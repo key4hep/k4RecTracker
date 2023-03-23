@@ -29,6 +29,6 @@ endif()
 
 include(CTest)
 
-add_subdirectory(k4ProjectTemplate)
+add_subdirectory(DCHdigi)
 
 include(cmake/CreateProjectConfig.cmake)

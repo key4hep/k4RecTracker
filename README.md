@@ -1,40 +1,42 @@
-# k4-project-template
+# k4RecTracker
 
 
-This repository can be a starting point and template for projects using the Key4HEP software stack.
-
+This repository hosts vertex and tracker reconstruction related code as well as tracking steering files.
 
 
 ## Dependencies
 
 * ROOT
-
 * PODIO
-
+* EDM4HEP
 * Gaudi
-
 * k4FWCore
 
 ## Installation
 
-
 ```
 source /cvmfs/sw.hsf.org/key4hep/setup.sh
+git clone git@github.com:BrieucF/k4RecTracker.git
+cd k4RecTracker
 mkdir build install
-cd build;
+cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install
-make install
-
+make install -j 4
+cd ..
+LD_LIBRARY_PATH=$PWD/install/lib:$PWD/install/lib64:$LD_LIBRARY_PATH
+export PYTHONPATH=$PWD/install/python:$PYTHONPATH
 
 ```
+## Repository content
+
+* `DCHdigi`: drift chamber digitization
+
 
 ## Execute Examples 
 
 
 ```
-k4run ../k4TestFWCore/options/createHelloWorld.py 
-
-k4run ../k4TestFWCore/options/createExampleEventData.py 
+k4run DCHdigi/test/runDCHdigitizer.py
 
 ```
 
