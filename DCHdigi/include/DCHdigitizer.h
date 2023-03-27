@@ -13,7 +13,7 @@
 
 /** @class DCHdigitizer
  *
- *  Algorithm for creating reconstructed drift chamber hits (edm4hep::TrackerHit) from Geant4 hits (edm4hep::SimTrackerHit).
+ *  Algorithm for creating digitized (meaning 'reconstructed' for now) drift chamber hits (edm4hep::TrackerHit) from Geant4 hits (edm4hep::SimTrackerHit).
  *  
  *  @author Brieuc Francois
  *  @date   2023-03
@@ -40,6 +40,6 @@ public:
 private:
   // Input sim tracker hit collection name
   DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
-  // Output reconstructed tracker hit collection name
-  DataHandle<edm4hep::TrackerHitCollection> m_output_rec_hits{"outputRecHits", Gaudi::DataHandle::Writer, this};
+  // Output digitized tracker hit collection name
+  DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 };
