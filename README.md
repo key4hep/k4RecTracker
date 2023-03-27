@@ -29,7 +29,8 @@ export PYTHONPATH=$PWD/install/python:$PYTHONPATH
 ```
 ## Repository content
 
-* `DCHdigi`: drift chamber digitization
+* `DCHdigi`: drift chamber digitization (for now, this step produces 'reco' collection)
+* `VTXdigi`: vertex detector digitization (for now, this step produces 'reco' collection)
 
 
 ## Execute Examples 
