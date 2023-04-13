@@ -31,5 +31,6 @@ include(CTest)
 
 add_subdirectory(DCHdigi)
 add_subdirectory(VTXdigi)
+add_subdirectory(Tracking)
 
 include(cmake/CreateProjectConfig.cmake)
