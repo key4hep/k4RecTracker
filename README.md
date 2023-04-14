@@ -1,7 +1,7 @@
 # k4RecTracker
 
 
-This repository hosts vertex and tracker reconstruction related code as well as tracking steering files.
+This repository hosts Gaudi components related to vertex and tracker reconstruction as well as tracking.
 
 
 ## Dependencies
@@ -31,6 +31,7 @@ export PYTHONPATH=$PWD/install/python:$PYTHONPATH
 
 * `DCHdigi`: drift chamber digitization (for now, this step produces 'reco' collection)
 * `VTXdigi`: vertex detector digitization (for now, this step produces 'reco' collection)
+* `Tracking`: tracking algorithms orchestrating [GenFit](https://github.com/GenFit/GenFit)
 
 
 ## Execute Examples 
@@ -40,7 +41,6 @@ export PYTHONPATH=$PWD/install/python:$PYTHONPATH
 k4run DCHdigi/test/runDCHdigitizer.py
 
 ```
-
 
 ## References:
 These could perhaps be usefule for newcomers. 
