@@ -1,5 +1,9 @@
 project(Tracking)
 
+find_package(GenFit REQUIRED)
+
+if (GenFit_FOUND)
+
 file(GLOB sources
     ${PROJECT_SOURCE_DIR}/src/*.cpp
 )
@@ -8,20 +12,14 @@ file(GLOB headers
   ${PROJECT_SOURCE_DIR}/include/*.h
 )
 
-#find_package(genfit REQUIRED)
-
-
-
 gaudi_add_module(Tracking
   SOURCES ${sources}
   LINK
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
+  GenFit::genfit2
 )
-
-target_include_directories(Tracking PUBLIC /cvmfs/sw.hsf.org/spackages6/genfit/02-00-01/x86_64-centos7-gcc11.2.0-opt/6fsvg/include/)
-TARGET_LINK_LIBRARIES(Tracking PUBLIC /cvmfs/sw.hsf.org/spackages6/genfit/02-00-01/x86_64-centos7-gcc11.2.0-opt/6fsvg/lib64/libgenfit2.so.2.2.0)
 
 target_include_directories(Tracking PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -44,6 +42,7 @@ install(TARGETS Tracking
 )
 
 install(FILES ${scripts} DESTINATION test)
+endif()
 
 #############################################
 #file(GLOB _plugin_sources src/components/*.cpp)
