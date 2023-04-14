@@ -1,6 +1,6 @@
 project(Tracking)
 
-find_package(GenFit REQUIRED)
+find_package(GenFit)
 
 if (GenFit_FOUND)
 
