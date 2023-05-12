@@ -42,6 +42,13 @@ k4run DCHdigi/test/runDCHdigitizer.py
 
 ```
 
+## Convention
+For the syntax, try to follow the LLVM standards. You can format your code before to open a pull request with 
+```
+source /cvmfs/sft.cern.ch/lcg/contrib/clang/14.0.6/x86_64-centos7/setup.sh
+clang-format -i path_to_your_file
+```
+
 ## References:
 These could perhaps be usefule for newcomers. 
 1. [lhcb-98-064 COMP](https://cds.cern.ch/record/691746/files/lhcb-98-064.pdf)
