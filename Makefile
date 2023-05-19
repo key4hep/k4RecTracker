@@ -1,3 +1,5 @@
+MAKEFLAGS += --no-print-directory
+
 make:
 	@ mkdir -p build install ; \
 	cd build ; \
