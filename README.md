@@ -25,6 +25,12 @@ cd k4RecTracker
 make
 ```
 
+Fetching data:
+
+```bash
+make get_data
+```
+
 ## Repository content
 
 * `DCHdigi`: drift chamber digitization (for now, this step produces 'reco' collection)
