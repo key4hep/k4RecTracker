@@ -22,16 +22,9 @@ Installing:
 
 ```bash
 cd k4RecTracker
-mkdir build install
-cd build
-source /cvmfs/sw.hsf.org/key4hep/setup.sh
-cmake .. -DCMAKE_INSTALL_PREFIX=../install
-make install -j 4
-cd ..
-LD_LIBRARY_PATH=$PWD/install/lib:$PWD/install/lib64:$LD_LIBRARY_PATH
-export PYTHONPATH=$PWD/install/python:$PYTHONPATH
-
+make
 ```
+
 ## Repository content
 
 * `DCHdigi`: drift chamber digitization (for now, this step produces 'reco' collection)
