@@ -1,5 +1,7 @@
 #include "DCHdigitizer.h"
 
+#include "DD4hep/Detector.h"
+
 DECLARE_COMPONENT(DCHdigitizer)
 
 DCHdigitizer::DCHdigitizer(const std::string& aName, ISvcLocator* aSvcLoc) : GaudiAlgorithm(aName, aSvcLoc) {
@@ -11,7 +13,8 @@ DCHdigitizer::~DCHdigitizer() {}
 
 StatusCode DCHdigitizer::initialize() { return StatusCode::SUCCESS; }
 
-StatusCode DCHdigitizer::execute() { 
+StatusCode DCHdigitizer::execute() {
+
   // Get the input collection with Geant4 hits
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
@@ -23,6 +26,7 @@ StatusCode DCHdigitizer::execute() {
     output_digi_hit.setEDep(input_sim_hit.getEDep());
     output_digi_hit.setPosition(input_sim_hit.getPosition());
   }
+
   return StatusCode::SUCCESS;
 }
 
