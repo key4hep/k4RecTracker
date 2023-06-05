@@ -1,6 +1,9 @@
 from Gaudi.Configuration import *
 from Configurables import ApplicationMgr
 
+from Configurables import GeoSvc
+geoservice = GeoSvc("GeoSvc")
+
 from Configurables import k4DataSvc
 dataservice = k4DataSvc("EventDataSvc", input = vars().get("input", "data/arcsim_kaon+_edm4hep.root"))
 
@@ -38,5 +41,5 @@ ApplicationMgr(
     ],
     EvtSel = 'NONE',
     EvtMax = 10,
-    ExtSvc = [dataservice]
+    ExtSvc = [geoservice, dataservice]
 )
