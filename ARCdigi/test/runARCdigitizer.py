@@ -100,8 +100,8 @@ geantsim = SimG4Alg("SimG4Alg",
                        eventProvider=particle_converter,
                        OutputLevel=INFO)
 # Digitize tracker hits
-from Configurables import DCHdigitizer
-dch_digitizer = DCHdigitizer("DCHdigitizer",
+from Configurables import ARCdigitizer
+arc_digitizer = ARCdigitizer("ARCdigitizer",
     inputSimHits = savetrackertool.SimTrackHits.Path,
     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi")
 )
@@ -136,7 +136,7 @@ ApplicationMgr(
               genAlg,
               hepmc_converter,
               geantsim,
-              dch_digitizer,
+              arc_digitizer,
               out
               ],
     EvtSel = 'NONE',
