@@ -10,8 +10,8 @@ dataservice = k4DataSvc("EventDataSvc", input = vars().get("input", "data/arcsim
 from Configurables import PodioInput
 podioinput = PodioInput("PodioInput", collections = ["ARC_HITS"], OutputLevel = DEBUG)
 
-from Configurables import DCHdigitizer
-dch_digitizer = DCHdigitizer("DCHdigitizer",
+from Configurables import ARCdigitizer
+arc_digitizer = ARCdigitizer("ARCdigitizer",
     inputSimHits = "ARC_HITS",
     outputDigiHits = "ARC_DIGI_HITS"
 )
@@ -25,7 +25,7 @@ from Configurables import AuditorSvc, ChronoAuditor
 chra = ChronoAuditor()
 audsvc = AuditorSvc()
 audsvc.Auditors = [chra]
-dch_digitizer.AuditExecute = True
+arc_digitizer.AuditExecute = True
 podiooutput.AuditExecute = True
 
 from Configurables import EventCounter
@@ -36,7 +36,7 @@ ApplicationMgr(
     TopAlg = [
         event_counter,
         podioinput,
-        dch_digitizer,
+        arc_digitizer,
         podiooutput
     ],
     EvtSel = 'NONE',

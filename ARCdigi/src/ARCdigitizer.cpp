@@ -1,19 +1,19 @@
-#include "DCHdigitizer.h"
+#include "ARCdigitizer.h"
 
 #include "DD4hep/Detector.h"
 
-DECLARE_COMPONENT(DCHdigitizer)
+DECLARE_COMPONENT(ARCdigitizer)
 
-DCHdigitizer::DCHdigitizer(const std::string& aName, ISvcLocator* aSvcLoc) : GaudiAlgorithm(aName, aSvcLoc) {
+ARCdigitizer::ARCdigitizer(const std::string& aName, ISvcLocator* aSvcLoc) : GaudiAlgorithm(aName, aSvcLoc) {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
 }
 
-DCHdigitizer::~DCHdigitizer() {}
+ARCdigitizer::~ARCdigitizer() {}
 
-StatusCode DCHdigitizer::initialize() { return StatusCode::SUCCESS; }
+StatusCode ARCdigitizer::initialize() { return StatusCode::SUCCESS; }
 
-StatusCode DCHdigitizer::execute() {
+StatusCode ARCdigitizer::execute() {
 
   // Get the input collection with Geant4 hits
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
@@ -30,4 +30,4 @@ StatusCode DCHdigitizer::execute() {
   return StatusCode::SUCCESS;
 }
 
-StatusCode DCHdigitizer::finalize() { return StatusCode::SUCCESS; }
+StatusCode ARCdigitizer::finalize() { return StatusCode::SUCCESS; }

@@ -11,19 +11,19 @@
 #include "edm4hep/TrackerHitCollection.h"
 #include "edm4hep/SimTrackerHitCollection.h"
 
-/** @class DCHdigitizer
+/** @class ARCdigitizer
  *
- *  Algorithm for creating digitized (meaning 'reconstructed' for now) drift chamber hits (edm4hep::TrackerHit) from Geant4 hits (edm4hep::SimTrackerHit).
+ *  Algorithm for creating digitized (meaning 'reconstructed' for now) ARC hits (edm4hep::TrackerHit) from Geant4 hits (edm4hep::SimTrackerHit).
  *  
- *  @author Brieuc Francois
+ *  @author Brieuc Francois, Matthew Basso
  *  @date   2023-03
  *
  */
 
-class DCHdigitizer : public GaudiAlgorithm {
+class ARCdigitizer : public GaudiAlgorithm {
 public:
-  explicit DCHdigitizer(const std::string&, ISvcLocator*);
-  virtual ~DCHdigitizer();
+  explicit ARCdigitizer(const std::string&, ISvcLocator*);
+  virtual ~ARCdigitizer();
   /**  Initialize.
    *   @return status code
    */
