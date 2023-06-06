@@ -50,6 +50,8 @@ private:
   DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
   // Path to detector compact
   StringProperty m_det_compact{this, "detectorCompact", ""};
+  // Flat value for SiPM efficiency
+  FloatProperty m_flat_SiPM_effi{this, "flatSiPMEfficiency", -1.0};
   // Detector geometry
   std::unique_ptr<dd4hep::Detector> m_detector;
 };

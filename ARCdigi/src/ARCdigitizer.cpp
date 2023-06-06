@@ -6,6 +6,9 @@
 // DD4HEP
 #include "DDRec/CellIDPositionConverter.h"
 
+// ROOT
+#include "TRandom.h"
+
 // STL
 #include <unordered_map>
 
@@ -15,6 +18,7 @@ ARCdigitizer::ARCdigitizer(const std::string& aName, ISvcLocator* aSvcLoc) : Gau
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
   declareProperty("detectorCompact", m_det_compact, "Path to detector compact");
+  declareProperty("flatSiPMEfficiency", m_flat_SiPM_effi, "Flat value for SiPM efficiency (<0 := disabled)");
 }
 
 ARCdigitizer::~ARCdigitizer() {}
@@ -23,6 +27,10 @@ StatusCode ARCdigitizer::initialize() {
   m_detector = dd4hep::Detector::make_unique(this->name() + "_detector");
   if (m_det_compact.value().empty()) {
     error() << "Detector compact must be provided!" << endmsg;
+    return StatusCode::FAILURE;
+  }
+  if (m_flat_SiPM_effi > 1.0) {
+    error() << "Flat SiPM efficiency cannot exceed 1!" << endmsg;
     return StatusCode::FAILURE;
   }
   m_detector->fromCompact(m_det_compact);
@@ -39,9 +47,12 @@ StatusCode ARCdigitizer::execute() {
   std::unordered_map<uint64_t, float> merged_digi_hits;
 
   // Digitize the sim hits
+  TRandom rand = TRandom();
   for (const auto& input_sim_hit : *input_sim_hits) {
     auto cell = input_sim_hit.getCellID();
-    if (merged_digi_hits.find(cell) == merged_digi_hits.end()) merged_digi_hits[cell] = 0.;
+    if (merged_digi_hits.find(cell) == merged_digi_hits.end()) merged_digi_hits[cell] = 0.0;
+    // Throw away simulated hits based on flat SiPM efficiency
+    if (m_flat_SiPM_effi >= 0.0 && rand.Uniform(1.0) > m_flat_SiPM_effi) continue;
     merged_digi_hits[cell] += input_sim_hit.getEDep();
   }
 
@@ -56,6 +67,8 @@ StatusCode ARCdigitizer::execute() {
     output_digi_hit.setPosition(edm4hep::Vector3d(pos.X(), pos.Y(), pos.Z()));
     output_digi_hit.setEDep(it->second);
   }
+
+  verbose() << "Output Digi Hit collection size: " << output_digi_hits->size() << endmsg;
 
   return StatusCode::SUCCESS;
 }
