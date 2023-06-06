@@ -10,7 +10,7 @@ file(GLOB headers
   ${PROJECT_SOURCE_DIR}/include/*.h
 )
 
-find_package(DD4hep REQUIRED COMPONENTS DDCore)
+find_package(DD4hep REQUIRED COMPONENTS DDCore DDRec)
 
 gaudi_add_module(${PackageName}
   SOURCES ${sources}
@@ -19,6 +19,7 @@ gaudi_add_module(${PackageName}
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
   DD4hep::DDCore
+  DD4hep::DDRec
 )
 
 target_include_directories(${PackageName} PUBLIC

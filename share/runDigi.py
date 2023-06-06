@@ -13,7 +13,8 @@ podioinput = PodioInput("PodioInput", collections = ["ARC_HITS"], OutputLevel = 
 from Configurables import ARCdigitizer
 arc_digitizer = ARCdigitizer("ARCdigitizer",
     inputSimHits = "ARC_HITS",
-    outputDigiHits = "ARC_DIGI_HITS"
+    outputDigiHits = "ARC_DIGI_HITS",
+    detectorCompact = "k4geo/FCCee/compact/CLD_ARC/arc_full_v0.xml"
 )
 
 from Configurables import PodioOutput
