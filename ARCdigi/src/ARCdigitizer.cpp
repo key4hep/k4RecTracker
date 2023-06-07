@@ -11,6 +11,7 @@
 
 // STL
 #include <unordered_map>
+#include <utility>
 
 DECLARE_COMPONENT(ARCdigitizer)
 
@@ -43,17 +44,18 @@ StatusCode ARCdigitizer::execute() {
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
 
-  // Dictionary to keep track of cell IDs and deposited energies
-  std::unordered_map<uint64_t, float> merged_digi_hits;
+  // Dictionary to keep track of cell IDs and (summed) deposited energies / (earliest) arrival times
+  std::unordered_map<uint64_t, std::pair<float, float>> merged_digi_hits;
 
   // Digitize the sim hits
   TRandom rand = TRandom();
   for (const auto& input_sim_hit : *input_sim_hits) {
     auto cell = input_sim_hit.getCellID();
-    if (merged_digi_hits.find(cell) == merged_digi_hits.end()) merged_digi_hits[cell] = 0.0;
+    if (merged_digi_hits.find(cell) == merged_digi_hits.end()) merged_digi_hits[cell] = std::pair<float, float>(0.0, -1.0);
     // Throw away simulated hits based on flat SiPM efficiency
     if (m_flat_SiPM_effi >= 0.0 && rand.Uniform(1.0) > m_flat_SiPM_effi) continue;
-    merged_digi_hits[cell] += input_sim_hit.getEDep();
+    merged_digi_hits[cell].first += input_sim_hit.getEDep();
+    if (merged_digi_hits[cell].second < 0.0 || input_sim_hit.getTime() < merged_digi_hits[cell].second) merged_digi_hits[cell].second = input_sim_hit.getTime();
   }
 
   // Get our cell ID -> position converter
@@ -64,8 +66,10 @@ StatusCode ARCdigitizer::execute() {
   for (auto it = merged_digi_hits.begin(); it != merged_digi_hits.end(); it++) {
     auto output_digi_hit = output_digi_hits->create();
     auto pos = converter.position(it->first);
+    output_digi_hit.setCellID(it->first);
     output_digi_hit.setPosition(edm4hep::Vector3d(pos.X(), pos.Y(), pos.Z()));
-    output_digi_hit.setEDep(it->second);
+    output_digi_hit.setEDep(it->second.first);
+    output_digi_hit.setTime(it->second.second);
   }
 
   verbose() << "Output Digi Hit collection size: " << output_digi_hits->size() << endmsg;
