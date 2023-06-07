@@ -15,7 +15,7 @@ This repository hosts Gaudi components related to vertex and tracker reconstruct
 Cloning:
 
 ```bash
-git clone https://github.com/mjbasso/k4RecTracker.git
+git clone --recursive https://github.com/mjbasso/k4RecTracker.git
 ```
 
 Installing:
@@ -33,14 +33,14 @@ make get_data
 
 ## Repository content
 
-* `DCHdigi`: drift chamber digitization (for now, this step produces 'reco' collection)
+* `ARCdigi`: ARC digitization (for now, this step produces 'reco' collection)
 * `VTXdigi`: vertex detector digitization (for now, this step produces 'reco' collection)
 * `Tracking`: tracking algorithms orchestrating [GenFit](https://github.com/GenFit/GenFit)
 
 ## Execute Examples 
 
 ```bash
-k4run DCHdigi/test/runDCHdigitizer.py
+k4run ARCdigi/test/runARCdigitizer.py
 ```
 
 ## Convention
