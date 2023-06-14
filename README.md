@@ -16,7 +16,7 @@ This repository hosts Gaudi components related to vertex and tracker reconstruct
 Cloning:
 
 ```bash
-git clone --recursive https://github.com/mjbasso/k4RecTracker.git
+git clone https://github.com/mjbasso/k4RecTracker.git
 ```
 
 Installing:
@@ -24,12 +24,6 @@ Installing:
 ```bash
 cd k4RecTracker
 make
-```
-
-Fetching data:
-
-```bash
-make get_data
 ```
 
 ## Repository content

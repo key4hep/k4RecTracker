@@ -14,7 +14,7 @@ from Configurables import ARCdigitizer
 arc_digitizer = ARCdigitizer("ARCdigitizer",
     inputSimHits = "ARC_HITS",
     outputDigiHits = "ARC_DIGI_HITS",
-    detectorCompact = "k4geo/FCCee/compact/CLD_ARC/arc_full_v0.xml"
+    detectorCompact = "/path/to/k4geo/FCCee/compact/CLD_ARC/arc_full_v0.xml"
 )
 
 from Configurables import PodioOutput
