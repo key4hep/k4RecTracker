@@ -51,10 +51,10 @@ StatusCode ARCdigitizer::execute() {
   // Digitize the sim hits
   TRandom rand = TRandom();
   for (const auto& input_sim_hit : *input_sim_hits) {
-    auto cell = input_sim_hit.getCellID();
-    if (merged_digi_hits.find(cell) == merged_digi_hits.end()) merged_digi_hits[cell] = std::pair<float, float>(0.0, -1.0);
     // Throw away simulated hits based on flat SiPM efficiency
     if (!m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && rand.Uniform(1.0) > m_flat_SiPM_effi) continue;
+    auto cell = input_sim_hit.getCellID();
+    if (merged_digi_hits.find(cell) == merged_digi_hits.end()) merged_digi_hits[cell] = std::pair<float, float>(0.0, -1.0);
     merged_digi_hits[cell].first += input_sim_hit.getEDep();
     if (merged_digi_hits[cell].second < 0.0 || input_sim_hit.getTime() < merged_digi_hits[cell].second) merged_digi_hits[cell].second = input_sim_hit.getTime();
   }
