@@ -9,6 +9,7 @@ This repository hosts Gaudi components related to vertex and tracker reconstruct
 * EDM4HEP
 * Gaudi
 * k4FWCore
+* DD4HEP
 
 ## Installation
 
