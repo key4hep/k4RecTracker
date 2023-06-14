@@ -20,7 +20,8 @@ ARCdigitizer::ARCdigitizer(const std::string& aName, ISvcLocator* aSvcLoc) : Gau
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
   declareProperty("detectorCompact", m_det_compact, "Path to detector compact");
   declareProperty("flatSiPMEfficiency", m_flat_SiPM_effi, "Flat value for SiPM efficiency (<0 := disabled)");
-  declareProperty("applySiPMEffiToDigiHits", m_apply_SiPM_effi_to_digi, "Apply the SiPM efficiency to digitized hits instead of simulated hits");
+  declareProperty("applySiPMEffiToDigiHits", m_apply_SiPM_effi_to_digi,
+                  "Apply the SiPM efficiency to digitized hits instead of simulated hits");
 }
 
 ARCdigitizer::~ARCdigitizer() {}
@@ -40,7 +41,6 @@ StatusCode ARCdigitizer::initialize() {
 }
 
 StatusCode ARCdigitizer::execute() {
-
   // Get the input collection with Geant4 hits
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
@@ -52,11 +52,14 @@ StatusCode ARCdigitizer::execute() {
   TRandom rand = TRandom();
   for (const auto& input_sim_hit : *input_sim_hits) {
     // Throw away simulated hits based on flat SiPM efficiency
-    if (!m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && rand.Uniform(1.0) > m_flat_SiPM_effi) continue;
+    if (!m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && rand.Uniform(1.0) > m_flat_SiPM_effi)
+      continue;
     auto cell = input_sim_hit.getCellID();
-    if (merged_digi_hits.find(cell) == merged_digi_hits.end()) merged_digi_hits[cell] = std::pair<float, float>(0.0, -1.0);
+    if (merged_digi_hits.find(cell) == merged_digi_hits.end())
+      merged_digi_hits[cell] = std::pair<float, float>(0.0, -1.0);
     merged_digi_hits[cell].first += input_sim_hit.getEDep();
-    if (merged_digi_hits[cell].second < 0.0 || input_sim_hit.getTime() < merged_digi_hits[cell].second) merged_digi_hits[cell].second = input_sim_hit.getTime();
+    if (merged_digi_hits[cell].second < 0.0 || input_sim_hit.getTime() < merged_digi_hits[cell].second)
+      merged_digi_hits[cell].second = input_sim_hit.getTime();
   }
 
   // Get our cell ID -> position converter
@@ -66,9 +69,10 @@ StatusCode ARCdigitizer::execute() {
   edm4hep::TrackerHitCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (auto it = merged_digi_hits.begin(); it != merged_digi_hits.end(); it++) {
     // Throw away digitized hits based on flat SiPM efficiency
-    if (m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && rand.Uniform(1.0) > m_flat_SiPM_effi) continue;
+    if (m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && rand.Uniform(1.0) > m_flat_SiPM_effi)
+      continue;
     auto output_digi_hit = output_digi_hits->create();
-    auto pos = converter.position(it->first);
+    auto pos             = converter.position(it->first);
     output_digi_hit.setCellID(it->first);
     output_digi_hit.setPosition(edm4hep::Vector3d(pos.X(), pos.Y(), pos.Z()));
     output_digi_hit.setEDep(it->second.first);
@@ -80,6 +84,4 @@ StatusCode ARCdigitizer::execute() {
   return StatusCode::SUCCESS;
 }
 
-StatusCode ARCdigitizer::finalize() {
-  return StatusCode::SUCCESS;
-}
+StatusCode ARCdigitizer::finalize() { return StatusCode::SUCCESS; }

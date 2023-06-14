@@ -11,7 +11,7 @@ GenFitter::~GenFitter() {}
 
 StatusCode GenFitter::initialize() { return StatusCode::SUCCESS; }
 
-StatusCode GenFitter::execute() { 
+StatusCode GenFitter::execute() {
   // Get the input collection with tracker hits
   const edm4hep::TrackerHitCollection* input_hits = m_input_hits.get();
   verbose() << "Input Hit collection size: " << input_hits->size() << endmsg;
@@ -21,9 +21,9 @@ StatusCode GenFitter::execute() {
     m_wire_measurements.push_back(genfit::WireMeasurement());
   }
 
-  // Produce dummy tracks 
+  // Produce dummy tracks
   edm4hep::TrackCollection* output_tracks = m_output_tracks.createAndPut();
-  auto output_track = output_tracks->create();
+  auto                      output_track  = output_tracks->create();
   output_track.setChi2(1.);
   output_track.setNdf(1);
   output_track.setDEdx(1.);
