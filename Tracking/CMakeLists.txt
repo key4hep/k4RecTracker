@@ -44,6 +44,9 @@ install(TARGETS Tracking
 install(FILES ${scripts} DESTINATION test)
 endif()
 
+SET(test_name "test_runGenFitTrackingOnSimplifiedDriftChamber")
+ADD_TEST(NAME t_${test_name} COMMAND k4run test/runGenFitTrackingOnSimplifiedDriftChamber.py)
+
 #############################################
 #file(GLOB _plugin_sources src/components/*.cpp)
 #gaudi_add_module(k4ProjectTemplatePlugins
