@@ -103,7 +103,7 @@ geantsim = SimG4Alg("SimG4Alg",
 from Configurables import DCHdigitizer
 dch_digitizer = DCHdigitizer("DCHdigitizer",
     inputSimHits = savetrackertool.SimTrackHits.Path,
-    outputRecHits = savetrackertool.SimTrackHits.Path.replace("sim", "reco")
+    outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi")
 )
 
 ################ Output
