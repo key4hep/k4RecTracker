@@ -3,6 +3,7 @@ from Configurables import ApplicationMgr
 
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
+geoservice.detectors.append("/path/to/k4geo/FCCee/compact/CLD_ARC/arc_full_v0.xml")
 
 from Configurables import k4DataSvc
 dataservice = k4DataSvc("EventDataSvc", input = vars().get("input", "data/arcsim_kaon+_edm4hep.root"))
@@ -13,8 +14,7 @@ podioinput = PodioInput("PodioInput", collections = ["ARC_HITS"], OutputLevel = 
 from Configurables import ARCdigitizer
 arc_digitizer = ARCdigitizer("ARCdigitizer",
     inputSimHits = "ARC_HITS",
-    outputDigiHits = "ARC_DIGI_HITS",
-    detectorCompact = "/path/to/k4geo/FCCee/compact/CLD_ARC/arc_full_v0.xml"
+    outputDigiHits = "ARC_DIGI_HITS"
 )
 
 from Configurables import PodioOutput
