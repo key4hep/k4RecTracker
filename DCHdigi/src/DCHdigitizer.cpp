@@ -11,7 +11,7 @@ DCHdigitizer::~DCHdigitizer() {}
 
 StatusCode DCHdigitizer::initialize() { return StatusCode::SUCCESS; }
 
-StatusCode DCHdigitizer::execute() { 
+StatusCode DCHdigitizer::execute() {
   // Get the input collection with Geant4 hits
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;

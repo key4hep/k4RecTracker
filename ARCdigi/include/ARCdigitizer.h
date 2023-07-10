@@ -3,8 +3,8 @@
 // GAUDI
 #include "Gaudi/Property.h"
 #include "GaudiAlg/GaudiAlgorithm.h"
-#include "GaudiKernel/RndmGenerators.h"
 #include "GaudiKernel/IRndmGenSvc.h"
+#include "GaudiKernel/RndmGenerators.h"
 
 // K4FWCORE
 #include "k4FWCore/DataHandle.h"
@@ -58,5 +58,4 @@ private:
   IRndmGenSvc* m_randSvc;
   // Uniform random number generator used for the SiPM quantum efficiency
   Rndm::Numbers m_uniform;
-
 };
