@@ -3,6 +3,8 @@
 // GAUDI
 #include "Gaudi/Property.h"
 #include "GaudiAlg/GaudiAlgorithm.h"
+#include "GaudiKernel/RndmGenerators.h"
+#include "GaudiKernel/IRndmGenSvc.h"
 
 // K4FWCORE
 #include "k4FWCore/DataHandle.h"
@@ -56,4 +58,10 @@ private:
   BooleanProperty m_apply_SiPM_effi_to_digi{this, "applySiPMEffiToDigiHits", false};
   // Detector geometry
   std::unique_ptr<dd4hep::Detector> m_detector;
+
+  // Random Number Service
+  IRndmGenSvc* m_randSvc;
+  // Uniform random number generator used for the SiPM quantum efficiency
+  Rndm::Numbers m_uniform;
+
 };

@@ -6,9 +6,6 @@
 // DD4HEP
 #include "DDRec/CellIDPositionConverter.h"
 
-// ROOT
-#include "TRandom.h"
-
 // STL
 #include <unordered_map>
 #include <utility>
@@ -19,7 +16,7 @@ ARCdigitizer::ARCdigitizer(const std::string& aName, ISvcLocator* aSvcLoc) : Gau
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
   declareProperty("detectorCompact", m_det_compact, "Path to detector compact");
-  declareProperty("flatSiPMEfficiency", m_flat_SiPM_effi, "Flat value for SiPM efficiency (<0 := disabled)");
+  declareProperty("flatSiPMEfficiency", m_flat_SiPM_effi, "Flat value for SiPM quantum efficiency (<0 := disabled)");
   declareProperty("applySiPMEffiToDigiHits", m_apply_SiPM_effi_to_digi,
                   "Apply the SiPM efficiency to digitized hits instead of simulated hits");
 }
@@ -32,6 +29,16 @@ StatusCode ARCdigitizer::initialize() {
     error() << "Detector compact must be provided!" << endmsg;
     return StatusCode::FAILURE;
   }
+  // Initialize random service
+  if (service("RndmGenSvc", m_randSvc).isFailure()) {
+    error() << "Couldn't get RndmGenSvc!" << endmsg;
+    return StatusCode::FAILURE;
+  }
+  if (m_uniform.initialize(m_randSvc, Rndm::Flat(0.0, 1.0)).isFailure()) {
+    error() << "Couldn't initialize RndmGenSvc!" << endmsg;
+    return StatusCode::FAILURE;
+  }
+  // Sanity check on efficiency cut
   if (m_flat_SiPM_effi > 1.0) {
     error() << "Flat SiPM efficiency cannot exceed 1!" << endmsg;
     return StatusCode::FAILURE;
@@ -49,10 +56,9 @@ StatusCode ARCdigitizer::execute() {
   std::unordered_map<uint64_t, std::pair<float, float>> merged_digi_hits;
 
   // Digitize the sim hits
-  TRandom rand = TRandom();
   for (const auto& input_sim_hit : *input_sim_hits) {
     // Throw away simulated hits based on flat SiPM efficiency
-    if (!m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && rand.Uniform(1.0) > m_flat_SiPM_effi)
+    if (!m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && m_uniform.shoot() > m_flat_SiPM_effi)
       continue;
     auto cell = input_sim_hit.getCellID();
     if (merged_digi_hits.find(cell) == merged_digi_hits.end())
@@ -69,7 +75,7 @@ StatusCode ARCdigitizer::execute() {
   edm4hep::TrackerHitCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (auto it = merged_digi_hits.begin(); it != merged_digi_hits.end(); it++) {
     // Throw away digitized hits based on flat SiPM efficiency
-    if (m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && rand.Uniform(1.0) > m_flat_SiPM_effi)
+    if (m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && m_uniform.shoot() > m_flat_SiPM_effi)
       continue;
     auto output_digi_hit = output_digi_hits->create();
     auto pos             = converter.position(it->first);
