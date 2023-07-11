@@ -26,6 +26,18 @@ cd k4RecTracker
 make
 ```
 
+Setting the environment:
+
+```bash
+source setup.sh
+```
+
+Fetching data:
+
+```bash
+make get_data
+```
+
 ## Repository content
 
 * `ARCdigi`: ARC digitization (for now, this step produces 'reco' collection)
