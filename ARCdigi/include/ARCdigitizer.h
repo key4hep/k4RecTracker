@@ -48,9 +48,9 @@ private:
   // Output digitized tracker hit collection name
   DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
   // Flat value for SiPM efficiency
-  FloatProperty m_flat_SiPM_effi{this, "flatSiPMEfficiency", -1.0};
+  FloatProperty m_flat_SiPM_effi{this, "flatSiPMEfficiency", -1.0, "Flat value for SiPM quantum efficiency (<0 := disabled)"};
   // Apply the SiPM efficiency to digitized hits instead of simulated hits
-  BooleanProperty m_apply_SiPM_effi_to_digi{this, "applySiPMEffiToDigiHits", false};
+  BooleanProperty m_apply_SiPM_effi_to_digi{this, "applySiPMEffiToDigiHits", false, "Apply the SiPM efficiency to digitized hits instead of simulated hits"};
 
   // Detector geometry
   dd4hep::Detector* m_detector;

@@ -15,9 +15,6 @@ DECLARE_COMPONENT(ARCdigitizer)
 ARCdigitizer::ARCdigitizer(const std::string& aName, ISvcLocator* aSvcLoc) : GaudiAlgorithm(aName, aSvcLoc) {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
-  declareProperty("flatSiPMEfficiency", m_flat_SiPM_effi, "Flat value for SiPM quantum efficiency (<0 := disabled)");
-  declareProperty("applySiPMEffiToDigiHits", m_apply_SiPM_effi_to_digi,
-                  "Apply the SiPM efficiency to digitized hits instead of simulated hits");
 }
 
 ARCdigitizer::~ARCdigitizer() {}
