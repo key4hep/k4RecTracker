@@ -40,11 +40,16 @@ make get_data
 
 ## Repository content
 
+* `DCHdigi`: drift chamber digitization (for now, this step produces 'reco' collection)
 * `ARCdigi`: ARC digitization (for now, this step produces 'reco' collection)
 * `VTXdigi`: vertex detector digitization (for now, this step produces 'reco' collection)
 * `Tracking`: tracking algorithms orchestrating [GenFit](https://github.com/GenFit/GenFit)
 
 ## Execute Examples 
+
+```bash
+k4run DCHdigi/test/runDCHdigitizer.py
+```
 
 ```bash
 k4run ARCdigi/test/runARCdigitizer.py
