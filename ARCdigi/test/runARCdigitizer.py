@@ -3,7 +3,11 @@ from Configurables import ApplicationMgr
 
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
-geoservice.detectors.append("k4geo/FCCee/compact/CLD_ARC/arc_full_v0.xml")
+path_to_detector = os.environ.get("LCGEO")
+detectors_to_use=[
+                    'FCCee/CLD/compact/CLD_o3_v01/CLD_o3_v01.xml',
+                   ]
+geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
 
 from Configurables import k4DataSvc
 dataservice = k4DataSvc("EventDataSvc", input = vars().get("input", "data/arcsim_kaon+_edm4hep.root"))
