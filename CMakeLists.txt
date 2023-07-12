@@ -1,7 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.12)
 
-
-project(k4ProjectTemplate)
+project(k4RecTracker)
 
 # please keep this layout for version setting, used by the automatic tagging script
 set(PACKAGE_VERSION_MAJOR 1)
@@ -11,7 +10,7 @@ set(PACKAGE_VERSION_PATCH 3)
 set(PACKAGE_VERSION "${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}.${PACKAGE_VERSION_PATCH}")
 
 # dependencies
-find_package(ROOT COMPONENTS RIO Tree)
+find_package(ROOT COMPONENTS RIO Tree MathCore)
 find_package(EDM4HEP)
 find_package(k4FWCore)
 find_package(Gaudi)
@@ -30,6 +29,7 @@ endif()
 include(CTest)
 
 add_subdirectory(DCHdigi)
+add_subdirectory(ARCdigi)
 add_subdirectory(VTXdigi)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 add_subdirectory(Tracking)

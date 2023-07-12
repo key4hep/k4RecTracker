@@ -8,8 +8,8 @@
 #include "k4FWCore/DataHandle.h"
 
 // EDM4HEP
-#include "edm4hep/TrackerHitCollection.h"
 #include "edm4hep/TrackCollection.h"
+#include "edm4hep/TrackerHitCollection.h"
 
 // GENFIT
 #include "WireMeasurement.h"
@@ -45,8 +45,6 @@ private:
   DataHandle<edm4hep::TrackerHitCollection> m_input_hits{"inputHits", Gaudi::DataHandle::Reader, this};
   // Output track collection name
   DataHandle<edm4hep::TrackCollection> m_output_tracks{"outputTracks", Gaudi::DataHandle::Writer, this};
-  // Transient genfit measurements used internally by genfit to run the tracking 
+  // Transient genfit measurements used internally by genfit to run the tracking
   std::vector<genfit::WireMeasurement> m_wire_measurements;
-
-
 };

@@ -8,8 +8,8 @@
 #include "k4FWCore/DataHandle.h"
 
 // EDM4HEP
-#include "edm4hep/TrackerHitCollection.h"
 #include "edm4hep/SimTrackerHitCollection.h"
+#include "edm4hep/TrackerHitCollection.h"
 
 /** @class DCHdigitizer
  *
