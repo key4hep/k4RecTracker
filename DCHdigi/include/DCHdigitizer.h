@@ -3,6 +3,8 @@
 // GAUDI
 #include "Gaudi/Property.h"
 #include "GaudiAlg/GaudiAlgorithm.h"
+#include "GaudiKernel/IRndmGenSvc.h"
+#include "GaudiKernel/RndmGenerators.h"
 
 // K4FWCORE
 #include "k4FWCore/DataHandle.h"
@@ -42,4 +44,17 @@ private:
   DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
   DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+
+  // z position resolution in mm
+  FloatProperty m_z_resolution{this, "zResolution", 1.0, "Spatial resolution in the z direction (from reading out the wires at both sides)"};
+  // xy resolution in mm
+  FloatProperty m_xy_resolution{this, "xyResolution", 0.1, "Spatial resolution in the xy direction"};
+
+  // Random Number Service
+  IRndmGenSvc* m_randSvc;
+  // Gaussian random number generator used for the smearing of the z position
+  Rndm::Numbers m_gauss_z;
+  // Gaussian random number generator used for the smearing of the xy position
+  Rndm::Numbers m_gauss_xy;
+
 };

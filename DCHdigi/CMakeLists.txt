@@ -14,6 +14,7 @@ gaudi_add_module(DCHdigi
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
+  DD4hep::DDRec
 )
 
 target_include_directories(DCHdigi PUBLIC
