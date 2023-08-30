@@ -15,8 +15,8 @@
 #include "edm4hep/TrackerHitCollection.h"
 
 // DD4HEP
+#include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
 #include "DDSegmentation/BitFieldCoder.h"
-#include "DD4hep/Detector.h" // for dd4hep::VolumeManager
 
 /** @class DCHdigitizer
  *
@@ -61,7 +61,8 @@ private:
   dd4hep::VolumeManager m_volman;
 
   // z position resolution in mm
-  FloatProperty m_z_resolution{this, "zResolution", 1.0, "Spatial resolution in the z direction (from reading out the wires at both sides) [mm]"};
+  FloatProperty m_z_resolution{this, "zResolution", 1.0,
+                               "Spatial resolution in the z direction (from reading out the wires at both sides) [mm]"};
   // xy resolution in mm
   FloatProperty m_xy_resolution{this, "xyResolution", 0.1, "Spatial resolution in the xy direction [mm]"};
 
@@ -71,5 +72,4 @@ private:
   Rndm::Numbers m_gauss_z;
   // Gaussian random number generator used for the smearing of the xy position
   Rndm::Numbers m_gauss_xy;
-
 };
