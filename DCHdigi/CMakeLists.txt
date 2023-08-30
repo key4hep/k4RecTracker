@@ -14,6 +14,7 @@ gaudi_add_module(DCHdigi
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
+  DD4hep::DDRec
 )
 
 target_include_directories(DCHdigi PUBLIC
@@ -37,3 +38,6 @@ install(TARGETS DCHdigi
 )
 
 install(FILES ${scripts} DESTINATION test)
+
+SET(test_name "test_DCHdigitizer")
+ADD_TEST(NAME t_${test_name} COMMAND k4run test/runDCHdigitizer.py)

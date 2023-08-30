@@ -10,7 +10,6 @@ file(GLOB headers
   ${PROJECT_SOURCE_DIR}/include/*.h
 )
 
-find_package(DD4hep REQUIRED COMPONENTS DDCore DDRec)
 
 gaudi_add_module(${PackageName}
   SOURCES ${sources}

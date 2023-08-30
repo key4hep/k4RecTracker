@@ -14,6 +14,7 @@ find_package(ROOT COMPONENTS RIO Tree MathCore)
 find_package(EDM4HEP)
 find_package(k4FWCore)
 find_package(Gaudi)
+find_package(DD4hep)
 #---------------------------------------------------------------
 
 include(GNUInstallDirs)
