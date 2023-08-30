@@ -46,7 +46,7 @@ geoservice = GeoSvc("GeoSvc")
 path_to_detector = os.environ.get("FCCDETECTORS", "")
 print(path_to_detector)
 detectors_to_use=[
-                    'Detector/DetFCCeeIDEA/compact/FCCee_DectMaster.xml',
+                    'Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v01.xml'
                   ]
 # prefix all xmls with path_to_detector
 geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
@@ -88,7 +88,7 @@ particle_converter = SimG4PrimariesFromEdmTool("EdmConverter")
 particle_converter.GenParticles.Path = genParticlesOutputName
 
 from Configurables import SimG4SaveTrackerHits
-savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["SimplifiedDriftChamberCollection"])
+savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["CDCHHits"])
 savetrackertool.SimTrackHits.Path = "DC_simTrackerHits"
 
 
@@ -98,12 +98,16 @@ geantsim = SimG4Alg("SimG4Alg",
                                  #saveHistTool
                        ],
                        eventProvider=particle_converter,
-                       OutputLevel=INFO)
+                       OutputLevel=DEBUG)
 # Digitize tracker hits
 from Configurables import DCHdigitizer
 dch_digitizer = DCHdigitizer("DCHdigitizer",
     inputSimHits = savetrackertool.SimTrackHits.Path,
-    outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi")
+    outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+    readoutName = "CDCHHits",
+    xyResolution = 0.1, # mm
+    zResolution = 1, # mm
+    OutputLevel=DEBUG
 )
 
 ################ Output
@@ -140,7 +144,7 @@ ApplicationMgr(
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 4,
+    EvtMax   = 100,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True,
  )
