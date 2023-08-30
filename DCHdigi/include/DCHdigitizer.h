@@ -20,7 +20,8 @@
 
 /** @class DCHdigitizer
  *
- *  Algorithm for creating digitized (meaning 'reconstructed' for now) drift chamber hits (edm4hep::TrackerHit) from Geant4 hits (edm4hep::SimTrackerHit).
+ *  Algorithm for creating digitized drift chamber hits (still based on edm4hep::TrackerHit) from edm4hep::SimTrackerHit.
+ *  You have to specify the expected resolution in z and in xy (distance to the wire). The smearing is applied in the wire reference frame.
  *  
  *  @author Brieuc Francois
  *  @date   2023-03
