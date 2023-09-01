@@ -48,7 +48,7 @@ make get_data
 ## Execute Examples 
 
 ```bash
-k4run DCHdigi/test/runDCHdigitizer.py
+k4run DCHdigi/test/runDCHsimpleDigitizer.py
 ```
 
 ```bash

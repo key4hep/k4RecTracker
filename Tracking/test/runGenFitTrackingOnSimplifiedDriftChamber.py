@@ -120,8 +120,8 @@ vtxe_digitizer = VTXdigitizer("VTXEdigitizer",
 )
 
 dch_reco_hit_name = saveDCHsimHitTool.SimTrackHits.Path.replace("sim", "reco")
-from Configurables import DCHdigitizer
-dch_digitizer = DCHdigitizer("DCHdigitizer",
+from Configurables import DCHsimpleDigitizer
+dch_digitizer = DCHsimpleDigitizer("DCHsimpleDigitizer",
     inputSimHits = saveDCHsimHitTool.SimTrackHits.Path,
     outputDigiHits = dch_reco_hit_name
 )

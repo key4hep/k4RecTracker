@@ -100,8 +100,8 @@ geantsim = SimG4Alg("SimG4Alg",
                        eventProvider=particle_converter,
                        OutputLevel=INFO)
 # Digitize tracker hits
-from Configurables import DCHdigitizer
-dch_digitizer = DCHdigitizer("DCHdigitizer",
+from Configurables import DCHsimpleDigitizer
+dch_digitizer = DCHsimpleDigitizer("DCHsimpleDigitizer",
     inputSimHits = savetrackertool.SimTrackHits.Path,
     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi")
 )
