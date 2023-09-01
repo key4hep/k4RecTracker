@@ -1,4 +1,4 @@
-#include "DCHdigitizer.h"
+#include "DCHsimpleDigitizer.h"
 
 // DD4hep
 #include "DD4hep/Detector.h"
@@ -7,17 +7,17 @@
 // ROOT
 #include "Math/Cylindrical3D.h"
 
-DECLARE_COMPONENT(DCHdigitizer)
+DECLARE_COMPONENT(DCHsimpleDigitizer)
 
-DCHdigitizer::DCHdigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
-    : GaudiAlgorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "DCHdigitizer") {
+DCHsimpleDigitizer::DCHsimpleDigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
+    : GaudiAlgorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "DCHsimpleDigitizer") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
 }
 
-DCHdigitizer::~DCHdigitizer() {}
+DCHsimpleDigitizer::~DCHsimpleDigitizer() {}
 
-StatusCode DCHdigitizer::initialize() {
+StatusCode DCHsimpleDigitizer::initialize() {
   // Initialize random services
   if (service("RndmGenSvc", m_randSvc).isFailure()) {
     error() << "Couldn't get RndmGenSvc!" << endmsg;
@@ -45,7 +45,7 @@ StatusCode DCHdigitizer::initialize() {
   return StatusCode::SUCCESS;
 }
 
-StatusCode DCHdigitizer::execute() {
+StatusCode DCHsimpleDigitizer::execute() {
   // Get the input collection with Geant4 hits
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   debug() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
@@ -111,4 +111,4 @@ StatusCode DCHdigitizer::execute() {
   return StatusCode::SUCCESS;
 }
 
-StatusCode DCHdigitizer::finalize() { return StatusCode::SUCCESS; }
+StatusCode DCHsimpleDigitizer::finalize() { return StatusCode::SUCCESS; }

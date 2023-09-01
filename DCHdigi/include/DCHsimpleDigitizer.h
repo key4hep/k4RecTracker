@@ -18,7 +18,7 @@
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
 #include "DDSegmentation/BitFieldCoder.h"
 
-/** @class DCHdigitizer
+/** @class DCHsimpleDigitizer
  *
  *  Algorithm for creating digitized drift chamber hits (still based on edm4hep::TrackerHit) from edm4hep::SimTrackerHit.
  *  You have to specify the expected resolution in z and in xy (distance to the wire). The smearing is applied in the wire reference frame.
@@ -28,10 +28,10 @@
  *
  */
 
-class DCHdigitizer : public GaudiAlgorithm {
+class DCHsimpleDigitizer : public GaudiAlgorithm {
 public:
-  explicit DCHdigitizer(const std::string&, ISvcLocator*);
-  virtual ~DCHdigitizer();
+  explicit DCHsimpleDigitizer(const std::string&, ISvcLocator*);
+  virtual ~DCHsimpleDigitizer();
   /**  Initialize.
    *   @return status code
    */
