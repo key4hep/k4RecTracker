@@ -84,7 +84,13 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute() {
     dd4hep::rec::Vector3D simHitLocalPositionVector(simHitLocalPosition[0], simHitLocalPosition[1],
                                                     simHitLocalPosition[2]);
     // get the smeared distance to the wire (cylindrical coordinate as the smearing should be perpendicular to the wire)
+    debug() << "Original distance to wire: " << simHitLocalPositionVector.rho() << endmsg;
     double smearedDistanceToWire = simHitLocalPositionVector.rho() + m_gauss_xy.shoot() * dd4hep::mm;
+    while(smearedDistanceToWire < 0){
+      debug() << "Negative smearedDistanceToWire (" << smearedDistanceToWire << ") shooting another random number" << endmsg;
+      smearedDistanceToWire = simHitLocalPositionVector.rho() + m_gauss_xy.shoot() * dd4hep::mm;
+    }
+    debug() << "Smeared distance to wire: " << smearedDistanceToWire << endmsg;
     // smear the z position (in local coordinate the z axis is aligned with the wire i.e. it take the stereo angle into account);
     double smearedZ = simHitLocalPositionVector.z() + m_gauss_z.shoot() * dd4hep::mm;
     // fill the output DriftChamberDigi (making sure we are back in mm)
