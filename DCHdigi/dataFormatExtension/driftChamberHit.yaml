@@ -18,5 +18,4 @@ datatypes:
       - float time                    // time of the hit [ns].
       - float eDep                    // energy deposited on the hit [GeV].
       - float eDepError               // error measured on eDep [GeV].
-    OneToManyRelations:
-      - edm4hep::RecIonizationCluster clusters // ionization clusters that were reconstructed in the cell
+      - uint32_t clusterCount         // number of clusters associated to this hit

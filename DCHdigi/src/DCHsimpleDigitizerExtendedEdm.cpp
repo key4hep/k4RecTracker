@@ -73,7 +73,6 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute() {
     // get the simHit coordinate in cm in the wire reference frame to be able to apply smearing of radius perpendicular to the wire
     wireTransformMatrix.MasterToLocal(simHitGlobalPosition, simHitLocalPosition);
     debug() << "Cell ID string: " << m_decoder->valueString(cellID) << endmsg;
-    ;
     debug() << "Global simHit x " << simHitGlobalPosition[0] << " --> Local simHit x " << simHitLocalPosition[0]
             << " in cm" << endmsg;
     debug() << "Global simHit y " << simHitGlobalPosition[1] << " --> Local simHit y " << simHitLocalPosition[1]
