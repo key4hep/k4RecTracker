@@ -13,7 +13,7 @@ This repository hosts Gaudi components related to vertex and tracker reconstruct
 
 ## Installation
 ```
-go somewhere public (to help support team helping you to debug your code)
+#go somewhere public (to help support team helping you to debug your code)
 source /cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh
 git clone https://github.com/HEP-FCC/FCCDetectors
 cd FCCDetectors
