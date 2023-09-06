@@ -4,15 +4,14 @@ project(DCHdigi)
 PODIO_GENERATE_DATAMODEL(extension dataFormatExtension/driftChamberHit.yaml ext_headers ext_sources
   UPSTREAM_EDM edm4hep:${EDM4HEP_DATA_DIR}/edm4hep.yaml
   IO_BACKEND_HANDLERS ${PODIO_IO_HANDLERS}
-  OUTPUT_FOLDER ${CMAKE_INSTALL_PREFIX}/extension)
+  OUTPUT_FOLDER ${CMAKE_CURRENT_BINARY_DIR})
 PODIO_ADD_DATAMODEL_CORE_LIB(extension "${ext_headers}" "${ext_sources}"
-  OUTPUT_FOLDER ${CMAKE_CURRENT_SOURCE_DIR}/extension)
+  OUTPUT_FOLDER ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(extension PUBLIC EDM4HEP::edm4hep)
-PODIO_ADD_ROOT_IO_DICT(extensionDict extension "${ext_headers}" ${CMAKE_CURRENT_SOURCE_DIR}/extension/src/selection.xml
-  OUTPUT_FOLDER ${CMAKE_CURRENT_SOURCE_DIR}/extension)
-PODIO_ADD_SIO_IO_BLOCKS(extension "${ext_headers}" "${ext_sources}")
+PODIO_ADD_ROOT_IO_DICT(extensionDict extension "${ext_headers}" src/selection.xml
+  OUTPUT_FOLDER ${CMAKE_CURRENT_BINARY_DIR})
+#PODIO_ADD_SIO_IO_BLOCKS(extension "${ext_headers}" "${ext_sources}")
 add_library(extension::extensionDict ALIAS extensionDict)
-message(${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR})
 list(APPEND EXTENSION_INSTALL_LIBS extension extensionDict)
 install(TARGETS ${EXTENSION_INSTALL_LIBS}
   EXPORT ${PROJECT_NAME}Targets
