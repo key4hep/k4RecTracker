@@ -106,6 +106,7 @@ StatusCode DCHsimpleDigitizer::execute() {
                                                   digiHitGlobalPosition[1] / dd4hep::mm,
                                                   digiHitGlobalPosition[2] / dd4hep::mm);
     output_digi_hit.setPosition(digiHitGlobalPositionVector);
+    output_digi_hit.setCellID(cellID);
   }
   debug() << "Output Digi Hit collection size: " << output_digi_hits->size() << endmsg;
   return StatusCode::SUCCESS;
