@@ -43,13 +43,16 @@ hepmc_converter.hepmcStatusList = []
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
 # if FCC_DETECTORS is empty, this should use relative path to working directory
-path_to_detector = os.environ.get("FCCDETECTORS", "")
-print(path_to_detector)
-detectors_to_use=[
-                    'Detector/DetFCCeeIDEA/compact/FCCee_DectMaster.xml',
-                  ]
+# path_to_detector = os.environ.get("FCCDETECTORS", "")
+# path_to_detector = os.environ.get("FCCDETECTORS", "")
+# print(path_to_detector)
+# detectors_to_use=[
+#                     'FCCee/IDEA/compact/IDEA_o1_v01/FCCee_IDEA_o1_v01.xml',
+#                   ]
 # prefix all xmls with path_to_detector
-geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
+# geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
+geoservice.detectors = ["../lcgeo/FCCee/IDEA/compact/IDEA_o1_v01/IDEA_o1_v01.xml"] # IDEA
+# geoservice.detectors = ["../lcgeo/FCCee/CLD/compact/CLD_o2_v05/CLD_o2_v05.xml"] # CLD
 geoservice.OutputLevel = INFO
 
 # Geant4 service
@@ -88,22 +91,27 @@ particle_converter = SimG4PrimariesFromEdmTool("EdmConverter")
 particle_converter.GenParticles.Path = genParticlesOutputName
 
 from Configurables import SimG4SaveTrackerHits
-savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["SimplifiedDriftChamberCollection"])
-savetrackertool.SimTrackHits.Path = "DC_simTrackerHits"
+savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutName="VTXDCollection") #, "VTXOBCollection", "VTXDCollection"]) # VertexBarrelCollection
+savetrackertool.SimTrackHits.Path = "VTX_simTrackerHits"
 
 
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [savetrackertool
+                       outputs= [savetrackertool,
                                  #saveHistTool
                        ],
                        eventProvider=particle_converter,
                        OutputLevel=INFO)
 # Digitize tracker hits
-from Configurables import DCHdigitizer
-dch_digitizer = DCHdigitizer("DCHdigitizer",
+from Configurables import VTXdigitizer
+vtx_digitizer = VTXdigitizer("VTXdigitizer",
     inputSimHits = savetrackertool.SimTrackHits.Path,
-    outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi")
+    outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+    readoutName = "VTXDCollection",
+    xResolution = "5", # um
+    yResolution = "5", # um
+    tResolution = "1000", # ns
+    OutputLevel = DEBUG
 )
 
 ################ Output
@@ -113,7 +121,7 @@ out = PodioOutput("out",
 out.outputCommands = ["keep *"]
 
 import uuid
-out.filename = "output_simplifiedDriftChamber_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+".root"
+out.filename = "output_vertex_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+".root"
 
 #CPU information
 from Configurables import AuditorSvc, ChronoAuditor
@@ -136,11 +144,11 @@ ApplicationMgr(
               genAlg,
               hepmc_converter,
               geantsim,
-              dch_digitizer,
+              vtx_digitizer,
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 4,
+    EvtMax   = 100,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
-    StopOnSignal = True,
+    StopOnSignal = True
  )

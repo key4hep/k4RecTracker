@@ -91,32 +91,42 @@ from Configurables import SimG4SaveTrackerHits
 saveDCHsimHitTool = SimG4SaveTrackerHits("saveDCHsimHitTool", readoutNames=["SimplifiedDriftChamberCollection"])
 saveDCHsimHitTool.SimTrackHits.Path = "DC_simTrackerHits"
 
-saveVTXBsimHitTool = SimG4SaveTrackerHits("saveVTXBsimHitTool", readoutNames=["VertexBarrelCollection"])
-saveVTXBsimHitTool.SimTrackHits.Path = "VTXB_simTrackerHits"
+saveVTXIBsimHitTool = SimG4SaveTrackerHits("saveVTXIBsimHitTool", readoutNames=["VTXIBCollection"])
+saveVTXIBsimHitTool.SimTrackHits.Path = "VTXIB_simTrackerHits"
 
-saveVTXEsimHitTool = SimG4SaveTrackerHits("saveVTXEsimHitTool", readoutNames=["VertexEndcapCollection"])
-saveVTXEsimHitTool.SimTrackHits.Path = "VTXE_simTrackerHits"
+saveVTXOBsimHitTool = SimG4SaveTrackerHits("saveVTXOBsimHitTool", readoutNames=["VTXOBCollection"])
+saveVTXOBsimHitTool.SimTrackHits.Path = "VTXOB_simTrackerHits"
+
+saveVTXDsimHitTool = SimG4SaveTrackerHits("saveVTXDsimHitTool", readoutNames=["VTXDCollection"])
+saveVTXDsimHitTool.SimTrackHits.Path = "VTXD_simTrackerHits"
 
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [saveVTXBsimHitTool, saveVTXEsimHitTool, saveDCHsimHitTool,
+                       outputs= [saveVTXIBsimHitTool, saveVTXOBsimHitTool, saveVTXDsimHitTool, saveDCHsimHitTool,
                                  #saveHistTool
                        ],
                        eventProvider = particle_converter,
                        OutputLevel = INFO)
 
 # Digitize tracker hits (for now digitization is reconstruction)
-vtxb_reco_hit_name = saveVTXBsimHitTool.SimTrackHits.Path.replace("sim", "reco")
+vtxib_reco_hit_name = saveVTXIBsimHitTool.SimTrackHits.Path.replace("sim", "reco")
 from Configurables import VTXdigitizer
-vtxb_digitizer = VTXdigitizer("VTXBdigitizer",
-    inputSimHits = saveVTXBsimHitTool.SimTrackHits.Path,
-    outputDigiHits = vtxb_reco_hit_name
+vtxib_digitizer = VTXdigitizer("VTXIBdigitizer",
+    inputSimHits = saveVTXIBsimHitTool.SimTrackHits.Path,
+    outputDigiHits = vtxib_reco_hit_name
 )
 
-vtxe_reco_hit_name = saveVTXEsimHitTool.SimTrackHits.Path.replace("sim", "reco")
-vtxe_digitizer = VTXdigitizer("VTXEdigitizer",
-    inputSimHits = saveVTXEsimHitTool.SimTrackHits.Path,
-    outputDigiHits = vtxe_reco_hit_name
+vtxob_reco_hit_name = saveVTXOBsimHitTool.SimTrackHits.Path.replace("sim", "reco")
+from Configurables import VTXdigitizer
+vtxob_digitizer = VTXdigitizer("VTXOBdigitizer",
+    inputSimHits = saveVTXOBsimHitTool.SimTrackHits.Path,
+    outputDigiHits = vtxob_reco_hit_name
+)
+
+vtxd_reco_hit_name = saveVTXDsimHitTool.SimTrackHits.Path.replace("sim", "reco")
+vtxd_digitizer = VTXdigitizer("VTXDdigitizer",
+    inputSimHits = saveVTXDsimHitTool.SimTrackHits.Path,
+    outputDigiHits = vtxd_reco_hit_name
 )
 
 dch_reco_hit_name = saveDCHsimHitTool.SimTrackHits.Path.replace("sim", "reco")
@@ -161,7 +171,7 @@ ApplicationMgr(
               hepmc_converter,
               geantsim,
               vtxb_digitizer,
-              vtxe_digitizer,
+              vtxd_digitizer,
               dch_digitizer,
               genfitter,
               out
