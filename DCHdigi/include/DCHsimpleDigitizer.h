@@ -15,10 +15,10 @@
 #include "edm4hep/TrackerHitCollection.h"
 
 // DD4HEP
+#include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
 #include "DDSegmentation/BitFieldCoder.h"
-#include "DD4hep/Detector.h" // for dd4hep::VolumeManager
 
-/** @class DCHdigitizer
+/** @class DCHsimpleDigitizer
  *
  *  Algorithm for creating digitized drift chamber hits (still based on edm4hep::TrackerHit) from edm4hep::SimTrackerHit.
  *  You have to specify the expected resolution in z and in xy (distance to the wire). The smearing is applied in the wire reference frame.
@@ -28,10 +28,10 @@
  *
  */
 
-class DCHdigitizer : public GaudiAlgorithm {
+class DCHsimpleDigitizer : public GaudiAlgorithm {
 public:
-  explicit DCHdigitizer(const std::string&, ISvcLocator*);
-  virtual ~DCHdigitizer();
+  explicit DCHsimpleDigitizer(const std::string&, ISvcLocator*);
+  virtual ~DCHsimpleDigitizer();
   /**  Initialize.
    *   @return status code
    */
@@ -61,7 +61,8 @@ private:
   dd4hep::VolumeManager m_volman;
 
   // z position resolution in mm
-  FloatProperty m_z_resolution{this, "zResolution", 1.0, "Spatial resolution in the z direction (from reading out the wires at both sides) [mm]"};
+  FloatProperty m_z_resolution{this, "zResolution", 1.0,
+                               "Spatial resolution in the z direction (from reading out the wires at both sides) [mm]"};
   // xy resolution in mm
   FloatProperty m_xy_resolution{this, "xyResolution", 0.1, "Spatial resolution in the xy direction [mm]"};
 
@@ -71,5 +72,4 @@ private:
   Rndm::Numbers m_gauss_z;
   // Gaussian random number generator used for the smearing of the xy position
   Rndm::Numbers m_gauss_xy;
-
 };

@@ -46,11 +46,26 @@ geoservice = GeoSvc("GeoSvc")
 path_to_detector = os.environ.get("FCCDETECTORS", "")
 print(path_to_detector)
 detectors_to_use=[
-                    'Detector/DetFCCeeIDEA/compact/FCCee_DectMaster.xml',
+                    'Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v01.xml'
                   ]
 # prefix all xmls with path_to_detector
 geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
 geoservice.OutputLevel = INFO
+
+# define regions to act on Geant4 max step length to have the expected 1hit/800um in the drift chamber
+#from Configurables import SimG4FullSimDCHRegion
+#drift_chamber_region = SimG4FullSimDCHRegion("drift_chamber_region", volumeNames = ["CDCH"], max_step_length = 10)
+from Configurables import  SimG4UserLimitRegion
+regiontool = SimG4UserLimitRegion("limits")
+regiontool.volumeNames = ["CDCH"]
+regiontool.OutputLevel = DEBUG
+from GaudiKernel.SystemOfUnits import mm
+regiontool.maxStep = 0.4*mm
+
+from Configurables import SimG4UserLimitPhysicsList
+# create overlay on top of FTFP_BERT physics list, attaching fast sim/parametrization process
+physicslisttool = SimG4UserLimitPhysicsList("Physics")
+physicslisttool.fullphysics = "SimG4FtfpBert"
 
 # Geant4 service
 # Configures the Geant simulation: geometry, physics list and user actions
@@ -68,7 +83,9 @@ from Configurables import SimG4ConstantMagneticFieldTool
 field = SimG4ConstantMagneticFieldTool("SimG4ConstantMagneticFieldTool", FieldComponentZ = -2 * tesla, FieldOn = magneticField, IntegratorStepper = "ClassicalRK4")
 
 from Configurables import SimG4Svc
-geantservice = SimG4Svc("SimG4Svc", detector = 'SimG4DD4hepDetector', physicslist = "SimG4FtfpBert", actions = actions, magneticField = field)
+#geantservice = SimG4Svc("SimG4Svc", detector = 'SimG4DD4hepDetector', physicslist = "SimG4FtfpBert", actions = actions, magneticField = field)
+geantservice = SimG4Svc("SimG4Svc", detector = 'SimG4DD4hepDetector', physicslist = physicslisttool, actions = actions, magneticField = field, regions = [regiontool])
+#geantservice = SimG4Svc("SimG4Svc", detector = 'SimG4DD4hepDetector', physicslist = "SimG4FtfpBert", actions = actions, magneticField = field, regions = ["SimG4FullSimDCHRegion/drift_chamber_region"])
 
 # Fixed seed to have reproducible results, change it for each job if you split one production into several jobs
 # Mind that if you leave Gaudi handle random seed and some job start within the same second (very likely) you will have duplicates
@@ -77,6 +94,7 @@ geantservice.seedValue = 4242
 
 # Range cut
 geantservice.g4PreInitCommands += ["/run/setCut 0.1 mm"]
+#geantservice.g4PreInitCommands += ["/run/setStepMax 0.1 mm"]
 
 # Geant4 algorithm
 # Translates EDM to G4Event, passes the event to G4, writes out outputs via tools
@@ -88,57 +106,27 @@ particle_converter = SimG4PrimariesFromEdmTool("EdmConverter")
 particle_converter.GenParticles.Path = genParticlesOutputName
 
 from Configurables import SimG4SaveTrackerHits
-saveDCHsimHitTool = SimG4SaveTrackerHits("saveDCHsimHitTool", readoutNames=["SimplifiedDriftChamberCollection"])
-saveDCHsimHitTool.SimTrackHits.Path = "DC_simTrackerHits"
+savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["CDCHHits"])
+savetrackertool.SimTrackHits.Path = "DC_simTrackerHits"
 
-saveVTXIBsimHitTool = SimG4SaveTrackerHits("saveVTXIBsimHitTool", readoutNames=["VTXIBCollection"])
-saveVTXIBsimHitTool.SimTrackHits.Path = "VTXIB_simTrackerHits"
-
-saveVTXOBsimHitTool = SimG4SaveTrackerHits("saveVTXOBsimHitTool", readoutNames=["VTXOBCollection"])
-saveVTXOBsimHitTool.SimTrackHits.Path = "VTXOB_simTrackerHits"
-
-saveVTXDsimHitTool = SimG4SaveTrackerHits("saveVTXDsimHitTool", readoutNames=["VTXDCollection"])
-saveVTXDsimHitTool.SimTrackHits.Path = "VTXD_simTrackerHits"
 
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [saveVTXIBsimHitTool, saveVTXOBsimHitTool, saveVTXDsimHitTool, saveDCHsimHitTool,
+                       outputs= [savetrackertool
                                  #saveHistTool
                        ],
-                       eventProvider = particle_converter,
-                       OutputLevel = INFO)
-
-# Digitize tracker hits (for now digitization is reconstruction)
-vtxib_reco_hit_name = saveVTXIBsimHitTool.SimTrackHits.Path.replace("sim", "reco")
-from Configurables import VTXdigitizer
-vtxib_digitizer = VTXdigitizer("VTXIBdigitizer",
-    inputSimHits = saveVTXIBsimHitTool.SimTrackHits.Path,
-    outputDigiHits = vtxib_reco_hit_name
+                       eventProvider=particle_converter,
+                       OutputLevel=DEBUG)
+# Digitize tracker hits
+from Configurables import DCHsimpleDigitizerExtendedEdm
+dch_digitizer = DCHsimpleDigitizerExtendedEdm("DCHsimpleDigitizerExtendedEdm",
+    inputSimHits = savetrackertool.SimTrackHits.Path,
+    outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+    readoutName = "CDCHHits",
+    xyResolution = 0.1, # mm
+    zResolution = 1, # mm
+    OutputLevel=INFO
 )
-
-vtxob_reco_hit_name = saveVTXOBsimHitTool.SimTrackHits.Path.replace("sim", "reco")
-from Configurables import VTXdigitizer
-vtxob_digitizer = VTXdigitizer("VTXOBdigitizer",
-    inputSimHits = saveVTXOBsimHitTool.SimTrackHits.Path,
-    outputDigiHits = vtxob_reco_hit_name
-)
-
-vtxd_reco_hit_name = saveVTXDsimHitTool.SimTrackHits.Path.replace("sim", "reco")
-vtxd_digitizer = VTXdigitizer("VTXDdigitizer",
-    inputSimHits = saveVTXDsimHitTool.SimTrackHits.Path,
-    outputDigiHits = vtxd_reco_hit_name
-)
-
-dch_reco_hit_name = saveDCHsimHitTool.SimTrackHits.Path.replace("sim", "reco")
-from Configurables import DCHsimpleDigitizer
-dch_digitizer = DCHsimpleDigitizer("DCHsimpleDigitizer",
-    inputSimHits = saveDCHsimHitTool.SimTrackHits.Path,
-    outputDigiHits = dch_reco_hit_name
-)
-
-# run the genfit tracking 
-from Configurables import GenFitter
-genfitter = GenFitter("GenFitter", inputHits = dch_reco_hit_name, outputTracks = "genfit_tracks") 
 
 ################ Output
 from Configurables import PodioOutput
@@ -147,7 +135,7 @@ out = PodioOutput("out",
 out.outputCommands = ["keep *"]
 
 import uuid
-out.filename = "output_simplifiedDriftChamber_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+".root"
+out.filename = "output_simplifiedDriftChamber_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+"_stepLength_"+str(regiontool.maxStep)+".root"
 
 #CPU information
 from Configurables import AuditorSvc, ChronoAuditor
@@ -170,14 +158,11 @@ ApplicationMgr(
               genAlg,
               hepmc_converter,
               geantsim,
-              vtxb_digitizer,
-              vtxd_digitizer,
               dch_digitizer,
-              genfitter,
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 4,
+    EvtMax   = 10,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True,
  )
