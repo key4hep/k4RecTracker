@@ -10,8 +10,8 @@ from GaudiKernel.SystemOfUnits import MeV, GeV, tesla
 momentum = 5 # in GeV
 #thetaMin = 90.25 # degrees
 #thetaMax = 90.25 # degrees
-thetaMin = 20 # degrees
-thetaMax = 130 # degrees
+thetaMin = 20 #20 degrees
+thetaMax = 160 #160 # degrees
 pdgCode = 13 # 11 electron, 13 muon, 22 photon, 111 pi0, 211 pi+
 magneticField = True
 _pi = 3.14159
@@ -23,7 +23,7 @@ pgun = MomentumRangeParticleGun("ParticleGun_Electron")
 pgun.PdgCodes = [pdgCode]
 pgun.MomentumMin = momentum * GeV
 pgun.MomentumMax = momentum * GeV
-pgun.PhiMin = 0
+pgun.PhiMin = 0 
 pgun.PhiMax = 2 * _pi
 pgun.ThetaMin = thetaMin * _pi / 180.
 pgun.ThetaMax = thetaMax * _pi / 180.
@@ -71,7 +71,7 @@ from Configurables import SimG4ConstantMagneticFieldTool
 field = SimG4ConstantMagneticFieldTool("SimG4ConstantMagneticFieldTool", FieldComponentZ = -2 * tesla, FieldOn = magneticField, IntegratorStepper = "ClassicalRK4")
 
 from Configurables import SimG4Svc
-geantservice = SimG4Svc("SimG4Svc", detector = 'SimG4DD4hepDetector', physicslist = "SimG4FtfpBert", actions = actions, magneticField = field)
+geantservice = SimG4Svc("SimG4Svc", detector = 'SimG4DD4hepDetector', physicslist = "SimG4FtfpBert", magneticField = field) # , actions = actions)
 
 # Fixed seed to have reproducible results, change it for each job if you split one production into several jobs
 # Mind that if you leave Gaudi handle random seed and some job start within the same second (very likely) you will have duplicates
@@ -91,28 +91,81 @@ particle_converter = SimG4PrimariesFromEdmTool("EdmConverter")
 particle_converter.GenParticles.Path = genParticlesOutputName
 
 from Configurables import SimG4SaveTrackerHits
-savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutName="VTXDCollection") #, "VTXOBCollection", "VTXDCollection"]) # VertexBarrelCollection
+
+### CLD
+# savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VertexBarrelCollection"])
+# savetrackertool.SimTrackHits.Path = "VTXB_simTrackerHits"
+
+# savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VertexEndcapCollection"])
+# savetrackertool.SimTrackHits.Path = "VTXE_simTrackerHits"
+
+
+### IDEA
+savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VTXIBCollection", "VTXOBCollection", "VTXDCollection"])
 savetrackertool.SimTrackHits.Path = "VTX_simTrackerHits"
+
+# savetrackertoolOB = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VTXOBCollection"])
+# savetrackertoolOB.SimTrackHits.Path = "VTXOB_simTrackerHits"
+
+# savetrackertoolD = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VTXDCollection"])
+# savetrackertoolD.SimTrackHits.Path = "VTXD_simTrackerHits"
 
 
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [savetrackertool,
+                       outputs= [savetrackertool #savetrackertoolIB, #savetrackertoolOB, # savetrackertoolD
                                  #saveHistTool
                        ],
                        eventProvider=particle_converter,
                        OutputLevel=INFO)
 # Digitize tracker hits
 from Configurables import VTXdigitizer
-vtx_digitizer = VTXdigitizer("VTXdigitizer",
+
+
+# vtx_digitizer = VTXdigitizer("VTXdigitizer",
+#     inputSimHits = savetrackertool.SimTrackHits.Path,
+#     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+#     readoutName = "VertexBarrelCollection",
+#     xResolution = 0.005, # mm
+#     yResolution = 0.005, # mm
+#     tResolution = 1000, # ns
+#     OutputLevel = INFO
+# )
+
+### For IDEA
+vtxib_digitizer = VTXdigitizer("VTXdigitizer",
     inputSimHits = savetrackertool.SimTrackHits.Path,
     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
-    readoutName = "VTXDCollection",
-    xResolution = "5", # um
-    yResolution = "5", # um
-    tResolution = "1000", # ns
+    readoutName = "VTXIBCollection",
+    xResolution = 1.0, # mm
+    yResolution = 1.0, # mm
+    tResolution = 1000, # ns
     OutputLevel = DEBUG
 )
+
+# vtxob_digitizer = VTXdigitizer("VTXdigitizer",
+#     inputSimHits = savetrackertool.SimTrackHits.Path,
+#     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+#     readoutName = "VTXOBCollection",
+#     xResolution = 1.0, # mm
+#     yResolution = 1.0, # mm
+#     tResolution = 1000, # ns
+#     OutputLevel = INFO
+# )
+
+# vtxd_digitizer = VTXdigitizer("VTXdigitizer",
+#     inputSimHits = savetrackertool.SimTrackHits.Path,
+#     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+#     readoutName = "VTXDCollection",
+#     xResolution = 1.0, # mm
+#     yResolution = 1.0, # mm
+#     tResolution = 1000, # ns
+#     OutputLevel = INFO
+# )
+
+# run the genfit tracking 
+# from Configurables import GenFitter
+# genfitter = GenFitter("GenFitter", inputHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"), outputTracks = "genfit_tracks") 
 
 ################ Output
 from Configurables import PodioOutput
@@ -144,11 +197,14 @@ ApplicationMgr(
               genAlg,
               hepmc_converter,
               geantsim,
-              vtx_digitizer,
+            #   vtx_digitizer,
+              vtxib_digitizer,
+              # vtxob_digitizer,
+            #   vtxd_digitizer,
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 100,
+    EvtMax   = 1000,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True
  )

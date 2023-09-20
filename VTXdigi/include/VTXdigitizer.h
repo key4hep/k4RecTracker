@@ -51,7 +51,7 @@ private:
   DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout names
-  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "VTXDCollection", "Name of the detector readout"};
+  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "VertexBarrelCollection", "Name of the detector readout"};
   // Pointer to the geometry service
   ServiceHandle<IGeoSvc> m_geoSvc;
   // Decoder for the cellID
@@ -73,5 +73,5 @@ private:
   // Gaussian random number generator used for smearing
   Rndm::Numbers m_gauss_x;
   Rndm::Numbers m_gauss_y;
-  Rndm::Numbers m_gauss_t;
+  Rndm::Numbers m_gauss_time;
 };

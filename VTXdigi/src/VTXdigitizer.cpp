@@ -27,7 +27,7 @@ StatusCode VTXdigitizer::initialize() {
     error() << "Couldn't initialize RndmGenSvc!" << endmsg;
     return StatusCode::FAILURE;
   }
-  if (m_gauss_t.initialize(m_randSvc, Rndm::Gauss(0., m_t_resolution)).isFailure()) {
+  if (m_gauss_time.initialize(m_randSvc, Rndm::Gauss(0., m_t_resolution)).isFailure()) {
     error() << "Couldn't initialize RndmGenSvc!" << endmsg;
     return StatusCode::FAILURE;
   }
@@ -56,59 +56,79 @@ StatusCode VTXdigitizer::execute() {
   for (const auto& input_sim_hit : *input_sim_hits) {
     auto output_digi_hit = output_digi_hits->create();
 
-    warning() << "Test!!!" << endmsg;
-
-
-
-
     // smear the hit position: need to go in the local frame of the silicon sensor to smear in the direction along/perpendicular to the stave
 
     // retrieve the cell detElement
     dd4hep::DDSegmentation::CellID cellID         = input_sim_hit.getCellID();
+    debug() << "Digitisation of " << m_readoutName << ", cellID: " << cellID << endmsg;
+
+    std::string sensorDetElementName = "";
+    if(m_readoutName == "VTXIBCollection"){
+        sensorDetElementName =
+          Form( "VTXIB_layer%d_stave%d_module%d_sensors_sensor%d", 
+                m_decoder->get(cellID, "layer"), 
+                m_decoder->get(cellID, "stave"), 
+                m_decoder->get(cellID, "module"), 
+                m_decoder->get(cellID, "sensor")
+          );
+    }
+    else if(m_readoutName == "VTXOBCollection"){
+        sensorDetElementName =
+          Form( "VTXOB_layer%d_stave%d_module%d_sensor%d", 
+                m_decoder->get(cellID, "layer"), 
+                m_decoder->get(cellID, "stave"), 
+                m_decoder->get(cellID, "module"), 
+                m_decoder->get(cellID, "sensor")
+          );
+    }
+    else if(m_readoutName == "VTXDCollection"){
+      sensorDetElementName =
+        Form( "VTXD_side%d_layer%d_petal%d_stave%d_sensors_module%d_sensor%d", 
+              m_decoder->get(cellID, "side"), 
+              m_decoder->get(cellID, "layer"), 
+              m_decoder->get(cellID, "petal"), 
+              m_decoder->get(cellID, "stave"), 
+              m_decoder->get(cellID, "module"), 
+              m_decoder->get(cellID, "sensor")
+        );
+    }
+    else if(m_readoutName == "VertexBarrelReadout"){ // CLD Barrel
+      sensorDetElementName =
+        Form( "VertexBarrel_layer%d_ladder%d", 
+              m_decoder->get(cellID, "layer"), 
+              m_decoder->get(cellID, "module")
+        );
+    }
+
+    // // get the transformation matrix used to place the sensor: Kind of working
+    // auto        cellDetElement = m_volman.lookupDetElement(cellID);
+    // const auto& sensorTransformMatrix = cellDetElement.worldTransformation();
+
+
     auto                           cellDetElement = m_volman.lookupDetElement(cellID);
-    warning() << "cellID: " << cellID << endmsg;
+    dd4hep::DetElement blubDetElement = cellDetElement; //.child(sensorDetElementName);
+    const auto& sensorTransformMatrix = blubDetElement.nominal().worldTransformation();
 
-    // retrieve the sensor          ###### (in DD4hep 1.23 there is no easy way to access the volume daughters we have to pass by detElements, in later versions volumes can be used)
+    debug() << "Rotation matrix: " << Form("%d %d %d %d %d %d %d %d %d",sensorTransformMatrix.GetRotationMatrix()[0], sensorTransformMatrix.GetRotationMatrix()[1], sensorTransformMatrix.GetRotationMatrix()[2], sensorTransformMatrix.GetRotationMatrix()[3], sensorTransformMatrix.GetRotationMatrix()[4], sensorTransformMatrix.GetRotationMatrix()[5], sensorTransformMatrix.GetRotationMatrix()[6], sensorTransformMatrix.GetRotationMatrix()[7], sensorTransformMatrix.GetRotationMatrix()[8]) << endmsg;
+    // debug() << "Translation: " << sensorTransformMatrix.GetTranslation() << endmsg;
 
-    // // VTXIB
-    // const std::string& sensorDetElementName =
-    //     Form("VTXIB_layer%d_stave_sensors_module%d_sensorMotherVolume%d", m_decoder->get(cellID, "layer"),
-    //           m_decoder->get(cellID, "module"), m_decoder->get(cellID, "sensor"));
-    // warning() << "sensorDetElementName: " << sensorDetElementName << endmsg;
 
-    // VTXD
-    const std::string& sensorDetElementName =
-        Form("VTXD_side%d_layer%d_petal%d_stave%d_sensors_module%d_sensor%d", m_decoder->get(cellID, "side"),
-              m_decoder->get(cellID, "layer"), m_decoder->get(cellID, "petal"), m_decoder->get(cellID, "stave"), m_decoder->get(cellID, "module"), m_decoder->get(cellID, "sensor"));
-    warning() << "sensorDetElementName: " << sensorDetElementName << endmsg;
-
-    // // CLD Barrel
-    // const std::string& sensorDetElementName =
-    //     Form("VTXIB_layer%d_stave_sensors_module%d_sensorMotherVolume%d", m_decoder->get(cellID, "layer"),
-    //           m_decoder->get(cellID, "module"), m_decoder->get(cellID, "sensor"));
-    // warning() << "sensorDetElementName: " << sensorDetElementName << endmsg;    
-
-    dd4hep::DetElement sensorDetElement = cellDetElement; // cellDetElement.child(sensorDetElementName);
-
-    // get the transformation matrix used to place the wire
-    const auto& sensorTransformMatrix = sensorDetElement.nominal().worldTransformation();
-
-    // Retrieve global position in mm and apply unit transformation (translation matrix is tored in cm)
+    // Retrieve global position in mm and apply unit transformation (translation matrix is stored in cm)
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,
-                                      input_sim_hit.getPosition().z * dd4hep::mm}; // Unit correct for vertex?
+                                      input_sim_hit.getPosition().z * dd4hep::mm};
     double simHitLocalPosition[3]  = {0, 0, 0};
 
     // get the simHit coordinate in cm in the sensor reference frame to be able to apply smearing
     sensorTransformMatrix.MasterToLocal(simHitGlobalPosition, simHitLocalPosition);
     debug() << "Cell ID string: " << m_decoder->valueString(cellID) << endmsg;
     ;
-    debug() << "Global simHit x " << simHitGlobalPosition[0] << " --> Local simHit x " << simHitLocalPosition[0]
-            << " in cm" << endmsg;
-    debug() << "Global simHit y " << simHitGlobalPosition[1] << " --> Local simHit y " << simHitLocalPosition[1]
-            << " in cm" << endmsg;
-    debug() << "Global simHit z " << simHitGlobalPosition[2] << " --> Local simHit z " << simHitLocalPosition[2]
-            << " in cm" << endmsg;
+    debug() << "Global simHit x " << simHitGlobalPosition[0] << " [mm] --> Local simHit x " << simHitLocalPosition[0]
+            << " [cm]" << endmsg;
+    debug() << "Global simHit y " << simHitGlobalPosition[1] << " [mm] --> Local simHit y " << simHitLocalPosition[1]
+            << " [cm]" << endmsg;
+    debug() << "Global simHit z " << simHitGlobalPosition[2] << " [mm] --> Local simHit z " << simHitLocalPosition[2]
+            << " [cm]" << endmsg;
 
     // build a vector to easily apply smearing of distance to the wire
     dd4hep::rec::Vector3D simHitLocalPositionVector(simHitLocalPosition[0], simHitLocalPosition[1],
@@ -129,10 +149,22 @@ StatusCode VTXdigitizer::execute() {
                                                   digiHitGlobalPosition[1] / dd4hep::mm,
                                                   digiHitGlobalPosition[2] / dd4hep::mm);
 
+    debug() << "Global digiHit x " << digiHitGlobalPositionVector[0] << " [mm] --> Local digiHit x " << digiHitLocalPosition[0]
+            << " [cm]" << endmsg;
+    debug() << "Global digiHit y " << digiHitGlobalPositionVector[1] << " [mm] --> Local digiHit y " << digiHitLocalPosition[1]
+            << " [cm]" << endmsg;
+    debug() << "Global digiHit z " << digiHitGlobalPositionVector[2] << " [mm] --> Local digiHit z " << digiHitLocalPosition[2]
+            << " [cm]" << endmsg;
 
+    debug() << "Moving to next hit... " << std::endl << endmsg;
 
     output_digi_hit.setEDep(input_sim_hit.getEDep());
     output_digi_hit.setPosition(digiHitGlobalPositionVector);
+
+    // Apply time smearing
+    output_digi_hit.setTime( input_sim_hit.getTime() + m_gauss_time.shoot() );
+
+    output_digi_hit.setCellID(cellID);
   }
   return StatusCode::SUCCESS;
 }
