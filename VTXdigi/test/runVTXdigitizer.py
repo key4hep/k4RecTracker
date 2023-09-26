@@ -8,13 +8,17 @@ podioevent  = FCCDataSvc("EventDataSvc")
 from GaudiKernel.SystemOfUnits import MeV, GeV, tesla
 ################## Particle gun setup
 momentum = 5 # in GeV
-#thetaMin = 90.25 # degrees
-#thetaMax = 90.25 # degrees
-thetaMin = 20 #20 degrees
-thetaMax = 160 #160 # degrees
+thetaMin = 5
+thetaMax = 175
 pdgCode = 13 # 11 electron, 13 muon, 22 photon, 111 pi0, 211 pi+
 magneticField = True
 _pi = 3.14159
+
+################## Vertex sensor resolutions
+innerVertexResolution_x = 0.005 # [mm], assume 5 µm resolution for ARCADIA sensor
+innerVertexResolution_y = 0.005 # [mm], assume 5 µm resolution for ARCADIA sensor
+outerVertexResolution_x = 0.014 # [mm], assume ATLASPix3 sensor with 50 µm pitch -> 50/sqrt(12) = 14.4 µm resolution
+outerVertexResolution_y = 0.043 # [mm], assume ATLASPix3 sensor with 150 µm pitch -> 150/sqrt(12) = 43.3 µm resolution
 
 from Configurables import GenAlg
 genAlg = GenAlg()
@@ -23,7 +27,7 @@ pgun = MomentumRangeParticleGun("ParticleGun_Electron")
 pgun.PdgCodes = [pdgCode]
 pgun.MomentumMin = momentum * GeV
 pgun.MomentumMax = momentum * GeV
-pgun.PhiMin = 0 
+pgun.PhiMin = 0
 pgun.PhiMax = 2 * _pi
 pgun.ThetaMin = thetaMin * _pi / 180.
 pgun.ThetaMax = thetaMax * _pi / 180.
@@ -52,7 +56,6 @@ geoservice = GeoSvc("GeoSvc")
 # prefix all xmls with path_to_detector
 # geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
 geoservice.detectors = ["../lcgeo/FCCee/IDEA/compact/IDEA_o1_v01/IDEA_o1_v01.xml"] # IDEA
-# geoservice.detectors = ["../lcgeo/FCCee/CLD/compact/CLD_o2_v05/CLD_o2_v05.xml"] # CLD
 geoservice.OutputLevel = INFO
 
 # Geant4 service
@@ -93,27 +96,27 @@ particle_converter.GenParticles.Path = genParticlesOutputName
 from Configurables import SimG4SaveTrackerHits
 
 ### CLD
-# savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VertexBarrelCollection"])
+# savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutName="VertexBarrelCollection")
 # savetrackertool.SimTrackHits.Path = "VTXB_simTrackerHits"
 
-# savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VertexEndcapCollection"])
+# savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutName="VertexEndcapCollection")
 # savetrackertool.SimTrackHits.Path = "VTXE_simTrackerHits"
 
 
 ### IDEA
-savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VTXIBCollection", "VTXOBCollection", "VTXDCollection"])
-savetrackertool.SimTrackHits.Path = "VTX_simTrackerHits"
+SimG4SaveTrackerHitsIB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsIB", readoutName="VTXIBCollection")
+SimG4SaveTrackerHitsIB.SimTrackHits.Path = "VTXIB_simTrackerHits"
 
-# savetrackertoolOB = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VTXOBCollection"])
-# savetrackertoolOB.SimTrackHits.Path = "VTXOB_simTrackerHits"
+SimG4SaveTrackerHitsOB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsOB", readoutName="VTXOBCollection")
+SimG4SaveTrackerHitsOB.SimTrackHits.Path = "VTXOB_simTrackerHits"
 
-# savetrackertoolD = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["VTXDCollection"])
-# savetrackertoolD.SimTrackHits.Path = "VTXD_simTrackerHits"
+SimG4SaveTrackerHitsD = SimG4SaveTrackerHits("SimG4SaveTrackerHitsD", readoutName="VTXDCollection")
+SimG4SaveTrackerHitsD.SimTrackHits.Path = "VTXD_simTrackerHits"
 
 
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [savetrackertool #savetrackertoolIB, #savetrackertoolOB, # savetrackertoolD
+                       outputs= [SimG4SaveTrackerHitsIB, SimG4SaveTrackerHitsOB, SimG4SaveTrackerHitsD
                                  #saveHistTool
                        ],
                        eventProvider=particle_converter,
@@ -121,7 +124,7 @@ geantsim = SimG4Alg("SimG4Alg",
 # Digitize tracker hits
 from Configurables import VTXdigitizer
 
-
+### For CLD
 # vtx_digitizer = VTXdigitizer("VTXdigitizer",
 #     inputSimHits = savetrackertool.SimTrackHits.Path,
 #     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
@@ -132,36 +135,47 @@ from Configurables import VTXdigitizer
 #     OutputLevel = INFO
 # )
 
+# vtx_digitizer = VTXdigitizer("VTXdigitizer",
+#     inputSimHits = savetrackertool.SimTrackHits.Path,
+#     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+#     readoutName = "VertexEndcapCollection",
+#     xResolution = 0.005, # mm
+#     yResolution = 0.005, # mm
+#     tResolution = 1000, # ns
+#     OutputLevel = INFO
+# )
+
+
 ### For IDEA
 vtxib_digitizer = VTXdigitizer("VTXdigitizer",
-    inputSimHits = savetrackertool.SimTrackHits.Path,
-    outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+    inputSimHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path,
+    outputDigiHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path.replace("sim", "digi"),
     readoutName = "VTXIBCollection",
-    xResolution = 1.0, # mm
-    yResolution = 1.0, # mm
+    xResolution = innerVertexResolution_x, # mm, r-phi direction
+    yResolution = innerVertexResolution_y, # mm, z direction
     tResolution = 1000, # ns
-    OutputLevel = DEBUG
+    OutputLevel = INFO
 )
 
-# vtxob_digitizer = VTXdigitizer("VTXdigitizer",
-#     inputSimHits = savetrackertool.SimTrackHits.Path,
-#     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
-#     readoutName = "VTXOBCollection",
-#     xResolution = 1.0, # mm
-#     yResolution = 1.0, # mm
-#     tResolution = 1000, # ns
-#     OutputLevel = INFO
-# )
+vtxob_digitizer = VTXdigitizer("VTXdigitizer",
+    inputSimHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path,
+    outputDigiHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path.replace("sim", "digi"),
+    readoutName = "VTXOBCollection",
+    xResolution = outerVertexResolution_x, # mm, r-phi direction
+    yResolution = outerVertexResolution_y, # mm, z direction
+    tResolution = 1000, # ns
+    OutputLevel = INFO
+)
 
-# vtxd_digitizer = VTXdigitizer("VTXdigitizer",
-#     inputSimHits = savetrackertool.SimTrackHits.Path,
-#     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
-#     readoutName = "VTXDCollection",
-#     xResolution = 1.0, # mm
-#     yResolution = 1.0, # mm
-#     tResolution = 1000, # ns
-#     OutputLevel = INFO
-# )
+vtxd_digitizer = VTXdigitizer("VTXdigitizer",
+    inputSimHits = SimG4SaveTrackerHitsD.SimTrackHits.Path,
+    outputDigiHits = SimG4SaveTrackerHitsD.SimTrackHits.Path.replace("sim", "digi"),
+    readoutName = "VTXDCollection",
+    xResolution = outerVertexResolution_x, # mm, r direction
+    yResolution = outerVertexResolution_y, # mm, phi direction
+    tResolution = 1000, # ns
+    OutputLevel = INFO
+)
 
 # run the genfit tracking 
 # from Configurables import GenFitter
@@ -199,7 +213,7 @@ ApplicationMgr(
               geantsim,
             #   vtx_digitizer,
               vtxib_digitizer,
-              # vtxob_digitizer,
+            #   vtxob_digitizer,
             #   vtxd_digitizer,
               out
               ],

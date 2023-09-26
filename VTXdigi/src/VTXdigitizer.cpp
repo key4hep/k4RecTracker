@@ -62,57 +62,48 @@ StatusCode VTXdigitizer::execute() {
     dd4hep::DDSegmentation::CellID cellID         = input_sim_hit.getCellID();
     debug() << "Digitisation of " << m_readoutName << ", cellID: " << cellID << endmsg;
 
-    std::string sensorDetElementName = "";
-    if(m_readoutName == "VTXIBCollection"){
-        sensorDetElementName =
-          Form( "VTXIB_layer%d_stave%d_module%d_sensors_sensor%d", 
-                m_decoder->get(cellID, "layer"), 
-                m_decoder->get(cellID, "stave"), 
-                m_decoder->get(cellID, "module"), 
-                m_decoder->get(cellID, "sensor")
-          );
-    }
-    else if(m_readoutName == "VTXOBCollection"){
-        sensorDetElementName =
-          Form( "VTXOB_layer%d_stave%d_module%d_sensor%d", 
-                m_decoder->get(cellID, "layer"), 
-                m_decoder->get(cellID, "stave"), 
-                m_decoder->get(cellID, "module"), 
-                m_decoder->get(cellID, "sensor")
-          );
-    }
-    else if(m_readoutName == "VTXDCollection"){
-      sensorDetElementName =
-        Form( "VTXD_side%d_layer%d_petal%d_stave%d_sensors_module%d_sensor%d", 
-              m_decoder->get(cellID, "side"), 
-              m_decoder->get(cellID, "layer"), 
-              m_decoder->get(cellID, "petal"), 
-              m_decoder->get(cellID, "stave"), 
-              m_decoder->get(cellID, "module"), 
-              m_decoder->get(cellID, "sensor")
-        );
-    }
-    else if(m_readoutName == "VertexBarrelReadout"){ // CLD Barrel
-      sensorDetElementName =
-        Form( "VertexBarrel_layer%d_ladder%d", 
-              m_decoder->get(cellID, "layer"), 
-              m_decoder->get(cellID, "module")
-        );
-    }
+    //// Leave this for the moment as it could be useful
+    // std::string sensorDetElementName = "";
+    // if(m_readoutName == "VTXIBCollection"){
+    //     sensorDetElementName =
+    //       Form( "VTXIB_layer%d_stave%d_module%d_sensors_sensor%d", 
+    //             m_decoder->get(cellID, "layer"), 
+    //             m_decoder->get(cellID, "stave"), 
+    //             m_decoder->get(cellID, "module"), 
+    //             m_decoder->get(cellID, "sensor")
+    //       );
+    // }
+    // else if(m_readoutName == "VTXOBCollection"){
+    //     sensorDetElementName =
+    //       Form( "VTXOB_layer%d_stave%d_module%d_sensor%d", 
+    //             m_decoder->get(cellID, "layer"), 
+    //             m_decoder->get(cellID, "stave"), 
+    //             m_decoder->get(cellID, "module"), 
+    //             m_decoder->get(cellID, "sensor")
+    //       );
+    // }
+    // else if(m_readoutName == "VTXDCollection"){
+    //   sensorDetElementName =
+    //     Form( "VTXD_side%d_layer%d_petal%d_stave%d_sensors_module%d_sensor%d", 
+    //           m_decoder->get(cellID, "side"), 
+    //           m_decoder->get(cellID, "layer"), 
+    //           m_decoder->get(cellID, "petal"), 
+    //           m_decoder->get(cellID, "stave"), 
+    //           m_decoder->get(cellID, "module"), 
+    //           m_decoder->get(cellID, "sensor")
+    //     );
+    // }
+    // else if(m_readoutName == "VertexBarrelReadout"){ // CLD Barrel
+    //   sensorDetElementName =
+    //     Form( "VertexBarrel_layer%d_ladder%d", 
+    //           m_decoder->get(cellID, "layer"), 
+    //           m_decoder->get(cellID, "module")
+    //     );
+    // }
 
-    // // get the transformation matrix used to place the sensor: Kind of working
-    // auto        cellDetElement = m_volman.lookupDetElement(cellID);
-    // const auto& sensorTransformMatrix = cellDetElement.worldTransformation();
-
-
-    auto                           cellDetElement = m_volman.lookupDetElement(cellID);
-    dd4hep::DetElement blubDetElement = cellDetElement; //.child(sensorDetElementName);
-    const auto& sensorTransformMatrix = blubDetElement.nominal().worldTransformation();
-
-    debug() << "Rotation matrix: " << Form("%d %d %d %d %d %d %d %d %d",sensorTransformMatrix.GetRotationMatrix()[0], sensorTransformMatrix.GetRotationMatrix()[1], sensorTransformMatrix.GetRotationMatrix()[2], sensorTransformMatrix.GetRotationMatrix()[3], sensorTransformMatrix.GetRotationMatrix()[4], sensorTransformMatrix.GetRotationMatrix()[5], sensorTransformMatrix.GetRotationMatrix()[6], sensorTransformMatrix.GetRotationMatrix()[7], sensorTransformMatrix.GetRotationMatrix()[8]) << endmsg;
-    // debug() << "Translation: " << sensorTransformMatrix.GetTranslation() << endmsg;
-
-
+    // Get transformation matrix of sensor
+    const auto& sensorTransformMatrix = m_volman.lookupVolumePlacement(cellID).matrix();
+  
     // Retrieve global position in mm and apply unit transformation (translation matrix is stored in cm)
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,
@@ -134,13 +125,24 @@ StatusCode VTXdigitizer::execute() {
     dd4hep::rec::Vector3D simHitLocalPositionVector(simHitLocalPosition[0], simHitLocalPosition[1],
                                                     simHitLocalPosition[2]);
 
-    // get the smeared distance to the wire (cylindrical coordinate as the smearing should be perpendicular to the wire)
-    double smearedX = simHitLocalPositionVector.x() + m_gauss_x.shoot() * dd4hep::mm;
-    double smearedY = simHitLocalPositionVector.y() + m_gauss_y.shoot() * dd4hep::mm;
+    // Smear the hit in the local sensor coordinates
+    double digiHitLocalPosition[3];
+    if(m_readoutName=="VTXIBCollection" || m_readoutName=="VTXOBCollection"){ // In barrel, the sensor box is along y-z
+      digiHitLocalPosition[0] = simHitLocalPositionVector.x();
+      digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_x.shoot() * dd4hep::mm;
+      digiHitLocalPosition[2] = simHitLocalPositionVector.z() + m_gauss_y.shoot() * dd4hep::mm;
+    }
+    else if(m_readoutName == "VTXDCollection"){ // In the disks, the sensor box is already in x-y
+      digiHitLocalPosition[0] = simHitLocalPositionVector.x() + m_gauss_x.shoot() * dd4hep::mm;
+      digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_y.shoot() * dd4hep::mm;
+      digiHitLocalPosition[2] = simHitLocalPositionVector.z();
+    }
+    else{
+      error() << "VTX readout name (m_readoutName) needs to be either VTXIBCollection, VTXOBCollection or VTXDCollection" << endmsg;
+      return StatusCode::FAILURE;
+    }
 
     // go back to the global frame
-    double digiHitLocalPosition[3]  = {smearedX, smearedY,
-                                        simHitLocalPositionVector.z()};
     double digiHitGlobalPosition[3] = {0, 0, 0};
     sensorTransformMatrix.LocalToMaster(digiHitLocalPosition, digiHitGlobalPosition);
     
@@ -155,7 +157,6 @@ StatusCode VTXdigitizer::execute() {
             << " [cm]" << endmsg;
     debug() << "Global digiHit z " << digiHitGlobalPositionVector[2] << " [mm] --> Local digiHit z " << digiHitLocalPosition[2]
             << " [cm]" << endmsg;
-
     debug() << "Moving to next hit... " << std::endl << endmsg;
 
     output_digi_hit.setEDep(input_sim_hit.getEDep());
