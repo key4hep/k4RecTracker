@@ -147,7 +147,7 @@ from Configurables import VTXdigitizer
 
 
 ### For IDEA
-vtxib_digitizer = VTXdigitizer("VTXdigitizer",
+vtxib_digitizer = VTXdigitizer("VTXIBdigitizer",
     inputSimHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path.replace("sim", "digi"),
     readoutName = "VTXIBCollection",
@@ -157,7 +157,7 @@ vtxib_digitizer = VTXdigitizer("VTXdigitizer",
     OutputLevel = INFO
 )
 
-vtxob_digitizer = VTXdigitizer("VTXdigitizer",
+vtxob_digitizer = VTXdigitizer("VTXOBdigitizer",
     inputSimHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path.replace("sim", "digi"),
     readoutName = "VTXOBCollection",
@@ -167,7 +167,7 @@ vtxob_digitizer = VTXdigitizer("VTXdigitizer",
     OutputLevel = INFO
 )
 
-vtxd_digitizer = VTXdigitizer("VTXdigitizer",
+vtxd_digitizer = VTXdigitizer("VTXDdigitizer",
     inputSimHits = SimG4SaveTrackerHitsD.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsD.SimTrackHits.Path.replace("sim", "digi"),
     readoutName = "VTXDCollection",
@@ -211,10 +211,10 @@ ApplicationMgr(
               genAlg,
               hepmc_converter,
               geantsim,
-            #   vtx_digitizer,
+              #vtx_digitizer,
               vtxib_digitizer,
-            #   vtxob_digitizer,
-            #   vtxd_digitizer,
+              vtxob_digitizer,
+              vtxd_digitizer,
               out
               ],
     EvtSel = 'NONE',
