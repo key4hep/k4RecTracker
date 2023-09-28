@@ -34,16 +34,16 @@ StatusCode VTXdigitizer::initialize() {
   }
 
   // check if readout exists
-  if (m_geoSvc->lcdd()->readouts().find(m_readoutName) == m_geoSvc->lcdd()->readouts().end()) {
+  if (m_geoSvc->getDetector()->readouts().find(m_readoutName) == m_geoSvc->getDetector()->readouts().end()) {
     error() << "Readout <<" << m_readoutName << ">> does not exist." << endmsg;
     return StatusCode::FAILURE;
   }
 
   // set the cellID decoder
-  m_decoder = m_geoSvc->lcdd()->readout(m_readoutName).idSpec().decoder();
+  m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder();
 
   // retrieve the volume manager
-  m_volman = m_geoSvc->lcdd()->volumeManager();
+  m_volman = m_geoSvc->getDetector()->volumeManager();
 
   return StatusCode::SUCCESS;
 }
@@ -130,11 +130,13 @@ StatusCode VTXdigitizer::execute() {
     // Smear the hit in the local sensor coordinates
     double digiHitLocalPosition[3];
     if (m_readoutName == "VTXIBCollection" ||
-        m_readoutName == "VTXOBCollection") {  // In barrel, the sensor box is along y-z
+        m_readoutName == "VTXOBCollection" ||
+        m_readoutName == "VertexBarrelCollection") {  // In barrel, the sensor box is along y-z
       digiHitLocalPosition[0] = simHitLocalPositionVector.x();
       digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_x.shoot() * dd4hep::mm;
       digiHitLocalPosition[2] = simHitLocalPositionVector.z() + m_gauss_y.shoot() * dd4hep::mm;
-    } else if (m_readoutName == "VTXDCollection") {  // In the disks, the sensor box is already in x-y
+    } else if (m_readoutName == "VTXDCollection" ||
+               m_readoutName == "VertexEndcapCollection") {  // In the disks, the sensor box is already in x-y
       digiHitLocalPosition[0] = simHitLocalPositionVector.x() + m_gauss_x.shoot() * dd4hep::mm;
       digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_y.shoot() * dd4hep::mm;
       digiHitLocalPosition[2] = simHitLocalPositionVector.z();

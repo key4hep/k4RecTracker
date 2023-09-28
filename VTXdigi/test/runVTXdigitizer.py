@@ -55,6 +55,7 @@ geoservice = GeoSvc("GeoSvc")
 #                   ]
 # prefix all xmls with path_to_detector
 # geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
+# geoservice.detectors = ["../lcgeo/FCCee/CLD/compact/CLD_o2_v05/CLD_o2_v05.xml"] # CLD
 geoservice.detectors = ["../lcgeo/FCCee/IDEA/compact/IDEA_o1_v01/IDEA_o1_v01.xml"] # IDEA
 geoservice.OutputLevel = INFO
 
@@ -96,27 +97,28 @@ particle_converter.GenParticles.Path = genParticlesOutputName
 from Configurables import SimG4SaveTrackerHits
 
 ### CLD
-# savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutName="VertexBarrelCollection")
-# savetrackertool.SimTrackHits.Path = "VTXB_simTrackerHits"
+# SimG4SaveTrackerHitsB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsB", readoutNames=["VertexBarrelCollection"])
+# SimG4SaveTrackerHitsB.SimTrackHits.Path = "VTXB_simTrackerHits"
 
-# savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutName="VertexEndcapCollection")
-# savetrackertool.SimTrackHits.Path = "VTXE_simTrackerHits"
+# SimG4SaveTrackerHitsE = SimG4SaveTrackerHits("SimG4SaveTrackerHitsE", readoutNames=["VertexEndcapCollection"])
+# SimG4SaveTrackerHitsE.SimTrackHits.Path = "VTXE_simTrackerHits"
 
 
 ### IDEA
-SimG4SaveTrackerHitsIB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsIB", readoutName="VTXIBCollection")
+SimG4SaveTrackerHitsIB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsIB", readoutNames=["VTXIBCollection"])
 SimG4SaveTrackerHitsIB.SimTrackHits.Path = "VTXIB_simTrackerHits"
 
-SimG4SaveTrackerHitsOB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsOB", readoutName="VTXOBCollection")
+SimG4SaveTrackerHitsOB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsOB", readoutNames=["VTXOBCollection"])
 SimG4SaveTrackerHitsOB.SimTrackHits.Path = "VTXOB_simTrackerHits"
 
-SimG4SaveTrackerHitsD = SimG4SaveTrackerHits("SimG4SaveTrackerHitsD", readoutName="VTXDCollection")
+SimG4SaveTrackerHitsD = SimG4SaveTrackerHits("SimG4SaveTrackerHitsD", readoutNames=["VTXDCollection"])
 SimG4SaveTrackerHitsD.SimTrackHits.Path = "VTXD_simTrackerHits"
 
 
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [SimG4SaveTrackerHitsIB, SimG4SaveTrackerHitsOB, SimG4SaveTrackerHitsD
+                       outputs= [SimG4SaveTrackerHitsIB, SimG4SaveTrackerHitsOB, SimG4SaveTrackerHitsD  ## IDEA
+                                 #SimG4SaveTrackerHitsB, SimG4SaveTrackerHitsE  ## CLD
                                  #saveHistTool
                        ],
                        eventProvider=particle_converter,
@@ -124,30 +126,30 @@ geantsim = SimG4Alg("SimG4Alg",
 # Digitize tracker hits
 from Configurables import VTXdigitizer
 
-### For CLD
-# vtx_digitizer = VTXdigitizer("VTXdigitizer",
-#     inputSimHits = savetrackertool.SimTrackHits.Path,
-#     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+### For CLD. Not working yet, SimG4 doesn't produce hits in CLD vertex yet
+# vtxb_digitizer = VTXdigitizer("VTXBdigitizer",
+#     inputSimHits = SimG4SaveTrackerHitsB.SimTrackHits.Path,
+#     outputDigiHits = SimG4SaveTrackerHitsB.SimTrackHits.Path.replace("sim", "digi"),
 #     readoutName = "VertexBarrelCollection",
 #     xResolution = 0.005, # mm
 #     yResolution = 0.005, # mm
 #     tResolution = 1000, # ns
-#     OutputLevel = INFO
+#     OutputLevel = DEBUG
 # )
 
-# vtx_digitizer = VTXdigitizer("VTXdigitizer",
-#     inputSimHits = savetrackertool.SimTrackHits.Path,
-#     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+# vtxe_digitizer = VTXdigitizer("VTXEdigitizer",
+#     inputSimHits = SimG4SaveTrackerHitsE.SimTrackHits.Path,
+#     outputDigiHits = SimG4SaveTrackerHitsE.SimTrackHits.Path.replace("sim", "digi"),
 #     readoutName = "VertexEndcapCollection",
 #     xResolution = 0.005, # mm
 #     yResolution = 0.005, # mm
 #     tResolution = 1000, # ns
-#     OutputLevel = INFO
+#     OutputLevel = DEBUG
 # )
 
 
 ### For IDEA
-vtxib_digitizer = VTXdigitizer("VTXdigitizer",
+vtxib_digitizer = VTXdigitizer("VTXIBdigitizer",
     inputSimHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path.replace("sim", "digi"),
     readoutName = "VTXIBCollection",
@@ -157,7 +159,7 @@ vtxib_digitizer = VTXdigitizer("VTXdigitizer",
     OutputLevel = INFO
 )
 
-vtxob_digitizer = VTXdigitizer("VTXdigitizer",
+vtxob_digitizer = VTXdigitizer("VTXOBdigitizer",
     inputSimHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path.replace("sim", "digi"),
     readoutName = "VTXOBCollection",
@@ -167,7 +169,7 @@ vtxob_digitizer = VTXdigitizer("VTXdigitizer",
     OutputLevel = INFO
 )
 
-vtxd_digitizer = VTXdigitizer("VTXdigitizer",
+vtxd_digitizer = VTXdigitizer("VTXDdigitizer",
     inputSimHits = SimG4SaveTrackerHitsD.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsD.SimTrackHits.Path.replace("sim", "digi"),
     readoutName = "VTXDCollection",
@@ -211,10 +213,11 @@ ApplicationMgr(
               genAlg,
               hepmc_converter,
               geantsim,
-            #   vtx_digitizer,
+            #   vtxb_digitizer,
+            #   vtxe_digitizer,
               vtxib_digitizer,
-            #   vtxob_digitizer,
-            #   vtxd_digitizer,
+              vtxob_digitizer,
+              vtxd_digitizer,
               out
               ],
     EvtSel = 'NONE',
