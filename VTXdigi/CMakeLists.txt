@@ -40,3 +40,6 @@ install(TARGETS ${PackageName}
 )
 
 install(FILES ${scripts} DESTINATION test)
+
+SET(test_name "test_runVTXdigitizer")
+ADD_TEST(NAME t_${test_name} COMMAND k4run test/runVTXdigitizer.py)
