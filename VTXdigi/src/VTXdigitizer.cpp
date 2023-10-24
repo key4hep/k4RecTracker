@@ -131,18 +131,20 @@ StatusCode VTXdigitizer::execute() {
     double digiHitLocalPosition[3];
     if (m_readoutName == "VTXIBCollection" ||
         m_readoutName == "VTXOBCollection" ||
-        m_readoutName == "VertexBarrelCollection") {  // In barrel, the sensor box is along y-z
+        m_readoutName == "VertexBarrelCollection" ||
+        m_readoutName == "SiWrapperBCollection") {  // In barrel, the sensor box is along y-z
       digiHitLocalPosition[0] = simHitLocalPositionVector.x();
       digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_x.shoot() * dd4hep::mm;
       digiHitLocalPosition[2] = simHitLocalPositionVector.z() + m_gauss_y.shoot() * dd4hep::mm;
     } else if (m_readoutName == "VTXDCollection" ||
-               m_readoutName == "VertexEndcapCollection") {  // In the disks, the sensor box is already in x-y
+               m_readoutName == "VertexEndcapCollection" ||
+               m_readoutName == "SiWrapperDCollection") {  // In the disks, the sensor box is already in x-y
       digiHitLocalPosition[0] = simHitLocalPositionVector.x() + m_gauss_x.shoot() * dd4hep::mm;
       digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_y.shoot() * dd4hep::mm;
       digiHitLocalPosition[2] = simHitLocalPositionVector.z();
     } else {
       error()
-          << "VTX readout name (m_readoutName) needs to be either VTXIBCollection, VTXOBCollection or VTXDCollection"
+          << "VTX readout name (m_readoutName) unknown!"
           << endmsg;
       return StatusCode::FAILURE;
     }

@@ -20,6 +20,9 @@ innerVertexResolution_y = 0.005 # [mm], assume 5 µm resolution for ARCADIA sens
 outerVertexResolution_x = 0.014 # [mm], assume ATLASPix3 sensor with 50 µm pitch -> 50/sqrt(12) = 14.4 µm resolution
 outerVertexResolution_y = 0.043 # [mm], assume ATLASPix3 sensor with 150 µm pitch -> 150/sqrt(12) = 43.3 µm resolution
 
+siWrapperResolution_x = 0.050 # [mm]
+siWrapperResolution_y = 1.0 # [mm]
+
 from Configurables import GenAlg
 genAlg = GenAlg()
 from Configurables import  MomentumRangeParticleGun
@@ -47,16 +50,13 @@ hepmc_converter.hepmcStatusList = []
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
 # if FCC_DETECTORS is empty, this should use relative path to working directory
-# path_to_detector = os.environ.get("FCCDETECTORS", "")
-# path_to_detector = os.environ.get("FCCDETECTORS", "")
-# print(path_to_detector)
-# detectors_to_use=[
-#                     'FCCee/IDEA/compact/IDEA_o1_v01/FCCee_IDEA_o1_v01.xml',
-#                   ]
+path_to_detector = os.environ.get("K4GEO", "") # Previously used "FCCDETECTORS"
+print(path_to_detector)
+detectors_to_use=[
+                    'FCCee/IDEA/compact/IDEA_o1_v02/IDEA_o1_v02.xml',
+                  ]
 # prefix all xmls with path_to_detector
-# geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
-# geoservice.detectors = ["../lcgeo/FCCee/CLD/compact/CLD_o2_v05/CLD_o2_v05.xml"] # CLD
-geoservice.detectors = ["../lcgeo/FCCee/IDEA/compact/IDEA_o1_v01/IDEA_o1_v01.xml"] # IDEA
+geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
 geoservice.OutputLevel = INFO
 
 # Geant4 service
@@ -97,27 +97,33 @@ particle_converter.GenParticles.Path = genParticlesOutputName
 from Configurables import SimG4SaveTrackerHits
 
 ### CLD
-# SimG4SaveTrackerHitsB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsB", readoutNames=["VertexBarrelCollection"])
+# SimG4SaveTrackerHitsB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsB", readoutName="VertexBarrelCollection")
 # SimG4SaveTrackerHitsB.SimTrackHits.Path = "VTXB_simTrackerHits"
 
-# SimG4SaveTrackerHitsE = SimG4SaveTrackerHits("SimG4SaveTrackerHitsE", readoutNames=["VertexEndcapCollection"])
+# SimG4SaveTrackerHitsE = SimG4SaveTrackerHits("SimG4SaveTrackerHitsE", readoutName="VertexEndcapCollection"
 # SimG4SaveTrackerHitsE.SimTrackHits.Path = "VTXE_simTrackerHits"
 
 
 ### IDEA
-SimG4SaveTrackerHitsIB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsIB", readoutNames=["VTXIBCollection"])
+SimG4SaveTrackerHitsIB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsIB", readoutName="VTXIBCollection")
 SimG4SaveTrackerHitsIB.SimTrackHits.Path = "VTXIB_simTrackerHits"
 
-SimG4SaveTrackerHitsOB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsOB", readoutNames=["VTXOBCollection"])
+SimG4SaveTrackerHitsOB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsOB", readoutName="VTXOBCollection")
 SimG4SaveTrackerHitsOB.SimTrackHits.Path = "VTXOB_simTrackerHits"
 
-SimG4SaveTrackerHitsD = SimG4SaveTrackerHits("SimG4SaveTrackerHitsD", readoutNames=["VTXDCollection"])
+SimG4SaveTrackerHitsD = SimG4SaveTrackerHits("SimG4SaveTrackerHitsD", readoutName="VTXDCollection")
 SimG4SaveTrackerHitsD.SimTrackHits.Path = "VTXD_simTrackerHits"
 
+SimG4SaveTrackerHitsSiWrB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsSiWrB", readoutName="SiWrapperBCollection")
+SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path = "SiWrB_simTrackerHits"
+
+SimG4SaveTrackerHitsSiWrD = SimG4SaveTrackerHits("SimG4SaveTrackerHitsSiWrD", readoutName="SiWrapperDCollection")
+SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path = "SiWrD_simTrackerHits"
 
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [SimG4SaveTrackerHitsIB, SimG4SaveTrackerHitsOB, SimG4SaveTrackerHitsD  ## IDEA
+                       outputs= [SimG4SaveTrackerHitsIB, SimG4SaveTrackerHitsOB, SimG4SaveTrackerHitsD,  ## IDEA vertex
+                                #  SimG4SaveTrackerHitsSiWrB, SimG4SaveTrackerHitsSiWrD ## IDEA wrapper
                                  #SimG4SaveTrackerHitsB, SimG4SaveTrackerHitsE  ## CLD
                                  #saveHistTool
                        ],
@@ -179,6 +185,26 @@ vtxd_digitizer = VTXdigitizer("VTXDdigitizer",
     OutputLevel = INFO
 )
 
+# siwrb_digitizer = VTXdigitizer("SiWrBdigitizer",
+#     inputSimHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path,
+#     outputDigiHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path.replace("sim", "digi"),
+#     readoutName = "SiWrapperBCollection",
+#     xResolution = siWrapperResolution_x, # mm, r direction
+#     yResolution = siWrapperResolution_y, # mm, phi direction
+#     tResolution = 0.030, # ns
+#     OutputLevel = INFO
+# )
+
+# siwrd_digitizer = VTXdigitizer("SiWrDdigitizer",
+#     inputSimHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path,
+#     outputDigiHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path.replace("sim", "digi"),
+#     readoutName = "SiWrapperDCollection",
+#     xResolution = siWrapperResolution_x, # mm, r direction
+#     yResolution = siWrapperResolution_y, # mm, phi direction
+#     tResolution = 0.030, # ns
+#     OutputLevel = INFO
+# )
+
 # run the genfit tracking 
 # from Configurables import GenFitter
 # genfitter = GenFitter("GenFitter", inputHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"), outputTracks = "genfit_tracks") 
@@ -213,11 +239,9 @@ ApplicationMgr(
               genAlg,
               hepmc_converter,
               geantsim,
-            #   vtxb_digitizer,
-            #   vtxe_digitizer,
-              vtxib_digitizer,
-              vtxob_digitizer,
-              vtxd_digitizer,
+            #   vtxb_digitizer,vtxe_digitizer,
+              vtxib_digitizer, vtxob_digitizer, vtxd_digitizer,
+            #   siwrb_digitizer, siwrd_digitizer,
               out
               ],
     EvtSel = 'NONE',
