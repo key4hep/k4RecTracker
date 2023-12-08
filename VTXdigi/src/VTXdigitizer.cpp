@@ -1,9 +1,5 @@
 #include "VTXdigitizer.h"
 
-// DD4hep
-#include "DD4hep/Detector.h"
-#include "DDRec/Vector3D.h"
-
 DECLARE_COMPONENT(VTXdigitizer)
 
 VTXdigitizer::VTXdigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
@@ -40,7 +36,7 @@ StatusCode VTXdigitizer::initialize() {
   }
 
   // set the cellID decoder
-  m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder();
+  m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder(); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
 
   // retrieve the volume manager
   m_volman = m_geoSvc->getDetector()->volumeManager();
@@ -53,6 +49,8 @@ StatusCode VTXdigitizer::execute() {
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
 
+  unsigned nDismissedHits=0;
+
   // Digitize the sim hits
   edm4hep::TrackerHitCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (const auto& input_sim_hit : *input_sim_hits) {
@@ -64,45 +62,6 @@ StatusCode VTXdigitizer::execute() {
     dd4hep::DDSegmentation::CellID cellID = input_sim_hit.getCellID();
     debug() << "Digitisation of " << m_readoutName << ", cellID: " << cellID << endmsg;
 
-    //// Leave this for the moment as it could be useful
-    // std::string sensorDetElementName = "";
-    // if(m_readoutName == "VTXIBCollection"){
-    //     sensorDetElementName =
-    //       Form( "VTXIB_layer%d_stave%d_module%d_sensors_sensor%d",
-    //             m_decoder->get(cellID, "layer"),
-    //             m_decoder->get(cellID, "stave"),
-    //             m_decoder->get(cellID, "module"),
-    //             m_decoder->get(cellID, "sensor")
-    //       );
-    // }
-    // else if(m_readoutName == "VTXOBCollection"){
-    //     sensorDetElementName =
-    //       Form( "VTXOB_layer%d_stave%d_module%d_sensor%d",
-    //             m_decoder->get(cellID, "layer"),
-    //             m_decoder->get(cellID, "stave"),
-    //             m_decoder->get(cellID, "module"),
-    //             m_decoder->get(cellID, "sensor")
-    //       );
-    // }
-    // else if(m_readoutName == "VTXDCollection"){
-    //   sensorDetElementName =
-    //     Form( "VTXD_side%d_layer%d_petal%d_stave%d_sensors_module%d_sensor%d",
-    //           m_decoder->get(cellID, "side"),
-    //           m_decoder->get(cellID, "layer"),
-    //           m_decoder->get(cellID, "petal"),
-    //           m_decoder->get(cellID, "stave"),
-    //           m_decoder->get(cellID, "module"),
-    //           m_decoder->get(cellID, "sensor")
-    //     );
-    // }
-    // else if(m_readoutName == "VertexBarrelReadout"){ // CLD Barrel
-    //   sensorDetElementName =
-    //     Form( "VertexBarrel_layer%d_ladder%d",
-    //           m_decoder->get(cellID, "layer"),
-    //           m_decoder->get(cellID, "module")
-    //     );
-    // }
-
     // Get transformation matrix of sensor
     const auto& sensorTransformMatrix = m_volman.lookupVolumePlacement(cellID).matrix();
 
@@ -110,7 +69,46 @@ StatusCode VTXdigitizer::execute() {
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,
                                       input_sim_hit.getPosition().z * dd4hep::mm};
+    dd4hep::rec::Vector3D simHitGlobalPositionVector(simHitGlobalPosition[0], simHitGlobalPosition[1],
+                                                    simHitGlobalPosition[2]);
     double simHitLocalPosition[3]  = {0, 0, 0};
+
+    if(m_forceHitsOntoSurface){
+      dd4hep::Detector& theDetector = dd4hep::Detector::getInstance();
+      dd4hep::rec::SurfaceManager& surfMan = *theDetector.extension<dd4hep::rec::SurfaceManager>() ;
+      dd4hep::DetElement det = m_geoSvc->getDetector()->detector(m_detectorName) ;
+      _map = surfMan.map( det.name() ) ;
+
+      if( ! _map )
+        error() << " Could not find surface map for detector " << det.name() << " in SurfaceManager " << endmsg;
+
+      dd4hep::rec::SurfaceMap::const_iterator sI = _map->find(cellID) ;
+      if( sI == _map->end() )
+        error() << " VTXdigitizer: no surface found for cellID " << m_decoder->valueString(cellID) << std::endl << endmsg;
+
+      dd4hep::rec::Vector3D newPos ;
+      const dd4hep::rec::ISurface* surf = sI->second ;    
+
+      // Check if Hit is inside sensitive 
+      if ( ! surf->insideBounds( simHitGlobalPositionVector ) ) {
+        
+        info() << "Hit at " << simHitGlobalPositionVector << " is not on surface " << *surf  
+                << ". Distance: " << surf->distance(simHitGlobalPositionVector )
+                << std::endl << endmsg;        
+
+        if( m_forceHitsOntoSurface ){
+          dd4hep::rec::Vector2D lv = surf->globalToLocal(simHitGlobalPositionVector) ;
+          dd4hep::rec::Vector3D oldPosOnSurf = surf->localToGlobal( lv ) ; 
+          
+          info() << "Moved hit to " << oldPosOnSurf << ", distance " << (oldPosOnSurf-simHitGlobalPositionVector).r()
+                  << std::endl << endmsg;
+            
+          simHitGlobalPositionVector = oldPosOnSurf ;
+        } 
+        else
+          ++nDismissedHits;
+      }
+    }
 
     // get the simHit coordinate in cm in the sensor reference frame to be able to apply smearing
     sensorTransformMatrix.MasterToLocal(simHitGlobalPosition, simHitLocalPosition);
@@ -132,13 +130,13 @@ StatusCode VTXdigitizer::execute() {
     if (m_readoutName == "VTXIBCollection" ||
         m_readoutName == "VTXOBCollection" ||
         m_readoutName == "VertexBarrelCollection" ||
-        m_readoutName == "SiWrapperBCollection") {  // In barrel, the sensor box is along y-z
+        m_readoutName == "SiWrBCollection") {  // In barrel, the sensor box is along y-z
       digiHitLocalPosition[0] = simHitLocalPositionVector.x();
       digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_x.shoot() * dd4hep::mm;
       digiHitLocalPosition[2] = simHitLocalPositionVector.z() + m_gauss_y.shoot() * dd4hep::mm;
     } else if (m_readoutName == "VTXDCollection" ||
                m_readoutName == "VertexEndcapCollection" ||
-               m_readoutName == "SiWrapperDCollection") {  // In the disks, the sensor box is already in x-y
+               m_readoutName == "SiWrDCollection") {  // In the disks, the sensor box is already in x-y
       digiHitLocalPosition[0] = simHitLocalPositionVector.x() + m_gauss_x.shoot() * dd4hep::mm;
       digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_y.shoot() * dd4hep::mm;
       digiHitLocalPosition[2] = simHitLocalPositionVector.z();

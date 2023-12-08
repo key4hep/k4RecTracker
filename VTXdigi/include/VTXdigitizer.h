@@ -16,6 +16,9 @@
 
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
+#include "DDRec/Vector3D.h"
+#include "DDRec/SurfaceManager.h"
+
 #include "DDSegmentation/BitFieldCoder.h"
 
 /** @class VTXdigitizer
@@ -50,6 +53,8 @@ private:
   // Output digitized vertex hit collection name
   DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
+  // Detector name
+  Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
   // Detector readout names
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "VertexBarrelCollection", "Name of the detector readout"};
   // Pointer to the geometry service
@@ -68,8 +73,15 @@ private:
   // t resolution in ns
   FloatProperty m_t_resolution{this, "tResolution", 0.1, "Time resolution [ns]"};
 
+  // Surface manager used to project hits onto sensitive surface with forceHitsOntoSurface argument
+  const dd4hep::rec::SurfaceMap* _map;
+
+  // Option to force hits onto sensitive surface
+  BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"};
+
   // Random Number Service
   IRndmGenSvc* m_randSvc;
+
   // Gaussian random number generator used for smearing
   Rndm::Numbers m_gauss_x;
   Rndm::Numbers m_gauss_y;
