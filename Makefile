@@ -3,7 +3,6 @@ MAKEFLAGS += --no-print-directory
 make:
 	@ mkdir -p build install ; \
 	cd build ; \
-	source /cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh ; \
 	cmake .. -DCMAKE_INSTALL_PREFIX=../install ; \
 	make install -j4 ; \
 	cd .. ; \
