@@ -10,11 +10,16 @@ set(PACKAGE_VERSION_PATCH 3)
 set(PACKAGE_VERSION "${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}.${PACKAGE_VERSION_PATCH}")
 
 # dependencies
+# For some reason, the find_package with DD4hep must be the first one
+find_package(DD4hep REQUIRED COMPONENTS DDRec DDG4 DDParsers)
+# dd4hep_set_compiler_flags() expects DD4hep_SET_RPATH to be set to ON
+# otherwise it will not set the rpath when installing
+set(DD4HEP_SET_RPATH ON)
+dd4hep_set_compiler_flags()
 find_package(ROOT COMPONENTS RIO Tree MathCore)
 find_package(EDM4HEP)
 find_package(k4FWCore)
 find_package(Gaudi)
-find_package(DD4hep)
 #---------------------------------------------------------------
 
 include(GNUInstallDirs)
