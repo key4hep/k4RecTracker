@@ -33,14 +33,14 @@ StatusCode DCHsimpleDigitizer::initialize() {
   }
 
   // check if readout exists
-  if (m_geoSvc->lcdd()->readouts().find(m_readoutName) == m_geoSvc->lcdd()->readouts().end()) {
+  if (m_geoSvc->getDetector()->readouts().find(m_readoutName) == m_geoSvc->getDetector()->readouts().end()) {
     error() << "Readout <<" << m_readoutName << ">> does not exist." << endmsg;
     return StatusCode::FAILURE;
   }
   // set the cellID decoder
-  m_decoder = m_geoSvc->lcdd()->readout(m_readoutName).idSpec().decoder();
+  m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder();
   // retrieve the volume manager
-  m_volman = m_geoSvc->lcdd()->volumeManager();
+  m_volman = m_geoSvc->getDetector()->volumeManager();
 
   return StatusCode::SUCCESS;
 }
@@ -60,7 +60,7 @@ StatusCode DCHsimpleDigitizer::execute() {
     auto                           cellDetElement = m_volman.lookupDetElement(cellID);
     // retrieve the wire (in DD4hep 1.23 there is no easy way to access the volume daughters we have to pass by detElements, in later versions volumes can be used)
     const std::string& wireDetElementName =
-        Form("superLayer_%d_layer_%d_phi_%d_wire", m_decoder->get(cellID, "superLayer"),
+        Form("superLayer_%ld_layer_%ld_phi_%ld_wire", m_decoder->get(cellID, "superLayer"),
              m_decoder->get(cellID, "layer"), m_decoder->get(cellID, "phi"));
     dd4hep::DetElement wireDetElement = cellDetElement.child(wireDetElementName);
     // get the transformation matrix used to place the wire
