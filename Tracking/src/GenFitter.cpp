@@ -17,9 +17,9 @@ StatusCode GenFitter::execute() {
   verbose() << "Input Hit collection size: " << input_hits->size() << endmsg;
 
   // Convert edm4hep::TrackerHitCollection to Genfit measurements
-  for (const auto& input_hit : *input_hits) {
-    m_wire_measurements.push_back(genfit::WireMeasurement());
-  }
+  //for (const auto& input_hit : *input_hits) {
+  //  m_wire_measurements.push_back(genfit::WireMeasurement());
+  //}
 
   // Produce dummy tracks
   edm4hep::TrackCollection* output_tracks = m_output_tracks.createAndPut();
