@@ -13,8 +13,8 @@ datatypes:
     Author: "B. Francois, CERN"
     Members:
       - uint64_t cellID               // ID of the wire that created this hit
-      - float distanceToWire          // smeared distance of closest approach between the wire and the hit
-      - float zPositionAlongWire      // smeared z position in the local wire coordinate system
+      - float distanceToWire          // smeared distance of closest approach between the wire and the hit [mm]
+      - float zPositionAlongWire      // smeared z position in the local wire coordinate system [mm]
       - float time                    // time of the hit [ns].
       - float eDep                    // energy deposited on the hit [GeV].
       - float eDepError               // error measured on eDep [GeV].
