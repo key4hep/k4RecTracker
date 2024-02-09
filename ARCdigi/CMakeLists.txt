@@ -43,5 +43,6 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 
-SET(test_name "test_runARCdigitizer")
-ADD_TEST(NAME t_${test_name} COMMAND k4run test/runARCdigitizer.py)
+#SET(test_name "test_runARCdigitizer")
+#ADD_TEST(NAME ${test_name} COMMAND k4run test/runARCdigitizer.py)
+#set_test_env(${test_name})

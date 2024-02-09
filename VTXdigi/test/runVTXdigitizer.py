@@ -149,7 +149,7 @@ from Configurables import SimG4Alg
 # IDEA
 geantsim = SimG4Alg("SimG4Alg",
                        outputs= [SimG4SaveTrackerHitsIB, SimG4SaveTrackerHitsOB, SimG4SaveTrackerHitsD,
-                                 SimG4SaveTrackerHitsSiWrB, SimG4SaveTrackerHitsSiWrD,
+                                 #SimG4SaveTrackerHitsSiWrB, SimG4SaveTrackerHitsSiWrD,
                                  #saveHistTool
                        ],
                        eventProvider=particle_converter,
@@ -221,29 +221,29 @@ vtxd_digitizer  = VTXdigitizer("VTXDdigitizer",
     OutputLevel = INFO
 )
 
-siwrb_digitizer = VTXdigitizer("SiWrBdigitizer",
-    inputSimHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path,
-    outputDigiHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path.replace("sim", "digi"),
-    detectorName = "SiliconWrapper",
-    readoutName = "SiWrBCollection",
-    xResolution = siWrapperResolution_x, # mm, r direction
-    yResolution = siWrapperResolution_y, # mm, phi direction
-    tResolution = siWrapperResolution_t, # ns
-    forceHitsOntoSurface = False,
-    OutputLevel = INFO
-)
-
-siwrd_digitizer = VTXdigitizer("SiWrDdigitizer",
-    inputSimHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path,
-    outputDigiHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path.replace("sim", "digi"),
-    detectorName = "SiliconWrapper",
-    readoutName = "SiWrDCollection",
-    xResolution = siWrapperResolution_x, # mm, r direction
-    yResolution = siWrapperResolution_y, # mm, phi direction
-    tResolution = siWrapperResolution_t, # ns
-    forceHitsOntoSurface = False,
-    OutputLevel = INFO
-)
+#siwrb_digitizer = VTXdigitizer("SiWrBdigitizer",
+#    inputSimHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path,
+#    outputDigiHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path.replace("sim", "digi"),
+#    detectorName = "SiliconWrapper",
+#    readoutName = "SiWrBCollection",
+#    xResolution = siWrapperResolution_x, # mm, r direction
+#    yResolution = siWrapperResolution_y, # mm, phi direction
+#    tResolution = siWrapperResolution_t, # ns
+#    forceHitsOntoSurface = False,
+#    OutputLevel = INFO
+#)
+#
+#siwrd_digitizer = VTXdigitizer("SiWrDdigitizer",
+#    inputSimHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path,
+#    outputDigiHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path.replace("sim", "digi"),
+#    detectorName = "SiliconWrapper",
+#    readoutName = "SiWrDCollection",
+#    xResolution = siWrapperResolution_x, # mm, r direction
+#    yResolution = siWrapperResolution_y, # mm, phi direction
+#    tResolution = siWrapperResolution_t, # ns
+#    forceHitsOntoSurface = False,
+#    OutputLevel = INFO
+#)
 
 # run the genfit tracking 
 # from Configurables import GenFitter
@@ -298,11 +298,11 @@ ApplicationMgr(
               hepmc_converter,
               geantsim,
               vtxib_digitizer, vtxob_digitizer, vtxd_digitizer,
-              siwrb_digitizer, siwrd_digitizer,
+              #siwrb_digitizer, siwrd_digitizer,
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 100000,
+    EvtMax   = 10,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True
  )

@@ -1,4 +1,6 @@
-project(DCHdigi)
+set(PackageName DCHdigi)
+
+project(${PackageName})
 
 # Build the extension data model and link it against the upstream model
 PODIO_GENERATE_DATAMODEL(extension dataFormatExtension/driftChamberHit.yaml ext_headers ext_sources
@@ -40,7 +42,7 @@ file(GLOB headers
   ${PROJECT_SOURCE_DIR}/include/*.h
 )
 
-gaudi_add_module(DCHdigi
+gaudi_add_module(${PackageName}
   SOURCES ${sources}
   LINK
   Gaudi::GaudiKernel
@@ -50,13 +52,13 @@ gaudi_add_module(DCHdigi
   DD4hep::DDRec
 )
 
-target_include_directories(DCHdigi PUBLIC
+target_include_directories(${PackageName} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
   ${CMAKE_INSTALL_PREFIX}/extension
 )
 
-set_target_properties(DCHdigi PROPERTIES PUBLIC_HEADER "${headers}")
+set_target_properties(${PackageName} PROPERTIES PUBLIC_HEADER "${headers}")
 
 file(GLOB scripts
   ${PROJECT_SOURCE_DIR}/test/*.py
@@ -64,7 +66,7 @@ file(GLOB scripts
 
 file(COPY ${scripts} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/test)
 
-install(TARGETS DCHdigi
+install(TARGETS ${PackageName}
   EXPORT ${CMAKE_PROJECT_NAME}Targets
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT bin
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT shlib
@@ -73,5 +75,10 @@ install(TARGETS DCHdigi
 
 install(FILES ${scripts} DESTINATION test)
 
-ADD_TEST(NAME "t_DCHsimpleDigitizer" COMMAND k4run test/runDCHsimpleDigitizer.py)
-ADD_TEST(NAME "t_DCHsimpleDigitizerExtendedEdm" COMMAND k4run test/runDCHsimpleDigitizerExtendedEdm.py)
+SET(test_name "test_DCHsimpleDigitizer")
+ADD_TEST(NAME ${test_name} COMMAND k4run test/runDCHsimpleDigitizer.py)
+set_test_env(${test_name})
+
+SET(test_name "test_DCHsimpleDigitizerExtendedEdm")
+ADD_TEST(NAME ${test_name} COMMAND k4run test/runDCHsimpleDigitizerExtendedEdm.py)
+set_test_env(${test_name})

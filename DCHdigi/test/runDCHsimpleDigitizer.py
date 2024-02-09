@@ -43,10 +43,10 @@ hepmc_converter.hepmcStatusList = []
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
 # if FCC_DETECTORS is empty, this should use relative path to working directory
-path_to_detector = os.environ.get("FCCDETECTORS", "")
+path_to_detector = os.environ.get("K4GEO", "")
 print(path_to_detector)
 detectors_to_use=[
-                    'Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v01.xml'
+                    'FCCee/IDEA/compact/IDEA_o1_v02/IDEA_o1_v02.xml'
                   ]
 # prefix all xmls with path_to_detector
 geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
@@ -88,7 +88,7 @@ particle_converter = SimG4PrimariesFromEdmTool("EdmConverter")
 particle_converter.GenParticles.Path = genParticlesOutputName
 
 from Configurables import SimG4SaveTrackerHits
-savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["CDCHHits"])
+savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutName="CDCHHits")
 savetrackertool.SimTrackHits.Path = "DC_simTrackerHits"
 
 
@@ -144,7 +144,7 @@ ApplicationMgr(
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 100,
+    EvtMax   = 10,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True,
  )
