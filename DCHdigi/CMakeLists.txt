@@ -1,4 +1,4 @@
-set(PackageName DCHDigi)
+set(PackageName DCHdigi)
 
 project(${PackageName})
 
