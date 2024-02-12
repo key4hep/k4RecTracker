@@ -7,7 +7,7 @@ podioevent  = FCCDataSvc("EventDataSvc")
 
 from GaudiKernel.SystemOfUnits import MeV, GeV, tesla
 ################## Particle gun setup
-momentum = 5 # in GeV
+momentum = 10 # in GeV
 #thetaMin = 90.25 # degrees
 #thetaMax = 90.25 # degrees
 thetaMin = 20 # degrees
@@ -60,7 +60,7 @@ regiontool = SimG4UserLimitRegion("limits")
 regiontool.volumeNames = ["CDCH"]
 regiontool.OutputLevel = DEBUG
 from GaudiKernel.SystemOfUnits import mm
-regiontool.maxStep = 0.4*mm
+#regiontool.maxStep = 0.4*mm
 
 from Configurables import SimG4UserLimitPhysicsList
 # create overlay on top of FTFP_BERT physics list, attaching fast sim/parametrization process
@@ -135,7 +135,7 @@ out = PodioOutput("out",
 out.outputCommands = ["keep *"]
 
 import uuid
-out.filename = "output_simplifiedDriftChamber_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+"_stepLength_"+str(regiontool.maxStep)+".root"
+out.filename = "output_simplifiedDriftChamber_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+"_stepLength_default.root"
 
 #CPU information
 from Configurables import AuditorSvc, ChronoAuditor
@@ -162,7 +162,7 @@ ApplicationMgr(
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 10,
+    EvtMax   = 1000,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True,
  )

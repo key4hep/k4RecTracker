@@ -14,7 +14,7 @@
 #include "edm4hep/SimTrackerHitCollection.h"
 
 // EDM4HEP extension
-#include "extension/DriftChamberDigiCollection.h"
+#include "extension/DriftChamberDigiLeftRightGlobalCollection.h"
 
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
@@ -51,7 +51,7 @@ private:
   // Input sim tracker hit collection name
   DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
-  DataHandle<extension::DriftChamberDigiCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  DataHandle<extension::DriftChamberDigiLeftRightGlobalCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "CDCHHits", "Name of the detector readout"};

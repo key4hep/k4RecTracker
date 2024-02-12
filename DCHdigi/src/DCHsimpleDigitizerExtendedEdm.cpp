@@ -51,7 +51,7 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute() {
   debug() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
 
   // Digitize the sim hits
-  extension::DriftChamberDigiCollection* output_digi_hits = m_output_digi_hits.createAndPut();
+  extension::DriftChamberDigiLeftRightGlobalCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (const auto& input_sim_hit : *input_sim_hits) {
     auto output_digi_hit = output_digi_hits->create();
     // smear the hit position: need to go in the wire local frame to smear in the direction aligned/perpendicular with the wire for z/distanceToWire, taking e.g. stereo angle into account
@@ -92,10 +92,16 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute() {
     debug() << "Smeared distance to wire: " << smearedDistanceToWire << endmsg;
     // smear the z position (in local coordinate the z axis is aligned with the wire i.e. it take the stereo angle into account);
     double smearedZ = simHitLocalPositionVector.z() + m_gauss_z.shoot() * dd4hep::mm;
+    double leftHitLocalPosition[3]  = {-1 * smearedDistanceToWire, 0, smearedZ};
+    double rightHitLocalPosition[3]  = {smearedDistanceToWire, 0, smearedZ};
+    double leftHitGlobalPosition[3]  = {0, 0, 0};
+    double rightHitGlobalPosition[3]  = {0, 0, 0};
+    wireTransformMatrix.LocalToMaster(leftHitLocalPosition, leftHitGlobalPosition);
+    wireTransformMatrix.LocalToMaster(rightHitLocalPosition, rightHitGlobalPosition);
     // fill the output DriftChamberDigi (making sure we are back in mm)
     output_digi_hit.setCellID(cellID);
-    output_digi_hit.setDistanceToWire(smearedDistanceToWire / dd4hep::mm);
-    output_digi_hit.setZPositionAlongWire(smearedZ / dd4hep::mm);
+    output_digi_hit.setLeftPosition(edm4hep::Vector3d({leftHitGlobalPosition[0] / dd4hep::mm, leftHitGlobalPosition[1] / dd4hep::mm, leftHitGlobalPosition[2] / dd4hep::mm}));
+    output_digi_hit.setRightPosition(edm4hep::Vector3d({rightHitGlobalPosition[0] / dd4hep::mm, rightHitGlobalPosition[1] / dd4hep::mm, rightHitGlobalPosition[2] / dd4hep::mm}));
   }
   debug() << "Output Digi Hit collection size: " << output_digi_hits->size() << endmsg;
   return StatusCode::SUCCESS;

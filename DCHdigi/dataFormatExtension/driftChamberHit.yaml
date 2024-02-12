@@ -10,12 +10,24 @@ options:
 datatypes:
 
   extension::DriftChamberDigi:
-    Description: "Drift chamber digitized hit (before tracking)"
+    Description: "Drift chamber digitized hit (before tracking) in local coordinates"
     Author: "B. Francois, CERN"
     Members:
       - uint64_t cellID               // ID of the wire that created this hit
       - float distanceToWire          // smeared distance of closest approach between the wire and the hit [mm]
       - float zPositionAlongWire      // smeared z position in the local wire coordinate system [mm]
+      - float time                    // time of the hit [ns].
+      - float eDep                    // energy deposited on the hit [GeV].
+      - float eDepError               // error measured on eDep [GeV].
+      - uint32_t clusterCount         // number of clusters associated to this hit
+
+  extension::DriftChamberDigiLeftRightGlobal:
+    Description: "Drift chamber digitized hit (before tracking) in local coordinates"
+    Author: "B. Francois, CERN"
+    Members:
+      - uint64_t cellID               // ID of the wire that created this hit
+      - edm4hep::Vector3d leftPosition // position of the hit assuming it was on the left side of the wire [mm]
+      - edm4hep::Vector3d rightPosition // position of the hit assuming it was on the right side of the wire [mm]
       - float time                    // time of the hit [ns].
       - float eDep                    // energy deposited on the hit [GeV].
       - float eDepError               // error measured on eDep [GeV].
