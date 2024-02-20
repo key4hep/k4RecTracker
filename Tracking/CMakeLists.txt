@@ -2,9 +2,9 @@ set(PackageName Tracking)
 
 project(${PackageName})
 
-find_package(GenFit)
+#find_package(GenFit)
 
-if (GenFit_FOUND)
+#if (GenFit_FOUND)
 
 file(GLOB sources
     ${PROJECT_SOURCE_DIR}/src/*.cpp
@@ -20,7 +20,7 @@ gaudi_add_module(${PackageName}
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
-  GenFit::genfit2
+  #GenFit::genfit2
 )
 
 target_include_directories(${PackageName} PUBLIC
@@ -44,4 +44,4 @@ install(TARGETS ${PackageName}
 )
 
 install(FILES ${scripts} DESTINATION test)
-endif()
+#endif()

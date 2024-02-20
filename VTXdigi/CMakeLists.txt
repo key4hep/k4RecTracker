@@ -16,6 +16,7 @@ gaudi_add_module(${PackageName}
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
+  DD4hep::DDRec
 )
 
 target_include_directories(${PackageName} PUBLIC
@@ -39,3 +40,7 @@ install(TARGETS ${PackageName}
 )
 
 install(FILES ${scripts} DESTINATION test)
+
+SET(test_name "test_runVTXdigitizer")
+ADD_TEST(NAME ${test_name} COMMAND k4run test/runVTXdigitizer.py)
+set_test_env(${test_name})
