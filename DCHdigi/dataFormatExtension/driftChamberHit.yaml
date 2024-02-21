@@ -22,7 +22,7 @@ datatypes:
       - uint32_t clusterCount         // number of clusters associated to this hit
 
   extension::DriftChamberDigi:
-    Description: "Drift chamber digitized hit (before tracking) in global coordinates"
+    Description: "Drift chamber digitized hit (before tracking) in global coordinates. Assumes that the hits are radially in the middle of the cells"
     Author: "B. Francois, CERN"
     Members:
       - uint64_t cellID               // ID of the wire that created this hit

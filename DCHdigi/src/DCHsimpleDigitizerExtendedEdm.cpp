@@ -92,6 +92,7 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute() {
     debug() << "Smeared distance to wire: " << smearedDistanceToWire << endmsg;
     // smear the z position (in local coordinate the z axis is aligned with the wire i.e. it take the stereo angle into account);
     double smearedZ = simHitLocalPositionVector.z() + m_gauss_z.shoot() * dd4hep::mm;
+    // NB: here we assume the hit is radially in the middle of the cell
     double leftHitLocalPosition[3]  = {-1 * smearedDistanceToWire, 0, smearedZ};
     double rightHitLocalPosition[3]  = {smearedDistanceToWire, 0, smearedZ};
     double leftHitGlobalPosition[3]  = {0, 0, 0};
