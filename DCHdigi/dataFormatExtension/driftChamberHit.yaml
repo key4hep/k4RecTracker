@@ -32,3 +32,12 @@ datatypes:
       - float eDep                    // energy deposited on the hit [GeV].
       - float eDepError               // error measured on eDep [GeV].
       - uint32_t clusterCount         // number of clusters associated to this hit
+
+  extension::MCRecoDriftChamberDigiAssociation:
+    Description: "Association between a DriftChamberDigi and the corresponding simulated hit"
+    Author: "B. Francois, CERN"
+    Members:
+      - float weight              // weight of this association
+    OneToOneRelations:
+      - extension::DriftChamberDigi digi    // reference to the digitized hit
+      - edm4hep::SimTrackerHit sim // reference to the simulated hit

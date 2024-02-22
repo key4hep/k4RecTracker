@@ -122,11 +122,22 @@ from Configurables import DCHsimpleDigitizerExtendedEdm
 dch_digitizer = DCHsimpleDigitizerExtendedEdm("DCHsimpleDigitizerExtendedEdm",
     inputSimHits = savetrackertool.SimTrackHits.Path,
     outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
+    outputSimDigiAssociation = "DC_simDigiAssociation",
     readoutName = "CDCHHits",
     xyResolution = 0.1, # mm
     zResolution = 1, # mm
     OutputLevel=INFO
 )
+
+# Derive performance quantities
+#from Configurables import DCHsimpleDigitizerExtendedEdmPerformance
+#dch_perf = DCHsimpleDigitizerExtendedEdmPerformance("DCHsimpleDigitizerExtendedEdmPerformance",
+#        inputSimHits = savetrackertool.SimTrackHits.Path,
+#        inputDigiHits = dch_digitizer.outputDigiHits,
+#        inputSimDigiAssociation = dch_digitizer.outputSimDigiAssociation
+#)
+
+
 
 ################ Output
 from Configurables import PodioOutput
@@ -159,10 +170,11 @@ ApplicationMgr(
               hepmc_converter,
               geantsim,
               dch_digitizer,
+              #dch_perf,
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 1000,
+    EvtMax   = 100,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True,
  )

@@ -13,6 +13,7 @@ DCHsimpleDigitizerExtendedEdm::DCHsimpleDigitizerExtendedEdm(const std::string& 
     : GaudiAlgorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "DCHsimpleDigitizerExtendedEdm") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
+  declareProperty("outputSimDigiAssociation", m_output_sim_digi_association, "Output name for the association between digitized and simulated hit collections");
 }
 
 DCHsimpleDigitizerExtendedEdm::~DCHsimpleDigitizerExtendedEdm() {}
@@ -49,6 +50,9 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute() {
   // Get the input collection with Geant4 hits
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   debug() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
+
+  // Prepare a collection for the association between digitized and simulated hit, setting weights to 1
+  extension::MCRecoDriftChamberDigiAssociationCollection* digi_sim_associations = m_output_sim_digi_association.createAndPut();
 
   // Digitize the sim hits
   extension::DriftChamberDigiCollection* output_digi_hits = m_output_digi_hits.createAndPut();
@@ -103,6 +107,11 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute() {
     output_digi_hit.setCellID(cellID);
     output_digi_hit.setLeftPosition(edm4hep::Vector3d({leftHitGlobalPosition[0] / dd4hep::mm, leftHitGlobalPosition[1] / dd4hep::mm, leftHitGlobalPosition[2] / dd4hep::mm}));
     output_digi_hit.setRightPosition(edm4hep::Vector3d({rightHitGlobalPosition[0] / dd4hep::mm, rightHitGlobalPosition[1] / dd4hep::mm, rightHitGlobalPosition[2] / dd4hep::mm}));
+
+    // create the association between digitized and simulated hit
+    auto digi_sim_association = digi_sim_associations->create();
+    digi_sim_association.setDigi(output_digi_hit);
+    digi_sim_association.setSim(input_sim_hit);
   }
   debug() << "Output Digi Hit collection size: " << output_digi_hits->size() << endmsg;
   return StatusCode::SUCCESS;
