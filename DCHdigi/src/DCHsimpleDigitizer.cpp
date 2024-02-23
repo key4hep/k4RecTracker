@@ -51,7 +51,7 @@ StatusCode DCHsimpleDigitizer::execute() {
   debug() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
 
   // Digitize the sim hits
-  edm4hep::TrackerHitCollection* output_digi_hits = m_output_digi_hits.createAndPut();
+  edm4hep::TrackerHit3DCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (const auto& input_sim_hit : *input_sim_hits) {
     auto output_digi_hit = output_digi_hits->create();
     // smear the hit position: need to go in the wire local frame to smear in the direction aligned/perpendicular with the wire for z/distanceToWire, taking e.g. stereo angle into account

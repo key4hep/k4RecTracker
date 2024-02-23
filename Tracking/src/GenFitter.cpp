@@ -13,7 +13,7 @@ StatusCode GenFitter::initialize() { return StatusCode::SUCCESS; }
 
 StatusCode GenFitter::execute() {
   // Get the input collection with tracker hits
-  const edm4hep::TrackerHitCollection* input_hits = m_input_hits.get();
+  const edm4hep::TrackerHit3DCollection* input_hits = m_input_hits.get();
   verbose() << "Input Hit collection size: " << input_hits->size() << endmsg;
 
   // Convert edm4hep::TrackerHitCollection to Genfit measurements

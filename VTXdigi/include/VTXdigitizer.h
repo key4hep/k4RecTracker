@@ -12,7 +12,15 @@
 
 // EDM4HEP
 #include "edm4hep/SimTrackerHitCollection.h"
+#include "edm4hep/TrackCollection.h"
+#if __has_include("edm4hep/TrackerHit3DCollection.h")
+#include "edm4hep/TrackerHit3DCollection.h"
+#else
 #include "edm4hep/TrackerHitCollection.h"
+namespace edm4hep {
+  using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
+}  // namespace edm4hep
+#endif
 
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
@@ -23,7 +31,7 @@
 
 /** @class VTXdigitizer
  *
- *  Algorithm for creating digitized (meaning 'reconstructed' for now) vertex detector hits (edm4hep::TrackerHit) from Geant4 hits (edm4hep::SimTrackerHit).
+ *  Algorithm for creating digitized (meaning 'reconstructed' for now) vertex detector hits (edm4hep::TrackerHit3D) from Geant4 hits (edm4hep::SimTrackerHit).
  *  
  *  @author Brieuc Francois
  *  @date   2023-03
@@ -51,7 +59,7 @@ private:
   // Input sim vertex hit collection name
   DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized vertex hit collection name
-  DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector name
   Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};

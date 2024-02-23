@@ -12,7 +12,15 @@
 
 // EDM4HEP
 #include "edm4hep/SimTrackerHitCollection.h"
+#include "edm4hep/TrackCollection.h"
+#if __has_include("edm4hep/TrackerHit3DCollection.h")
+#include "edm4hep/TrackerHit3DCollection.h"
+#else
 #include "edm4hep/TrackerHitCollection.h"
+namespace edm4hep {
+  using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
+}  // namespace edm4hep
+#endif
 
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
@@ -20,7 +28,7 @@
 
 /** @class DCHsimpleDigitizer
  *
- *  Algorithm for creating digitized drift chamber hits (still based on edm4hep::TrackerHit) from edm4hep::SimTrackerHit.
+ *  Algorithm for creating digitized drift chamber hits (still based on edm4hep::TrackerHit3D) from edm4hep::SimTrackerHit.
  *  You have to specify the expected resolution in z and in xy (distance to the wire). The smearing is applied in the wire reference frame.
  *  
  *  @author Brieuc Francois
@@ -49,7 +57,7 @@ private:
   // Input sim tracker hit collection name
   DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
-  DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "CDCHHits", "Name of the detector readout"};
