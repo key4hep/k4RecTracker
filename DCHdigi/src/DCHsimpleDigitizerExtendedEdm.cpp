@@ -97,7 +97,7 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute() {
                                                     simHitLocalPosition[2] / dd4hep::mm);
     // get the smeared distance to the wire (cylindrical coordinate as the smearing should be perpendicular to the wire)
     debug() << "Original distance to wire: " << simHitLocalPositionVector.rho() << " mm" << endmsg;
-    double smearedDistanceToWire = simHitLocalPositionVector.rho() + m_gauss_xy.shoot() * dd4hep::mm;
+    double smearedDistanceToWire = simHitLocalPositionVector.rho() + m_gauss_xy.shoot();
     while(smearedDistanceToWire < 0){
       debug() << "Negative smearedDistanceToWire (" << smearedDistanceToWire << ") shooting another random number" << endmsg;
       smearedDistanceToWire = simHitLocalPositionVector.rho() + m_gauss_xy.shoot();
@@ -129,8 +129,8 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute() {
             << " in cm" << endmsg;
     // fill the output DriftChamberDigi (making sure we are back in mm)
     output_digi_hit.setCellID(cellID);
-    edm4hep::Vector3d leftHitGlobalPositionVector = edm4hep::Vector3d({leftHitGlobalPosition[0] / dd4hep::mm, leftHitGlobalPosition[1] / dd4hep::mm, leftHitGlobalPosition[2] / dd4hep::mm});
-    edm4hep::Vector3d rightHitGlobalPositionVector = edm4hep::Vector3d({rightHitGlobalPosition[0] / dd4hep::mm, rightHitGlobalPosition[1] / dd4hep::mm, rightHitGlobalPosition[2] / dd4hep::mm});
+    edm4hep::Vector3d leftHitGlobalPositionVector = edm4hep::Vector3d(leftHitGlobalPosition[0] / dd4hep::mm, leftHitGlobalPosition[1] / dd4hep::mm, leftHitGlobalPosition[2] / dd4hep::mm);
+    edm4hep::Vector3d rightHitGlobalPositionVector = edm4hep::Vector3d(rightHitGlobalPosition[0] / dd4hep::mm, rightHitGlobalPosition[1] / dd4hep::mm, rightHitGlobalPosition[2] / dd4hep::mm);
     output_digi_hit.setLeftPosition(leftHitGlobalPositionVector);
     output_digi_hit.setRightPosition(rightHitGlobalPositionVector);
     output_digi_hit.setTime(input_sim_hit.getTime()); // will apply smearing when we know more from R&D teams
