@@ -11,14 +11,22 @@
 
 // EDM4HEP
 #include "edm4hep/SimTrackerHitCollection.h"
+#include "edm4hep/TrackCollection.h"
+#if __has_include("edm4hep/TrackerHit3DCollection.h")
+#include "edm4hep/TrackerHit3DCollection.h"
+#else
 #include "edm4hep/TrackerHitCollection.h"
+namespace edm4hep {
+  using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
+}  // namespace edm4hep
+#endif
 
 // DD4HEP
 #include "DD4hep/Detector.h"
 
 /** @class ARCdigitizer
  *
- *  Algorithm for creating digitized (meaning 'reconstructed' for now) ARC hits (edm4hep::TrackerHit) from Geant4 hits (edm4hep::SimTrackerHit).
+ *  Algorithm for creating digitized (meaning 'reconstructed' for now) ARC hits (edm4hep::TrackerHit3D) from Geant4 hits (edm4hep::SimTrackerHit).
  *  
  *  @author Brieuc Francois, Matthew Basso
  *  @date   2023-03
@@ -46,7 +54,7 @@ private:
   // Input sim tracker hit collection name
   DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
-  DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
   // Flat value for SiPM efficiency
   FloatProperty m_flat_SiPM_effi{this, "flatSiPMEfficiency", -1.0, "Flat value for SiPM quantum efficiency (<0 := disabled)"};
   // Apply the SiPM efficiency to digitized hits instead of simulated hits
