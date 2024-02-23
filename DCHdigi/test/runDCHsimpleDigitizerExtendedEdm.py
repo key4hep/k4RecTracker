@@ -126,7 +126,8 @@ dch_digitizer = DCHsimpleDigitizerExtendedEdm("DCHsimpleDigitizerExtendedEdm",
     readoutName = "CDCHHits",
     xyResolution = 0.1, # mm
     zResolution = 1, # mm
-    OutputLevel=INFO
+    debugMode = False,
+    OutputLevel = INFO
 )
 
 # Derive performance quantities
@@ -144,6 +145,9 @@ from Configurables import PodioOutput
 out = PodioOutput("out",
                   OutputLevel=INFO)
 out.outputCommands = ["keep *"]
+if not dch_digitizer.debugMode:
+    out.outputCommands.append("drop *HitSimHitDelta*")
+    out.outputCommands.append("drop outputDigiLocalHits")
 
 import uuid
 out.filename = "output_simplifiedDriftChamber_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+"_stepLength_default.root"
