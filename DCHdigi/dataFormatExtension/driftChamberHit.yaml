@@ -9,8 +9,8 @@ options:
 
 datatypes:
 
-  extension::DriftChamberDigi:
-    Description: "Drift chamber digitized hit (before tracking)"
+  extension::DriftChamberDigiLocal:
+    Description: "Drift chamber digitized hit (before tracking) in local coordinates"
     Author: "B. Francois, CERN"
     Members:
       - uint64_t cellID               // ID of the wire that created this hit
@@ -20,3 +20,24 @@ datatypes:
       - float eDep                    // energy deposited on the hit [GeV].
       - float eDepError               // error measured on eDep [GeV].
       - uint32_t clusterCount         // number of clusters associated to this hit
+
+  extension::DriftChamberDigi:
+    Description: "Drift chamber digitized hit (before tracking) in global coordinates. Assumes that the hits are radially in the middle of the cells"
+    Author: "B. Francois, CERN"
+    Members:
+      - uint64_t cellID               // ID of the wire that created this hit
+      - edm4hep::Vector3d leftPosition // position of the hit assuming it was on the left side of the wire, radially in the middle of the cell [mm]
+      - edm4hep::Vector3d rightPosition // position of the hit assuming it was on the right side of the wire, radially in the middle of the cell [mm]
+      - float time                    // time of the hit [ns].
+      - float eDep                    // energy deposited on the hit [GeV].
+      - float eDepError               // error measured on eDep [GeV].
+      - uint32_t clusterCount         // number of clusters associated to this hit
+
+  extension::MCRecoDriftChamberDigiAssociation:
+    Description: "Association between a DriftChamberDigi and the corresponding simulated hit"
+    Author: "B. Francois, CERN"
+    Members:
+      - float weight              // weight of this association
+    OneToOneRelations:
+      - extension::DriftChamberDigi digi    // reference to the digitized hit
+      - edm4hep::SimTrackerHit sim // reference to the simulated hit
