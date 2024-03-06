@@ -52,7 +52,7 @@ StatusCode VTXdigitizer::execute() {
   unsigned nDismissedHits=0;
 
   // Digitize the sim hits
-  edm4hep::TrackerHitCollection* output_digi_hits = m_output_digi_hits.createAndPut();
+  edm4hep::TrackerHit3DCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (const auto& input_sim_hit : *input_sim_hits) {
     auto output_digi_hit = output_digi_hits->create();
 

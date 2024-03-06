@@ -68,7 +68,7 @@ StatusCode ARCdigitizer::execute() {
   dd4hep::rec::CellIDPositionConverter converter(*m_detector);
 
   // Write the digitized hits
-  edm4hep::TrackerHitCollection* output_digi_hits = m_output_digi_hits.createAndPut();
+  edm4hep::TrackerHit3DCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (auto it = merged_digi_hits.begin(); it != merged_digi_hits.end(); it++) {
     // Throw away digitized hits based on flat SiPM efficiency
     if (m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && m_uniform.shoot() > m_flat_SiPM_effi)

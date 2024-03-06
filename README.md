@@ -24,7 +24,7 @@ make install -j 8
 cd ../../
 export FCCDETECTORS=$PWD/FCCDetectors/;PATH=$PWD/FCCDetectors/install/bin/:$PATH;CMAKE_PREFIX_PATH=$PWD/FCCDetectors/install/:$CMAKE_PREFIX_PATH;LD_LIBRARY_PATH=$PWD/FCCDetectors/install/lib:$LD_LIBRARY_PATH;export PYTHONPATH=$PWD/FCCDetectors/install/python:$PYTHONPATH;LD_LIBRARY_PATH=$PWD/FCCDetectors/install/lib64:$LD_LIBRARY_PATH
 
-git clone git@github.com:BrieucF/k4RecTracker.git
+git clone git@github.com:key4hep/k4RecTracker.git
 cd k4RecTracker
 mkdir build install
 cd build
@@ -46,7 +46,7 @@ export K4RECTRACKER=$PWD/k4RecTracker/install/share/k4RecTracker; PATH=$PWD/k4Re
 Cloning:
 
 ```bash
-git clone git@github.com:BrieucF/k4RecTracker.git
+git clone git@github.com:key4hep/k4RecTracker.git
 ```
 
 Installing:
