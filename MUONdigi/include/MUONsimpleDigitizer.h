@@ -12,7 +12,15 @@
 
 // EDM4HEP
 #include "edm4hep/SimTrackerHitCollection.h"
+#include "edm4hep/TrackCollection.h"
+#if __has_include("edm4hep/TrackerHit3DCollection.h")
+#include "edm4hep/TrackerHit3DCollection.h"
+#else
 #include "edm4hep/TrackerHitCollection.h"
+namespace edm4hep {
+  using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
+}  // namespace edm4hep
+#endif
 
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
@@ -20,8 +28,8 @@
 
 /** @class MUONsimpleDigitizer
  *
- *  Algorithm for creating digitized Muon system hits (still based on edm4hep::TrackerHit) from edm4hep::SimTrackerHit.
- *  You have to specify the expected resolution in z and in xy (distance to the wire). The smearing is applied in the wire reference frame.
+ *  Algorithm for creating digitized Muon system hits (still based on edm4hep::TrackerHit3D) from edm4hep::SimTrackerHit.
+ *  You have to specify the expected resolution in z and in xy.
  *  
  *  @author Mahmoud Ali
  *  @date   2023-09
@@ -49,7 +57,7 @@ private:
   // Input sim tracker hit collection name
   DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
-  DataHandle<edm4hep::TrackerHitCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "MuonChamberBarrelReadout", "Name of the detector readout"};
@@ -59,13 +67,13 @@ private:
   dd4hep::DDSegmentation::BitFieldCoder* m_decoder;
   // Volume manager to get the physical cell sensitive volume
   dd4hep::VolumeManager m_volman;
-/*
+
   // z position resolution in mm
   FloatProperty m_z_resolution{this, "zResolution", 1.0,
-                               "Spatial resolution in the z direction (from reading out the wires at both sides) [mm]"};
+                               "Spatial resolution in the z direction [mm]"};
   // xy resolution in mm
   FloatProperty m_xy_resolution{this, "xyResolution", 0.1, "Spatial resolution in the xy direction [mm]"};
-*/
+
   // Random Number Service
   IRndmGenSvc* m_randSvc;
   // Gaussian random number generator used for the smearing of the z position

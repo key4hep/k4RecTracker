@@ -10,8 +10,8 @@ from GaudiKernel.SystemOfUnits import MeV, GeV, tesla
 momentum = 5 # in GeV
 #thetaMin = 90.25 # degrees
 #thetaMax = 90.25 # degrees
-thetaMin = 20 # degrees
-thetaMax = 130 # degrees
+thetaMin = 0 # degrees
+thetaMax = 180 # degrees
 pdgCode = 13 # 11 electron, 13 muon, 22 photon, 111 pi0, 211 pi+
 magneticField = True
 _pi = 3.14159
@@ -46,7 +46,8 @@ geoservice = GeoSvc("GeoSvc")
 path_to_detector = os.environ.get("FCCDETECTORS", "")
 print(path_to_detector)
 detectors_to_use=[
-                    'Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v01.xml'
+                   # 'Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v02.xml'
+                    '/afs/cern.ch/work/m/maali/public/FCCDetectors/Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v02.xml'
                   ]
 # prefix all xmls with path_to_detector
 geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
@@ -88,23 +89,31 @@ particle_converter = SimG4PrimariesFromEdmTool("EdmConverter")
 particle_converter.GenParticles.Path = genParticlesOutputName
 
 from Configurables import SimG4SaveTrackerHits
-savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["MUONHits"])
-savetrackertool.SimTrackHits.Path = "DC_simTrackerHits"
+#savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["MuonChamberBarrelReadout"])
+#savetrackertool.SimTrackHits.Path = "MUON_simTrackerHits"
 
+saveMuonBarrelTool = SimG4SaveTrackerHits("SimG4SaveMuonBarrelHits", readoutName="MuonChamberBarrelReadout")
+saveMuonBarrelTool.SimTrackHits.Path = "muonBarrelSimHits"
+
+saveMuonPositiveEndcapTool = SimG4SaveTrackerHits("SimG4SaveMuonPositiveEndcapHits", readoutName="MuonChamberPositiveEndcapReadout")
+saveMuonPositiveEndcapTool.SimTrackHits.Path = "muonPositiveEndcapSimHits"
+
+saveMuonNegativeEndcapTool = SimG4SaveTrackerHits("SimG4SaveMuonNegativeEndcapHits", readoutName="MuonChamberNegativeEndcapReadout")
+saveMuonNegativeEndcapTool.SimTrackHits.Path = "muonNegativeEndcapSimHits"
 
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [savetrackertool
+                       outputs= [saveMuonBarrelTool, saveMuonPositiveEndcapTool, saveMuonNegativeEndcapTool
                                  #saveHistTool
                        ],
                        eventProvider=particle_converter,
-                       OutputLevel=DEBUG)
+                       OutputLevel=INFO)
 # Digitize tracker hits
 from Configurables import MUONsimpleDigitizer
 muon_digitizer = MUONsimpleDigitizer("MUONsimpleDigitizer",
-    inputSimHits = savetrackertool.SimTrackHits.Path,
-    outputDigiHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"),
-    readoutName = "MUONHits",
+    inputSimHits = saveMuonBarrelTool.SimTrackHits.Path,
+    outputDigiHits = saveMuonBarrelTool.SimTrackHits.Path.replace("sim", "digi"),
+    readoutName = "MuonChamberBarrelReadout",
     xyResolution = 0.1, # mm
     zResolution = 1, # mm
     OutputLevel=DEBUG
@@ -117,7 +126,7 @@ out = PodioOutput("out",
 out.outputCommands = ["keep *"]
 
 import uuid
-out.filename = "output_simplifiedDriftChamber_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+".root"
+out.filename = "output_simpleMuonSystem_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+".root"
 
 #CPU information
 from Configurables import AuditorSvc, ChronoAuditor
