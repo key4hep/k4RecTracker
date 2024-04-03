@@ -43,11 +43,12 @@ hepmc_converter.hepmcStatusList = []
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
 # if FCC_DETECTORS is empty, this should use relative path to working directory
-path_to_detector = os.environ.get("FCCDETECTORS", "")
+path_to_detector = os.environ.get("K4GEO", "")
 print(path_to_detector)
 detectors_to_use=[
                    # 'Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v02.xml'
-                    '/afs/cern.ch/work/m/maali/public/FCCDetectors/Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v02.xml'
+                    '/afs/cern.ch/work/m/maali/public/k4geo/FCCee/IDEA/compact/IDEA_o1_v02/IDEA_o1_v02.xml'
+                 #  '/afs/cern.ch/work/m/maali/public/FCCDetectors/Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v02.xml'
                   ]
 # prefix all xmls with path_to_detector
 geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
@@ -74,7 +75,7 @@ geantservice = SimG4Svc("SimG4Svc", detector = 'SimG4DD4hepDetector', physicslis
 # Fixed seed to have reproducible results, change it for each job if you split one production into several jobs
 # Mind that if you leave Gaudi handle random seed and some job start within the same second (very likely) you will have duplicates
 geantservice.randomNumbersFromGaudi = False
-geantservice.seedValue = 4242
+geantservice.seedValue = 3135
 
 # Range cut
 geantservice.g4PreInitCommands += ["/run/setCut 0.1 mm"]
@@ -92,18 +93,18 @@ from Configurables import SimG4SaveTrackerHits
 #savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["MuonChamberBarrelReadout"])
 #savetrackertool.SimTrackHits.Path = "MUON_simTrackerHits"
 
-saveMuonBarrelTool = SimG4SaveTrackerHits("SimG4SaveMuonBarrelHits", readoutName="MuonChamberBarrelReadout")
-saveMuonBarrelTool.SimTrackHits.Path = "muonBarrelSimHits"
+SimG4SaveMuonHits = SimG4SaveTrackerHits("SimG4SaveMuonHits", readoutName="mRWELLChamberReadout")
+SimG4SaveMuonHits.SimTrackHits.Path = "Muon_SimHits"
 
-saveMuonPositiveEndcapTool = SimG4SaveTrackerHits("SimG4SaveMuonPositiveEndcapHits", readoutName="MuonChamberPositiveEndcapReadout")
-saveMuonPositiveEndcapTool.SimTrackHits.Path = "muonPositiveEndcapSimHits"
+#saveMuonPositiveEndcapTool = SimG4SaveTrackerHits("SimG4SaveMuonPositiveEndcapHits", readoutName="MuonChamberPositiveEndcapReadout")
+#saveMuonPositiveEndcapTool.SimTrackHits.Path = "muonPositiveEndcapSimHits"
 
-saveMuonNegativeEndcapTool = SimG4SaveTrackerHits("SimG4SaveMuonNegativeEndcapHits", readoutName="MuonChamberNegativeEndcapReadout")
-saveMuonNegativeEndcapTool.SimTrackHits.Path = "muonNegativeEndcapSimHits"
+#saveMuonNegativeEndcapTool = SimG4SaveTrackerHits("SimG4SaveMuonNegativeEndcapHits", readoutName="MuonChamberNegativeEndcapReadout")
+#saveMuonNegativeEndcapTool.SimTrackHits.Path = "muonNegativeEndcapSimHits"
 
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [saveMuonBarrelTool, saveMuonPositiveEndcapTool, saveMuonNegativeEndcapTool
+                       outputs= [SimG4SaveMuonHits,
                                  #saveHistTool
                        ],
                        eventProvider=particle_converter,
@@ -111,12 +112,12 @@ geantsim = SimG4Alg("SimG4Alg",
 # Digitize tracker hits
 from Configurables import MUONsimpleDigitizer
 muon_digitizer = MUONsimpleDigitizer("MUONsimpleDigitizer",
-    inputSimHits = saveMuonBarrelTool.SimTrackHits.Path,
-    outputDigiHits = saveMuonBarrelTool.SimTrackHits.Path.replace("sim", "digi"),
-    readoutName = "MuonChamberBarrelReadout",
-    xyResolution = 0.1, # mm
-    zResolution = 1, # mm
-    OutputLevel=DEBUG
+    inputSimHits = SimG4SaveMuonHits.SimTrackHits.Path,
+    outputDigiHits = SimG4SaveMuonHits.SimTrackHits.Path.replace("sim", "digi"),
+    readoutName = "mRWELLChamberReadout",
+    xResolution = 0.4, # mm
+    yResolution = 0.4, # mm
+    OutputLevel=INFO
 )
 
 ################ Output

@@ -24,6 +24,8 @@ namespace edm4hep {
 
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
+#include "DDRec/Vector3D.h"
+#include "DDRec/SurfaceManager.h"
 #include "DDSegmentation/BitFieldCoder.h"
 
 /** @class MUONsimpleDigitizer
@@ -60,7 +62,7 @@ private:
   DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
-  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "MuonChamberBarrelReadout", "Name of the detector readout"};
+  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "mRWELLChamberReadout", "Name of the detector readout"};
   // Pointer to the geometry service
   ServiceHandle<IGeoSvc> m_geoSvc;
   // Decoder for the cellID
@@ -69,15 +71,15 @@ private:
   dd4hep::VolumeManager m_volman;
 
   // z position resolution in mm
-  FloatProperty m_z_resolution{this, "zResolution", 1.0,
-                               "Spatial resolution in the z direction [mm]"};
+  FloatProperty m_x_resolution{this, "xResolution", 1.0,
+                               "Spatial resolution in the x direction [mm]"};
   // xy resolution in mm
-  FloatProperty m_xy_resolution{this, "xyResolution", 0.1, "Spatial resolution in the xy direction [mm]"};
+  FloatProperty m_y_resolution{this, "yResolution", 1.0, "Spatial resolution in the y direction [mm]"};
 
   // Random Number Service
   IRndmGenSvc* m_randSvc;
-  // Gaussian random number generator used for the smearing of the z position
-  Rndm::Numbers m_gauss_z;
-  // Gaussian random number generator used for the smearing of the xy position
-  Rndm::Numbers m_gauss_xy;
+  // Gaussian random number generator used for the smearing of the x position
+  Rndm::Numbers m_gauss_x;
+  // Gaussian random number generator used for the smearing of the y position
+  Rndm::Numbers m_gauss_y;
 };

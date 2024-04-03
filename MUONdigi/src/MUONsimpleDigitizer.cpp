@@ -5,7 +5,7 @@
 #include "DDRec/Vector3D.h"
 
 // ROOT
-#include "Math/Cylindrical3D.h"
+//#include "Math/Cylindrical3D.h"
 
 DECLARE_COMPONENT(MUONsimpleDigitizer)
 
@@ -23,11 +23,11 @@ StatusCode MUONsimpleDigitizer::initialize() {
     error() << "Couldn't get RndmGenSvc!" << endmsg;
     return StatusCode::FAILURE;
   }
-  if (m_gauss_z.initialize(m_randSvc, Rndm::Gauss(0., m_z_resolution)).isFailure()) {
+  if (m_gauss_x.initialize(m_randSvc, Rndm::Gauss(0., m_x_resolution)).isFailure()) {
     error() << "Couldn't initialize RndmGenSvc!" << endmsg;
     return StatusCode::FAILURE;
   }
-  if (m_gauss_xy.initialize(m_randSvc, Rndm::Gauss(0., m_xy_resolution)).isFailure()) {
+  if (m_gauss_y.initialize(m_randSvc, Rndm::Gauss(0., m_y_resolution)).isFailure()) {
     error() << "Couldn't initialize RndmGenSvc!" << endmsg;
     return StatusCode::FAILURE;
   }
@@ -58,7 +58,7 @@ StatusCode MUONsimpleDigitizer::execute() {
     // retrieve the cell detElement
     dd4hep::DDSegmentation::CellID cellID         = input_sim_hit.getCellID();
     debug() << "Digitisation of " << m_readoutName << ", cellID: " << cellID << endmsg;
-    auto                           cellDetElement = m_volman.lookupDetElement(cellID);
+  //  auto                           cellDetElement = m_volman.lookupDetElement(cellID);
   
    /* const std::string& stripsDetElementName =
         Form("system_%d_layer_%d_phi_%d", m_decoder->get(cellID, "layer"), m_decoder->get(cellID, "phi"));
@@ -72,7 +72,10 @@ StatusCode MUONsimpleDigitizer::execute() {
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,
                                       input_sim_hit.getPosition().z * dd4hep::mm};
+    dd4hep::rec::Vector3D simHitGlobalPositionVector(simHitGlobalPosition[0], simHitGlobalPosition[1],
+                                                    simHitGlobalPosition[2]);                                  
     double simHitLocalPosition[3]  = {0, 0, 0};
+
     // get the simHit coordinate in cm in the strips reference frame 
     stripsTransformMatrix.MasterToLocal(simHitGlobalPosition, simHitLocalPosition);
     debug() << "Cell ID string: " << m_decoder->valueString(cellID) << endmsg;
@@ -87,21 +90,27 @@ StatusCode MUONsimpleDigitizer::execute() {
     dd4hep::rec::Vector3D simHitLocalPositionVector(simHitLocalPosition[0], simHitLocalPosition[1],
                                                     simHitLocalPosition[2]);
      // smear xy position
-    double smearedDistanceTostrips = simHitLocalPositionVector.rho() + m_gauss_xy.shoot() * dd4hep::mm;
+    double smearedX = simHitLocalPositionVector.x() ;
+    double smearedY = simHitLocalPositionVector.y() + m_gauss_x.shoot() * dd4hep::mm;    
     // smear the z position 
-    double smearedZ = simHitLocalPositionVector.z() + m_gauss_z.shoot() * dd4hep::mm;
-    // build the local position vector of the smeared hit using cylindrical coordinates. When we will have edm4hep::MUONHit there will be probably no need
-    ROOT::Math::Cylindrical3D digiHitLocalPositionVector(smearedDistanceTostrips, smearedZ,
-                                                         simHitLocalPositionVector.phi());
-    debug() << "Local simHit distance to the strips: " << simHitLocalPositionVector.rho()
-            << " Local digiHit distance to the strips: " << smearedDistanceTostrips << " in cm" << endmsg;
+    double smearedZ = simHitLocalPositionVector.z() + m_gauss_y.shoot() * dd4hep::mm;
+
+    double digiHitLocalPosition[3] = {smearedX, smearedY, smearedZ};
+
+    // build the local position vector of the smeared hit. 
+ //   dd4hep::rec::Vector3D  digiHitLocalPositionVector(smearedX, smearedY, smearedZ);
+    debug() << "Local simHit x: " << simHitLocalPositionVector.x()
+            << " Local digiHit x: " << smearedX << " in cm" << endmsg;
+    debug() << "Local simHit y: " << simHitLocalPositionVector.y()
+            << " Local digiHit y: " << smearedY << " in cm" << endmsg;
     debug() << "Local simHit z: " << simHitLocalPositionVector.z()
-            << " Local digiHit distance to the strips: " << smearedZ << " in cm" << endmsg;
-    debug() << "Local simHit phi: " << simHitLocalPositionVector.phi()
-            << " Local digiHit distance to the strips: " << digiHitLocalPositionVector.Phi() << endmsg;
+            << " Local digiHit z: " << smearedZ << " in cm" << endmsg;
+    
+
+
     // go back to the global frame
-    double digiHitLocalPosition[3]  = {digiHitLocalPositionVector.x(), digiHitLocalPositionVector.y(),
-                                       digiHitLocalPositionVector.z()};
+ //   double digiHitLocalPosition[3]  = {digiHitLocalPositionVector.x(), digiHitLocalPositionVector.y(),
+  //                                     digiHitLocalPositionVector.z()};
     double digiHitGlobalPosition[3] = {0, 0, 0};
     stripsTransformMatrix.LocalToMaster(digiHitLocalPosition, digiHitGlobalPosition);
     // go back to mm
