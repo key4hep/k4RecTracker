@@ -3,11 +3,13 @@ set(PackageName Tracking)
 project(${PackageName})
 
 #find_package(GenFit)
+FIND_PACKAGE(MarlinUtil)
 
 #if (GenFit_FOUND)
 
 file(GLOB sources
     ${PROJECT_SOURCE_DIR}/src/*.cpp
+    ${PROJECT_SOURCE_DIR}/components/*.cpp
 )
 
 file(GLOB headers
@@ -26,6 +28,7 @@ gaudi_add_module(${PackageName}
 target_include_directories(${PackageName} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
+  ${MarlinUtil_INCLUDE_DIRS}
 )
 
 set_target_properties(${PackageName} PROPERTIES PUBLIC_HEADER "${headers}")
@@ -44,4 +47,9 @@ install(TARGETS ${PackageName}
 )
 
 install(FILES ${scripts} DESTINATION test)
+
+SET(test_name "test_TracksFromGenParticles")
+ADD_TEST(NAME ${test_name} COMMAND k4run test/runTracksFromGenParticles.py)
+set_test_env(${test_name})
+
 #endif()
