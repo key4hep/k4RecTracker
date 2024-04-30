@@ -26,6 +26,7 @@ export FCCDETECTORS=$PWD/FCCDetectors/;PATH=$PWD/FCCDetectors/install/bin/:$PATH
 
 git clone git@github.com:key4hep/k4RecTracker.git
 cd k4RecTracker
+source setup.sh
 mkdir build install
 cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=../install

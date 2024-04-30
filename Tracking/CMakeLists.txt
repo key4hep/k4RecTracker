@@ -20,7 +20,9 @@ gaudi_add_module(${PackageName}
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
-  #GenFit::genfit2
+  extensionDict
+  OnnxRuntime
+  torch
 )
 
 target_include_directories(${PackageName} PUBLIC
@@ -45,3 +47,6 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 #endif()
+SET(test_name "test_tracking")
+ADD_TEST(NAME ${test_name} COMMAND k4run test/runGenFitTrackingOnSimplifiedDriftChamber.py)
+set_test_env(${test_name})
