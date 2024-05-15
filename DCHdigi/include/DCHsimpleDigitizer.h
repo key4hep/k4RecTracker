@@ -2,7 +2,8 @@
 
 // GAUDI
 #include "Gaudi/Property.h"
-#include "GaudiAlg/GaudiAlgorithm.h"
+// #include "GaudiAlg/GaudiAlgorithm.h"
+#include "Gaudi/Algorithm.h"
 #include "GaudiKernel/IRndmGenSvc.h"
 #include "GaudiKernel/RndmGenerators.h"
 
@@ -36,7 +37,7 @@ namespace edm4hep {
  *
  */
 
-class DCHsimpleDigitizer : public GaudiAlgorithm {
+class DCHsimpleDigitizer : public Gaudi::Algorithm {
 public:
   explicit DCHsimpleDigitizer(const std::string&, ISvcLocator*);
   virtual ~DCHsimpleDigitizer();
@@ -47,7 +48,7 @@ public:
   /**  Execute.
    *   @return status code
    */
-  virtual StatusCode execute() final;
+  virtual StatusCode execute(const EventContext&) const final;
   /**  Finalize.
    *   @return status code
    */
@@ -55,9 +56,9 @@ public:
 
 private:
   // Input sim tracker hit collection name
-  DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
-  DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "CDCHHits", "Name of the detector readout"};

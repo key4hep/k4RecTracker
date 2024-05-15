@@ -15,6 +15,7 @@ from Configurables import GenFitter
 
 dch_tracking = GenFitter(
     "GenFitter",
+    modelPath="/afs/cern.ch/work/m/mgarciam/private/k4RecTracker_dev_0/Tracking/model_multivector_1_input.onnx",
     inputHits_CDC="CDCHDigis",
     inputHits_VTXD="VTXDDigis",
     inputHits_VTXIB="VTXIBDigis",

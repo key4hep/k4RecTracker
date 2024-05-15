@@ -2,8 +2,8 @@
 
 // GAUDI
 #include "Gaudi/Property.h"
-#include "GaudiAlg/GaudiAlgorithm.h"
-
+// #include "GaudiAlg/GaudiAlgorithm.h"
+#include "Gaudi/Algorithm.h"
 // K4FWCORE
 #include "k4FWCore/DataHandle.h"
 
@@ -22,7 +22,10 @@ namespace edm4hep {
 #include "extension/DriftChamberDigiCollection.h"
 #include "extension/DriftChamberDigiLocalCollection.h"
 #include "extension/MCRecoDriftChamberDigiAssociationCollection.h"
-
+#include "onnxruntime_cxx_api.h"
+#include <memory> 
+#include <vector> 
+#include <string>   
 // GENFIT
 //#include "WireMeasurement.h"
 
@@ -35,7 +38,7 @@ namespace edm4hep {
  *
  */
 
-class GenFitter : public GaudiAlgorithm {
+class GenFitter : public Gaudi::Algorithm {
 public:
   explicit GenFitter(const std::string&, ISvcLocator*);
   virtual ~GenFitter();
@@ -46,21 +49,35 @@ public:
   /**  Execute.
    *   @return status code
    */
-  virtual StatusCode execute() final;
+  virtual StatusCode execute(const EventContext&) const final;
   /**  Finalize.
    *   @return status code
    */
   virtual StatusCode finalize() final;
 
 private:
+  /// Pointer to the ONNX enviroment
+  std::unique_ptr<Ort::Env> fEnv;
+  /// Pointer to the ONNX inference session
+  std::unique_ptr<Ort::Session> fSession;
+  /// ONNX settings
+  Ort::SessionOptions fSessionOptions;
+  /// ONNX memory info
+  const OrtMemoryInfo* fInfo;
+  struct MemoryInfo;
+  /// the input names represent the names given to the model
+  /// when defining  the model's architecture (if applicable)
+  /// they can also be retrieved from model.summary()
+  std::vector<const char*> fInames;
+  std::vector<const char*> fOnames;
+
+  std::string modelPath={};
   // Input tracker hit collection name
-  DataHandle<extension::DriftChamberDigiCollection> m_input_hits_CDC{"inputHits_CDC", Gaudi::DataHandle::Reader, this};
-  DataHandle<edm4hep::TrackerHit3DCollection> m_input_hits_VTXIB{"inputHits_VTXIB", Gaudi::DataHandle::Reader, this};
-  DataHandle<edm4hep::TrackerHit3DCollection> m_input_hits_VTXD{"inputHits_VTXD", Gaudi::DataHandle::Reader, this};
-  DataHandle<edm4hep::TrackerHit3DCollection> m_input_hits_VTXOB{"inputHits_VTXOB", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<extension::DriftChamberDigiCollection> m_input_hits_CDC{"inputHits_CDC", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_input_hits_VTXIB{"inputHits_VTXIB", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_input_hits_VTXD{"inputHits_VTXD", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_input_hits_VTXOB{"inputHits_VTXOB", Gaudi::DataHandle::Reader, this};
 
   // Output track collection name
-  DataHandle<edm4hep::TrackCollection> m_output_tracks{"outputTracks", Gaudi::DataHandle::Writer, this};
-  // Transient genfit measurements used internally by genfit to run the tracking
-  //std::vector<genfit::WireMeasurement> m_wire_measurements;
+  mutable DataHandle<edm4hep::TrackCollection> m_output_tracks{"outputTracks", Gaudi::DataHandle::Writer, this};
 };
