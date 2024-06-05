@@ -17,7 +17,15 @@
 #if __has_include("edm4hep/TrackerHit3DCollection.h")
 #include "edm4hep/TrackerHit3DCollection.h"
 #else
+#include "edm4hep/TrackCollection.h"
+#if __has_include("edm4hep/TrackerHit3DCollection.h")
+#include "edm4hep/TrackerHit3DCollection.h"
+#else
 #include "edm4hep/TrackerHitCollection.h"
+namespace edm4hep {
+  using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
+}  // namespace edm4hep
+#endif
 namespace edm4hep {
   using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
 }  // namespace edm4hep
@@ -32,6 +40,7 @@ namespace edm4hep {
 
 /** @class VTXdigitizer
  *
+ *  Algorithm for creating digitized (meaning 'reconstructed' for now) vertex detector hits (edm4hep::TrackerHit3D) from Geant4 hits (edm4hep::SimTrackerHit).
  *  Algorithm for creating digitized (meaning 'reconstructed' for now) vertex detector hits (edm4hep::TrackerHit3D) from Geant4 hits (edm4hep::SimTrackerHit).
  *  
  *  @author Brieuc Francois

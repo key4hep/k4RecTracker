@@ -14,6 +14,7 @@ file(GLOB headers
 gaudi_add_module(${PackageName}
   SOURCES ${sources}
   LINK
+  Gaudi::GaudiAlgLib
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
