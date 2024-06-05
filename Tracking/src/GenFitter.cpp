@@ -71,6 +71,7 @@ GenFitter::GenFitter(const std::string& aName, ISvcLocator* aSvcLoc) : Gaudi::Al
   declareProperty("inputHits_VTXD", m_input_hits_VTXD, "Input VTXD tracker hit collection name");
   declareProperty("inputHits_VTXOB", m_input_hits_VTXOB, "Input VTXOB tracker hit collection name");
   declareProperty("outputTracks", m_output_tracks, "Output track collection name");
+  declareProperty("outputHits", m_output_hits, "Output hits collection name");
 }
 
 GenFitter::~GenFitter() {}
@@ -200,6 +201,7 @@ StatusCode GenFitter::execute(const EventContext&) const {
   
   // std::cout << "indices: " << clustering.index({indices}) << std::endl;
   extension::TrackCollection* output_tracks = m_output_tracks.createAndPut();
+  extension::TrackerHit3DCollection* output_hits= m_output_hits.createAndPut();
   int64_t number_of_tracks = unique_tensor.numel(); 
   std::cout << "number_of_tracks: " << number_of_tracks << std::endl;
   
@@ -222,9 +224,9 @@ StatusCode GenFitter::execute(const EventContext&) const {
         if ((torch::sum(mask_VTXD)>0).item<bool>()){
           // The hit belong to vtxd
           auto hit = inputHits_VTXD->at(index_id.item<int>());
-          extension::MutableTrackerHit3D hit_extension;
+          auto hit_extension  = output_hits->create();
           hit_extension.setCellID(hit.getCellID());
-          hit_extension.setType(hit.getType());
+          hit_extension.setType(1);
           hit_extension.setEDep(hit.getEDep());
           hit_extension.setPosition(hit.getPosition());
           // output_track.addToTrackerHits(hit_extension);
@@ -234,9 +236,9 @@ StatusCode GenFitter::execute(const EventContext&) const {
           index_id = index_id-it_0;
           // std::cout << "taking hit from inputHits_VTXIB" << std::endl;
           auto hit = inputHits_VTXIB->at(index_id.item<int>());
-          extension::MutableTrackerHit3D hit_extension;
+          auto hit_extension  = output_hits->create();
           hit_extension.setCellID(hit.getCellID());
-          hit_extension.setType(hit.getType());
+          hit_extension.setType(1);
           hit_extension.setEDep(hit.getEDep());
           hit_extension.setPosition(hit.getPosition());
           // output_track.addToTrackerHits(hit_extension);
@@ -244,17 +246,22 @@ StatusCode GenFitter::execute(const EventContext&) const {
           index_id = index_id-(it_1+it_0);
           auto hit = inputHits_VTXOB->at(index_id.item<int>());
           // std::cout << "taking hit from VTOB" << std::endl;
-          extension::MutableTrackerHit3D hit_extension;
+          auto hit_extension  = output_hits->create();
           hit_extension.setCellID(hit.getCellID());
-          hit_extension.setType(hit.getType());
+          hit_extension.setType(1);
           hit_extension.setEDep(hit.getEDep());
           hit_extension.setPosition(hit.getPosition());
-          // output_track.addToTrackerHits(hit_extension);
+          output_track.addToTrackerHits(hit_extension);
         } else if ((torch::sum(mask_CDC)>0).item<bool>()){
           index_id = index_id-(it_1+it_2 +it_0);
           // std::cout << "taking hit from CDC" << std::endl;
           auto hit = input_hits_CDC->at(index_id.item<int>());
-          output_track.addToTrackerHits(hit);
+          auto hit_extension  = output_hits->create();
+          hit_extension.setCellID(hit.getCellID());
+          hit_extension.setType(0);
+          hit_extension.setEDep(hit.getEDep());
+          hit_extension.setPosition(hit.getLeftPosition());
+          output_track.addToTrackerHits(hit_extension);
         }
     }
   }

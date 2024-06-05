@@ -21,6 +21,7 @@ dch_tracking = GenFitter(
     inputHits_VTXIB="VTXIBDigis",
     inputHits_VTXOB="VTXOBDigis",
     outputTracks="CDCHTracks",
+    outputHits="Hits",
     OutputLevel=INFO,
 )
 

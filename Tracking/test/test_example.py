@@ -20,7 +20,7 @@ for i, event in enumerate(reader.get("events")):
         hits_in_track = track.getTrackerHits()
         coordinates = []
         for hit in hits_in_track:
-            position = hit.getLeftPosition()
+            position = hit.getPosition()
             x = position.x
             y = position.y
             z = position.z

@@ -20,6 +20,7 @@ namespace edm4hep {
 
 #include "extension/TrackCollection.h"
 #include "extension/TrackCollection.h"
+#include "extension/TrackerHit3DCollection.h"
 // EDM4HEP extension
 #include "extension/DriftChamberDigiCollection.h"
 #include "extension/DriftChamberDigiLocalCollection.h"
@@ -82,4 +83,5 @@ private:
 
   // Output track collection name
   mutable DataHandle<extension::TrackCollection> m_output_tracks{"outputTracks", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<extension::TrackerHit3DCollection> m_output_hits{"outputHits", Gaudi::DataHandle::Writer, this};
 };
