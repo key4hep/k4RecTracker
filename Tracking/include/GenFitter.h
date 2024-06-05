@@ -11,13 +11,15 @@
 #if __has_include("edm4hep/TrackerHit3DCollection.h")
 #include "edm4hep/TrackerHit3DCollection.h"
 #else
-#include "edm4hep/TrackerHitCollection.h"
+#include "edm4hep/TrackerHit3D.h"
+#include "extension/TrackerHit3D.h"
 namespace edm4hep {
   using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
 }  // namespace edm4hep
 #endif
 
-#include "edm4hep/TrackCollection.h"
+#include "extension/TrackCollection.h"
+#include "extension/TrackCollection.h"
 // EDM4HEP extension
 #include "extension/DriftChamberDigiCollection.h"
 #include "extension/DriftChamberDigiLocalCollection.h"
@@ -79,5 +81,5 @@ private:
   mutable DataHandle<edm4hep::TrackerHit3DCollection> m_input_hits_VTXOB{"inputHits_VTXOB", Gaudi::DataHandle::Reader, this};
 
   // Output track collection name
-  mutable DataHandle<edm4hep::TrackCollection> m_output_tracks{"outputTracks", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<extension::TrackCollection> m_output_tracks{"outputTracks", Gaudi::DataHandle::Writer, this};
 };

@@ -4,7 +4,9 @@
 #include <vector>
 #include <torch/torch.h>
 #include "onnxruntime_cxx_api.h"
-
+#include <ATen/ATen.h>
+#include "edm4hep/TrackerHit3D.h"
+#include "extension/MutableTrackerHit3D.h"
 
 torch::Tensor find_condpoints(torch::Tensor betas, torch::Tensor  unassigned, float tbeta) {
     int n_points = unassigned.size(0);
@@ -109,8 +111,9 @@ StatusCode GenFitter::execute(const EventContext&) const {
 
   // size_t size_total = size_CDC+size_VTXD+size_VTXIB+size_VTXOB;
   std::vector <float> ListGlobalInputs; 
- 
+  std::vector <float> ListHitType_VTXD;
   int it = 0;
+  int it_0 = 0;
   for (const auto& input_sim_hit : *inputHits_VTXD) {
     ListGlobalInputs.push_back(input_sim_hit.getPosition().x);
     ListGlobalInputs.push_back(input_sim_hit.getPosition().y);
@@ -119,9 +122,14 @@ StatusCode GenFitter::execute(const EventContext&) const {
     ListGlobalInputs.push_back(0.0);
     ListGlobalInputs.push_back(0.0);
     ListGlobalInputs.push_back(0.0); 
-    it += 1;                           
+    ListHitType_VTXD.push_back(it);
+    it += 1;  
+    it_0 += 1;                        
   }
-  // std::cout << "Input Hit collection size inputHits_VTXD: " << it <<std::endl;
+  torch::Tensor ListHitType_VTXD_tensor = torch::from_blob(ListHitType_VTXD.data(), {it_0}, torch::kFloat32);
+
+  std::vector <float> ListHitType_VTXIB;
+  int it_1 = 0;
   for (const auto& input_sim_hit : *inputHits_VTXIB) {
     ListGlobalInputs.push_back(input_sim_hit.getPosition().x);
     ListGlobalInputs.push_back(input_sim_hit.getPosition().y);
@@ -130,9 +138,14 @@ StatusCode GenFitter::execute(const EventContext&) const {
     ListGlobalInputs.push_back(0.0);
     ListGlobalInputs.push_back(0.0);
     ListGlobalInputs.push_back(0.0); 
-    it += 1;                        
+    ListHitType_VTXIB.push_back(it);
+    it += 1; 
+    it_1 += 1;                      
   }
+  torch::Tensor ListHitType_VTXIB_tensor = torch::from_blob(ListHitType_VTXIB.data(), {it_1}, torch::kFloat32);
   // std::cout << "Input Hit collection size inputHits_VTXIB: " << it <<std::endl;
+  std::vector <float> ListHitType_VTXOB;
+  int it_2 = 0;
   for (const auto& input_sim_hit : *inputHits_VTXOB) {
     ListGlobalInputs.push_back(input_sim_hit.getPosition().x);
     ListGlobalInputs.push_back(input_sim_hit.getPosition().y);
@@ -141,9 +154,14 @@ StatusCode GenFitter::execute(const EventContext&) const {
     ListGlobalInputs.push_back(0.0);
     ListGlobalInputs.push_back(0.0);
     ListGlobalInputs.push_back(0.0);
-    it += 1;                         
+    ListHitType_VTXOB.push_back(it);
+    it += 1;  
+    it_2 += 1;                   
   }
+  torch::Tensor ListHitType_VTXOB_tensor = torch::from_blob(ListHitType_VTXOB.data(), {it_2}, torch::kFloat32);
   // std::cout << "Input Hit collection size inputHits_VTXOB: " << it <<std::endl;
+  int it_3 = 0;
+  std::vector <float> ListHitType_CDC;
   for (const auto& input_sim_hit : *input_hits_CDC) {
     ListGlobalInputs.push_back(input_sim_hit.getLeftPosition().x);
     ListGlobalInputs.push_back(input_sim_hit.getLeftPosition().y);
@@ -152,8 +170,11 @@ StatusCode GenFitter::execute(const EventContext&) const {
     ListGlobalInputs.push_back(input_sim_hit.getRightPosition().x - input_sim_hit.getLeftPosition().x);
     ListGlobalInputs.push_back(input_sim_hit.getRightPosition().y - input_sim_hit.getLeftPosition().y);
     ListGlobalInputs.push_back(input_sim_hit.getRightPosition().z - input_sim_hit.getLeftPosition().z); 
-    it += 1;                       
+    ListHitType_CDC.push_back(it);
+    it += 1;    
+    it_3 += 1;                     
   }
+  torch::Tensor ListHitType_CDC_tensor = torch::from_blob(ListHitType_CDC.data(), {it_3}, torch::kFloat32);
   // std::cout << "Input Hit collection size CDC: " << it <<std::endl;
   // torch::Tensor input_tensor = torch::from_blob(ListGlobalInputs.data(), {it,7}, torch::kFloat32);
   // std::cout << "input_tensor: " << input_tensor <<std::endl;
@@ -169,16 +190,78 @@ StatusCode GenFitter::execute(const EventContext&) const {
   float* floatarr = output_tensors.front().GetTensorMutableData<float>();
   std::vector<float> output_vector(floatarr, floatarr + it*4);
   auto clustering = get_clustering(output_vector, it);
+  torch::Tensor unique_tensor;
+  torch::Tensor inverse_indices;
+  std::tie(unique_tensor, inverse_indices)  = at::_unique(clustering, true, true);
+  
   // std::cout << "Clustering: " << clustering << std::endl;
-  // torch::Tensor output_model_tensor = torch::from_blob(output_vector.data(), {it,4}, torch::kFloat32);
-  // std::cout << "output_model_tensor: " << output_model_tensor <<std::endl;
-  // Produce dummy tracks
-  edm4hep::TrackCollection* output_tracks = m_output_tracks.createAndPut();
-  auto                      output_track  = output_tracks->create();
-  output_track.setChi2(1.);
-  output_track.setNdf(1);
-  output_track.setDEdx(1.);
+  // std::cout << "inverse_indices: " << inverse_indices << std::endl;
+
+  
+  // std::cout << "indices: " << clustering.index({indices}) << std::endl;
+  extension::TrackCollection* output_tracks = m_output_tracks.createAndPut();
+  int64_t number_of_tracks = unique_tensor.numel(); 
+  std::cout << "number_of_tracks: " << number_of_tracks << std::endl;
+  
+  for (int i = 0; i < number_of_tracks; ++i) {
+      auto id_of_track = unique_tensor.index({i});
+      auto output_track  = output_tracks->create();
+      // set global properties
+      output_track.setChi2(1.);
+      output_track.setNdf(1);
+      output_track.setDEdx(1.);
+      torch::Tensor mask = (clustering == id_of_track);
+      torch::Tensor indices = torch::nonzero(mask);
+      int64_t number_of_hits = indices.numel();
+      for (int j = 0; j < number_of_hits; ++j) {
+        auto index_id = indices.index({j});
+        torch::Tensor mask_VTXD = (ListHitType_VTXD_tensor == index_id);
+        torch::Tensor mask_VTXIB = (ListHitType_VTXIB_tensor == index_id);
+        torch::Tensor mask_VTOB = (ListHitType_VTXOB_tensor == index_id);
+        torch::Tensor mask_CDC = (ListHitType_CDC_tensor == index_id);
+        if ((torch::sum(mask_VTXD)>0).item<bool>()){
+          // The hit belong to vtxd
+          auto hit = inputHits_VTXD->at(index_id.item<int>());
+          extension::MutableTrackerHit3D hit_extension;
+          hit_extension.setCellID(hit.getCellID());
+          hit_extension.setType(hit.getType());
+          hit_extension.setEDep(hit.getEDep());
+          hit_extension.setPosition(hit.getPosition());
+          // output_track.addToTrackerHits(hit_extension);
+          // std::cout << "taking hit from inputHits_VTXD" << std::endl;
+          // add this hit to some collection
+        } else if ((torch::sum(mask_VTXIB)>0).item<bool>()){
+          index_id = index_id-it_0;
+          // std::cout << "taking hit from inputHits_VTXIB" << std::endl;
+          auto hit = inputHits_VTXIB->at(index_id.item<int>());
+          extension::MutableTrackerHit3D hit_extension;
+          hit_extension.setCellID(hit.getCellID());
+          hit_extension.setType(hit.getType());
+          hit_extension.setEDep(hit.getEDep());
+          hit_extension.setPosition(hit.getPosition());
+          // output_track.addToTrackerHits(hit_extension);
+        } else if ((torch::sum(mask_VTOB)>0).item<bool>()){
+          index_id = index_id-(it_1+it_0);
+          auto hit = inputHits_VTXOB->at(index_id.item<int>());
+          // std::cout << "taking hit from VTOB" << std::endl;
+          extension::MutableTrackerHit3D hit_extension;
+          hit_extension.setCellID(hit.getCellID());
+          hit_extension.setType(hit.getType());
+          hit_extension.setEDep(hit.getEDep());
+          hit_extension.setPosition(hit.getPosition());
+          // output_track.addToTrackerHits(hit_extension);
+        } else if ((torch::sum(mask_CDC)>0).item<bool>()){
+          index_id = index_id-(it_1+it_2 +it_0);
+          // std::cout << "taking hit from CDC" << std::endl;
+          auto hit = input_hits_CDC->at(index_id.item<int>());
+          output_track.addToTrackerHits(hit);
+        }
+    }
+  }
+  
+ 
   return StatusCode::SUCCESS;
 }
 
 StatusCode GenFitter::finalize() { return StatusCode::SUCCESS; }
+
