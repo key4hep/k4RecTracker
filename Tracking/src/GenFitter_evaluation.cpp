@@ -116,7 +116,7 @@ StatusCode GenFitter_eval::execute(const EventContext&) const {
   const edm4hep::SimTrackerHitCollection* inputHits_VTXIB_sim = m_input_hits_VTXOB_sim.get();
   const edm4hep::SimTrackerHitCollection* inputHits_VTXOB_sim = m_input_hits_VTXOB_sim.get();
   const edm4hep::SimTrackerHitCollection* inputHits_CDC_sim = m_input_hits_CDC_sim.get();
-  const extension::MCRecoDriftChamberDigiAssociation* inputAssociation_CDC_sim = m_input_Association_CDC.get();
+  //const extension::MCRecoDriftChamberDigiAssociation* inputAssociation_CDC_sim = m_input_Association_CDC.get();
   std::cout << "Input Hit collection size VTXD: " << inputHits_VTXD_sim->size() << std::endl;
   // std::cout << "Input Hit collection size VTXIB: " << inputHits_VTXIB->size() << std::endl;
   // std::cout << "Input Hit collection size VTXOB: " << inputHits_VTXOB->size() << std::endl;
@@ -142,6 +142,13 @@ StatusCode GenFitter_eval::execute(const EventContext&) const {
     auto object_id_MC = MC_particle.getObjectID();
     auto index_MC = object_id_MC.index;
     ListHitMC_VTXOB.push_back(index_MC);                 
+  }
+  std::vector <float> ListHitMC_CDC; 
+  for (const auto& input_sim_hit : *inputHits_CDC_sim) {
+    auto MC_particle = input_sim_hit.getParticle();
+    auto object_id_MC = MC_particle.getObjectID();
+    auto index_MC = object_id_MC.index;
+    ListHitMC_CDC.push_back(index_MC);                 
   }
 
   // size_t size_total = size_CDC+size_VTXD+size_VTXIB+size_VTXOB;
@@ -197,7 +204,7 @@ StatusCode GenFitter_eval::execute(const EventContext&) const {
   // std::cout << "Input Hit collection size inputHits_VTXOB: " << it <<std::endl;
   int it_3 = 0;
 
-  std::vector <float> ListHitMC_CDC; 
+  // std::vector <float> ListHitMC_CDC; 
   std::vector <float> ListHitType_CDC;
   for (const auto& input_sim_hit : *input_hits_CDC) {
     ListGlobalInputs.push_back(input_sim_hit.getLeftPosition().x);
@@ -285,7 +292,7 @@ StatusCode GenFitter_eval::execute(const EventContext&) const {
           auto hit_extension  = output_hits->create();
           hit_extension.setCellID(hit.getCellID());
           hit_extension.setType(1);
-          // hit_extension.setEDep(ListHitMC_VTXIB[index_id.item<int>()]);
+          hit_extension.setEDep(ListHitMC_VTXIB[index_id.item<int>()]);
           hit_extension.setPosition(hit.getPosition());
           // output_track.addToTrackerHits(hit_extension);
         } else if ((torch::sum(mask_VTOB)>0).item<bool>()){
@@ -294,7 +301,7 @@ StatusCode GenFitter_eval::execute(const EventContext&) const {
           auto hit_extension  = output_hits->create();
           hit_extension.setCellID(hit.getCellID());
           hit_extension.setType(1);
-          // hit_extension.setEDep(ListHitMC_VTXOB[index_id.item<int>()]);
+          hit_extension.setEDep(ListHitMC_VTXOB[index_id.item<int>()]);
           hit_extension.setPosition(hit.getPosition());
           output_track.addToTrackerHits(hit_extension);
         } else if ((torch::sum(mask_CDC)>0).item<bool>()){
@@ -303,7 +310,7 @@ StatusCode GenFitter_eval::execute(const EventContext&) const {
           auto hit_extension  = output_hits->create();
           hit_extension.setCellID(hit.getCellID());
           hit_extension.setType(0);
-          //hit_extension.setEDep(ListHitMC_CDC[index_id.item<int>()]);
+          hit_extension.setEDep(ListHitMC_CDC[index_id.item<int>()]);
           // hit_extension.setEDep(0);
           hit_extension.setPosition(hit.getLeftPosition());
           output_track.addToTrackerHits(hit_extension);
