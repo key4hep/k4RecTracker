@@ -3,7 +3,7 @@
 DECLARE_COMPONENT(VTXdigitizer)
 
 VTXdigitizer::VTXdigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
-    : GaudiAlgorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizer") {
+    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizer") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim vertex hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized vertex hit collection name");
 }
@@ -44,7 +44,7 @@ StatusCode VTXdigitizer::initialize() {
   return StatusCode::SUCCESS;
 }
 
-StatusCode VTXdigitizer::execute() {
+StatusCode VTXdigitizer::execute(const EventContext&) const {
   // Get the input collection with Geant4 hits
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;

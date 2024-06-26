@@ -2,7 +2,8 @@
 
 // GAUDI
 #include "Gaudi/Property.h"
-#include "GaudiAlg/GaudiAlgorithm.h"
+// #include "GaudiAlg/GaudiAlgorithm.h"
+#include "Gaudi/Algorithm.h"
 #include "GaudiKernel/IRndmGenSvc.h"
 #include "GaudiKernel/RndmGenerators.h"
 
@@ -16,7 +17,15 @@
 #if __has_include("edm4hep/TrackerHit3DCollection.h")
 #include "edm4hep/TrackerHit3DCollection.h"
 #else
+#include "edm4hep/TrackCollection.h"
+#if __has_include("edm4hep/TrackerHit3DCollection.h")
+#include "edm4hep/TrackerHit3DCollection.h"
+#else
 #include "edm4hep/TrackerHitCollection.h"
+namespace edm4hep {
+  using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
+}  // namespace edm4hep
+#endif
 namespace edm4hep {
   using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
 }  // namespace edm4hep
@@ -32,13 +41,14 @@ namespace edm4hep {
 /** @class VTXdigitizer
  *
  *  Algorithm for creating digitized (meaning 'reconstructed' for now) vertex detector hits (edm4hep::TrackerHit3D) from Geant4 hits (edm4hep::SimTrackerHit).
+ *  Algorithm for creating digitized (meaning 'reconstructed' for now) vertex detector hits (edm4hep::TrackerHit3D) from Geant4 hits (edm4hep::SimTrackerHit).
  *  
  *  @author Brieuc Francois
  *  @date   2023-03
  *
  */
 
-class VTXdigitizer : public GaudiAlgorithm {
+class VTXdigitizer : public Gaudi::Algorithm {
 public:
   explicit VTXdigitizer(const std::string&, ISvcLocator*);
   virtual ~VTXdigitizer();
@@ -49,7 +59,7 @@ public:
   /**  Execute.
    *   @return status code
    */
-  virtual StatusCode execute() final;
+  virtual StatusCode execute(const EventContext&) const final;
   /**  Finalize.
    *   @return status code
    */
@@ -57,14 +67,14 @@ public:
 
 private:
   // Input sim vertex hit collection name
-  DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized vertex hit collection name
-  DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector name
-  Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
+  mutable Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
   // Detector readout names
-  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "VertexBarrelCollection", "Name of the detector readout"};
+  mutable Gaudi::Property<std::string> m_readoutName{this, "readoutName", "VertexBarrelCollection", "Name of the detector readout"};
   // Pointer to the geometry service
   ServiceHandle<IGeoSvc> m_geoSvc;
   // Decoder for the cellID
@@ -82,7 +92,7 @@ private:
   FloatProperty m_t_resolution{this, "tResolution", 0.1, "Time resolution [ns]"};
 
   // Surface manager used to project hits onto sensitive surface with forceHitsOntoSurface argument
-  const dd4hep::rec::SurfaceMap* _map;
+  mutable const dd4hep::rec::SurfaceMap* _map;
 
   // Option to force hits onto sensitive surface
   BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"};
