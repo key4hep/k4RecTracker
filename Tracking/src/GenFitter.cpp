@@ -26,7 +26,6 @@ StatusCode GenFitter::execute() {
   auto                      output_track  = output_tracks->create();
   output_track.setChi2(1.);
   output_track.setNdf(1);
-  output_track.setDEdx(1.);
   return StatusCode::SUCCESS;
 }
 
