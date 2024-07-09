@@ -62,7 +62,7 @@ private:
   DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
-  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "mRWELLChamberReadout", "Name of the detector readout"};
+  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "MuonSystemCollection", "Name of the detector readout"};
   // Pointer to the geometry service
   ServiceHandle<IGeoSvc> m_geoSvc;
   // Decoder for the cellID

@@ -47,7 +47,7 @@ path_to_detector = os.environ.get("K4GEO", "")
 print(path_to_detector)
 detectors_to_use=[
                    # 'Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v02.xml'
-                    '/afs/cern.ch/work/m/maali/public/k4geo/FCCee/IDEA/compact/IDEA_o1_v02/IDEA_o1_v02.xml'
+                    '/afs/cern.ch/work/m/maali/public/k4geo/FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml'
                  #  '/afs/cern.ch/work/m/maali/public/FCCDetectors/Detector/DetFCCeeIDEA/compact/IDEA_o1_v01/FCCee_DectMaster_v02.xml'
                   ]
 # prefix all xmls with path_to_detector
@@ -93,7 +93,7 @@ from Configurables import SimG4SaveTrackerHits
 #savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["MuonChamberBarrelReadout"])
 #savetrackertool.SimTrackHits.Path = "MUON_simTrackerHits"
 
-SimG4SaveMuonHits = SimG4SaveTrackerHits("SimG4SaveMuonHits", readoutName="mRWELLChamberReadout")
+SimG4SaveMuonHits = SimG4SaveTrackerHits("SimG4SaveMuonHits", readoutName="MuonSystemCollection")
 SimG4SaveMuonHits.SimTrackHits.Path = "Muon_SimHits"
 
 #saveMuonPositiveEndcapTool = SimG4SaveTrackerHits("SimG4SaveMuonPositiveEndcapHits", readoutName="MuonChamberPositiveEndcapReadout")
@@ -113,8 +113,8 @@ geantsim = SimG4Alg("SimG4Alg",
 from Configurables import MUONsimpleDigitizer
 muon_digitizer = MUONsimpleDigitizer("MUONsimpleDigitizer",
     inputSimHits = SimG4SaveMuonHits.SimTrackHits.Path,
-    outputDigiHits = SimG4SaveMuonHits.SimTrackHits.Path.replace("sim", "digi"),
-    readoutName = "mRWELLChamberReadout",
+    outputDigiHits = SimG4SaveMuonHits.SimTrackHits.Path.replace("Sim", "Digi"),
+    readoutName = "MuonSystemCollection",
     xResolution = 0.4, # mm
     yResolution = 0.4, # mm
     OutputLevel=INFO
@@ -154,7 +154,7 @@ ApplicationMgr(
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 100,
+    EvtMax   = 10000,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True,
  )
