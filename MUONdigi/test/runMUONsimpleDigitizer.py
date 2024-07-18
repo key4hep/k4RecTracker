@@ -8,8 +8,6 @@ podioevent  = FCCDataSvc("EventDataSvc")
 from GaudiKernel.SystemOfUnits import MeV, GeV, tesla
 ################## Particle gun setup
 momentum = 5 # in GeV
-#thetaMin = 90.25 # degrees
-#thetaMax = 90.25 # degrees
 thetaMin = 0 # degrees
 thetaMax = 180 # degrees
 pdgCode = 13 # 11 electron, 13 muon, 22 photon, 111 pi0, 211 pi+
@@ -75,7 +73,7 @@ geantservice = SimG4Svc("SimG4Svc", detector = 'SimG4DD4hepDetector', physicslis
 # Fixed seed to have reproducible results, change it for each job if you split one production into several jobs
 # Mind that if you leave Gaudi handle random seed and some job start within the same second (very likely) you will have duplicates
 geantservice.randomNumbersFromGaudi = False
-geantservice.seedValue = 3135
+geantservice.seedValue = 4242
 
 # Range cut
 geantservice.g4PreInitCommands += ["/run/setCut 0.1 mm"]
@@ -90,33 +88,25 @@ particle_converter = SimG4PrimariesFromEdmTool("EdmConverter")
 particle_converter.GenParticles.Path = genParticlesOutputName
 
 from Configurables import SimG4SaveTrackerHits
-#savetrackertool = SimG4SaveTrackerHits("SimG4SaveTrackerHits", readoutNames=["MuonChamberBarrelReadout"])
-#savetrackertool.SimTrackHits.Path = "MUON_simTrackerHits"
-
 SimG4SaveMuonHits = SimG4SaveTrackerHits("SimG4SaveMuonHits", readoutName="MuonSystemCollection")
 SimG4SaveMuonHits.SimTrackHits.Path = "Muon_SimHits"
 
-#saveMuonPositiveEndcapTool = SimG4SaveTrackerHits("SimG4SaveMuonPositiveEndcapHits", readoutName="MuonChamberPositiveEndcapReadout")
-#saveMuonPositiveEndcapTool.SimTrackHits.Path = "muonPositiveEndcapSimHits"
-
-#saveMuonNegativeEndcapTool = SimG4SaveTrackerHits("SimG4SaveMuonNegativeEndcapHits", readoutName="MuonChamberNegativeEndcapReadout")
-#saveMuonNegativeEndcapTool.SimTrackHits.Path = "muonNegativeEndcapSimHits"
-
 from Configurables import SimG4Alg
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [SimG4SaveMuonHits,
-                                 #saveHistTool
-                       ],
+                       outputs= [SimG4SaveMuonHits],
                        eventProvider=particle_converter,
                        OutputLevel=INFO)
+
 # Digitize tracker hits
 from Configurables import MUONsimpleDigitizer
 muon_digitizer = MUONsimpleDigitizer("MUONsimpleDigitizer",
     inputSimHits = SimG4SaveMuonHits.SimTrackHits.Path,
     outputDigiHits = SimG4SaveMuonHits.SimTrackHits.Path.replace("Sim", "Digi"),
+    outputSimDigiAssociation = "MS_simDigiAssociation",    
     readoutName = "MuonSystemCollection",
     xResolution = 0.4, # mm
     yResolution = 0.4, # mm
+    efficiency = 0.95, # efficiency of the detector (mRWELL chamber)
     OutputLevel=INFO
 )
 
@@ -127,7 +117,7 @@ out = PodioOutput("out",
 out.outputCommands = ["keep *"]
 
 import uuid
-out.filename = "output_simpleMuonSystem_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+".root"
+out.filename = "output_MuonSystemDigi_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+".root"
 
 #CPU information
 from Configurables import AuditorSvc, ChronoAuditor
@@ -137,6 +127,7 @@ audsvc.Auditors = [chra]
 genAlg.AuditExecute = True
 hepmc_converter.AuditExecute = True
 geantsim.AuditExecute = True
+muon_digitizer.AuditExecute = True
 out.AuditExecute = True
 
 from Configurables import EventCounter
@@ -154,7 +145,7 @@ ApplicationMgr(
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 10000,
+    EvtMax   = 100,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True,
- )
+)

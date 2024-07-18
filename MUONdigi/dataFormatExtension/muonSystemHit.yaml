@@ -1,0 +1,19 @@
+---
+schema_version: 1
+options:
+  # should getters / setters be prefixed with get / set?
+  getSyntax: True
+  # should POD members be exposed with getters/setters in classes that have them as members?
+  exposePODMembers: False
+  includeSubfolder: True
+
+datatypes:
+
+  extension::MCRecoMuonSystemDigiAssociation:
+    Description: "Association between a Digi hits and the corresponding simulated hit for the muon system"
+    Author: "B. Francois, CERN; Mahmoud Ali, INFN-Bo"
+    Members:
+      - float weight              // weight of this association
+    OneToOneRelations:
+      - edm4hep::TrackerHit3D digi    // reference to the digitized hit
+      - edm4hep::SimTrackerHit sim // reference to the simulated hit

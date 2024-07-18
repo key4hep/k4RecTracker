@@ -4,6 +4,7 @@
 #include "DD4hep/Detector.h"
 #include "DDRec/Vector3D.h"
 
+#include "extension/MCRecoMuonSystemDigiAssociationCollection.h"
 // ROOT
 //#include "Math/Cylindrical3D.h"
 
@@ -13,6 +14,8 @@ MUONsimpleDigitizer::MUONsimpleDigitizer(const std::string& aName, ISvcLocator* 
     : GaudiAlgorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "MUONsimpleDigitizer") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
+  declareProperty("outputSimDigiAssociation", m_output_sim_digi_association, "Output name for the association between digitized and simulated hit collections");
+  declareProperty("efficiency", m_efficiency, "Efficiency of the detector");
 }
 
 MUONsimpleDigitizer::~MUONsimpleDigitizer() {}
@@ -28,6 +31,10 @@ StatusCode MUONsimpleDigitizer::initialize() {
     return StatusCode::FAILURE;
   }
   if (m_gauss_y.initialize(m_randSvc, Rndm::Gauss(0., m_y_resolution)).isFailure()) {
+    error() << "Couldn't initialize RndmGenSvc!" << endmsg;
+    return StatusCode::FAILURE;
+  }
+  if (m_flat.initialize(m_randSvc, Rndm::Flat(0., 1.)).isFailure()) {
     error() << "Couldn't initialize RndmGenSvc!" << endmsg;
     return StatusCode::FAILURE;
   }
@@ -50,25 +57,27 @@ StatusCode MUONsimpleDigitizer::execute() {
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   debug() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
 
+  // Prepare a collection for the association between digitized and simulated hit, setting weights to 1
+  extension::MCRecoMuonSystemDigiAssociationCollection* digi_sim_associations = m_output_sim_digi_association.createAndPut();
+
   // Digitize the sim hits
   edm4hep::TrackerHit3DCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (const auto& input_sim_hit : *input_sim_hits) {
+    // Apply efficiency
+    if (m_flat.shoot() > m_efficiency) {
+      continue; // Skip this hit
+    }
+
     auto output_digi_hit = output_digi_hits->create();
     // smear the hit position:
     // retrieve the cell detElement
     dd4hep::DDSegmentation::CellID cellID         = input_sim_hit.getCellID();
     debug() << "Digitisation of " << m_readoutName << ", cellID: " << cellID << endmsg;
-  //  auto                           cellDetElement = m_volman.lookupDetElement(cellID);
-  
-   /* const std::string& stripsDetElementName =
-        Form("system_%d_layer_%d_phi_%d", m_decoder->get(cellID, "layer"), m_decoder->get(cellID, "phi"));
-    dd4hep::DetElement stripsDetElement = cellDetElement.child(stripsDetElementName);
-    const auto& stripsTransformMatrix = stripsDetElement.nominal().worldTransformation();
-   */
+    //  auto                           cellDetElement = m_volman.lookupDetElement(cellID);
 
     const auto& stripsTransformMatrix = m_volman.lookupVolumePlacement(cellID).matrix();
 
-    // Retrieve global position in mm and apply unit transformation (translation matrix is tored in cm)
+    // Retrieve global position in mm and apply unit transformation (translation matrix is stored in cm)
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,
                                       input_sim_hit.getPosition().z * dd4hep::mm};
@@ -98,7 +107,7 @@ StatusCode MUONsimpleDigitizer::execute() {
     double digiHitLocalPosition[3] = {smearedX, smearedY, smearedZ};
 
     // build the local position vector of the smeared hit. 
- //   dd4hep::rec::Vector3D  digiHitLocalPositionVector(smearedX, smearedY, smearedZ);
+    // dd4hep::rec::Vector3D  digiHitLocalPositionVector(smearedX, smearedY, smearedZ);
     debug() << "Local simHit x: " << simHitLocalPositionVector.x()
             << " Local digiHit x: " << smearedX << " in cm" << endmsg;
     debug() << "Local simHit y: " << simHitLocalPositionVector.y()
@@ -106,11 +115,12 @@ StatusCode MUONsimpleDigitizer::execute() {
     debug() << "Local simHit z: " << simHitLocalPositionVector.z()
             << " Local digiHit z: " << smearedZ << " in cm" << endmsg;
     
-
+    // create the association between digitized and simulated hit
+    auto digi_sim_association = digi_sim_associations->create();
+    digi_sim_association.setDigi(output_digi_hit);
+    digi_sim_association.setSim(input_sim_hit);
 
     // go back to the global frame
- //   double digiHitLocalPosition[3]  = {digiHitLocalPositionVector.x(), digiHitLocalPositionVector.y(),
-  //                                     digiHitLocalPositionVector.z()};
     double digiHitGlobalPosition[3] = {0, 0, 0};
     stripsTransformMatrix.LocalToMaster(digiHitLocalPosition, digiHitGlobalPosition);
     // go back to mm

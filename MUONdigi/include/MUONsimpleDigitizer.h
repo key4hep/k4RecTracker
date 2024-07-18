@@ -17,10 +17,15 @@
 #include "edm4hep/TrackerHit3DCollection.h"
 #else
 #include "edm4hep/TrackerHitCollection.h"
+
+#include "podio/UserDataCollection.h"
+
 namespace edm4hep {
   using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
 }  // namespace edm4hep
 #endif
+
+#include "extension/MCRecoMuonSystemDigiAssociationCollection.h"
 
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
@@ -60,6 +65,8 @@ private:
   DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
   DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  // Output association between digitized and simulated hit collections name
+  DataHandle<extension::MCRecoMuonSystemDigiAssociationCollection> m_output_sim_digi_association{"outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "MuonSystemCollection", "Name of the detector readout"};
@@ -70,11 +77,14 @@ private:
   // Volume manager to get the physical cell sensitive volume
   dd4hep::VolumeManager m_volman;
 
-  // z position resolution in mm
+  // x position resolution in mm
   FloatProperty m_x_resolution{this, "xResolution", 1.0,
                                "Spatial resolution in the x direction [mm]"};
-  // xy resolution in mm
+  // y resolution in mm
   FloatProperty m_y_resolution{this, "yResolution", 1.0, "Spatial resolution in the y direction [mm]"};
+
+  // Detector efficiency
+  FloatProperty m_efficiency{this, "efficiency", 0.95, "Detector efficiency"};
 
   // Random Number Service
   IRndmGenSvc* m_randSvc;
@@ -82,4 +92,6 @@ private:
   Rndm::Numbers m_gauss_x;
   // Gaussian random number generator used for the smearing of the y position
   Rndm::Numbers m_gauss_y;
+  // Flat random number generator used for efficiency
+  Rndm::Numbers m_flat;
 };
