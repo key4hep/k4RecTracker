@@ -6,9 +6,11 @@
 #include "GaudiKernel/IRndmGenSvc.h"
 #include "GaudiKernel/RndmGenerators.h"
 
-// K4FWCORE
+// K4FWCORE & podio
 #include "k4FWCore/DataHandle.h"
 #include "k4Interface/IGeoSvc.h"
+#include "podio/UserDataCollection.h"
+#include "edm4hep/Vector3d.h"
 
 // EDM4HEP
 #include "edm4hep/SimTrackerHitCollection.h"
@@ -17,8 +19,6 @@
 #include "edm4hep/TrackerHit3DCollection.h"
 #else
 #include "edm4hep/TrackerHitCollection.h"
-
-#include "podio/UserDataCollection.h"
 
 namespace edm4hep {
   using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
@@ -83,15 +83,25 @@ private:
   // y resolution in mm
   FloatProperty m_y_resolution{this, "yResolution", 1.0, "Spatial resolution in the y direction [mm]"};
 
+  // z resolution in mm
+  FloatProperty m_z_resolution{this, "zResolution", 1.0, "Spatial resolution in the z direction [mm]"};
+
   // Detector efficiency
   FloatProperty m_efficiency{this, "efficiency", 0.95, "Detector efficiency"};
 
+  // Declaration of validation distribution
+  DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceX{"simDigiDifferenceX", Gaudi::DataHandle::Writer, this}; // mm
+  DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceY{"simDigiDifferenceY", Gaudi::DataHandle::Writer, this}; // mm
+  DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceZ{"simDigiDifferenceZ", Gaudi::DataHandle::Writer, this}; // mm
+  
   // Random Number Service
   IRndmGenSvc* m_randSvc;
   // Gaussian random number generator used for the smearing of the x position
   Rndm::Numbers m_gauss_x;
   // Gaussian random number generator used for the smearing of the y position
   Rndm::Numbers m_gauss_y;
+  // Gaussian random number generator used for the smearing of the z position
+  Rndm::Numbers m_gauss_z;  
   // Flat random number generator used for efficiency
   Rndm::Numbers m_flat;
 };

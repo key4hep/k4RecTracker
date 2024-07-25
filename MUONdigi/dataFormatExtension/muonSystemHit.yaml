@@ -14,6 +14,8 @@ datatypes:
     Author: "B. Francois, CERN; Mahmoud Ali, INFN-Bo"
     Members:
       - float weight              // weight of this association
+      - edm4hep::Vector3d positionDifference // the difference between simHit and DigiHit positions.
     OneToOneRelations:
       - edm4hep::TrackerHit3D digi    // reference to the digitized hit
       - edm4hep::SimTrackerHit sim // reference to the simulated hit
+      

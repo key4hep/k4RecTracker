@@ -106,8 +106,9 @@ muon_digitizer = MUONsimpleDigitizer("MUONsimpleDigitizer",
     readoutName = "MuonSystemCollection",
     xResolution = 0.4, # mm
     yResolution = 0.4, # mm
+    zResolution = 0.4, # mm
     efficiency = 0.95, # efficiency of the detector (mRWELL chamber)
-    OutputLevel=INFO
+    OutputLevel=DEBUG
 )
 
 ################ Output
@@ -117,7 +118,7 @@ out = PodioOutput("out",
 out.outputCommands = ["keep *"]
 
 import uuid
-out.filename = "output_MuonSystemDigi_MagneticField_"+str(magneticField)+"_pMin_"+str(momentum*1000)+"_MeV"+"_ThetaMinMax_"+str(thetaMin)+"_"+str(thetaMax)+"_pdgId_"+str(pdgCode)+".root"
+out.filename = "output_MuonSystemDigi"+"_pMin_"+str(momentum)+"_GeV"+"_pdgId_"+str(pdgCode)+".root"
 
 #CPU information
 from Configurables import AuditorSvc, ChronoAuditor
@@ -145,7 +146,7 @@ ApplicationMgr(
               out
               ],
     EvtSel = 'NONE',
-    EvtMax   = 100,
+    EvtMax   = 10000,
     ExtSvc = [geoservice, podioevent, geantservice, audsvc],
     StopOnSignal = True,
 )
