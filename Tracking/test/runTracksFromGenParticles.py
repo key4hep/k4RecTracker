@@ -17,16 +17,16 @@ input_reader = PodioInput('InputReader')
 # Calling TracksFromGenParticles
 from Configurables import TracksFromGenParticles
 tracksFromGenParticles = TracksFromGenParticles("TracksFromGenParticles",
-                                               InputGenParticles = "MCParticles",
-                                               OutputTracks = "TracksFromGenParticles",
-                                               OutputMCRecoTrackParticleAssociation = "TracksFromGenParticlesAssociation",
+                                               InputGenParticles = ["MCParticles"],
+                                               OutputTracks = ["TracksFromGenParticles"],
+                                               OutputMCRecoTrackParticleAssociation = ["TracksFromGenParticlesAssociation"],
                                                Bz = 2.0,
                                                OutputLevel = INFO)
 
 # produce a TH1 with distances between tracks and simTrackerHits
 from Configurables import PlotTrackHitDistances
 plotTrackHitDistances = PlotTrackHitDistances("PlotTrackHitDistances",
-                                             InputSimTrackerHits = "CDCHHits",
+                                             InputSimTrackerHits = ["CDCHHits"],
                                              InputTracksFromGenParticlesAssociation = tracksFromGenParticles.OutputMCRecoTrackParticleAssociation, 
                                              Bz = 2.0)
 

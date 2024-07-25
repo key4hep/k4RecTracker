@@ -27,7 +27,7 @@
  */
 
 struct TracksFromGenParticles final
-  : Gaudi::Functional::MultiTransformer<std::tuple<edm4hep::TrackCollection, edm4hep::MCRecoTrackParticleAssociationCollection>(const edm4hep::MCParticleCollection&)> {
+  : k4FWCore::MultiTransformer<std::tuple<edm4hep::TrackCollection, edm4hep::MCRecoTrackParticleAssociationCollection>(const edm4hep::MCParticleCollection&)> {
   TracksFromGenParticles(const std::string& name, ISvcLocator* svcLoc)
       : MultiTransformer(
             name, svcLoc,
@@ -72,7 +72,7 @@ std::tuple<edm4hep::TrackCollection, edm4hep::MCRecoTrackParticleAssociationColl
       trackState_AtFirstHit.location = edm4hep::TrackState::AtCalorimeter;
       trackFromGen.addToTrackStates(trackState_AtCalorimeter);
 
-      debug() << trackFromGen << endmsg;
+      //debug() << trackFromGen << endmsg;
       outputTrackCollection.push_back(trackFromGen);
 
       // Building the association between tracks and genParticles

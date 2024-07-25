@@ -29,7 +29,7 @@
  */
 
 struct PlotTrackHitDistances final
-  : Gaudi::Functional::Consumer<void(const edm4hep::SimTrackerHitCollection&, const edm4hep::MCRecoTrackParticleAssociationCollection&)> {
+  : k4FWCore::Consumer<void(const edm4hep::SimTrackerHitCollection&, const edm4hep::MCRecoTrackParticleAssociationCollection&)> {
   PlotTrackHitDistances(const std::string& name, ISvcLocator* svcLoc)
       : Consumer(
             name, svcLoc,
@@ -49,6 +49,7 @@ struct PlotTrackHitDistances final
         if (trackState.location == edm4hep::TrackState::AtIP) {
           trackStateAtIP = trackState;
           found_trackStateAtIP = true;
+          break;
         }
       }
       if (!found_trackStateAtIP)
