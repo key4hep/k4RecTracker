@@ -1,6 +1,5 @@
 // Gaudi
 #include "Gaudi/Property.h"
-#include "GaudiAlg/Consumer.h"
 #include "Gaudi/Accumulators/RootHistogram.h"
 #include "Gaudi/Histograming/Sink/Utils.h"
 
@@ -16,8 +15,8 @@
 // ROOT
 #include "TH1D.h"
 
-// Define BaseClass_t
-#include "k4FWCore/BaseClass.h"
+// k4FWCore
+#include "k4FWCore/Consumer.h"
 
 #include <string>
 
@@ -30,13 +29,13 @@
  */
 
 struct PlotTrackHitDistances final
-  : Gaudi::Functional::Consumer<void(const edm4hep::SimTrackerHitCollection&, const edm4hep::MCRecoTrackParticleAssociationCollection&), BaseClass_t> {
+  : Gaudi::Functional::Consumer<void(const edm4hep::SimTrackerHitCollection&, const edm4hep::MCRecoTrackParticleAssociationCollection&)> {
   PlotTrackHitDistances(const std::string& name, ISvcLocator* svcLoc)
       : Consumer(
             name, svcLoc,
             {
-            KeyValue("InputSimTrackerHits", "DCHCollection"),
-            KeyValue("InputTracksFromGenParticlesAssociation", "TracksFromGenParticlesAssociation"),
+            KeyValues("InputSimTrackerHits", {"DCHCollection"}),
+            KeyValues("InputTracksFromGenParticlesAssociation", {"TracksFromGenParticlesAssociation"}),
             }) {}
 
   void operator()(const edm4hep::SimTrackerHitCollection& simTrackerHits, const edm4hep::MCRecoTrackParticleAssociationCollection& trackParticleAssociations) const override {

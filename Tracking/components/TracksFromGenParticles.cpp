@@ -1,5 +1,4 @@
 #include "Gaudi/Property.h"
-#include "GaudiAlg/Transformer.h"
 
 // edm4hep
 #include "edm4hep/MCParticleCollection.h"
@@ -9,8 +8,8 @@
 // marlin
 #include <marlinutil/HelixClass_double.h>
 
-// Define BaseClass_t
-#include "k4FWCore/BaseClass.h"
+// k4FWCore
+#include "k4FWCore/Transformer.h"
 
 #include <string>
 
@@ -28,13 +27,13 @@
  */
 
 struct TracksFromGenParticles final
-  : Gaudi::Functional::MultiTransformer<std::tuple<edm4hep::TrackCollection, edm4hep::MCRecoTrackParticleAssociationCollection>(const edm4hep::MCParticleCollection&), BaseClass_t> {
+  : Gaudi::Functional::MultiTransformer<std::tuple<edm4hep::TrackCollection, edm4hep::MCRecoTrackParticleAssociationCollection>(const edm4hep::MCParticleCollection&)> {
   TracksFromGenParticles(const std::string& name, ISvcLocator* svcLoc)
       : MultiTransformer(
             name, svcLoc,
-            {KeyValue("InputGenParticles", "MCParticles")},
-            {KeyValue("OutputTracks", "TracksFromGenParticles"),
-            KeyValue("OutputMCRecoTrackParticleAssociation", "TracksFromGenParticlesAssociation")}) {
+            {KeyValues("InputGenParticles", {"MCParticles"})},
+            {KeyValues("OutputTracks", {"TracksFromGenParticles"}),
+            KeyValues("OutputMCRecoTrackParticleAssociation", {"TracksFromGenParticlesAssociation"})}) {
   }
 
 std::tuple<edm4hep::TrackCollection, edm4hep::MCRecoTrackParticleAssociationCollection> operator()(const edm4hep::MCParticleCollection& genParticleColl) const override {
