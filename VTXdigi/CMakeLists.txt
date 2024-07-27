@@ -16,6 +16,7 @@ gaudi_add_module(${PackageName}
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
+  k4FWCore::k4Interface
   DD4hep::DDRec
 )
 

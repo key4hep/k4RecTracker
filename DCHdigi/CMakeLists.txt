@@ -49,6 +49,7 @@ gaudi_add_module(${PackageName}
   EDM4HEP::edm4hep
   extensionDict
   k4FWCore::k4FWCore
+  k4FWCore::k4Interface
   DD4hep::DDRec
 )
 

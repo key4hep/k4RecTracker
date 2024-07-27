@@ -49,8 +49,6 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
 
-  unsigned nDismissedHits=0;
-
   // Digitize the sim hits
   edm4hep::TrackerHit3DCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (const auto& input_sim_hit : *input_sim_hits) {
@@ -105,8 +103,6 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
             
           simHitGlobalPositionVector = oldPosOnSurf ;
         } 
-        else
-          ++nDismissedHits;
       }
     }
 
