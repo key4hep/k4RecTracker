@@ -10,7 +10,7 @@
 DECLARE_COMPONENT(DCHsimpleDigitizerExtendedEdm)
 
 DCHsimpleDigitizerExtendedEdm::DCHsimpleDigitizerExtendedEdm(const std::string& aName, ISvcLocator* aSvcLoc)
-    : GaudiAlgorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "DCHsimpleDigitizerExtendedEdm") {
+    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "DCHsimpleDigitizerExtendedEdm") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
   declareProperty("outputSimDigiAssociation", m_output_sim_digi_association, "Output name for the association between digitized and simulated hit collections");

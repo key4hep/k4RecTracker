@@ -2,7 +2,7 @@
 
 // GAUDI
 #include "Gaudi/Property.h"
-#include "GaudiAlg/GaudiAlgorithm.h"
+#include "Gaudi/Algorithm.h"
 
 // K4FWCORE
 #include "k4FWCore/DataHandle.h"
@@ -30,7 +30,7 @@ namespace edm4hep {
  *
  */
 
-class GenFitter : public GaudiAlgorithm {
+class GenFitter : public Gaudi::Algorithm {
 public:
   explicit GenFitter(const std::string&, ISvcLocator*);
   virtual ~GenFitter();
@@ -49,9 +49,9 @@ public:
 
 private:
   // Input tracker hit collection name
-  DataHandle<edm4hep::TrackerHit3DCollection> m_input_hits{"inputHits", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_input_hits{"inputHits", Gaudi::DataHandle::Reader, this};
   // Output track collection name
-  DataHandle<edm4hep::TrackCollection> m_output_tracks{"outputTracks", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<edm4hep::TrackCollection> m_output_tracks{"outputTracks", Gaudi::DataHandle::Writer, this};
   // Transient genfit measurements used internally by genfit to run the tracking
   //std::vector<genfit::WireMeasurement> m_wire_measurements;
 };

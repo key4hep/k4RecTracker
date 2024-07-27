@@ -2,7 +2,7 @@
 
 DECLARE_COMPONENT(GenFitter)
 
-GenFitter::GenFitter(const std::string& aName, ISvcLocator* aSvcLoc) : GaudiAlgorithm(aName, aSvcLoc) {
+GenFitter::GenFitter(const std::string& aName, ISvcLocator* aSvcLoc) : Gaudi::Algorithm(aName, aSvcLoc) {
   declareProperty("inputHits", m_input_hits, "Input tracker hit collection name");
   declareProperty("outputTracks", m_output_tracks, "Output track collection name");
 }

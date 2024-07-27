@@ -10,7 +10,7 @@
 DECLARE_COMPONENT(DCHsimpleDigitizer)
 
 DCHsimpleDigitizer::DCHsimpleDigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
-    : GaudiAlgorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "DCHsimpleDigitizer") {
+    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "DCHsimpleDigitizer") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
 }

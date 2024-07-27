@@ -3,7 +3,7 @@
 DECLARE_COMPONENT(VTXdigitizer)
 
 VTXdigitizer::VTXdigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
-    : GaudiAlgorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizer") {
+    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizer") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim vertex hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized vertex hit collection name");
 }
