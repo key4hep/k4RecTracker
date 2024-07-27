@@ -2,7 +2,7 @@
 
 // GAUDI
 #include "Gaudi/Property.h"
-#include "GaudiAlg/GaudiAlgorithm.h"
+#include "Gaudi/Algorithm.h"
 #include "GaudiKernel/IRndmGenSvc.h"
 #include "GaudiKernel/RndmGenerators.h"
 
@@ -38,7 +38,7 @@ namespace edm4hep {
  *
  */
 
-class VTXdigitizer : public GaudiAlgorithm {
+class VTXdigitizer : public Gaudi::Algorithm {
 public:
   explicit VTXdigitizer(const std::string&, ISvcLocator*);
   virtual ~VTXdigitizer();
@@ -49,7 +49,7 @@ public:
   /**  Execute.
    *   @return status code
    */
-  virtual StatusCode execute() final;
+  virtual StatusCode execute(const EventContext&) const final;
   /**  Finalize.
    *   @return status code
    */
@@ -57,9 +57,9 @@ public:
 
 private:
   // Input sim vertex hit collection name
-  DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized vertex hit collection name
-  DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
 
   // Detector name
   Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
@@ -82,7 +82,7 @@ private:
   FloatProperty m_t_resolution{this, "tResolution", 0.1, "Time resolution [ns]"};
 
   // Surface manager used to project hits onto sensitive surface with forceHitsOntoSurface argument
-  const dd4hep::rec::SurfaceMap* _map;
+  mutable const dd4hep::rec::SurfaceMap* _map;
 
   // Option to force hits onto sensitive surface
   BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"};

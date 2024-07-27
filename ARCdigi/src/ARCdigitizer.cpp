@@ -12,7 +12,7 @@
 
 DECLARE_COMPONENT(ARCdigitizer)
 
-ARCdigitizer::ARCdigitizer(const std::string& aName, ISvcLocator* aSvcLoc) : GaudiAlgorithm(aName, aSvcLoc) {
+ARCdigitizer::ARCdigitizer(const std::string& aName, ISvcLocator* aSvcLoc) : Gaudi::Algorithm(aName, aSvcLoc) {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim tracker hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized tracker hit collection name");
 }
@@ -43,7 +43,7 @@ StatusCode ARCdigitizer::initialize() {
   return StatusCode::SUCCESS;
 }
 
-StatusCode ARCdigitizer::execute() {
+StatusCode ARCdigitizer::execute(const EventContext&) const {
   // Get the input collection with Geant4 hits
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
