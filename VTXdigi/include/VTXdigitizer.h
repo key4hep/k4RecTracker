@@ -82,7 +82,7 @@ private:
   FloatProperty m_t_resolution{this, "tResolution", 0.1, "Time resolution [ns]"};
 
   // Surface manager used to project hits onto sensitive surface with forceHitsOntoSurface argument
-  const dd4hep::rec::SurfaceMap* _map;
+  mutable const dd4hep::rec::SurfaceMap* _map;
 
   // Option to force hits onto sensitive surface
   BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"};
