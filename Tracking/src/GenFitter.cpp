@@ -11,7 +11,7 @@ GenFitter::~GenFitter() {}
 
 StatusCode GenFitter::initialize() { return StatusCode::SUCCESS; }
 
-StatusCode GenFitter::execute() {
+StatusCode GenFitter::execute(const EventContext&) const {
   // Get the input collection with tracker hits
   const edm4hep::TrackerHit3DCollection* input_hits = m_input_hits.get();
   verbose() << "Input Hit collection size: " << input_hits->size() << endmsg;
