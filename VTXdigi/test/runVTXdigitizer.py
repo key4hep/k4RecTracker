@@ -66,7 +66,7 @@ geoservice = GeoSvc("GeoSvc")
 path_to_detector = os.environ.get("K4GEO", "") # Previously used "FCCDETECTORS"
 print(path_to_detector)
 detectors_to_use=[
-                   'FCCee/IDEA/compact/IDEA_o1_v02/IDEA_o1_v03.xml',
+                   'FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml',
                     # 'FCCee/CLD/compact/CLD_o2_v05/CLD_o2_v05.xml',
                   ]
 # prefix all xmls with path_to_detector
