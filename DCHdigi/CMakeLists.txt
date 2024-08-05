@@ -28,7 +28,7 @@ install(FILES
 
 install(FILES
   dataFormatExtension/driftChamberHit.yaml
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/extension" COMPONENT dev)
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/extension" COMPONENT dev)
 
 install(FILES
   "${PROJECT_BINARY_DIR}/libextensionDict_rdict.pcm"
@@ -45,12 +45,17 @@ file(GLOB headers
 gaudi_add_module(${PackageName}
   SOURCES ${sources}
   LINK
+  k4FWCore::k4FWCore
+  k4FWCore::k4Interface
+  Gaudi::GaudiAlgLib
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   extensionDict
-  k4FWCore::k4FWCore
-  k4FWCore::k4Interface
   DD4hep::DDRec
+  DD4hep::DDCore
+  ROOT::MathCore
+  ROOT::MathMore
+  GSL::gsl
 )
 
 target_include_directories(${PackageName} PUBLIC
@@ -71,7 +76,7 @@ install(TARGETS ${PackageName}
   EXPORT ${CMAKE_PROJECT_NAME}Targets
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT bin
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT shlib
-  PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/@{CMAKE_PROJECT_NAME}" COMPONENT dev
+  PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${CMAKE_PROJECT_NAME}" COMPONENT dev
 )
 
 install(FILES ${scripts} DESTINATION test)
