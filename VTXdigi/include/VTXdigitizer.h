@@ -21,6 +21,7 @@ namespace edm4hep {
   using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
 }  // namespace edm4hep
 #endif
+#include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
 
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
@@ -60,6 +61,8 @@ private:
   mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized vertex hit collection name
   mutable DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  // Output link between sim hits and digitized hits
+  mutable DataHandle<edm4hep::TrackerHitSimTrackerHitLinkCollection> m_output_sim_digi_link{"outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
 
   // Detector name
   Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
