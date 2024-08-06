@@ -22,6 +22,7 @@ tracksFromGenParticles = TracksFromGenParticles("TracksFromGenParticles",
 
 # produce a TH1 with distances between tracks and simTrackerHits
 from Configurables import PlotTrackHitDistances, RootHistSvc
+from Configurables import Gaudi__Histograming__Sink__Root as RootHistoSink
 plotTrackHitDistances = PlotTrackHitDistances("PlotTrackHitDistances",
                                              InputSimTrackerHits = ["CDCHHits"],
                                              InputTracksFromGenParticlesAssociation = tracksFromGenParticles.OutputMCRecoTrackParticleAssociation, 
@@ -39,14 +40,9 @@ audsvc.Auditors = [chra]
 tracksFromGenParticles.AuditExecute = True
 plotTrackHitDistances.AuditExecute = True
 
-# event counter
-from Configurables import EventCounter
-event_counter = EventCounter('event_counter')
-event_counter.Frequency = 10
-
 from Configurables import EventDataSvc
 ApplicationMgr(
-    TopAlg= [event_counter, tracksFromGenParticles, plotTrackHitDistances],
+    TopAlg= [tracksFromGenParticles, plotTrackHitDistances],
     EvtSel='NONE',
     EvtMax=-1,
     ExtSvc=[root_hist_svc, EventDataSvc("EventDataSvc"), audsvc],
