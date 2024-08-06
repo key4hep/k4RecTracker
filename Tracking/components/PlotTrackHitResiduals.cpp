@@ -76,22 +76,6 @@ struct PlotTrackHitDistances final
   Gaudi::Property<float> m_Bz{this, "Bz", 2., "Z component of the (assumed constant) magnetic field in Tesla."};
   mutable Gaudi::Accumulators::Histogram<1> m_residualHist{this, "", "Track-hit Distances", {100, 0, 1, "Distance [mm];Entries"}};
 
-	StatusCode finalize() override {
-			TFile file("track_hit_distances.root", "RECREATE");
-			std::string name = "";
-			// Name that will appear in the stats table
-			std::string histName = "Distances";
-			nlohmann::json jH {m_residualHist};
-			auto [histo, dir] = Gaudi::Histograming::Sink::jsonToRootHistogram<Gaudi::Histograming::Sink::Traits<false, TH1D, 1>>(name, histName, jH[0]);
-      // Add overflow bin to the last bin
-      int lastBinIndex = histo.GetNbinsX();
-      histo.SetBinContent(lastBinIndex, histo.GetBinContent(lastBinIndex) + histo.GetBinContent(lastBinIndex + 1));
-			// Name of the histogram in the ROOT file
-			histo.Write("Distances");
-			file.Close();
-			return StatusCode::SUCCESS;
-		}
-
 };
 
 DECLARE_COMPONENT(PlotTrackHitDistances)

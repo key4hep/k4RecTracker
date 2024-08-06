@@ -21,11 +21,15 @@ tracksFromGenParticles = TracksFromGenParticles("TracksFromGenParticles",
                                                OutputLevel = INFO)
 
 # produce a TH1 with distances between tracks and simTrackerHits
-from Configurables import PlotTrackHitDistances
+from Configurables import PlotTrackHitDistances, RootHistSvc
 plotTrackHitDistances = PlotTrackHitDistances("PlotTrackHitDistances",
                                              InputSimTrackerHits = ["CDCHHits"],
                                              InputTracksFromGenParticlesAssociation = tracksFromGenParticles.OutputMCRecoTrackParticleAssociation, 
                                              Bz = 2.0)
+
+hps = RootHistSvc("HistogramPersistencySvc")
+root_hist_svc = RootHistoSink("RootHistoSink")
+root_hist_svc.FileName = "TrackHitDistances.root"
 
 # Set auditor service
 from Configurables import AuditorSvc, ChronoAuditor
@@ -45,6 +49,6 @@ ApplicationMgr(
     TopAlg= [event_counter, tracksFromGenParticles, plotTrackHitDistances],
     EvtSel='NONE',
     EvtMax=-1,
-    ExtSvc=[EventDataSvc("EventDataSvc"), audsvc],
+    ExtSvc=[root_hist_svc, EventDataSvc("EventDataSvc"), audsvc],
     StopOnSignal=True,
 )
