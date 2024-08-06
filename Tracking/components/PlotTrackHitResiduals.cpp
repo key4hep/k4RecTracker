@@ -74,7 +74,7 @@ struct PlotTrackHitDistances final
     return;
   }
   Gaudi::Property<float> m_Bz{this, "Bz", 2., "Z component of the (assumed constant) magnetic field in Tesla."};
-  mutable Gaudi::Accumulators::Histogram<1> m_residualHist{this, "", "Track-hit Distances", {100, 0, 1, "Distance [mm];Entries"}};
+  mutable Gaudi::Accumulators::Histogram<1> m_residualHist{this, "track_hits_distance_closest_approach", "Track-hit Distances", {100, 0, 1, "Distance [mm];Entries"}};
 
 };
 
