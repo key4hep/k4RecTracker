@@ -34,13 +34,8 @@ audsvc.Auditors = [chra]
 arc_digitizer.AuditExecute = True
 podiooutput.AuditExecute = True
 
-from Configurables import EventCounter
-event_counter = EventCounter('event_counter')
-event_counter.Frequency = 1
-
 ApplicationMgr(
     TopAlg = [
-        event_counter,
         podioinput,
         arc_digitizer,
         podiooutput
