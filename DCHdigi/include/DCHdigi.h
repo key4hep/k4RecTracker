@@ -36,7 +36,6 @@
 
 // Gaudi Transformer baseclass headers
 #include "Gaudi/Property.h"
-#include "GaudiAlg/Transformer.h"
 #include "k4FWCore/Transformer.h"
 
 // Gaudi services
