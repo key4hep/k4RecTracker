@@ -66,7 +66,7 @@ geoservice = GeoSvc("GeoSvc")
 path_to_detector = os.environ.get("K4GEO", "") # Previously used "FCCDETECTORS"
 print(path_to_detector)
 detectors_to_use=[
-                   'FCCee/IDEA/compact/IDEA_o1_v02/IDEA_o1_v02.xml',
+                   'FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml',
                     # 'FCCee/CLD/compact/CLD_o2_v05/CLD_o2_v05.xml',
                   ]
 # prefix all xmls with path_to_detector
@@ -162,6 +162,7 @@ from Configurables import VTXdigitizer
 vtxb_digitizer = VTXdigitizer("VTXBdigitizer",
     inputSimHits = SimG4SaveTrackerHitsB.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsB.SimTrackHits.Path.replace("sim", "digi"),
+    outputSimDigiAssociation = SimG4SaveTrackerHitsB.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
     detectorName = "Vertex",
     readoutName = "VertexBarrelCollection",
     xResolution = vertexBarrelResolution_x, 
@@ -174,6 +175,7 @@ vtxb_digitizer = VTXdigitizer("VTXBdigitizer",
 vtxe_digitizer = VTXdigitizer("VTXEdigitizer",
     inputSimHits = SimG4SaveTrackerHitsE.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsE.SimTrackHits.Path.replace("sim", "digi"),
+    outputSimDigiAssociation = SimG4SaveTrackerHitsE.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
     detectorName = "Vertex",
     readoutName = "VertexEndcapCollection",
     xResolution = vertexEndcapResolution_x,
@@ -188,6 +190,7 @@ vtxe_digitizer = VTXdigitizer("VTXEdigitizer",
 vtxib_digitizer = VTXdigitizer("VTXIBdigitizer",
     inputSimHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path.replace("sim", "digi"),
+    outputSimDigiAssociation = SimG4SaveTrackerHitsIB.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
     detectorName = "Vertex",
     readoutName = "VTXIBCollection",
     xResolution = innerVertexResolution_x, # mm, r-phi direction
@@ -200,6 +203,7 @@ vtxib_digitizer = VTXdigitizer("VTXIBdigitizer",
 vtxob_digitizer = VTXdigitizer("VTXOBdigitizer",
     inputSimHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path.replace("sim", "digi"),
+    outputSimDigiAssociation = SimG4SaveTrackerHitsOB.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
     detectorName = "Vertex",
     readoutName = "VTXOBCollection",
     xResolution = outerVertexResolution_x, # mm, r-phi direction
@@ -212,6 +216,7 @@ vtxob_digitizer = VTXdigitizer("VTXOBdigitizer",
 vtxd_digitizer  = VTXdigitizer("VTXDdigitizer",
     inputSimHits = SimG4SaveTrackerHitsD.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsD.SimTrackHits.Path.replace("sim", "digi"),
+    outputSimDigiAssociation = SimG4SaveTrackerHitsD.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
     detectorName = "Vertex",
     readoutName = "VTXDCollection",
     xResolution = outerVertexResolution_x, # mm, r direction
