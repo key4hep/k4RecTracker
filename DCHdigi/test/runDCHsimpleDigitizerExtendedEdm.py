@@ -162,14 +162,9 @@ hepmc_converter.AuditExecute = True
 geantsim.AuditExecute = True
 out.AuditExecute = True
 
-from Configurables import EventCounter
-event_counter = EventCounter('event_counter')
-event_counter.Frequency = 1
-
 from Configurables import ApplicationMgr
 ApplicationMgr(
     TopAlg = [
-              event_counter,
               genAlg,
               hepmc_converter,
               geantsim,
