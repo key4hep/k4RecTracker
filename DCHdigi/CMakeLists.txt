@@ -42,6 +42,16 @@ file(GLOB headers
   ${PROJECT_SOURCE_DIR}/include/*.h
 )
 
+include(CheckIncludeFileCXX)
+set(CMAKE_REQUIRED_LIBRARIES DD4hep::DDRec)
+CHECK_INCLUDE_FILE_CXX(DDRec/DCH_info.h DCH_INFO_H_EXIST)
+set(CMAKE_REQUIRED_LIBRARIES)
+set(FILES_DEPENDINGON_DCH_INFO_H "DCHdigi.cpp" )
+if(NOT DCH_INFO_H_EXIST)
+    list(FILTER sources EXCLUDE REGEX "${FILES_DEPENDINGON_DCH_INFO_H}")
+    message(WARNING "Gaudi algorithm defined in ${FILES_DEPENDINGON_DCH_INFO_H} will not be built because header file DDRec/DCH_info.h was not found")
+endif()
+
 gaudi_add_module(${PackageName}
   SOURCES ${sources}
   LINK
