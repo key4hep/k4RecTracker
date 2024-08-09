@@ -403,6 +403,12 @@ std::pair<uint32_t,uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTracke
   std::vector <float> vecEtr,vecEtrTot;
   float sumVecTot,meanVecTot,sumVec,meanVec;
 /////////end from Createclusters.h/////////
+
+  // get rid of spurious compiler error, Werror=unused-but-set-variable
+  (void)NCl;
+  (void)vecpar;
+  (void)sumVecTot;
+
    int NCld;
    TString parName;
    double bg, Momentum, mass=-1e300;
