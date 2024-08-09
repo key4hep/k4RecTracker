@@ -117,10 +117,10 @@ private:
   //          machinery for smearing the position
 
   /// along the sense wire position resolution in mm
-  Gaudi::Property<float> m_z_resolution{this, "zResolution_mm", 10.0,
+  Gaudi::Property<float> m_z_resolution{this, "zResolution_mm", 0.1,
                                "Spatial resolution in the z direction (from reading out the wires at both sides) [mm]"};
   /// xy resolution in mm
-  Gaudi::Property<float> m_xy_resolution{this, "xyResolution_mm", 10., "Spatial resolution in the xy direction [mm]"};
+  Gaudi::Property<float> m_xy_resolution{this, "xyResolution_mm", 0.1, "Spatial resolution in the xy direction [mm]"};
 
   /// create seed using the uid
   SmartIF<IUniqueIDGenSvc>                   m_uidSvc;

@@ -22,8 +22,8 @@ DCHdigi.DCH_simhits=["DCHCollection"]
 DCHdigi.DCH_name="DCH_v2"
 DCHdigi.fileDataAlg="DataAlgFORGEANT.root"
 DCHdigi.create_debug_histograms=True
-DCHdigi.zResolution_mm=1.23
-DCHdigi.xyResolution_mm=4.56
+DCHdigi.zResolution_mm=0.1
+DCHdigi.xyResolution_mm=0.1
 
 
 DCHdigi.OutputLevel=INFO
