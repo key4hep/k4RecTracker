@@ -7,7 +7,14 @@
 ddsim --steeringFile sim_steering.py --outputFile 'dch_proton_10GeV.root' -N 10 --runType batch --random.seed 42
 
 # download file for cluster counting technique
-wget https://fccsw.web.cern.ch/fccsw/filesForSimDigiReco/IDEA/DataAlgFORGEANT.root
+ifilename="https://fccsw.web.cern.ch/fccsw/filesForSimDigiReco/IDEA/DataAlgFORGEANT.root"
+wget $ifilename
+
+# Check if the input file exists
+if [[ ! -f "$(basename $ifilename)" ]]; then
+    echo "Error: File '$(basename $ifilename)' not found."
+    exit 1
+fi
 
 # run digitizer for position smearing and cluster counting calculation
 k4run runDCHdigi.py
