@@ -45,8 +45,6 @@ datatypes:
       - float eDep                    // energy deposited on the hit [GeV]
       - float eDepError               // error measured on eDep [GeV]
       - edm4hep::Vector3d position    // point on the sensitive wire (SW) which is closest to the simhit [mm]
-      - edm4hep::Vector3d position_L  // point on the left to the sensitive wire (SW) [mm]
-      - edm4hep::Vector3d position_R  // point on the right to the sensitive wire (SW) [mm]
       - edm4hep::Vector3d directionSW // direction of SW
       - float distanceToWire          // distance hit-wire [mm]
       - uint32_t clusterCount         // number of clusters associated to this hit
