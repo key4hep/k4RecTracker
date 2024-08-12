@@ -50,6 +50,7 @@
 
 // EDM4HEP extension
 #include "extension/DriftChamberDigiV2Collection.h"
+#include "extension/MCRecoDriftChamberDigiV2AssociationCollection.h"
 
 
 // DD4hep
@@ -77,17 +78,19 @@ constexpr double MM_TO_CM = 0.1;
 
 using colltype_in  = edm4hep::SimTrackerHitCollection;
 using colltype_out = extension::DriftChamberDigiV2Collection;
+using colltype_out2= extension::MCRecoDriftChamberDigiV2AssociationCollection;
+
 
 struct DCHdigi final
     : k4FWCore::MultiTransformer<
-          std::tuple<colltype_out>(
+          std::tuple<colltype_out,colltype_out2>(
               const colltype_in&, const edm4hep::EventHeaderCollection&)> {
   DCHdigi(const std::string& name, ISvcLocator* svcLoc);
 
   StatusCode initialize() override;
   StatusCode finalize() override;
 
-  std::tuple<colltype_out> operator()(
+  std::tuple<colltype_out,colltype_out2> operator()(
       const colltype_in& ,
       const edm4hep::EventHeaderCollection&   ) const override;
 
