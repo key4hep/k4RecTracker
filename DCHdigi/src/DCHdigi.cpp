@@ -4,6 +4,8 @@
 #include <iostream>
 #include <sstream>
 
+#include "extension/MutableDriftChamberDigiV2.h"
+
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       DCHdigi constructor       ////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -158,19 +160,20 @@ DCHdigi::operator()(const colltype_in& input_sim_hits,
 
         auto [clusterCount,clusterSize] = CalculateClusters(input_sim_hit);
 
-        // create in place the output object
-        output_digi_hits.create(input_sim_hit.getCellID(),
-                                type,
-                                quality,
-                                input_sim_hit.getTime(),
-                                input_sim_hit.getEDep(),
-                                eDepError,
-                                positionSW,
-                                directionSW,
-                                distanceToWire,
-                                clusterCount,
-                                clusterSize
-                                );
+        extension::MutableDriftChamberDigiV2 oDCHdigihit;
+        oDCHdigihit.setCellID(input_sim_hit.getCellID());
+        oDCHdigihit.setType(type);
+        oDCHdigihit.setQuality(quality);
+        oDCHdigihit.setTime(input_sim_hit.getTime());
+        oDCHdigihit.setEDep(input_sim_hit.getEDep());
+        oDCHdigihit.setEDepError(eDepError);
+        oDCHdigihit.setPosition(positionSW);
+        oDCHdigihit.setDirectionSW(directionSW);
+        oDCHdigihit.setDistanceToWire(distanceToWire);
+        oDCHdigihit.setClusterCount(clusterCount);
+        oDCHdigihit.setClusterSize(clusterSize);
+
+        output_digi_hits.push_back(oDCHdigihit);
         }// end loop over hit collection
 
     /////////////////////////////////////////////////////////////////
