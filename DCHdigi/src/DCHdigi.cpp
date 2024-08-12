@@ -17,7 +17,8 @@ DCHdigi::DCHdigi(const std::string& name, ISvcLocator* svcLoc)
         KeyValues("HeaderName", {"EventHeader"}),
     },
     {
-        KeyValues("DCH_DigiCollection", {"DCH_DigiCollection"})
+        KeyValues("DCH_DigiCollection", {"DCH_DigiCollection"}),
+        KeyValues("DCH_DigiSimAssociationCollection", {"DCH_DigiSimAssociationCollection"})
     }
   )
 {
@@ -96,7 +97,7 @@ StatusCode DCHdigi::initialize() {
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       operator()       ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-std::tuple<colltype_out>
+std::tuple<colltype_out,colltype_out2>
 DCHdigi::operator()(const colltype_in& input_sim_hits,
     const edm4hep::EventHeaderCollection&  headers) const {
 
@@ -107,6 +108,7 @@ DCHdigi::operator()(const colltype_in& input_sim_hits,
 
     // Create the collections we are going to return
     colltype_out output_digi_hits;
+    colltype_out2 output_digi_sim_association;
 
     //loop over hit collection
     for (const auto& input_sim_hit : input_sim_hits)
@@ -174,10 +176,15 @@ DCHdigi::operator()(const colltype_in& input_sim_hits,
         oDCHdigihit.setClusterSize(clusterSize);
 
         output_digi_hits.push_back(oDCHdigihit);
+
+        extension::MutableMCRecoDriftChamberDigiV2Association oDCHsimdigi_association;
+        oDCHsimdigi_association.setDigi( output_digi_hits.at( output_digi_hits.size() )  );
+        oDCHsimdigi_association.setSim( input_sim_hit  );
+
         }// end loop over hit collection
 
     /////////////////////////////////////////////////////////////////
-    return std::make_tuple<colltype_out>(std::move(output_digi_hits));
+    return std::make_tuple<colltype_out,colltype_out2>(std::move(output_digi_hits),std::move(output_digi_sim_association));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
