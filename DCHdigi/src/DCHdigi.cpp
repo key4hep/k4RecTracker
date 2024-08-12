@@ -178,7 +178,7 @@ DCHdigi::operator()(const colltype_in& input_sim_hits,
         output_digi_hits.push_back(oDCHdigihit);
 
         extension::MutableMCRecoDriftChamberDigiV2Association oDCHsimdigi_association;
-        oDCHsimdigi_association.setDigi( output_digi_hits.at( output_digi_hits.size()-1 )  );
+        oDCHsimdigi_association.setDigi( oDCHdigihit  );
         oDCHsimdigi_association.setSim( input_sim_hit  );
 
         }// end loop over hit collection
