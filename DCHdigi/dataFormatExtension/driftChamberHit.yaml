@@ -34,6 +34,15 @@ datatypes:
       - float eDepError               // error measured on eDep [GeV].
       - uint32_t clusterCount         // number of clusters associated to this hit
 
+  extension::MCRecoDriftChamberDigiAssociation:
+    Description: "Association between a DriftChamberDigi and the corresponding simulated hit"
+    Author: "B. Francois, CERN"
+    Members:
+      - float weight              // weight of this association
+    OneToOneRelations:
+      - extension::DriftChamberDigi digi    // reference to the digitized hit
+      - edm4hep::SimTrackerHit sim // reference to the simulated hit
+
   extension::DriftChamberDigiV2:
     Description: "Digitized hit (before tracking) for Drift Chamber v2 (requires data extension)."
     Author: "A. Tolosa-Delgado, B. Francois, CERN"
@@ -50,11 +59,11 @@ datatypes:
       - uint32_t clusterCount         // number of clusters associated to this hit
       - uint32_t clusterSize          // number of electrons per cluster
 
-  extension::MCRecoDriftChamberDigiAssociation:
+  extension::MCRecoDriftChamberDigiV2Association:
     Description: "Association between a DriftChamberDigi and the corresponding simulated hit"
     Author: "B. Francois, CERN"
     Members:
       - float weight              // weight of this association
     OneToOneRelations:
-      - extension::DriftChamberDigi digi    // reference to the digitized hit
+      - extension::DriftChamberDigiV2 digi    // reference to the digitized hit
       - edm4hep::SimTrackerHit sim // reference to the simulated hit
