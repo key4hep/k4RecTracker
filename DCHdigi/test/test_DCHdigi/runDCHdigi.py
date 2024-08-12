@@ -14,7 +14,7 @@ svc.output = "dch_proton_10GeV_digi.root"
 
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
-geoservice.detectors = ['/home/alvarotd/work/mydch/DCH_detector/compact/DCH_standalone_o1_v02.xml']
+geoservice.detectors = ['./compact/DCH_standalone_o1_v02.xml']
 
 from Configurables import DCHdigi
 DCHdigi = DCHdigi("DCHdigi")
