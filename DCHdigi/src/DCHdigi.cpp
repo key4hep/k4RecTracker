@@ -237,9 +237,9 @@ void DCHdigi::PrepareRandomEngine(const edm4hep::EventHeaderCollection&  headers
     uint32_t run_n = headers[0].getRunNumber();
     size_t seed = m_uidSvc->getUniqueID(evt_n, run_n, this->name() );
     m_engine.seed(seed);
-    // test random engine...
+    // advance internal state to minimize possibility of creating correlations
     m_engine.discard(10);
-    myRandom.SetSeed(seed+42);
+    for(int i=0; i<10; ++i) myRandom.Rndm();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
