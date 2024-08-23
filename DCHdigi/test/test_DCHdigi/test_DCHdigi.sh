@@ -1,3 +1,4 @@
+#!/bin/bash
 # file: test_DCHdigi.sh
 # author: Alvaro Tolosa-Delgado, CERN 2024
 # to run: sh + test_DCHdigi.sh
