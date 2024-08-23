@@ -191,7 +191,9 @@ private:
 
   /// Flag to create output file with debug histgrams
   Gaudi::Property<bool> m_create_debug_histos{this, "create_debug_histograms", false, "Create output file with histograms for debugging"};
-
+  
+  /// name for the file that will contain the histograms for debugging
+  Gaudi::Property<std::string> m_out_debug_filename{this, "out_debug_filename", "dch_digi_alg_debug.root", "name for the file that will contain the histograms for debugging"};
   /// histogram to store distance from hit position to the wire
   TH1D * hDpw;
 
