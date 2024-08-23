@@ -180,6 +180,7 @@ DCHdigi::operator()(const colltype_in& input_sim_hits,
         extension::MutableMCRecoDriftChamberDigiV2Association oDCHsimdigi_association;
         oDCHsimdigi_association.setDigi( oDCHdigihit  );
         oDCHsimdigi_association.setSim( input_sim_hit  );
+        output_digi_sim_association.push_back(oDCHsimdigi_association);
 
         }// end loop over hit collection
 
