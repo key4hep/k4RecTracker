@@ -78,14 +78,14 @@ constexpr double MM_TO_CM = 0.1;
 
 struct DCHdigi final
     : k4FWCore::MultiTransformer<
-          std::tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection>(
+          std::tuple<edm4hep::DriftChamberDigiV2Collection,edm4hep::MCRecoDriftChamberDigiV2AssociationCollection>(
               const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
   DCHdigi(const std::string& name, ISvcLocator* svcLoc);
 
   StatusCode initialize() override;
   StatusCode finalize() override;
 
-  std::tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection> operator()(
+  std::tuple<edm4hep::DriftChamberDigiV2Collection,edm4hep::MCRecoDriftChamberDigiV2AssociationCollection> operator()(
       const edm4hep::SimTrackerHitCollection& ,
       const edm4hep::EventHeaderCollection&   ) const override;
 
