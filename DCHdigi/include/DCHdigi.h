@@ -172,7 +172,6 @@ private:
   TVector3 Calculate_wire_z0_point        (int ilayer, int nphi) const;
   double   Calculate_wire_phi_z0          (int ilayer, int nphi) const;
 
-  double Calculate_phi_rot_equivalent_to_hit_to_wire_distance(int ilayer, double hit_to_wire_distance) const;
 
   //------------------------------------------------------------------
   //        cluster calculation, developed by Walaa

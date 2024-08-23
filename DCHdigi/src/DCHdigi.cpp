@@ -246,14 +246,6 @@ void DCHdigi::PrepareRandomEngine(const edm4hep::EventHeaderCollection&  headers
 /////       Ancillary functions for calculating the distance to the wire       ////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-double DCHdigi::Calculate_phi_rot_equivalent_to_hit_to_wire_distance(int ilayer, double hit_to_wire_distance) const
-{
-    auto & l = this->dch_data->database.at(ilayer);
-    double rz0 = l.radius_sw_z0;
-    return 2*atan( (hit_to_wire_distance/2.)/rz0 );
-}
-
-
 
 TVector3 DCHdigi::Calculate_wire_vector_ez(int ilayer, int nphi) const
 {
