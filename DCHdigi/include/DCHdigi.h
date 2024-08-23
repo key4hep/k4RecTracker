@@ -76,22 +76,17 @@
 /// constant to convert from mm (EDM4hep) to DD4hep (cm)
 constexpr double MM_TO_CM = 0.1;
 
-using colltype_in  = edm4hep::SimTrackerHitCollection;
-using colltype_out = extension::DriftChamberDigiV2Collection;
-using colltype_out2= extension::MCRecoDriftChamberDigiV2AssociationCollection;
-
-
 struct DCHdigi final
     : k4FWCore::MultiTransformer<
-          std::tuple<colltype_out,colltype_out2>(
-              const colltype_in&, const edm4hep::EventHeaderCollection&)> {
+          std::tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection>(
+              const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
   DCHdigi(const std::string& name, ISvcLocator* svcLoc);
 
   StatusCode initialize() override;
   StatusCode finalize() override;
 
-  std::tuple<colltype_out,colltype_out2> operator()(
-      const colltype_in& ,
+  std::tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection> operator()(
+      const edm4hep::SimTrackerHitCollection& ,
       const edm4hep::EventHeaderCollection&   ) const override;
 
 private:

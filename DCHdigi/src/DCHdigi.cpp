@@ -97,8 +97,8 @@ StatusCode DCHdigi::initialize() {
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       operator()       ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-std::tuple<colltype_out,colltype_out2>
-DCHdigi::operator()(const colltype_in& input_sim_hits,
+std::tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection>
+DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     const edm4hep::EventHeaderCollection&  headers) const {
 
     // initialize seed for random engine
@@ -107,8 +107,8 @@ DCHdigi::operator()(const colltype_in& input_sim_hits,
     debug() << "Input Sim Hit collection size: " << input_sim_hits.size() << endmsg;
 
     // Create the collections we are going to return
-    colltype_out output_digi_hits;
-    colltype_out2 output_digi_sim_association;
+    extension::DriftChamberDigiV2Collection output_digi_hits;
+    extension::MCRecoDriftChamberDigiV2AssociationCollection output_digi_sim_association;
 
     //loop over hit collection
     for (const auto& input_sim_hit : input_sim_hits)
@@ -185,7 +185,7 @@ DCHdigi::operator()(const colltype_in& input_sim_hits,
         }// end loop over hit collection
 
     /////////////////////////////////////////////////////////////////
-    return std::make_tuple<colltype_out,colltype_out2>(std::move(output_digi_hits),std::move(output_digi_sim_association));
+    return std::make_tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection>(std::move(output_digi_hits),std::move(output_digi_sim_association));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
