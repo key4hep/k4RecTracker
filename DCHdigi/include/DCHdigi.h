@@ -26,7 +26,7 @@
  * (default value false) <br>
   * @param GeoSvcName Geometry service name <br>
  * (default value GeoSvc) <br>
-  * @param uidSvcName The name of the UniqueIDGenSvc instance <br>
+  * @param uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring reproducibility. <br>
  * (default value uidSvc) <br>
  * <br>
  */
