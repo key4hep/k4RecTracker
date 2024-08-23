@@ -21,7 +21,7 @@
   * @param zResolution_mm Resolution (sigma for gaussian smearing) along the sense wire, in mm <br>
  * (default value 1 mm) <br>
   * @param xyResolution_mm Resolution (sigma for gaussian smearing) perpendicular the sense wire, in mm <br>
- * (default value 10 mm) <br>
+ * (default value 0.1 mm) <br>
   * @param create_debug_histograms Optional flag to create debug histograms <br>
  * (default value false) <br>
   * @param GeoSvcName Geometry service name <br>
@@ -123,7 +123,7 @@ private:
   Gaudi::Property<float> m_z_resolution{this, "zResolution_mm", 1.0,
                                "Spatial resolution in the z direction (from reading out the wires at both sides) in mm. Default 1 mm."};
   /// xy resolution in mm
-  Gaudi::Property<float> m_xy_resolution{this, "xyResolution_mm", 0.1, "Spatial resolution in the xy direction [mm]"};
+  Gaudi::Property<float> m_xy_resolution{this, "xyResolution_mm", 0.1, "Spatial resolution in the xy direction in mm. Default 0.1 mm."};
 
   /// create seed using the uid
   SmartIF<IUniqueIDGenSvc>                   m_uidSvc;
