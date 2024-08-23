@@ -195,7 +195,7 @@ StatusCode DCHdigi::finalize()
 {
     if( m_create_debug_histos.value() )
     {
-        std::unique_ptr<TFile> ofile{TFile::Open ( "dch_digi_alg_debug.root", "recreate" ) };
+        std::unique_ptr<TFile> ofile{TFile::Open ( m_out_debug_filename.value().c_str() , "recreate" ) };
         ofile->cd();
         hDpw->Write();
         hDww->Write();
