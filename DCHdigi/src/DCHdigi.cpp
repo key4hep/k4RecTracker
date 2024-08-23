@@ -65,7 +65,7 @@ StatusCode DCHdigi::initialize() {
     m_decoder = dch_readout.idSpec().decoder();
 
     ///////////////////////////////////////////////////////////////////////////////////
-    /////////////////////////  initialize Walaa's code for CLS  ///////////////////////
+    //////////////////  initialize Walaa's code for Cluster counting  /////////////////
     ///////////////////////////////////////////////////////////////////////////////////
 	debug() << Form("Opening %s...",m_fileDataAlg.value().c_str())<<endmsg;
     if( not IsFileGood(m_fileDataAlg.value()) ) ThrowException("File <<" + m_fileDataAlg.value() + ">> not found.");
