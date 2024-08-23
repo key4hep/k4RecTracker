@@ -19,7 +19,7 @@
   * @param fileDataAlg File needed for calculating cluster count and size <br>
  * (default value /eos/.../DataAlgFORGEANT.root) <br>
   * @param zResolution_mm Resolution (sigma for gaussian smearing) along the sense wire, in mm <br>
- * (default value 10 mm) <br>
+ * (default value 1 mm) <br>
   * @param xyResolution_mm Resolution (sigma for gaussian smearing) perpendicular the sense wire, in mm <br>
  * (default value 10 mm) <br>
   * @param create_debug_histograms Optional flag to create debug histograms <br>
@@ -120,8 +120,8 @@ private:
   //          machinery for smearing the position
 
   /// along the sense wire position resolution in mm
-  Gaudi::Property<float> m_z_resolution{this, "zResolution_mm", 0.1,
-                               "Spatial resolution in the z direction (from reading out the wires at both sides) [mm]"};
+  Gaudi::Property<float> m_z_resolution{this, "zResolution_mm", 1.0,
+                               "Spatial resolution in the z direction (from reading out the wires at both sides) in mm. Default 1 mm."};
   /// xy resolution in mm
   Gaudi::Property<float> m_xy_resolution{this, "xyResolution_mm", 0.1, "Spatial resolution in the xy direction [mm]"};
 
