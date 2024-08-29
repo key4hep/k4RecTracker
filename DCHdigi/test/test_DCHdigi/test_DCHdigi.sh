@@ -21,7 +21,4 @@ fi
 k4run runDCHdigi.py
 
 # check distribution of distance from hit position to the wire
-check_DCHdigi_output=$( (python3 check_DCHdigi_output.py) 2>&1)
-
-# return value printed out by the previous python script
-exit $check_DCHdigi_output
+python3 check_DCHdigi_output.py
