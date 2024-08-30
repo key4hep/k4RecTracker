@@ -97,7 +97,7 @@ StatusCode DCHdigi::initialize() {
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       operator()       ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-std::tuple<edm4hep::DriftChamberDigiV2Collection,edm4hep::MCRecoDriftChamberDigiV2AssociationCollection>
+std::tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection>
 DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     const edm4hep::EventHeaderCollection&  headers) const {
 
@@ -107,8 +107,8 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     debug() << "Input Sim Hit collection size: " << input_sim_hits.size() << endmsg;
 
     // Create the collections we are going to return
-    edm4hep::DriftChamberDigiV2Collection output_digi_hits;
-    edm4hep::MCRecoDriftChamberDigiV2AssociationCollection output_digi_sim_association;
+    extension::DriftChamberDigiV2Collection output_digi_hits;
+    extension::MCRecoDriftChamberDigiV2AssociationCollection output_digi_sim_association;
 
     //loop over hit collection
     for (const auto& input_sim_hit : input_sim_hits)
@@ -162,7 +162,7 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
 
         auto [clusterCount,clusterSize] = CalculateClusters(input_sim_hit);
 
-        edm4hep::MutableDriftChamberDigiV2 oDCHdigihit;
+        extension::MutableDriftChamberDigiV2 oDCHdigihit;
         oDCHdigihit.setCellID(input_sim_hit.getCellID());
         oDCHdigihit.setType(type);
         oDCHdigihit.setQuality(quality);
@@ -177,7 +177,7 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
 
         output_digi_hits.push_back(oDCHdigihit);
 
-        edm4hep::MutableMCRecoDriftChamberDigiV2Association oDCHsimdigi_association;
+        extension::MutableMCRecoDriftChamberDigiV2Association oDCHsimdigi_association;
         oDCHsimdigi_association.setDigi( oDCHdigihit  );
         oDCHsimdigi_association.setSim( input_sim_hit  );
         output_digi_sim_association.push_back(oDCHsimdigi_association);
@@ -185,7 +185,7 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
         }// end loop over hit collection
 
     /////////////////////////////////////////////////////////////////
-    return std::make_tuple<edm4hep::DriftChamberDigiV2Collection,edm4hep::MCRecoDriftChamberDigiV2AssociationCollection>(std::move(output_digi_hits),std::move(output_digi_sim_association));
+    return std::make_tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection>(std::move(output_digi_hits),std::move(output_digi_sim_association));
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////
