@@ -43,7 +43,7 @@ datatypes:
       - extension::DriftChamberDigi digi    // reference to the digitized hit
       - edm4hep::SimTrackerHit sim // reference to the simulated hit
 
-  edm4hep::DriftChamberDigiV2:
+  extension::DriftChamberDigiV2:
     Description: "Digitized hit (before tracking) for Drift Chamber v2 (requires data extension)."
     Author: "A. Tolosa-Delgado, B. Francois, CERN"
     Members:
@@ -59,28 +59,11 @@ datatypes:
       - uint32_t clusterCount         // number of clusters associated to this hit
       - uint32_t clusterSize          // number of electrons per cluster
 
-  edm4hep::MCRecoDriftChamberDigiV2Association:
+  extension::MCRecoDriftChamberDigiV2Association:
     Description: "Association between a DriftChamberDigi and the corresponding simulated hit"
     Author: "B. Francois, CERN"
     Members:
       - float weight              // weight of this association
     OneToOneRelations:
-      - edm4hep::DriftChamberDigiV2 digi    // reference to the digitized hit
+      - extension::DriftChamberDigiV2 digi    // reference to the digitized hit
       - edm4hep::SimTrackerHit sim // reference to the simulated hit
-
-interfaces:
-  edm4hep::TrackerHit:
-    Description: "Evolution of tracker hit interface class"
-    Author: "Thomas Madlener, DESY"
-    Members:
-      - uint64_t cellID // ID of the sensor that created this hit
-      - int32_t type // type of the raw data hit
-      - int32_t quality // quality bit flag of the hit
-      - float time [ns] // time of the hit
-      - float eDep [GeV] // energy deposited on the hit
-      - float eDepError [GeV] // error measured on eDep
-      - edm4hep::Vector3d position [mm] // hit position
-    Types:
-      - edm4hep::TrackerHit3D
-      - edm4hep::TrackerHitPlane
-      - edm4hep::DriftChamberDigiV2

@@ -12,7 +12,7 @@
  * Processor produces collection of Digitized hits of Drift Chamber v2<br>
  * @param DCH_simhits The name of input collection, type edm4hep::SimTrackerHitCollection <br>
  * (default name empty) <br>
- * @param DCH_DigiCollection The name of out collection, type edm4hep::DriftChamberDigiV2Collection <br>
+ * @param DCH_DigiCollection The name of out collection, type extension::DriftChamberDigiV2Collection <br>
  * (default name DCH_DigiCollection) <br>
  * @param DCH_name DCH subdetector name <br>
  * (default value DCH_v2) <br>
@@ -78,14 +78,14 @@ constexpr double MM_TO_CM = 0.1;
 
 struct DCHdigi final
     : k4FWCore::MultiTransformer<
-          std::tuple<edm4hep::DriftChamberDigiV2Collection,edm4hep::MCRecoDriftChamberDigiV2AssociationCollection>(
+          std::tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection>(
               const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
   DCHdigi(const std::string& name, ISvcLocator* svcLoc);
 
   StatusCode initialize() override;
   StatusCode finalize() override;
 
-  std::tuple<edm4hep::DriftChamberDigiV2Collection,edm4hep::MCRecoDriftChamberDigiV2AssociationCollection> operator()(
+  std::tuple<extension::DriftChamberDigiV2Collection,extension::MCRecoDriftChamberDigiV2AssociationCollection> operator()(
       const edm4hep::SimTrackerHitCollection& ,
       const edm4hep::EventHeaderCollection&   ) const override;
 
