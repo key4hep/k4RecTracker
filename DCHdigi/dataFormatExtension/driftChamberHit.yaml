@@ -67,3 +67,76 @@ datatypes:
     OneToOneRelations:
       - extension::DriftChamberDigiV2 digi    // reference to the digitized hit
       - edm4hep::SimTrackerHit sim // reference to the simulated hit
+      
+# the following is just because interface looks for e.g. extension/TrackerHit3DCollection.h
+  extension::TrackerHit3D:
+    Description: "Tracker hit"
+    Author: "EDM4hep authors"
+    Members:
+      - uint64_t cellID      // ID of the sensor that created this hit
+      - int32_t type                       // type of raw data hit
+      - int32_t quality                    // quality bit flag of the hit
+      - float time [ns]                    // time of the hit
+      - float eDep [GeV]                   // energy deposited on the hit
+      - float eDepError [GeV]              // error measured on EDep
+      - edm4hep::Vector3d position [mm]    // hit position
+      - edm4hep::CovMatrix3f covMatrix // covariance matrix of the position (x,y,z)
+    ExtraCode:
+      includes: "#include <edm4hep/Constants.h>"
+      declaration: "
+      /// Get the position covariance matrix value for the two passed dimensions\n
+      float getCovMatrix(edm4hep::Cartesian dimI, edm4hep::Cartesian dimJ) const { return getCovMatrix().getValue(dimI, dimJ); }\n
+      "
+    MutableExtraCode:
+      includes: "#include <edm4hep/Constants.h>"
+      declaration: "
+      /// Set the position covariance matrix value for the two passed dimensions\n
+      void setCovMatrix(float value, edm4hep::Cartesian dimI, edm4hep::Cartesian dimJ) { getCovMatrix().setValue(value, dimI, dimJ); }\n
+      "
+  extension::TrackerHitPlane:
+    Description: "Tracker hit plane"
+    Author: "EDM4hep authors"
+    Members:
+      - uint64_t cellID      // ID of the sensor that created this hit
+      - int32_t type                       // type of raw data hit
+      - int32_t quality                    // quality bit flag of the hit
+      - float time [ns]                    // time of the hit
+      - float eDep [GeV]                   // energy deposited on the hit
+      - float eDepError [GeV]              // error measured on EDep
+      - edm4hep::Vector2f u            // measurement direction vector, u lies in the x-y plane
+      - edm4hep::Vector2f v            // measurement direction vector, v is along z
+      - float du                       // measurement error along the direction
+      - float dv                       // measurement error along the direction
+      - edm4hep::Vector3d position [mm]   // hit position
+      - edm4hep::CovMatrix3f covMatrix // covariance of the position (x,y,z)
+    ExtraCode:
+      includes: "#include <edm4hep/Constants.h>"
+      declaration: "
+      /// Get the position covariance matrix value for the two passed dimensions\n
+      float getCovMatrix(edm4hep::Cartesian dimI, edm4hep::Cartesian dimJ) const { return getCovMatrix().getValue(dimI, dimJ); }\n
+      "
+    MutableExtraCode:
+      includes: "#include <edm4hep/Constants.h>"
+      declaration: "
+      /// Set the position covariance matrix value for the two passed dimensions\n
+      void setCovMatrix(float value, edm4hep::Cartesian dimI, edm4hep::Cartesian dimJ) { getCovMatrix().setValue(value, dimI, dimJ); }\n
+      "
+
+# end of "the following is just because interface looks for e.g. extension/TrackerHit3DCollection.h"
+
+interfaces:
+  extension::TrackerHit:
+    Description: "Tracker hit interface class"
+    Author: "Thomas Madlener, DESY"
+    Members:
+      - uint64_t cellID // ID of the sensor that created this hit
+      - int32_t type // type of the raw data hit
+      - int32_t quality // quality bit flag of the hit
+      - float time [ns] // time of the hit
+      - float eDep [GeV] // energy deposited on the hit
+      - float eDepError [GeV] // error measured on eDep
+      - edm4hep::Vector3d position [mm] // hit position
+    Types:
+      - extension::TrackerHitPlane
+      - extension::TrackerHit3D
+      - extension::DriftChamberDigiV2
