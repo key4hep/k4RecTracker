@@ -56,8 +56,8 @@ datatypes:
       - edm4hep::Vector3d position    // point on the sensitive wire (SW) which is closest to the simhit [mm]
       - edm4hep::Vector3d directionSW // direction of SW
       - float distanceToWire          // distance hit-wire [mm]
-      - uint32_t clusterCount         // number of clusters associated to this hit
-      - uint32_t clusterSize          // number of electrons per cluster
+      - uint32_t nCluster             // number of clusters associated to this hit
+      - uint32_t nElectronPerCluster  // number of electrons per cluster
 
   extension::MCRecoDriftChamberDigiV2Association:
     Description: "Association between a DriftChamberDigi and the corresponding simulated hit"
