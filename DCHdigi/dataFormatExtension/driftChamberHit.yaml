@@ -67,7 +67,25 @@ datatypes:
     OneToOneRelations:
       - extension::DriftChamberDigiV2 digi    // reference to the digitized hit
       - edm4hep::SimTrackerHit sim // reference to the simulated hit
-      
+
+  extension::Track:
+    Description: "Reconstructed track"
+    Author: "EDM4hep authors"
+    Members:
+      - int32_t type                         // flagword that defines the type of track.Bits 16-31 are used internally
+      - float chi2                       // Chi^2 of the track fit
+      - int32_t ndf                          // number of degrees of freedom of the track fit
+      - float dEdx                       // dEdx of the track
+      - float dEdxError                  // error of dEdx
+      - float radiusOfInnermostHit       // radius of the innermost hit that has been used in the track fit
+    VectorMembers:
+      - int32_t subdetectorHitNumbers        // number of hits in particular subdetectors
+      - edm4hep::TrackState trackStates  // track states
+      - edm4hep::Quantity dxQuantities // different measurements of dx quantities
+    OneToManyRelations:
+      - extension::TrackerHit trackerHits  // hits that have been used to create this track
+      - extension::Track tracks            // tracks (segments) that have been combined to create this track
+
 # the following is just because interface looks for e.g. extension/TrackerHit3DCollection.h
   extension::TrackerHit3D:
     Description: "Tracker hit"
