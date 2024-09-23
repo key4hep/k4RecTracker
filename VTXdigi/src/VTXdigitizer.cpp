@@ -51,6 +51,13 @@ StatusCode VTXdigitizer::initialize() {
   // set the cellID decoder
   m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder(); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
 
+  if (m_decoder->fieldDescription().find("layer") == std::string::npos){
+    error() 
+      << " Readout " << m_readoutName << " does not contain layer id!"
+      << endmsg;
+    return StatusCode::FAILURE;
+  }
+  
   // retrieve the volume manager
   m_volman = m_geoSvc->getDetector()->volumeManager();
 
@@ -138,7 +145,8 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
 
     // Smear the hit in the local sensor coordinates
     double digiHitLocalPosition[3];
-    int iLayer = m_decoder->get(cellID, "layer");
+    int iLayer = m_decoder->get(cellID, "layer");      
+    debug() << "readout: " << m_readoutName << ", layer id: " << iLayer << endmsg;
     if (m_readoutName == "VertexBarrelCollection" ||
         m_readoutName == "SiWrBCollection") {  // In barrel, the sensor box is along y-z
       digiHitLocalPosition[0] = simHitLocalPositionVector.x();
