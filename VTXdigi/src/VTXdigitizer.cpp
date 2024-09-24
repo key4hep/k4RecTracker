@@ -17,17 +17,29 @@ StatusCode VTXdigitizer::initialize() {
     error() << "Couldn't get RndmGenSvc!" << endmsg;
     return StatusCode::FAILURE;
   }
-  if (m_gauss_x.initialize(m_randSvc, Rndm::Gauss(0., m_x_resolution)).isFailure()) {
-    error() << "Couldn't initialize RndmGenSvc!" << endmsg;
-    return StatusCode::FAILURE;
+
+  m_gauss_x_vec.resize(m_x_resolution.size());
+  for (size_t i = 0; i < m_x_resolution.size(); ++i) {
+    if (m_gauss_x_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_x_resolution[i])).isFailure()) {
+      error() << "Couldn't initialize RndmGenSvc!" << endmsg;
+      return StatusCode::FAILURE;
+    }
   }
-  if (m_gauss_y.initialize(m_randSvc, Rndm::Gauss(0., m_y_resolution)).isFailure()) {
-    error() << "Couldn't initialize RndmGenSvc!" << endmsg;
-    return StatusCode::FAILURE;
+
+  m_gauss_y_vec.resize(m_y_resolution.size());
+  for (size_t i = 0; i < m_y_resolution.size(); ++i) {  
+    if (m_gauss_y_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_y_resolution[i])).isFailure()) {
+      error() << "Couldn't initialize RndmGenSvc!" << endmsg;
+      return StatusCode::FAILURE;
+    }
   }
-  if (m_gauss_time.initialize(m_randSvc, Rndm::Gauss(0., m_t_resolution)).isFailure()) {
-    error() << "Couldn't initialize RndmGenSvc!" << endmsg;
-    return StatusCode::FAILURE;
+
+  m_gauss_t_vec.resize(m_t_resolution.size());
+  for (size_t i = 0; i < m_t_resolution.size(); ++i) {  
+    if (m_gauss_t_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_t_resolution[i])).isFailure()) {
+      error() << "Couldn't initialize RndmGenSvc!" << endmsg;
+      return StatusCode::FAILURE;
+    }
   }
 
   // check if readout exists
@@ -39,6 +51,13 @@ StatusCode VTXdigitizer::initialize() {
   // set the cellID decoder
   m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder(); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
 
+  if (m_decoder->fieldDescription().find("layer") == std::string::npos){
+    error() 
+      << " Readout " << m_readoutName << " does not contain layer id!"
+      << endmsg;
+    return StatusCode::FAILURE;
+  }
+  
   // retrieve the volume manager
   m_volman = m_geoSvc->getDetector()->volumeManager();
 
@@ -126,22 +145,21 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
 
     // Smear the hit in the local sensor coordinates
     double digiHitLocalPosition[3];
-    if (m_readoutName == "VTXIBCollection" ||
-        m_readoutName == "VTXOBCollection" ||
-        m_readoutName == "VertexBarrelCollection" ||
+    int iLayer = m_decoder->get(cellID, "layer");      
+    debug() << "readout: " << m_readoutName << ", layer id: " << iLayer << endmsg;
+    if (m_readoutName == "VertexBarrelCollection" ||
         m_readoutName == "SiWrBCollection") {  // In barrel, the sensor box is along y-z
       digiHitLocalPosition[0] = simHitLocalPositionVector.x();
-      digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_x.shoot() * dd4hep::mm;
-      digiHitLocalPosition[2] = simHitLocalPositionVector.z() + m_gauss_y.shoot() * dd4hep::mm;
-    } else if (m_readoutName == "VTXDCollection" ||
-               m_readoutName == "VertexEndcapCollection" ||
+      digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_x_vec[iLayer].shoot() * dd4hep::mm;
+      digiHitLocalPosition[2] = simHitLocalPositionVector.z() + m_gauss_y_vec[iLayer].shoot() * dd4hep::mm;
+    } else if (m_readoutName == "VertexEndcapCollection" ||
                m_readoutName == "SiWrDCollection") {  // In the disks, the sensor box is already in x-y
-      digiHitLocalPosition[0] = simHitLocalPositionVector.x() + m_gauss_x.shoot() * dd4hep::mm;
-      digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_y.shoot() * dd4hep::mm;
+      digiHitLocalPosition[0] = simHitLocalPositionVector.x() + m_gauss_x_vec[iLayer].shoot() * dd4hep::mm;
+      digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_y_vec[iLayer].shoot() * dd4hep::mm;
       digiHitLocalPosition[2] = simHitLocalPositionVector.z();
     } else {
       error()
-          << "VTX readout name (m_readoutName) unknown!"
+          << "VTX readout name (m_readoutName) unknown or xResolution/yResolution/tResolution not defining all detector layer resolutions!"
           << endmsg;
       return StatusCode::FAILURE;
     }
@@ -167,7 +185,7 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
     output_digi_hit.setPosition(digiHitGlobalPositionVector);
 
     // Apply time smearing
-    output_digi_hit.setTime(input_sim_hit.getTime() + m_gauss_time.shoot());
+    output_digi_hit.setTime(input_sim_hit.getTime() + m_gauss_t_vec[iLayer].shoot());
 
     output_digi_hit.setCellID(cellID);
 
