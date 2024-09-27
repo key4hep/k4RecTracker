@@ -52,8 +52,8 @@ struct PlotTrackHitDistances final
   void operator()(const edm4hep::SimTrackerHitCollection& simTrackerHits, const edm4hep::TrackMCParticleLinkCollection& trackParticleAssociations) const override {
 
     for (const auto& trackParticleAssociation : trackParticleAssociations) {
-      auto genParticle = trackParticleAssociation.getSim();
-      auto track = trackParticleAssociation.getRec();
+      auto genParticle = trackParticleAssociation.getTo();
+      auto track = trackParticleAssociation.getFrom();
       edm4hep::TrackState trackStateAtIP;
       bool found_trackStateAtIP = false;
       for (const auto& trackState : track.getTrackStates()) {
