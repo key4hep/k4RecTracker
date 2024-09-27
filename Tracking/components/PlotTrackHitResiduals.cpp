@@ -6,7 +6,7 @@
 // edm4hep
 #include "edm4hep/MCParticleCollection.h"
 #include "edm4hep/TrackCollection.h"
-#include "edm4hep/MCRecoTrackParticleAssociationCollection.h"
+#include "edm4hep/TrackMCParticleLinkCollection.h"
 #include "edm4hep/SimTrackerHitCollection.h"
 
 // marlin
