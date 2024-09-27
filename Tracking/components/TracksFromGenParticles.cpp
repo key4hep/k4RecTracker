@@ -27,7 +27,7 @@
  */
 
 struct TracksFromGenParticles final
-  : k4FWCore::MultiTransformer<std::tuple<edm4hep::TrackCollection, edm4hep::MCRecoTrackParticleAssociationCollection>(const edm4hep::MCParticleCollection&)> {
+  : k4FWCore::MultiTransformer<std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection>(const edm4hep::MCParticleCollection&)> {
   TracksFromGenParticles(const std::string& name, ISvcLocator* svcLoc)
       : MultiTransformer(
             name, svcLoc,
@@ -36,10 +36,10 @@ struct TracksFromGenParticles final
             KeyValues("OutputMCRecoTrackParticleAssociation", {"TracksFromGenParticlesAssociation"})}) {
   }
 
-std::tuple<edm4hep::TrackCollection, edm4hep::MCRecoTrackParticleAssociationCollection> operator()(const edm4hep::MCParticleCollection& genParticleColl) const override {
+std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection> operator()(const edm4hep::MCParticleCollection& genParticleColl) const override {
 
     auto outputTrackCollection = edm4hep::TrackCollection();
-    auto MCRecoTrackParticleAssociationCollection = edm4hep::MCRecoTrackParticleAssociationCollection();
+    auto MCRecoTrackParticleAssociationCollection = edm4hep::TrackMCParticleLinkCollection();
 
     for (const auto& genParticle : genParticleColl) {
       debug() << "Particle decayed in tracker: " << genParticle.isDecayedInTracker() << endmsg;
@@ -76,9 +76,9 @@ std::tuple<edm4hep::TrackCollection, edm4hep::MCRecoTrackParticleAssociationColl
       outputTrackCollection.push_back(trackFromGen);
 
       // Building the association between tracks and genParticles
-      auto MCRecoTrackParticleAssociation = edm4hep::MutableMCRecoTrackParticleAssociation();
-      MCRecoTrackParticleAssociation.setRec(trackFromGen);
-      MCRecoTrackParticleAssociation.setSim(genParticle);
+      auto MCRecoTrackParticleAssociation = MutableTrackMCParticleLink();
+      MCRecoTrackParticleAssociation.setFrom(trackFromGen);
+      MCRecoTrackParticleAssociation.setTo(genParticle);
       MCRecoTrackParticleAssociationCollection.push_back(MCRecoTrackParticleAssociation);
     }
     return std::make_tuple(std::move(outputTrackCollection), std::move(MCRecoTrackParticleAssociationCollection));
