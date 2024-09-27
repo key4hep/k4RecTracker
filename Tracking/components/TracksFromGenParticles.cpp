@@ -76,7 +76,7 @@ std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection> ope
       outputTrackCollection.push_back(trackFromGen);
 
       // Building the association between tracks and genParticles
-      auto MCRecoTrackParticleAssociation = MutableTrackMCParticleLink();
+      auto MCRecoTrackParticleAssociation = edm4hep::MutableTrackMCParticleLink();
       MCRecoTrackParticleAssociation.setFrom(trackFromGen);
       MCRecoTrackParticleAssociation.setTo(genParticle);
       MCRecoTrackParticleAssociationCollection.push_back(MCRecoTrackParticleAssociation);
