@@ -6,7 +6,7 @@
 // edm4hep
 #include "edm4hep/MCParticleCollection.h"
 #include "edm4hep/TrackCollection.h"
-#include "edm4hep/MCRecoTrackParticleAssociationCollection.h"
+#include "edm4hep/TrackMCParticleLinkCollection.h"
 #include "edm4hep/SimTrackerHitCollection.h"
 
 // marlin
@@ -40,7 +40,7 @@ namespace Gaudi::Accumulators {
  */
 
 struct PlotTrackHitDistances final
-  : k4FWCore::Consumer<void(const edm4hep::SimTrackerHitCollection&, const edm4hep::MCRecoTrackParticleAssociationCollection&)> {
+  : k4FWCore::Consumer<void(const edm4hep::SimTrackerHitCollection&, const edm4hep::TrackMCParticleLinkCollection&)> {
   PlotTrackHitDistances(const std::string& name, ISvcLocator* svcLoc)
       : Consumer(
             name, svcLoc,
@@ -49,11 +49,11 @@ struct PlotTrackHitDistances final
             KeyValues("InputTracksFromGenParticlesAssociation", {"TracksFromGenParticlesAssociation"}),
             }) {}
 
-  void operator()(const edm4hep::SimTrackerHitCollection& simTrackerHits, const edm4hep::MCRecoTrackParticleAssociationCollection& trackParticleAssociations) const override {
+  void operator()(const edm4hep::SimTrackerHitCollection& simTrackerHits, const edm4hep::TrackMCParticleLinkCollection& trackParticleAssociations) const override {
 
     for (const auto& trackParticleAssociation : trackParticleAssociations) {
-      auto genParticle = trackParticleAssociation.getSim();
-      auto track = trackParticleAssociation.getRec();
+      auto genParticle = trackParticleAssociation.getTo();
+      auto track = trackParticleAssociation.getFrom();
       edm4hep::TrackState trackStateAtIP;
       bool found_trackStateAtIP = false;
       for (const auto& trackState : track.getTrackStates()) {
