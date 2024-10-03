@@ -2,7 +2,7 @@
 
 // GAUDI
 #include "Gaudi/Property.h"
-#include "GaudiAlg/GaudiAlgorithm.h"
+#include "Gaudi/Algorithm.h"
 #include "GaudiKernel/IRndmGenSvc.h"
 #include "GaudiKernel/RndmGenerators.h"
 
@@ -33,7 +33,7 @@
  *
  */
 
-class DCHsimpleDigitizerExtendedEdm : public GaudiAlgorithm {
+class DCHsimpleDigitizerExtendedEdm : public Gaudi::Algorithm {
 public:
   explicit DCHsimpleDigitizerExtendedEdm(const std::string&, ISvcLocator*);
   virtual ~DCHsimpleDigitizerExtendedEdm();
@@ -44,7 +44,7 @@ public:
   /**  Execute.
    *   @return status code
    */
-  virtual StatusCode execute() final;
+  virtual StatusCode execute(const EventContext&) const final;
   /**  Finalize.
    *   @return status code
    */
@@ -52,13 +52,13 @@ public:
 
 private:
   // Input sim tracker hit collection name
-  DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
-  DataHandle<extension::DriftChamberDigiCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<extension::DriftChamberDigiCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
   // Output association between digitized and simulated hit collections
-  DataHandle<extension::MCRecoDriftChamberDigiAssociationCollection> m_output_sim_digi_association{"outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<extension::MCRecoDriftChamberDigiAssociationCollection> m_output_sim_digi_association{"outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
   // Output digitized tracker hit in local coordinates collection name. Only filled in debug mode
-  DataHandle<extension::DriftChamberDigiLocalCollection> m_output_digi_local_hits{"outputDigiLocalHits", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<extension::DriftChamberDigiLocalCollection> m_output_digi_local_hits{"outputDigiLocalHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "CDCHHits", "Name of the detector readout"};
@@ -77,10 +77,10 @@ private:
   // Flag to produce debugging distributions
   Gaudi::Property<bool> m_debugMode{this, "debugMode", false, "Flag to produce debugging distributions"};
   // Declaration of debugging distributions
-  DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaDistToWire{"leftHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
-  DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaLocalZ{"leftHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
-  DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaDistToWire{"rightHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
-  DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaLocalZ{"rightHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
+  mutable DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaDistToWire{"leftHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
+  mutable DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaLocalZ{"leftHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
+  mutable DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaDistToWire{"rightHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
+  mutable DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaLocalZ{"rightHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
 
   // Random Number Service
   IRndmGenSvc* m_randSvc;

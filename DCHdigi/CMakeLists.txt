@@ -45,11 +45,11 @@ file(GLOB headers
 gaudi_add_module(${PackageName}
   SOURCES ${sources}
   LINK
-  Gaudi::GaudiAlgLib
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   extensionDict
   k4FWCore::k4FWCore
+  k4FWCore::k4Interface
   DD4hep::DDRec
 )
 

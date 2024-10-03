@@ -2,7 +2,7 @@
 
 DECLARE_COMPONENT(GenFitter)
 
-GenFitter::GenFitter(const std::string& aName, ISvcLocator* aSvcLoc) : GaudiAlgorithm(aName, aSvcLoc) {
+GenFitter::GenFitter(const std::string& aName, ISvcLocator* aSvcLoc) : Gaudi::Algorithm(aName, aSvcLoc) {
   declareProperty("inputHits", m_input_hits, "Input tracker hit collection name");
   declareProperty("outputTracks", m_output_tracks, "Output track collection name");
 }
@@ -11,7 +11,7 @@ GenFitter::~GenFitter() {}
 
 StatusCode GenFitter::initialize() { return StatusCode::SUCCESS; }
 
-StatusCode GenFitter::execute() {
+StatusCode GenFitter::execute(const EventContext&) const {
   // Get the input collection with tracker hits
   const edm4hep::TrackerHit3DCollection* input_hits = m_input_hits.get();
   verbose() << "Input Hit collection size: " << input_hits->size() << endmsg;
