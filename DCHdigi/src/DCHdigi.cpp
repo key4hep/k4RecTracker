@@ -392,18 +392,18 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
   (void)vecpar;
   (void)sumVecTot;
 
-  int                NCld;
+  int                NCld(0);
   TString            parName;
-  double             bg, Momentum, mass = -1e300;
+  double             bg(0), Momentum(0), mass = -1e300;
   std::vector<float> vecExtraD;
 
   double              Ffrac, Fmpv1, Fsgm1, Fmpv2, Fsgm2;
   std::vector<double> CorrpMean, CorrpSgm, Corrdgmean, Corrdgsgm, Corrdglfrac, Corrdglmpvl, Corrdglsgml, Corrdglmeang,
       Corrdglsgmg;
-  float  Ekdelta;
-  float  maxEx0, maxExSlp, ExSgmlep, ExSgmhad;
-  float  MPVEx, SgmEx, MeanEx1, SgmEx1, frac, Slp, CorrSlp, CorrInt;
-  double LengthTrack, Etot_per_track;
+  float  Ekdelta(0);
+  float  maxEx0(0), maxExSlp(0), ExSgmlep(0), ExSgmhad(0);
+  float  MPVEx(0), SgmEx(0), MeanEx1(0), SgmEx1(0), frac(0), Slp(0), CorrSlp(0), CorrInt(0);
+  double LengthTrack(0), Etot_per_track(0);
   //////end parameters
   bool IsSecondaryWithinDCH = false;
   {
