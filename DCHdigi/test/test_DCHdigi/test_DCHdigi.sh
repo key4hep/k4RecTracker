@@ -9,7 +9,8 @@ ddsim --steeringFile sim_steering.py --outputFile 'dch_proton_10GeV.root' -N 10 
 
 # download file for cluster counting technique
 ifilename="https://fccsw.web.cern.ch/fccsw/filesForSimDigiReco/IDEA/DataAlgFORGEANT.root"
-wget $ifilename
+# -nc, --no-clobber: skip downloads that would download to existing files
+wget --no-clobber $ifilename
 
 # Check if the input file exists
 if [[ ! -f "$(basename $ifilename)" ]]; then
