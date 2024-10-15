@@ -16,22 +16,22 @@ _pi = 3.14159
 
 ################## Vertex sensor resolutions
 # IDEA
-innerVertexResolution_x = 0.003 # [mm], assume 5 µm resolution for ARCADIA sensor
-innerVertexResolution_y = 0.003 # [mm], assume 5 µm resolution for ARCADIA sensor
+innerVertexResolution_x = 0.003 # [mm], assume 3 µm resolution for ARCADIA sensor
+innerVertexResolution_y = 0.003 # [mm], assume 3 µm resolution for ARCADIA sensor
 innerVertexResolution_t = 1000 # [ns]
 outerVertexResolution_x = 0.050/math.sqrt(12) # [mm], assume ATLASPix3 sensor with 50 µm pitch
 outerVertexResolution_y = 0.150/math.sqrt(12) # [mm], assume ATLASPix3 sensor with 150 µm pitch
 outerVertexResolution_t = 1000 # [ns]
 
 # CLD
-vertexBarrelResolution_x = 0.003 # [mm], assume 5 µm resolution
-vertexBarrelResolution_y = 0.003 # [mm], assume 5 µm resolution
+vertexBarrelResolution_x = 0.003 # [mm], assume 3 µm resolution
+vertexBarrelResolution_y = 0.003 # [mm], assume 3 µm resolution
 vertexBarrelResolution_t = 1000 # [ns]
-vertexEndcapResolution_x = 0.003 # [mm], assume 5 µm resolution
-vertexEndcapResolution_y = 0.003 # [mm], assume 5 µm resolution
+vertexEndcapResolution_x = 0.003 # [mm], assume 3 µm resolution
+vertexEndcapResolution_y = 0.003 # [mm], assume 3 µm resolution
 vertexEndcapResolution_t = 1000 # [ns]
 
-
+# IDEA silicon wrapper
 siWrapperResolution_x = 0.050/math.sqrt(12) # [mm]
 siWrapperResolution_y = 1.0/math.sqrt(12) # [mm]
 siWrapperResolution_t = 0.040 # [ns], assume 40 ps timing resolution for a single layer -> Should lead to <30 ps resolution when >1 hit
@@ -113,21 +113,18 @@ particle_converter.GenParticles.Path = genParticlesOutputName
 from Configurables import SimG4SaveTrackerHits
 
 ### CLD
-SimG4SaveTrackerHitsB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsB", readoutName="VertexBarrelCollection")
-SimG4SaveTrackerHitsB.SimTrackHits.Path = "VTXB_simTrackerHits"
+# SimG4SaveTrackerHitsB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsB", readoutName="VertexBarrelCollection")
+# SimG4SaveTrackerHitsB.SimTrackHits.Path = "VTXB_simTrackerHits"
 
-SimG4SaveTrackerHitsE = SimG4SaveTrackerHits("SimG4SaveTrackerHitsE", readoutName="VertexEndcapCollection")
-SimG4SaveTrackerHitsE.SimTrackHits.Path = "VTXE_simTrackerHits"
+# SimG4SaveTrackerHitsE = SimG4SaveTrackerHits("SimG4SaveTrackerHitsE", readoutName="VertexEndcapCollection")
+# SimG4SaveTrackerHitsE.SimTrackHits.Path = "VTXE_simTrackerHits"
 
 
 ### IDEA
-SimG4SaveTrackerHitsIB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsIB", readoutName="VTXIBCollection")
-SimG4SaveTrackerHitsIB.SimTrackHits.Path = "VTXIB_simTrackerHits"
+SimG4SaveTrackerHitsB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsB", readoutName="VertexBarrelCollection")
+SimG4SaveTrackerHitsB.SimTrackHits.Path = "VTXB_simTrackerHits"
 
-SimG4SaveTrackerHitsOB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsOB", readoutName="VTXOBCollection")
-SimG4SaveTrackerHitsOB.SimTrackHits.Path = "VTXOB_simTrackerHits"
-
-SimG4SaveTrackerHitsD = SimG4SaveTrackerHits("SimG4SaveTrackerHitsD", readoutName="VTXDCollection")
+SimG4SaveTrackerHitsD = SimG4SaveTrackerHits("SimG4SaveTrackerHitsD", readoutName="VertexEndcapCollection")
 SimG4SaveTrackerHitsD.SimTrackHits.Path = "VTXD_simTrackerHits"
 
 SimG4SaveTrackerHitsSiWrB = SimG4SaveTrackerHits("SimG4SaveTrackerHitsSiWrB", readoutName="SiWrBCollection")
@@ -148,8 +145,8 @@ from Configurables import SimG4Alg
 
 # IDEA
 geantsim = SimG4Alg("SimG4Alg",
-                       outputs= [SimG4SaveTrackerHitsIB, SimG4SaveTrackerHitsOB, SimG4SaveTrackerHitsD,
-                                 #SimG4SaveTrackerHitsSiWrB, SimG4SaveTrackerHitsSiWrD,
+                       outputs= [SimG4SaveTrackerHitsB, SimG4SaveTrackerHitsD,
+                                 SimG4SaveTrackerHitsSiWrB, SimG4SaveTrackerHitsSiWrD,
                                  #saveHistTool
                        ],
                        eventProvider=particle_converter,
@@ -159,96 +156,85 @@ geantsim = SimG4Alg("SimG4Alg",
 from Configurables import VTXdigitizer
 
 ### For CLD. Not working yet, SimG4 doesn't produce hits in CLD vertex yet
-vtxb_digitizer = VTXdigitizer("VTXBdigitizer",
+# cld_vtxb_digitizer = VTXdigitizer("VTXBdigitizer",
+#     inputSimHits = SimG4SaveTrackerHitsB.SimTrackHits.Path,
+#     outputDigiHits = SimG4SaveTrackerHitsB.SimTrackHits.Path.replace("sim", "digi"),
+#     outputSimDigiAssociation = SimG4SaveTrackerHitsB.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
+#     detectorName = "Vertex",
+#     readoutName = "VertexBarrelCollection",
+#     xResolutions = [vertexBarrelResolution_x, vertexBarrelResolution_x, vertexBarrelResolution_x, vertexBarrelResolution_x, vertexBarrelResolution_x, vertexBarrelResolution_x],
+#     yResolutions = [vertexBarrelResolution_y, vertexBarrelResolution_y, vertexBarrelResolution_y, vertexBarrelResolution_y, vertexBarrelResolution_y, vertexBarrelResolution_y],
+#     tResolutions = [vertexBarrelResolution_t, vertexBarrelResolution_t, vertexBarrelResolution_t, vertexBarrelResolution_t, vertexBarrelResolution_t, vertexBarrelResolution_t],
+#     forceHitsOntoSurface = False,
+#     OutputLevel = INFO
+# )
+
+# cld_vtxd_digitizer = VTXdigitizer("VTXDdigitizer",
+#     inputSimHits = SimG4SaveTrackerHitsE.SimTrackHits.Path,
+#     outputDigiHits = SimG4SaveTrackerHitsE.SimTrackHits.Path.replace("sim", "digi"),
+#     outputSimDigiAssociation = SimG4SaveTrackerHitsE.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
+#     detectorName = "Vertex",
+#     readoutName = "VertexEndcapCollection",
+#     xResolutions = [vertexEndcapResolution_x, vertexEndcapResolution_x, vertexEndcapResolution_x, vertexEndcapResolution_x, vertexEndcapResolution_x, vertexEndcapResolution_x],
+#     yResolutions = [vertexEndcapResolution_y, vertexEndcapResolution_y, vertexEndcapResolution_y, vertexEndcapResolution_y, vertexEndcapResolution_y, vertexEndcapResolution_y],
+#     tResolutions = [vertexEndcapResolution_t, vertexEndcapResolution_t, vertexEndcapResolution_t, vertexEndcapResolution_t, vertexEndcapResolution_t, vertexEndcapResolution_t],
+#     forceHitsOntoSurface = False,
+#     OutputLevel = INFO
+# )
+
+
+### For IDEA
+idea_vtxb_digitizer = VTXdigitizer("VTXBdigitizer",
     inputSimHits = SimG4SaveTrackerHitsB.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsB.SimTrackHits.Path.replace("sim", "digi"),
     outputSimDigiAssociation = SimG4SaveTrackerHitsB.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
     detectorName = "Vertex",
     readoutName = "VertexBarrelCollection",
-    xResolution = vertexBarrelResolution_x, 
-    yResolution = vertexBarrelResolution_y,
-    tResolution = vertexBarrelResolution_t,
+    xResolution = [innerVertexResolution_x, innerVertexResolution_x, innerVertexResolution_x, outerVertexResolution_x, outerVertexResolution_x], # mm, r-phi direction
+    yResolution = [innerVertexResolution_y, innerVertexResolution_y, innerVertexResolution_y, outerVertexResolution_y, outerVertexResolution_y], # mm, z direction
+    tResolution = [innerVertexResolution_t, innerVertexResolution_t, innerVertexResolution_t, outerVertexResolution_t, outerVertexResolution_t], # ns
     forceHitsOntoSurface = False,
     OutputLevel = INFO
 )
 
-vtxe_digitizer = VTXdigitizer("VTXEdigitizer",
-    inputSimHits = SimG4SaveTrackerHitsE.SimTrackHits.Path,
-    outputDigiHits = SimG4SaveTrackerHitsE.SimTrackHits.Path.replace("sim", "digi"),
-    outputSimDigiAssociation = SimG4SaveTrackerHitsE.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
-    detectorName = "Vertex",
-    readoutName = "VertexEndcapCollection",
-    xResolution = vertexEndcapResolution_x,
-    yResolution = vertexEndcapResolution_y,
-    tResolution = vertexEndcapResolution_t,
-    forceHitsOntoSurface = False,
-    OutputLevel = INFO
-)
-
-
-### For IDEA
-vtxib_digitizer = VTXdigitizer("VTXIBdigitizer",
-    inputSimHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path,
-    outputDigiHits = SimG4SaveTrackerHitsIB.SimTrackHits.Path.replace("sim", "digi"),
-    outputSimDigiAssociation = SimG4SaveTrackerHitsIB.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
-    detectorName = "Vertex",
-    readoutName = "VTXIBCollection",
-    xResolution = innerVertexResolution_x, # mm, r-phi direction
-    yResolution = innerVertexResolution_y, # mm, z direction
-    tResolution = innerVertexResolution_t,
-    forceHitsOntoSurface = False,
-    OutputLevel = INFO
-)
-
-vtxob_digitizer = VTXdigitizer("VTXOBdigitizer",
-    inputSimHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path,
-    outputDigiHits = SimG4SaveTrackerHitsOB.SimTrackHits.Path.replace("sim", "digi"),
-    outputSimDigiAssociation = SimG4SaveTrackerHitsOB.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
-    detectorName = "Vertex",
-    readoutName = "VTXOBCollection",
-    xResolution = outerVertexResolution_x, # mm, r-phi direction
-    yResolution = outerVertexResolution_y, # mm, z direction
-    tResolution = outerVertexResolution_t, # ns
-    forceHitsOntoSurface = False,
-    OutputLevel = INFO
-)
-
-vtxd_digitizer  = VTXdigitizer("VTXDdigitizer",
+idea_vtxd_digitizer  = VTXdigitizer("VTXDdigitizer",
     inputSimHits = SimG4SaveTrackerHitsD.SimTrackHits.Path,
     outputDigiHits = SimG4SaveTrackerHitsD.SimTrackHits.Path.replace("sim", "digi"),
     outputSimDigiAssociation = SimG4SaveTrackerHitsD.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
     detectorName = "Vertex",
-    readoutName = "VTXDCollection",
-    xResolution = outerVertexResolution_x, # mm, r direction
-    yResolution = outerVertexResolution_y, # mm, phi direction
-    tResolution = outerVertexResolution_t, # ns
+    readoutName = "VertexEndcapCollection",
+    xResolution = [outerVertexResolution_x, outerVertexResolution_x, outerVertexResolution_x], # mm, r direction
+    yResolution = [outerVertexResolution_y, outerVertexResolution_y, outerVertexResolution_y], # mm, phi direction
+    tResolution = [outerVertexResolution_t, outerVertexResolution_t, outerVertexResolution_t], # ns
     forceHitsOntoSurface = False,
     OutputLevel = INFO
 )
 
-#siwrb_digitizer = VTXdigitizer("SiWrBdigitizer",
-#    inputSimHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path,
-#    outputDigiHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path.replace("sim", "digi"),
-#    detectorName = "SiliconWrapper",
-#    readoutName = "SiWrBCollection",
-#    xResolution = siWrapperResolution_x, # mm, r direction
-#    yResolution = siWrapperResolution_y, # mm, phi direction
-#    tResolution = siWrapperResolution_t, # ns
-#    forceHitsOntoSurface = False,
-#    OutputLevel = INFO
-#)
-#
-#siwrd_digitizer = VTXdigitizer("SiWrDdigitizer",
-#    inputSimHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path,
-#    outputDigiHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path.replace("sim", "digi"),
-#    detectorName = "SiliconWrapper",
-#    readoutName = "SiWrDCollection",
-#    xResolution = siWrapperResolution_x, # mm, r direction
-#    yResolution = siWrapperResolution_y, # mm, phi direction
-#    tResolution = siWrapperResolution_t, # ns
-#    forceHitsOntoSurface = False,
-#    OutputLevel = INFO
-#)
+idea_siwrb_digitizer = VTXdigitizer("SiWrBdigitizer",
+   inputSimHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path,
+   outputDigiHits = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path.replace("sim", "digi"),
+   outputSimDigiAssociation = SimG4SaveTrackerHitsSiWrB.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
+   detectorName = "SiWrB",
+   readoutName = "SiWrBCollection",
+   xResolution = [siWrapperResolution_x, siWrapperResolution_x], # mm, r-phi direction
+   yResolution = [siWrapperResolution_y, siWrapperResolution_y], # mm, z direction
+   tResolution = [siWrapperResolution_t, siWrapperResolution_t], # ns
+   forceHitsOntoSurface = False,
+   OutputLevel = INFO
+)
+
+idea_siwrd_digitizer = VTXdigitizer("SiWrDdigitizer",
+   inputSimHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path,
+   outputDigiHits = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path.replace("sim", "digi"),
+   outputSimDigiAssociation = SimG4SaveTrackerHitsSiWrD.SimTrackHits.Path.replace("simTrackerHits", "simDigiAssociation"),
+   detectorName = "SiWrD",
+   readoutName = "SiWrDCollection",
+   xResolution = [siWrapperResolution_x, siWrapperResolution_x], # mm, r direction
+   yResolution = [siWrapperResolution_y, siWrapperResolution_y], # mm, phi direction
+   tResolution = [siWrapperResolution_t, siWrapperResolution_t], # ns
+   forceHitsOntoSurface = False,
+   OutputLevel = INFO
+)
 
 # run the genfit tracking 
 # from Configurables import GenFitter
@@ -281,7 +267,7 @@ from Configurables import ApplicationMgr
 #               genAlg,
 #               hepmc_converter,
 #               geantsim,
-#               vtxb_digitizer,vtxe_digitizer,
+#               cld_vtxb_digitizer, cld_vtxd_digitizer,
 #               out
 #               ],
 #     EvtSel = 'NONE',
@@ -296,8 +282,8 @@ ApplicationMgr(
               genAlg,
               hepmc_converter,
               geantsim,
-              vtxib_digitizer, vtxob_digitizer, vtxd_digitizer,
-              #siwrb_digitizer, siwrd_digitizer,
+              idea_vtxb_digitizer, idea_vtxd_digitizer,
+              idea_siwrb_digitizer, idea_siwrd_digitizer,
               out
               ],
     EvtSel = 'NONE',

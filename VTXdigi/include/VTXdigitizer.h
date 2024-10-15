@@ -30,11 +30,13 @@ namespace edm4hep {
 
 #include "DDSegmentation/BitFieldCoder.h"
 
+#include <vector>
+
 /** @class VTXdigitizer
  *
  *  Algorithm for creating digitized (meaning 'reconstructed' for now) vertex detector hits (edm4hep::TrackerHit3D) from Geant4 hits (edm4hep::SimTrackerHit).
  *  
- *  @author Brieuc Francois
+ *  @author Brieuc Francois, Armin Ilg
  *  @date   2023-03
  *
  */
@@ -76,13 +78,13 @@ private:
   dd4hep::VolumeManager m_volman;
 
   // x resolution in um
-  FloatProperty m_x_resolution{this, "xResolution", 0.1, "Spatial resolution in the x direction [um] (r-phi direction in barrel, z direction in disks)"};
+  Gaudi::Property<std::vector<float>> m_x_resolution{this, "xResolution", {0.1}, "Spatial resolutions in the x direction per layer [um] (r-phi direction in barrel, z direction in disks)"};
 
   // y resolution in um
-  FloatProperty m_y_resolution{this, "yResolution", 0.1, "Spatial resolution in the y direction [um] (r direction in barrel, r-phi direction in disks)"};
+  Gaudi::Property<std::vector<float>> m_y_resolution{this, "yResolution", {0.1}, "Spatial resolutions in the y direction per layer [um] (r direction in barrel, r-phi direction in disks)"};
 
   // t resolution in ns
-  FloatProperty m_t_resolution{this, "tResolution", 0.1, "Time resolution [ns]"};
+  Gaudi::Property<std::vector<float>> m_t_resolution{this, "tResolution", {0.1}, "Time resolutions per layer [ns]"};
 
   // Surface manager used to project hits onto sensitive surface with forceHitsOntoSurface argument
   mutable const dd4hep::rec::SurfaceMap* _map;
@@ -94,7 +96,7 @@ private:
   IRndmGenSvc* m_randSvc;
 
   // Gaussian random number generator used for smearing
-  Rndm::Numbers m_gauss_x;
-  Rndm::Numbers m_gauss_y;
-  Rndm::Numbers m_gauss_time;
+  std::vector<Rndm::Numbers> m_gauss_x_vec;
+  std::vector<Rndm::Numbers> m_gauss_y_vec;
+  std::vector<Rndm::Numbers> m_gauss_t_vec;
 };
