@@ -175,6 +175,8 @@ private:
   /// code developed by Walaa for calculating number of clusters and cluster size
   std::pair<uint32_t, uint32_t> CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const;
 
+  bool IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle &) const ;
+
   //------------------------------------------------------------------
   //        debug information
 
