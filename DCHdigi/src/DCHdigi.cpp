@@ -318,39 +318,37 @@ TVector3 DCHdigi::Calculate_hitpos_to_wire_vector(int ilayer, int nphi, const TV
 ///////////////////////       CalculateNClusters       ////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-bool DCHdigi::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle & thisParticle) const
-{
-    auto  vertex           = thisParticle.getVertex();  // in mm
-    auto  vertexRsquared   = vertex[0] * vertex[0] + vertex[1] * vertex[1];
-    auto  vertexZabs       = std::fabs(vertex[2]);
-    float DCH_halflengh    = dch_data->Lhalf / dd4hep::mm;  //2000;
-    float DCH_rin_squared  = std::pow(dch_data->rin  / dd4hep::mm,2); //350 * 350;
-    float DCH_rout_squared = std::pow(dch_data->rout / dd4hep::mm,2); //2000 * 2000;
-    return (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
+bool DCHdigi::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thisParticle) const {
+  auto  vertex           = thisParticle.getVertex();  // in mm
+  auto  vertexRsquared   = vertex[0] * vertex[0] + vertex[1] * vertex[1];
+  auto  vertexZabs       = std::fabs(vertex[2]);
+  float DCH_halflengh    = dch_data->Lhalf / dd4hep::mm;              //2000;
+  float DCH_rin_squared  = std::pow(dch_data->rin / dd4hep::mm, 2);   //350 * 350;
+  float DCH_rout_squared = std::pow(dch_data->rout / dd4hep::mm, 2);  //2000 * 2000;
+  return (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
 }
 
 std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
-
   /// vector to accumulate the size of each cluster
   std::vector<int> ClSz_vector;
   //_________________SET NECESSARY PARAMETERS FOR THE CLS ALGORITHM-----WALAA_________________//
 
   // Parameters needed for the CL Algo //Added by Walaa///////
   ///from Createclusters.cpp////
-  float Eloss = 0.0;
-  float EIzp = 15.8;
-  float ExECl1 = 0;
-  float cut = 1000;  //controlla
-  float EIzs = 25.6;
-  float ExECl1totRec = 0;
-  float rndCorr(0);
-  const int nhEp       = 10;
-  float     hEpcut[10] = {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000};
-  int       minE       = 1000;
-  int       maxE       = 10000;
-  int       binE       = 1000;
-  int       nhE        = (maxE - minE) / binE;
-  float maxEx0len(0), ExSgmlen(0);
+  float               Eloss        = 0.0;
+  float               EIzp         = 15.8;
+  float               ExECl1       = 0;
+  float               cut          = 1000;  //controlla
+  float               EIzs         = 25.6;
+  float               ExECl1totRec = 0;
+  float               rndCorr(0);
+  const int           nhEp       = 10;
+  float               hEpcut[10] = {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000};
+  int                 minE       = 1000;
+  int                 maxE       = 10000;
+  int                 binE       = 1000;
+  int                 nhE        = (maxE - minE) / binE;
+  float               maxEx0len(0), ExSgmlen(0);
   std::vector<double> CorrpMean;
   std::vector<double> CorrpSgm;
   std::vector<double> Corrdgmean;
@@ -360,22 +358,22 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
   std::vector<double> Corrdglsgml;
   std::vector<double> Corrdglmeang;
   std::vector<double> Corrdglsgmg;
-  float  maxEx0(0), maxExSlp(0), ExSgmlep(0), ExSgmhad(0);
-  float  MPVEx(0), SgmEx(0), MeanEx1(0), SgmEx1(0), frac(0), Slp(0), CorrSlp(0), CorrInt(0);
+  float               maxEx0(0), maxExSlp(0), ExSgmlep(0), ExSgmhad(0);
+  float               MPVEx(0), SgmEx(0), MeanEx1(0), SgmEx1(0), frac(0), Slp(0), CorrSlp(0), CorrInt(0);
 
   /*________________________________________________________________________________*/
-  const edm4hep::MCParticle & thisParticle = input_sim_hit.getParticle();
-  bool IsSecondaryWithinDCH = IsParticleCreatedInsideDriftChamber(thisParticle);
+  const edm4hep::MCParticle& thisParticle         = input_sim_hit.getParticle();
+  bool                       IsSecondaryWithinDCH = IsParticleCreatedInsideDriftChamber(thisParticle);
 
   // Momentum from EDM4hep, in GeV
   double Momentum = sqrt((input_sim_hit.getMomentum().x * input_sim_hit.getMomentum().x) +
                          (input_sim_hit.getMomentum().y * input_sim_hit.getMomentum().y) +
                          (input_sim_hit.getMomentum().z * input_sim_hit.getMomentum().z));
 
-  int thisparticle_pdgid = thisParticle.getPDG();
-  int electron_pdgid = 11;
-  constexpr double me     = 0.511;   // electron mass in MeV
-  constexpr double me_GeV = me*1e-3; // electron mass in GeV
+  int              thisparticle_pdgid = thisParticle.getPDG();
+  int              electron_pdgid     = 11;
+  constexpr double me                 = 0.511;      // electron mass in MeV
+  constexpr double me_GeV             = me * 1e-3;  // electron mass in GeV
 
   /// number of clusters, with size > 1 electron
   int NClp(0);
@@ -384,8 +382,7 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
   int NCl1(0);
 
   // TODO Alvaro: gamma rays as secondary are ignored?
-  if( not IsSecondaryWithinDCH )
-  {
+  if (not IsSecondaryWithinDCH) {
     // lepton PDG id goes from 11 to 16 (antiparticles have negative id)
     bool IsLepton = (11 <= abs(thisparticle_pdgid)) && (16 >= abs(thisparticle_pdgid));
     if (IsLepton) {
@@ -396,8 +393,7 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
     }
 
     double thisparticle_mass = (thisParticle.getMass() / 1000.);  // mass in GeV, required in MeV
-    double bg   = Momentum / thisparticle_mass;
-
+    double bg                = Momentum / thisparticle_mass;
 
     CorrpMean    = flData->get_ClSzCorrpmean(bg);
     CorrpSgm     = flData->get_ClSzCorrpsgm(bg);
@@ -420,8 +416,10 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
     CorrSlp = flData->get_ClSzCorrSlp(bg);
     CorrInt = flData->get_ClSzCorrInt(bg);
 
-    double Tmax    = (2.0 * me * pow(bg, 2) / (1 + (2.0 * (1 + pow(bg, 2)) * me / thisparticle_mass) + pow(me / thisparticle_mass, 2))) * 1e+6;
-    float  maxEcut = cut;
+    double Tmax = (2.0 * me * pow(bg, 2) /
+                   (1 + (2.0 * (1 + pow(bg, 2)) * me / thisparticle_mass) + pow(me / thisparticle_mass, 2))) *
+                  1e+6;
+    float maxEcut = cut;
     if (Tmax < maxEcut) {
       maxEcut = Tmax;
     }
@@ -441,8 +439,8 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
     exGauss->SetParameter(4, Slp);
     exGauss->SetRange(0, 90);
 
-    float totExECl       = 0.0;
-    float ExECl          = 0.0;
+    float  totExECl       = 0.0;
+    float  ExECl          = 0.0;
     double LengthTrack    = input_sim_hit.getPathLength();
     double Etot_per_track = input_sim_hit.getEDep();
     LengthTrack *= 0.1;                  //from mm to cm
@@ -459,43 +457,42 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
       maxExECl = 0.0;
     }  //EIzs const = 25.6
 
-      debug() << "Eloss= " << Eloss << "EIzs= " << EIzs << "EIzp= " << EIzp << "maxExECl= " << maxExECl << "totExECl"
-              << totExECl << endmsg;
+    debug() << "Eloss= " << Eloss << "EIzs= " << EIzs << "EIzp= " << EIzp << "maxExECl= " << maxExECl << "totExECl"
+            << totExECl << endmsg;
 
-      // The following loop calculate number of clusters of size > 1, NClp
-      for (int while1counter = 0; Eloss > (EIzp + EIzs) && maxExECl > totExECl && while1counter < 1e6; while1counter++ ) {
+    // The following loop calculate number of clusters of size > 1, NClp
+    for (int while1counter = 0; Eloss > (EIzp + EIzs) && maxExECl > totExECl && while1counter < 1e6; while1counter++) {
+      ExECl = land->GetRandom(0, maxEcut);
 
-        ExECl = land->GetRandom(0, maxEcut);
-
-        if (ExECl > EIzs) {
-          Eloss -= EIzp;
-          if (ExECl > (maxExECl - totExECl)) {
-            ExECl = maxExECl - totExECl;
-          }
-          if (ExECl > Eloss)
-            ExECl = Eloss;
-          totExECl += ExECl;
-          Eloss -= ExECl;
-          NClp++;
-          //CLSZ
-          float tmpCorr = 0.0;
-          for (int i = 0; i < nhEp; ++i) {
-            if (ExECl >= (i == 0 ? 0 : hEpcut[i - 1]) && ExECl < hEpcut[i]) {
-              tmpCorr = this->myRandom.Gaus(CorrpMean[i], CorrpSgm[i]);
-            }
-          }
-          int ClSz = TMath::Nint(ExECl * CorrSlp + CorrInt - tmpCorr);
-          if (ClSz < 2) {
-            ClSz = 2;
-          }
-          ClSz_vector.push_back(ClSz);
+      if (ExECl > EIzs) {
+        Eloss -= EIzp;
+        if (ExECl > (maxExECl - totExECl)) {
+          ExECl = maxExECl - totExECl;
         }
+        if (ExECl > Eloss)
+          ExECl = Eloss;
+        totExECl += ExECl;
+        Eloss -= ExECl;
+        NClp++;
+        //CLSZ
+        float tmpCorr = 0.0;
+        for (int i = 0; i < nhEp; ++i) {
+          if (ExECl >= (i == 0 ? 0 : hEpcut[i - 1]) && ExECl < hEpcut[i]) {
+            tmpCorr = this->myRandom.Gaus(CorrpMean[i], CorrpSgm[i]);
+          }
+        }
+        int ClSz = TMath::Nint(ExECl * CorrSlp + CorrInt - tmpCorr);
+        if (ClSz < 2) {
+          ClSz = 2;
+        }
+        ClSz_vector.push_back(ClSz);
       }
+    }
 
     debug() << "Eloss= " << Eloss << "EIzp= " << EIzp << endmsg;
 
     // The following loop calculate number of clusters of size 1, NCl1
-    for (int while2counter = 0; Eloss >= EIzp && while2counter < 1e6;  while2counter++) {
+    for (int while2counter = 0; Eloss >= EIzp && while2counter < 1e6; while2counter++) {
       Eloss -= EIzp;
       ExECl1 = exGauss->GetRandom();
       if (ExECl1 > Eloss) {
@@ -508,20 +505,20 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
       ClSz_vector.push_back(1);
     }
 
-  } //-- end if particle is not secondary
+  }  //-- end if particle is not secondary
 
   // if particle is a delta electron created inside the drift chamber
   int NCld(0);
-  if (IsSecondaryWithinDCH &&  electron_pdgid == thisparticle_pdgid) {
+  if (IsSecondaryWithinDCH && electron_pdgid == thisparticle_pdgid) {
     // 1 delta ray cause 1 cluster NCld (d=delta)
     NCld = 1;
     // Ekdelta in keV
-    float  Ekdelta = (TMath::Sqrt(Momentum * Momentum + me_GeV * me_GeV) - me_GeV) * 1e6;
+    float Ekdelta = (TMath::Sqrt(Momentum * Momentum + me_GeV * me_GeV) - me_GeV) * 1e6;
 
     // TODO Alvaro: what is this for?
     {
       float tmpCl;
-      int tmphE = (Ekdelta - minE) / binE;
+      int   tmphE = (Ekdelta - minE) / binE;
       if (tmphE >= nhE)
         tmphE = nhE - 1;
       if (tmphE == nhE - 1) {
@@ -537,13 +534,11 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
 
       int ClSz = TMath::Nint(Ekdelta * CorrSlp + CorrInt - tmpCl);
       // TODO Alvaro: should it be 1 instead?
-      if (ClSz < 2)
-      {
+      if (ClSz < 2) {
         ClSz = 2;
       }
       ClSz_vector.push_back(ClSz);
     }
-
   }
   // conclusion: if hit caused by delta electron, NCld = 1, number of electrons ClSz=2
 
@@ -553,8 +548,8 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
 
   // value to be returned, total number of electrons (cluster size)
   int total_number_of_electrons_over_all_clusters = 0;
-  for( auto cluster_size : ClSz_vector)
+  for (auto cluster_size : ClSz_vector)
     total_number_of_electrons_over_all_clusters += cluster_size;
 
-  return { total_number_of_clusters , total_number_of_electrons_over_all_clusters };
+  return {total_number_of_clusters, total_number_of_electrons_over_all_clusters};
 }
