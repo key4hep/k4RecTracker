@@ -317,342 +317,244 @@ TVector3 DCHdigi::Calculate_hitpos_to_wire_vector(int ilayer, int nphi, const TV
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       CalculateNClusters       ////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
+
+bool DCHdigi::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle & thisParticle) const
+{
+    auto  vertex           = thisParticle.getVertex();  // in mm
+    auto  vertexRsquared   = vertex[0] * vertex[0] + vertex[1] * vertex[1];
+    auto  vertexZabs       = std::fabs(vertex[2]);
+    float DCH_halflengh    = dch_data->Lhalf / dd4hep::mm;  //2000;
+    float DCH_rin_squared  = std::pow(dch_data->rin  / dd4hep::mm,2); //350 * 350;
+    float DCH_rout_squared = std::pow(dch_data->rout / dd4hep::mm,2); //2000 * 2000;
+    return (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
+}
+
 std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
-  std::pair<uint32_t, uint32_t> return_values = {0, 0};
-  uint32_t&                     Ncl           = return_values.first;
-  uint32_t&                     ClSz          = return_values.second;
+
+  /// vector to accumulate the size of each cluster
+  std::vector<int> ClSz_vector;
   //_________________SET NECESSARY PARAMETERS FOR THE CLS ALGORITHM-----WALAA_________________//
 
-  auto thisParticle = input_sim_hit.getParticle();
   // Parameters needed for the CL Algo //Added by Walaa///////
   ///from Createclusters.cpp////
-  // int fNClusters;
-  double me = 0.511;
-  // float rnd;
   float Eloss = 0.0;
-  // float DeltaE_per_track= 0.0;
-  // float EtotCell= 0.0;
-  int NCl;
-  int NCl1, NClp;
-  // float ClSz,ClSzP;
-  // float Rt=0.87;
   float EIzp = 15.8;
-  float ExECl1;
-  float ExECl;
+  float ExECl1 = 0;
   float cut = 1000;  //controlla
-  // float prc=0.83;
   float EIzs = 25.6;
-  // float ratio=prc/EIzs;
-  // int NCltot=0;
-  // float Edep=0.0;
-  // float DeltaE=0.0;
-  // int count;
-  // bool loop;
-  // float prvDiff;
-  // float tmpDiff[10];
-  // float vecExECl[10];
-  // float mintmpDiff;
-  // int iloop;
-  float ExECl1totRec;
-  // float SgmaxExECl;
-  // int Ncl;
-  float rndCorr;
-  float maxExECl = 0.0;
-  // float ExSgm=0.0;
-  float totExECl;
-  //  int ParentID;
-  const int nhEp       = 10;  //10
+  float ExECl1totRec = 0;
+  float rndCorr(0);
+  const int nhEp       = 10;
   float     hEpcut[10] = {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000};
   int       minE       = 1000;
   int       maxE       = 10000;
   int       binE       = 1000;
   int       nhE        = (maxE - minE) / binE;
-  TString   parClass;
-  // int Ncltot=0;
-  int NEltot = 0;
-  // float Etot=0.0;
-  float maxEx0len, ExSgmlen;
-  int   choice = 2;
-  // int Nev=500000;
-  // int val;
-  // float EtCut=0.7;
-  ///////end from Createclusters.cpp////
-
-  ///////from Createclusters.h/////////
-  // TF1Convolution **cnvl =new TF1Convolution*[100];//100 for 1 cm gas box //Added by Walaa
-  // TF1 **fcnvl=new TF1 *[100];  //Added by Walaa
-  // float fnorm[100]; //Added by Walaa
-  double             vecpar[5];  //Added by Walaa
-  std::vector<float> vecEtr, vecEtrTot;
-  float              sumVecTot, meanVecTot, sumVec, meanVec;
-  /////////end from Createclusters.h/////////
-
-  // get rid of spurious compiler error, Werror=unused-but-set-variable
-  (void)NCl;
-  (void)vecpar;
-  (void)sumVecTot;
-
-  int                NCld(0);
-  TString            parName;
-  double             bg(0), Momentum(0), mass = -1e300;
-  std::vector<float> vecExtraD;
-
-  double              Ffrac, Fmpv1, Fsgm1, Fmpv2, Fsgm2;
-  std::vector<double> CorrpMean, CorrpSgm, Corrdgmean, Corrdgsgm, Corrdglfrac, Corrdglmpvl, Corrdglsgml, Corrdglmeang,
-      Corrdglsgmg;
-  float  Ekdelta(0);
+  float maxEx0len(0), ExSgmlen(0);
+  std::vector<double> CorrpMean;
+  std::vector<double> CorrpSgm;
+  std::vector<double> Corrdgmean;
+  std::vector<double> Corrdgsgm;
+  std::vector<double> Corrdglfrac;
+  std::vector<double> Corrdglmpvl;
+  std::vector<double> Corrdglsgml;
+  std::vector<double> Corrdglmeang;
+  std::vector<double> Corrdglsgmg;
   float  maxEx0(0), maxExSlp(0), ExSgmlep(0), ExSgmhad(0);
   float  MPVEx(0), SgmEx(0), MeanEx1(0), SgmEx1(0), frac(0), Slp(0), CorrSlp(0), CorrInt(0);
-  double LengthTrack(0), Etot_per_track(0);
-  //////end parameters
-  bool IsSecondaryWithinDCH = false;
+
+  /*________________________________________________________________________________*/
+  const edm4hep::MCParticle & thisParticle = input_sim_hit.getParticle();
+  bool IsSecondaryWithinDCH = IsParticleCreatedInsideDriftChamber(thisParticle);
+
+  // Momentum from EDM4hep, in GeV
+  double Momentum = sqrt((input_sim_hit.getMomentum().x * input_sim_hit.getMomentum().x) +
+                         (input_sim_hit.getMomentum().y * input_sim_hit.getMomentum().y) +
+                         (input_sim_hit.getMomentum().z * input_sim_hit.getMomentum().z));
+
+  int thisparticle_pdgid = thisParticle.getPDG();
+  int electron_pdgid = 11;
+  constexpr double me     = 0.511;   // electron mass in MeV
+  constexpr double me_GeV = me*1e-3; // electron mass in GeV
+
+  /// number of clusters, with size > 1 electron
+  int NClp(0);
+
+  /// number of clusters, with size = 1 electron
+  int NCl1(0);
+
+  // TODO Alvaro: gamma rays as secondary are ignored?
+  if( not IsSecondaryWithinDCH )
   {
-    auto  vertex           = thisParticle.getVertex();  // in mm
-    auto  vertexRsquared   = vertex[0] * vertex[0] + vertex[1] * vertex[1];
-    auto  vertexZabs       = std::fabs(vertex[2]);
-    float DCH_halflengh    = 2000;
-    float DCH_rin_squared  = 350 * 350;
-    float DCH_rout_squared = 2000 * 2000;
-    IsSecondaryWithinDCH =
-        (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
-  }
-  Momentum = sqrt((input_sim_hit.getMomentum().x * input_sim_hit.getMomentum().x) +
-                  (input_sim_hit.getMomentum().y * input_sim_hit.getMomentum().y) +
-                  (input_sim_hit.getMomentum().z * input_sim_hit.getMomentum().z));
-
-  NCld      = 0;
-  int pdgid = thisParticle.getPDG();
-  if (IsSecondaryWithinDCH && 11 == pdgid) {
-    NCld++;
-    Ekdelta = (TMath::Sqrt(Momentum * Momentum + me * me) - me) * 1e6;
-    vecExtraD.push_back(Ekdelta);
-  }
-  debug() << "NCld= " << NCld << "vecExtraD= " << vecExtraD << endmsg;
-  if (NCld > 0)
-    debug() << "There is delta rays" << endmsg;
-
-  mass = (thisParticle.getMass() / 1000.);  // mass in GeV, required in MeV
-  bg   = Momentum / mass;
-
-  Ffrac        = flData->get_Ffrac(bg);  //0.9;
-  Fmpv1        = flData->get_Fmpv1(bg);  //43;
-  Fsgm1        = flData->get_Fsgm1(bg);  //9.64;
-  Fmpv2        = flData->get_Fmpv2(bg);  //311.3;
-  Fsgm2        = flData->get_Fsgm2(bg);  //35;
-  CorrpMean    = flData->get_ClSzCorrpmean(bg);
-  CorrpSgm     = flData->get_ClSzCorrpsgm(bg);
-  Corrdgmean   = flData->get_ClSzCorrdgmean(bg);
-  Corrdgsgm    = flData->get_ClSzCorrdgsgm(bg);
-  Corrdglfrac  = flData->get_ClSzCorrdglfrac(bg);
-  Corrdglmpvl  = flData->get_ClSzCorrdglmpvl(bg);
-  Corrdglsgml  = flData->get_ClSzCorrdglsgml(bg);
-  Corrdglmeang = flData->get_ClSzCorrdglmeang(bg);
-  Corrdglsgmg  = flData->get_ClSzCorrdglsgmg(bg);
-  maxEx0       = flData->get_maxEx0(bg);  //379.4 electron 100 gev
-  maxExSlp     = flData->get_maxExSlp();
-  // lepton PDG id goes from 11 to 16 (antiparticles have negative id)
-  bool IsLepton = (11 <= abs(pdgid)) && (16 >= abs(pdgid));
-  if (IsLepton) {
-    ExSgmlep = flData->get_ExSgmlep();
-  } else {
-    ExSgmhad = flData->get_ExSgmhad();
-  }
-
-  MPVEx   = flData->get_MPVExtra(bg);     //103.2
-  SgmEx   = flData->get_SgmExtra(bg);     //28.5;//
-  MeanEx1 = flData->get_MeanExtra1(bg);   //13.8;//
-  SgmEx1  = flData->get_SgmExtra1(bg);    //9.72;//
-  frac    = flData->get_FracExtra1(bg);   //0.13;//
-  Slp     = flData->get_SlopeExtra1(bg);  //7.95;//
-  debug() << " maxEx0 " << maxEx0 << " ExSgmhad " << ExSgmhad << " MPVEx " << MPVEx << " SgmEx " << SgmEx << endmsg;
-  CorrSlp = flData->get_ClSzCorrSlp(bg);
-  CorrInt = flData->get_ClSzCorrInt(bg);
-
-  vecpar[0] = Ffrac;
-  vecpar[1] = Fmpv1;
-  vecpar[2] = Fsgm1;
-  vecpar[3] = Fmpv2;
-  vecpar[4] = Fsgm2;
-
-  double Tmax    = (2.0 * me * pow(bg, 2) / (1 + (2.0 * (1 + pow(bg, 2)) * me / mass) + pow(me / mass, 2))) * 1e+6;
-  float  maxEcut = cut;
-  if (Tmax < maxEcut) {
-    maxEcut = Tmax;
-  }
-  //cout << "Tmax ="<<Tmax<<"maxEcut= "<<maxEcut<<"cut= "<<maxEcut<<endl;
-  /*int nCv=20;
-		 * fcnvl[0] = new TF1("fcnvl-0","[0]*TMath::Landau(x,[1],[2],true)+(1.0-[0])*TMath::Landau(x,[3],[4],true)");
-		 * fcnvl[0]->SetRange(0,maxEcut);
-		 * fcnvl[0]->SetParameters(vecpar[0],vecpar[1],vecpar[2],vecpar[3],vecpar[4]);
-		 * cnvl[0]=nullptr;*/
-
-  TF1* land = new TF1("land", "landaun");
-  land->SetParameter(0, 1);
-  land->SetParameter(1, MPVEx);
-  land->SetParameter(2, SgmEx);
-  land->SetRange(0, maxEcut);
-
-  TF1* exGauss = new TF1("exGauss", "[0]*([1]*TMath::Gaus(x,[2],[3],true)+(1.0-[1])*TMath::Exp(-x/[4])/[4])");
-  exGauss->SetParameter(0, 1);
-  exGauss->SetParameter(1, frac);
-  exGauss->SetParameter(2, MeanEx1);
-  exGauss->SetParameter(3, SgmEx1);
-  exGauss->SetParameter(4, Slp);
-  exGauss->SetRange(0, 90);
-
-  //	int MaxEv = Entries > Nev ? Nev : Entries;
-  //	cout<<" MAXEV"<<MaxEv<<endl;
-  sumVecTot = meanVecTot = sumVec = meanVec = 0.0;
-  vecEtr.clear();
-  vecEtrTot.clear();
-  //_________________End SET NECESSARY PARAMETERS FOR ALGORITHM_________________//
-
-  NCl            = 0;
-  NCl1           = 0;
-  NClp           = 0;
-  totExECl       = 0.0;
-  ExECl          = 0.0;
-  LengthTrack    = input_sim_hit.getPathLength();
-  Etot_per_track = input_sim_hit.getEDep();
-  LengthTrack *= 0.1;                  //from mm to cm
-  Eloss     = Etot_per_track * 1.e09;  //from GeV to eV
-  maxEx0len = maxEx0 * LengthTrack;    //maxEx0 is a parameter
-  if (IsLepton) {
-    ExSgmlen = ExSgmlep * TMath::Sqrt(LengthTrack);
-  } else {
-    ExSgmlen = ExSgmhad * TMath::Sqrt(LengthTrack);
-  }
-  maxExECl = (Eloss - maxEx0len + this->myRandom.Gaus(0, ExSgmlen)) / maxExSlp;
-  //  cout<<"maxExECl=   "<<maxExECl<<endl;
-  //	SgmaxExECl=ExSgm/maxExSlp;
-  if (maxExECl < EIzs) {
-    maxExECl = 0.0;
-  }  //EIzs const = 25.6
-
-  //else if(choice==2){
-  if (choice == 2) {
-    //	cout<<"start new"<<"Eloss= "<<Eloss<<"EIzp=  "<<EIzp<< "EIzs= "<< EIzs<<"maxExECl=  "<<maxExECl<<"totExECl= "<<totExECl<<endl;
-    debug() << "Eloss= " << Eloss << "EIzs= " << EIzs << "EIzp= " << EIzp << "maxExECl= " << maxExECl << "totExECl"
-            << totExECl << endmsg;
-
-    // avoid possibility of infinity while loop
-    int while1counter = 0;
-    while (Eloss > (EIzp + EIzs) && maxExECl > totExECl && while1counter < 1e6) {
-      while1counter++;
-      //		cout<<"start again"<<endl;
-      //		cout<<"Eloss= "<<Eloss<<"EIzp=  "<<EIzp<< "EIzs= "<< EIzs<<"maxExECl=  "<<maxExECl<<"totExECl= "<<totExECl<<endl;
-      ExECl = land->GetRandom(0, maxEcut);
-      //				cout<<"ExECl= "<<ExECl<<endl;
-      //				ExECl=fcnvl[0]->GetRandom();
-      //	hExtraCl->Fill(ExECl);
-
-      if (ExECl > EIzs) {
-        Eloss -= EIzp;
-        if (ExECl > (maxExECl - totExECl)) {
-          ExECl = maxExECl - totExECl;
-          //							cout<< " count "<<count<<endl;
-        }
-        if (ExECl > Eloss)
-          ExECl = Eloss;
-        totExECl += ExECl;
-        //				cout<<"totExECl= " <<totExECl<<endl;
-        Eloss -= ExECl;
-        //				cout<<"Eloss= " <<Eloss<<endl;
-
-        NClp++;
-        //				cout<<"ExECl= "<<ExECl<<"totExECl= "<<totExECl<<"Eloss= "<<Eloss<<"NClp= " <<NClp<<endl;
-        //CLSZ
-        float tmpCorr = 0.0;
-        for (int i = 0; i < nhEp; ++i) {
-          if (ExECl >= (i == 0 ? 0 : hEpcut[i - 1]) && ExECl < hEpcut[i]) {
-            tmpCorr = this->myRandom.Gaus(CorrpMean[i], CorrpSgm[i]);
-          }
-        }
-        ClSz = TMath::Nint(ExECl * CorrSlp + CorrInt - tmpCorr);
-        if (ClSz < 2) {
-          ClSz = 2;
-        }
-        // TODO Alvaro: check what is ClSz???
-        // output_digi_hit.setClusterSize(ClSz);
-        //		hClSzRec->Fill(ClSz);
-        //		hClSzRecND->Fill(ClSz);
-        NEltot += ClSz;
-        //           fClusterCharge.push_back(ClSz);
-        //	    cout<<"ClSz=  "<<"fClusterCharge= "<<fClusterCharge<<endl;
-      }
-      //				cout<<"try1= "<<endl;
-    }
-    //             cout<<"try2= "<<endl;
-    //             cout<<"Eloss= "<<Eloss<<"EIzp=  "<<EIzp<< "EIzs= "<< EIzs<<"maxExECl=  "<<maxExECl<<"totExECl= "<<totExECl<<endl;
-  }
-  debug() << "Eloss= " << Eloss << "EIzp= " << EIzp << endmsg;
-
-  // avoid possibility of infinity while loop
-  int while2counter = 0;
-  while (Eloss >= EIzp && while2counter < 1e6) {
-    while2counter++;
-
-    Eloss -= EIzp;
-    ExECl1 = exGauss->GetRandom();
-    //	hExtraCl1->Fill(ExECl1);
-    if (ExECl1 > Eloss) {
-      ExECl1 = Eloss;
-    }
-    ExECl1totRec += ExECl1;
-    NCl1++;
-    //				EIzp=hEIzp->GetRandom();
-    Eloss -= ExECl1;
-    ClSz = 1;
-    // TODO Alvaro: check what is ClSz???
-    // output_digi_hit.setClusterSize(ClSz);
-    //	hClSzRec->Fill(ClSz);
-    //	hClSzRecND->Fill(ClSz);
-    //   fClusterCharge.push_back(ClSz);
-    NEltot += ClSz;
-  }
-
-  float tmpCl;
-  for (unsigned int i = 0; i < vecExtraD.size(); ++i) {
-    int tmphE = (vecExtraD[i] - minE) / binE;
-    if (tmphE >= nhE)
-      tmphE = nhE - 1;
-    //			cout<<" tmphE "<<tmphE<<endl;
-    if (tmphE == nhE - 1) {
-      rndCorr = this->myRandom.Uniform(0, 1);
-      if (rndCorr < Corrdglfrac[tmphE]) {
-        tmpCl = this->myRandom.Gaus(Corrdglmeang[tmphE], Corrdglsgmg[tmphE]);
-      } else {
-        tmpCl = this->myRandom.Landau(Corrdglmpvl[tmphE], Corrdglsgml[tmphE]);
-      }
+    // lepton PDG id goes from 11 to 16 (antiparticles have negative id)
+    bool IsLepton = (11 <= abs(thisparticle_pdgid)) && (16 >= abs(thisparticle_pdgid));
+    if (IsLepton) {
+      ExSgmlep = flData->get_ExSgmlep();
     } else {
-      tmpCl = this->myRandom.Gaus(Corrdgmean[tmphE], Corrdgsgm[tmphE]);
+      // TODO Alvaro: gamma rays treated as hadrons, is that ok?
+      ExSgmhad = flData->get_ExSgmhad();
     }
 
-    ClSz = TMath::Nint(vecExtraD[i] * CorrSlp + CorrInt - tmpCl);
-    if (ClSz < 2) {
-      ClSz = 2;
+    double thisparticle_mass = (thisParticle.getMass() / 1000.);  // mass in GeV, required in MeV
+    double bg   = Momentum / thisparticle_mass;
+
+
+    CorrpMean    = flData->get_ClSzCorrpmean(bg);
+    CorrpSgm     = flData->get_ClSzCorrpsgm(bg);
+    Corrdgmean   = flData->get_ClSzCorrdgmean(bg);
+    Corrdgsgm    = flData->get_ClSzCorrdgsgm(bg);
+    Corrdglfrac  = flData->get_ClSzCorrdglfrac(bg);
+    Corrdglmpvl  = flData->get_ClSzCorrdglmpvl(bg);
+    Corrdglsgml  = flData->get_ClSzCorrdglsgml(bg);
+    Corrdglmeang = flData->get_ClSzCorrdglmeang(bg);
+    Corrdglsgmg  = flData->get_ClSzCorrdglsgmg(bg);
+    maxEx0       = flData->get_maxEx0(bg);  //379.4 electron 100 gev
+    maxExSlp     = flData->get_maxExSlp();
+
+    MPVEx   = flData->get_MPVExtra(bg);     //103.2
+    SgmEx   = flData->get_SgmExtra(bg);     //28.5;//
+    MeanEx1 = flData->get_MeanExtra1(bg);   //13.8;//
+    SgmEx1  = flData->get_SgmExtra1(bg);    //9.72;//
+    frac    = flData->get_FracExtra1(bg);   //0.13;//
+    Slp     = flData->get_SlopeExtra1(bg);  //7.95;//
+    CorrSlp = flData->get_ClSzCorrSlp(bg);
+    CorrInt = flData->get_ClSzCorrInt(bg);
+
+    double Tmax    = (2.0 * me * pow(bg, 2) / (1 + (2.0 * (1 + pow(bg, 2)) * me / thisparticle_mass) + pow(me / thisparticle_mass, 2))) * 1e+6;
+    float  maxEcut = cut;
+    if (Tmax < maxEcut) {
+      maxEcut = Tmax;
     }
-    // TODO Alvaro: check what is ClSz???
-    // output_digi_hit.setClusterSize(ClSz);
-    //		hClSzRec->Fill(ClSz);
-    //		hClSzDRec->Fill(ClSz);
-    //      fClusterCharge.push_back(ClSz);
-    NEltot += ClSz;
+    /*________________________________________________________________________________*/
+
+    TF1* land = new TF1("land", "landaun");
+    land->SetParameter(0, 1);
+    land->SetParameter(1, MPVEx);
+    land->SetParameter(2, SgmEx);
+    land->SetRange(0, maxEcut);
+
+    TF1* exGauss = new TF1("exGauss", "[0]*([1]*TMath::Gaus(x,[2],[3],true)+(1.0-[1])*TMath::Exp(-x/[4])/[4])");
+    exGauss->SetParameter(0, 1);
+    exGauss->SetParameter(1, frac);
+    exGauss->SetParameter(2, MeanEx1);
+    exGauss->SetParameter(3, SgmEx1);
+    exGauss->SetParameter(4, Slp);
+    exGauss->SetRange(0, 90);
+
+    float totExECl       = 0.0;
+    float ExECl          = 0.0;
+    double LengthTrack    = input_sim_hit.getPathLength();
+    double Etot_per_track = input_sim_hit.getEDep();
+    LengthTrack *= 0.1;                  //from mm to cm
+    Eloss     = Etot_per_track * 1.e09;  //from GeV to eV
+    maxEx0len = maxEx0 * LengthTrack;    //maxEx0 is a parameter
+    if (IsLepton) {
+      ExSgmlen = ExSgmlep * TMath::Sqrt(LengthTrack);
+    } else {
+      ExSgmlen = ExSgmhad * TMath::Sqrt(LengthTrack);
+    }
+    float maxExECl = (Eloss - maxEx0len + this->myRandom.Gaus(0, ExSgmlen)) / maxExSlp;
+
+    if (maxExECl < EIzs) {
+      maxExECl = 0.0;
+    }  //EIzs const = 25.6
+
+      debug() << "Eloss= " << Eloss << "EIzs= " << EIzs << "EIzp= " << EIzp << "maxExECl= " << maxExECl << "totExECl"
+              << totExECl << endmsg;
+
+      // The following loop calculate number of clusters of size > 1, NClp
+      for (int while1counter = 0; Eloss > (EIzp + EIzs) && maxExECl > totExECl && while1counter < 1e6; while1counter++ ) {
+
+        ExECl = land->GetRandom(0, maxEcut);
+
+        if (ExECl > EIzs) {
+          Eloss -= EIzp;
+          if (ExECl > (maxExECl - totExECl)) {
+            ExECl = maxExECl - totExECl;
+          }
+          if (ExECl > Eloss)
+            ExECl = Eloss;
+          totExECl += ExECl;
+          Eloss -= ExECl;
+          NClp++;
+          //CLSZ
+          float tmpCorr = 0.0;
+          for (int i = 0; i < nhEp; ++i) {
+            if (ExECl >= (i == 0 ? 0 : hEpcut[i - 1]) && ExECl < hEpcut[i]) {
+              tmpCorr = this->myRandom.Gaus(CorrpMean[i], CorrpSgm[i]);
+            }
+          }
+          int ClSz = TMath::Nint(ExECl * CorrSlp + CorrInt - tmpCorr);
+          if (ClSz < 2) {
+            ClSz = 2;
+          }
+          ClSz_vector.push_back(ClSz);
+        }
+      }
+
+    debug() << "Eloss= " << Eloss << "EIzp= " << EIzp << endmsg;
+
+    // The following loop calculate number of clusters of size 1, NCl1
+    for (int while2counter = 0; Eloss >= EIzp && while2counter < 1e6;  while2counter++) {
+      Eloss -= EIzp;
+      ExECl1 = exGauss->GetRandom();
+      if (ExECl1 > Eloss) {
+        ExECl1 = Eloss;
+      }
+      ExECl1totRec += ExECl1;
+      NCl1++;
+      Eloss -= ExECl1;
+      // cluster size is 1
+      ClSz_vector.push_back(1);
+    }
+
+  } //-- end if particle is not secondary
+
+  // if particle is a delta electron created inside the drift chamber
+  int NCld(0);
+  if (IsSecondaryWithinDCH &&  electron_pdgid == thisparticle_pdgid) {
+    // 1 delta ray cause 1 cluster NCld (d=delta)
+    NCld = 1;
+    // Ekdelta in keV
+    float  Ekdelta = (TMath::Sqrt(Momentum * Momentum + me_GeV * me_GeV) - me_GeV) * 1e6;
+
+    // TODO Alvaro: what is this for?
+    {
+      float tmpCl;
+      int tmphE = (Ekdelta - minE) / binE;
+      if (tmphE >= nhE)
+        tmphE = nhE - 1;
+      if (tmphE == nhE - 1) {
+        rndCorr = this->myRandom.Uniform(0, 1);
+        if (rndCorr < Corrdglfrac[tmphE]) {
+          tmpCl = this->myRandom.Gaus(Corrdglmeang[tmphE], Corrdglsgmg[tmphE]);
+        } else {
+          tmpCl = this->myRandom.Landau(Corrdglmpvl[tmphE], Corrdglsgml[tmphE]);
+        }
+      } else {
+        tmpCl = this->myRandom.Gaus(Corrdgmean[tmphE], Corrdgsgm[tmphE]);
+      }
+
+      int ClSz = TMath::Nint(Ekdelta * CorrSlp + CorrInt - tmpCl);
+      // TODO Alvaro: should it be 1 instead?
+      if (ClSz < 2)
+      {
+        ClSz = 2;
+      }
+      ClSz_vector.push_back(ClSz);
+    }
+
   }
+  // conclusion: if hit caused by delta electron, NCld = 1, number of electrons ClSz=2
 
-  Ncl = NCl1 + NClp + NCld;
-  debug() << "Ncl= " << Ncl << " NCl1= " << NCl1 << "NClp= " << NClp << "NCld= " << NCld << endmsg;
-  debug() << "NCld= " << NCld << " vecExtraD.size() " << vecExtraD.size() << endmsg;
-  int vecExtraD_size = vecExtraD.size();
-  if (NCld != vecExtraD_size)
-    debug() << "There is a bug" << endmsg;
-  //debug() << "Output Digi Hit collection size: " << output_digi_hits->size() << endmsg;
+  // value to be returned, sum of number of clusters size=1, size>1, and clusters caused by delta rays
+  int total_number_of_clusters = NCl1 + NClp + NCld;
+  debug() << "Ncl= " << total_number_of_clusters << " NCl1= " << NCl1 << "NClp= " << NClp << "NCld= " << NCld << endmsg;
 
-  // output_digi_hit.setClusterCount(Ncl);
+  // value to be returned, total number of electrons (cluster size)
+  int total_number_of_electrons_over_all_clusters = 0;
+  for( auto cluster_size : ClSz_vector)
+    total_number_of_electrons_over_all_clusters += cluster_size;
 
-  /* for (int icl=0;icl<Ncl;icl++) {
-		 * output_digi_hit.setClusterSize(NEltot);
-	}*/
-  // output_digi_hit.setClusterSize(NEltot);
-  return return_values;
+  return { total_number_of_clusters , total_number_of_electrons_over_all_clusters };
 }
