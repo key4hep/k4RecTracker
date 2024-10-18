@@ -150,7 +150,7 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
     float distanceToWire = distanceToWire_smeared / MM_TO_CM;
 
-    auto [nCluster, nElectronPerCluster] = CalculateClusters(input_sim_hit);
+    auto [nCluster, nElectronsTotal] = CalculateClusters(input_sim_hit);
 
     extension::MutableDriftChamberDigiV2 oDCHdigihit;
     oDCHdigihit.setCellID(input_sim_hit.getCellID());
@@ -163,7 +163,7 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setDirectionSW(directionSW);
     oDCHdigihit.setDistanceToWire(distanceToWire);
     oDCHdigihit.setNCluster(nCluster);
-    oDCHdigihit.setNElectronPerCluster(nElectronPerCluster);
+    oDCHdigihit.setNElectronsTotal(nElectronsTotal);
 
     output_digi_hits.push_back(oDCHdigihit);
 
