@@ -19,7 +19,8 @@ DCHsimpleDigitizer::~DCHsimpleDigitizer() {}
 
 StatusCode DCHsimpleDigitizer::initialize() {
   // Initialize random services
-  if (service("RndmGenSvc", m_randSvc).isFailure()) {
+  m_randSvc = service("RndmGenSvc", false);
+  if (!m_randSvc) {
     error() << "Couldn't get RndmGenSvc!" << endmsg;
     return StatusCode::FAILURE;
   }
