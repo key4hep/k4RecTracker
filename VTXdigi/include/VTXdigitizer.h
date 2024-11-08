@@ -93,7 +93,7 @@ private:
   BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"};
 
   // Random Number Service
-  IRndmGenSvc* m_randSvc;
+  SmartIF<IRndmGenSvc> m_randSvc;
 
   // Gaussian random number generator used for smearing
   std::vector<Rndm::Numbers> m_gauss_x_vec;

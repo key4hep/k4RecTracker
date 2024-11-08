@@ -12,7 +12,6 @@
 
 // EDM4HEP
 #include "edm4hep/SimTrackerHitCollection.h"
-#include "edm4hep/TrackCollection.h"
 #if __has_include("edm4hep/TrackerHit3DCollection.h")
 #include "edm4hep/TrackerHit3DCollection.h"
 #else
@@ -75,7 +74,7 @@ private:
   FloatProperty m_xy_resolution{this, "xyResolution", 0.1, "Spatial resolution in the xy direction [mm]"};
 
   // Random Number Service
-  IRndmGenSvc* m_randSvc;
+  SmartIF<IRndmGenSvc> m_randSvc;
   // Gaussian random number generator used for the smearing of the z position
   Rndm::Numbers m_gauss_z;
   // Gaussian random number generator used for the smearing of the xy position

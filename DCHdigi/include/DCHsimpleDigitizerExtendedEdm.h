@@ -83,7 +83,7 @@ private:
   mutable DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaLocalZ{"rightHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
 
   // Random Number Service
-  IRndmGenSvc* m_randSvc;
+  SmartIF<IRndmGenSvc> m_randSvc;
   // Gaussian random number generator used for the smearing of the z position
   Rndm::Numbers m_gauss_z;
   // Gaussian random number generator used for the smearing of the xy position

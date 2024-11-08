@@ -11,7 +11,6 @@
 
 // EDM4HEP
 #include "edm4hep/SimTrackerHitCollection.h"
-#include "edm4hep/TrackCollection.h"
 #if __has_include("edm4hep/TrackerHit3DCollection.h")
 #include "edm4hep/TrackerHit3DCollection.h"
 #else
@@ -63,7 +62,7 @@ private:
   // Detector geometry
   dd4hep::Detector* m_detector;
   // Random Number Service
-  IRndmGenSvc* m_randSvc;
+  SmartIF<IRndmGenSvc> m_randSvc;
   // Uniform random number generator used for the SiPM quantum efficiency
   Rndm::Numbers m_uniform;
 };
