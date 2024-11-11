@@ -57,7 +57,8 @@ datatypes:
       - edm4hep::Vector3d directionSW // direction of SW
       - float distanceToWire          // distance hit-wire [mm]
       - uint32_t nCluster             // number of clusters associated to this hit
-      - uint32_t nElectronsTotal      // number of electrons for all the nCluster
+    VectorMembers:
+      - uint16_t nElectrons           // number of electrons for each cluster
 
   extension::MCRecoDriftChamberDigiV2Association:
     Description: "Association between a DriftChamberDigi and the corresponding simulated hit"

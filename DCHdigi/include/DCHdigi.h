@@ -172,8 +172,8 @@ private:
   /// pointer to wrapper class, which contains the cluster size and number distributions
   AlgData* flData;
 
-  /// code developed by Walaa for calculating number of clusters and cluster size
-  std::pair<uint32_t, uint32_t> CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const;
+  /// code developed by Walaa for calculating number of clusters and cluster size of each one
+  std::pair<uint32_t, std::vector<int>> CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const;
 
   bool IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle &) const ;
 

@@ -150,7 +150,7 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
     float distanceToWire = distanceToWire_smeared / MM_TO_CM;
 
-    auto [nCluster, nElectronsTotal] = CalculateClusters(input_sim_hit);
+    auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit);
 
     extension::MutableDriftChamberDigiV2 oDCHdigihit;
     oDCHdigihit.setCellID(input_sim_hit.getCellID());
@@ -163,7 +163,10 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setDirectionSW(directionSW);
     oDCHdigihit.setDistanceToWire(distanceToWire);
     oDCHdigihit.setNCluster(nCluster);
-    oDCHdigihit.setNElectronsTotal(nElectronsTotal);
+    // int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
+    // oDCHdigihit.setNElectronsTotal(nElectronsTotal);
+    for( auto ne : nElectrons_v )
+      oDCHdigihit.addToNElectrons(ne);
 
     output_digi_hits.push_back(oDCHdigihit);
 
@@ -328,7 +331,7 @@ bool DCHdigi::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thi
   return (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
 }
 
-std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
+std::pair<uint32_t, std::vector<int> > DCHdigi::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
   /// vector to accumulate the size of each cluster
   std::vector<int> ClSz_vector;
   //_________________SET NECESSARY PARAMETERS FOR THE CLS ALGORITHM-----WALAA_________________//
@@ -546,10 +549,14 @@ std::pair<uint32_t, uint32_t> DCHdigi::CalculateClusters(const edm4hep::SimTrack
   int total_number_of_clusters = NCl1 + NClp + NCld;
   debug() << "Ncl= " << total_number_of_clusters << " NCl1= " << NCl1 << "NClp= " << NClp << "NCld= " << NCld << endmsg;
 
+  if( ClSz_vector.size() != total_number_of_clusters )
+    debug() << "Array of cluster sizes does not match total number of clusters\n";
+
   // value to be returned, total number of electrons (cluster size)
   int total_number_of_electrons_over_all_clusters = 0;
   for (auto cluster_size : ClSz_vector)
     total_number_of_electrons_over_all_clusters += cluster_size;
 
-  return {total_number_of_clusters, total_number_of_electrons_over_all_clusters};
+  // return {total_number_of_clusters, total_number_of_electrons_over_all_clusters};
+  return {total_number_of_clusters, ClSz_vector};
 }

@@ -239,7 +239,7 @@ SIM.guineapig.particlesPerEvent = "-1"
 ################################################################################
 
 ##  direction of the particle gun, 3 vector 
-SIM.gun.direction = (0, 0, 1)
+SIM.gun.direction = (1, 0.9, 0)
 
 ## choose the distribution of the random direction for theta
 ## 
@@ -252,12 +252,12 @@ SIM.gun.direction = (0, 0, 1)
 ## 
 ##     Setting a distribution will set isotrop = True
 ##     
-SIM.gun.distribution = 'cos(theta)'
+#SIM.gun.distribution = 'cos(theta)'
 
 ## Total energy (including mass) for the particle gun.
 ## 
 ## If not None, it will overwrite the setting of momentumMin and momentumMax
-SIM.gun.energy = '10*GeV'
+SIM.gun.energy = '5*GeV'
 
 ## Maximal pseudorapidity for random distibution (overrides thetaMin)
 SIM.gun.etaMax = None
@@ -278,6 +278,9 @@ SIM.gun.momentumMax = 10000.0
 ## Minimal momentum when using distribution (default = 0.0)
 SIM.gun.momentumMin = 0.0
 SIM.gun.multiplicity = 1
+#SIM.gun.particle = "mu+"
+#SIM.gun.particle = "pi+"
+#SIM.gun.particle = "kaon+"
 SIM.gun.particle = "proton"
 
 ## Maximal azimuthal angle for random distribution
