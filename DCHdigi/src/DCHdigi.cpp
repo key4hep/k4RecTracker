@@ -341,8 +341,8 @@ bool DCHdigi::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thi
 std::pair<uint32_t, std::vector<int> > DCHdigi::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
 
   const edm4hep::MCParticle& thisParticle = input_sim_hit.getParticle();
-  // if gamma, optical photon, or other particle with null mass, return zero clusters
-  if( 22 == abs(thisParticle.getPDG()) || 0 == thisParticle.getMass() )
+  // if gamma, optical photon, or other particle with null mass, or hit with zero energy deposited, return zero clusters
+  if( 22 == abs(thisParticle.getPDG()) || 0 == thisParticle.getMass() || 0 == input_sim_hit.getEDep() )
      return {0., std::vector<int>{} };
 
   /// vector to accumulate the size (number of electrons) of each cluster
