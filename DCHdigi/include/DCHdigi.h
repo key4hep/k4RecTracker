@@ -129,6 +129,7 @@ private:
   // Gaussian random number generator used for the smearing of the xy position, in cm!
   mutable std::normal_distribution<double> m_gauss_xy_cm;
 
+  /// members with internal state (such as random engines) must be defined thread local
   inline static thread_local TRandom3 myRandom;
   //------------------------------------------------------------------
   //        ancillary functions

@@ -163,8 +163,10 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setDirectionSW(directionSW);
     oDCHdigihit.setDistanceToWire(distanceToWire);
     oDCHdigihit.setNCluster(nCluster);
-    // int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
-    // oDCHdigihit.setNElectronsTotal(nElectronsTotal);
+    // to return the total number of electrons within the step, do the following:
+    //   int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
+    //   oDCHdigihit.setNElectronsTotal(nElectronsTotal);
+    // to copy the vector of each cluster size to the EDM4hep data extension, do the following:
     for( auto ne : nElectrons_v )
       oDCHdigihit.addToNElectrons(ne);
 
@@ -220,6 +222,11 @@ void DCHdigi::PrintConfiguration(std::ostream& io) {
   io << "\tCluster distributions taken from: " << m_fileDataAlg.value().c_str() << "\n";
   io << "\tResolution along the wire (mm): " << m_z_resolution.value() << "\n";
   io << "\tResolution perp. to the wire (mm): " << m_xy_resolution.value() << "\n";
+  io << "\tCreate debug histograms: " << ( m_create_debug_histos.value() ? "true" : "false" ) << "\n";
+  if( true == m_create_debug_histos.value() )
+    io << "\t\t|--Name of output file with debug histograms: " << m_out_debug_filename.value() << "\n";
+
+
   return;
 }
 
@@ -332,7 +339,7 @@ bool DCHdigi::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thi
 }
 
 std::pair<uint32_t, std::vector<int> > DCHdigi::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
-  /// vector to accumulate the size of each cluster
+  /// vector to accumulate the size (number of electrons) of each cluster
   std::vector<int> ClSz_vector;
   //_________________SET NECESSARY PARAMETERS FOR THE CLS ALGORITHM-----WALAA_________________//
 
@@ -549,13 +556,8 @@ std::pair<uint32_t, std::vector<int> > DCHdigi::CalculateClusters(const edm4hep:
   int total_number_of_clusters = NCl1 + NClp + NCld;
   debug() << "Ncl= " << total_number_of_clusters << " NCl1= " << NCl1 << "NClp= " << NClp << "NCld= " << NCld << endmsg;
 
-  if( ClSz_vector.size() != total_number_of_clusters )
+  if( ClSz_vector.size() != std::size_t(total_number_of_clusters) )
     debug() << "Array of cluster sizes does not match total number of clusters\n";
-
-  // value to be returned, total number of electrons (cluster size)
-  int total_number_of_electrons_over_all_clusters = 0;
-  for (auto cluster_size : ClSz_vector)
-    total_number_of_electrons_over_all_clusters += cluster_size;
 
   // return {total_number_of_clusters, total_number_of_electrons_over_all_clusters};
   return {total_number_of_clusters, ClSz_vector};
