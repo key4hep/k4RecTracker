@@ -239,7 +239,7 @@ SIM.guineapig.particlesPerEvent = "-1"
 ################################################################################
 
 ##  direction of the particle gun, 3 vector 
-SIM.gun.direction = (1, 0.9, 0)
+SIM.gun.direction = (1,1,1)
 
 ## choose the distribution of the random direction for theta
 ## 
@@ -257,7 +257,7 @@ SIM.gun.direction = (1, 0.9, 0)
 ## Total energy (including mass) for the particle gun.
 ## 
 ## If not None, it will overwrite the setting of momentumMin and momentumMax
-SIM.gun.energy = '5*GeV'
+SIM.gun.energy = '10*GeV'
 
 ## Maximal pseudorapidity for random distibution (overrides thetaMin)
 SIM.gun.etaMax = None
@@ -554,11 +554,11 @@ SIM.physics.zeroTimePDGs = {17, 11, 13, 15}
 
 ## If True, calculate random seed for each event basedon eventID and runID
 ## Allows reproducibility even whenSkippingEvents
-SIM.random.enableEventSeed = False
+SIM.random.enableEventSeed = True
 SIM.random.file = None
 SIM.random.luxury = 1
 SIM.random.replace_gRandom = True
-SIM.random.seed = None
+SIM.random.seed = 123
 SIM.random.type = None
 
 
