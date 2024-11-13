@@ -339,6 +339,12 @@ bool DCHdigi::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thi
 }
 
 std::pair<uint32_t, std::vector<int> > DCHdigi::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
+
+  const edm4hep::MCParticle& thisParticle = input_sim_hit.getParticle();
+  // if gamma, optical photon, or other particle with null mass, return zero clusters
+  if( 22 == abs(thisParticle.getPDG()) || 0 == thisParticle.getMass() )
+     return {0., std::vector<int>{} };
+
   /// vector to accumulate the size (number of electrons) of each cluster
   std::vector<int> ClSz_vector;
   //_________________SET NECESSARY PARAMETERS FOR THE CLS ALGORITHM-----WALAA_________________//
@@ -372,7 +378,6 @@ std::pair<uint32_t, std::vector<int> > DCHdigi::CalculateClusters(const edm4hep:
   float               MPVEx(0), SgmEx(0), MeanEx1(0), SgmEx1(0), frac(0), Slp(0), CorrSlp(0), CorrInt(0);
 
   /*________________________________________________________________________________*/
-  const edm4hep::MCParticle& thisParticle         = input_sim_hit.getParticle();
   bool                       IsSecondaryWithinDCH = IsParticleCreatedInsideDriftChamber(thisParticle);
 
   // Momentum from EDM4hep, in GeV
@@ -391,7 +396,39 @@ std::pair<uint32_t, std::vector<int> > DCHdigi::CalculateClusters(const edm4hep:
   /// number of clusters, with size = 1 electron
   int NCl1(0);
 
-  // TODO Alvaro: gamma rays as secondary are ignored?
+  //___________________________________________________________________
+  double thisparticle_mass = (thisParticle.getMass() / 1000.);  // mass in GeV, required in MeV
+  double bg                = Momentum / thisparticle_mass;
+
+  CorrpMean    = flData->get_ClSzCorrpmean(bg);
+  CorrpSgm     = flData->get_ClSzCorrpsgm(bg);
+  Corrdgmean   = flData->get_ClSzCorrdgmean(bg);
+  Corrdgsgm    = flData->get_ClSzCorrdgsgm(bg);
+  Corrdglfrac  = flData->get_ClSzCorrdglfrac(bg);
+  Corrdglmpvl  = flData->get_ClSzCorrdglmpvl(bg);
+  Corrdglsgml  = flData->get_ClSzCorrdglsgml(bg);
+  Corrdglmeang = flData->get_ClSzCorrdglmeang(bg);
+  Corrdglsgmg  = flData->get_ClSzCorrdglsgmg(bg);
+  maxEx0       = flData->get_maxEx0(bg);  //379.4 electron 100 gev
+  maxExSlp     = flData->get_maxExSlp();
+
+  MPVEx   = flData->get_MPVExtra(bg);     //103.2
+  SgmEx   = flData->get_SgmExtra(bg);     //28.5;//
+  MeanEx1 = flData->get_MeanExtra1(bg);   //13.8;//
+  SgmEx1  = flData->get_SgmExtra1(bg);    //9.72;//
+  frac    = flData->get_FracExtra1(bg);   //0.13;//
+  Slp     = flData->get_SlopeExtra1(bg);  //7.95;//
+  CorrSlp = flData->get_ClSzCorrSlp(bg);
+  CorrInt = flData->get_ClSzCorrInt(bg);
+
+  double Tmax = (2.0 * me * pow(bg, 2) /
+                  (1 + (2.0 * (1 + pow(bg, 2)) * me / thisparticle_mass) + pow(me / thisparticle_mass, 2))) *
+                1e+6;
+  float maxEcut = cut;
+  if (Tmax < maxEcut) {
+    maxEcut = Tmax;
+  }
+  //___________________________________________________________________
   if (not IsSecondaryWithinDCH) {
     // lepton PDG id goes from 11 to 16 (antiparticles have negative id)
     bool IsLepton = (11 <= abs(thisparticle_pdgid)) && (16 >= abs(thisparticle_pdgid));
@@ -402,37 +439,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi::CalculateClusters(const edm4hep:
       ExSgmhad = flData->get_ExSgmhad();
     }
 
-    double thisparticle_mass = (thisParticle.getMass() / 1000.);  // mass in GeV, required in MeV
-    double bg                = Momentum / thisparticle_mass;
 
-    CorrpMean    = flData->get_ClSzCorrpmean(bg);
-    CorrpSgm     = flData->get_ClSzCorrpsgm(bg);
-    Corrdgmean   = flData->get_ClSzCorrdgmean(bg);
-    Corrdgsgm    = flData->get_ClSzCorrdgsgm(bg);
-    Corrdglfrac  = flData->get_ClSzCorrdglfrac(bg);
-    Corrdglmpvl  = flData->get_ClSzCorrdglmpvl(bg);
-    Corrdglsgml  = flData->get_ClSzCorrdglsgml(bg);
-    Corrdglmeang = flData->get_ClSzCorrdglmeang(bg);
-    Corrdglsgmg  = flData->get_ClSzCorrdglsgmg(bg);
-    maxEx0       = flData->get_maxEx0(bg);  //379.4 electron 100 gev
-    maxExSlp     = flData->get_maxExSlp();
-
-    MPVEx   = flData->get_MPVExtra(bg);     //103.2
-    SgmEx   = flData->get_SgmExtra(bg);     //28.5;//
-    MeanEx1 = flData->get_MeanExtra1(bg);   //13.8;//
-    SgmEx1  = flData->get_SgmExtra1(bg);    //9.72;//
-    frac    = flData->get_FracExtra1(bg);   //0.13;//
-    Slp     = flData->get_SlopeExtra1(bg);  //7.95;//
-    CorrSlp = flData->get_ClSzCorrSlp(bg);
-    CorrInt = flData->get_ClSzCorrInt(bg);
-
-    double Tmax = (2.0 * me * pow(bg, 2) /
-                   (1 + (2.0 * (1 + pow(bg, 2)) * me / thisparticle_mass) + pow(me / thisparticle_mass, 2))) *
-                  1e+6;
-    float maxEcut = cut;
-    if (Tmax < maxEcut) {
-      maxEcut = Tmax;
-    }
     /*________________________________________________________________________________*/
 
     TF1* land = new TF1("land", "landaun");
