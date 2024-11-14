@@ -29,7 +29,12 @@ StatusCode DCHdigi_v01::initialize() {
   if (!m_uidSvc)
     ThrowException("Unable to get UniqueIDGenSvc");
 
+  if( 0 > m_z_resolution.value() )
+    ThrowException("Z resolution input value can not be negative!");
   m_gauss_z_cm  = std::normal_distribution<double>(0., m_z_resolution.value() * MM_TO_CM);
+
+  if( 0 > m_xy_resolution.value() )
+    ThrowException("Radial (XY) resolution input value can not be negative!");
   m_gauss_xy_cm = std::normal_distribution<double>(0., m_xy_resolution.value() * MM_TO_CM);
 
   //-----------------
