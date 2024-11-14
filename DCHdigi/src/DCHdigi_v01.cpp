@@ -1,4 +1,4 @@
-#include "DCHdigi.h"
+#include "DCHdigi_v01.h"
 
 // STL
 #include <iostream>
@@ -10,7 +10,7 @@
 ///////////////////////       DCHdigi constructor       ////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 // -- KeyValues("name of the variable that holds the name of the collection exposed in the python steering file", {"default name for the collection"}),
-DCHdigi::DCHdigi(const std::string& name, ISvcLocator* svcLoc)
+DCHdigi_v01::DCHdigi_v01(const std::string& name, ISvcLocator* svcLoc)
     : MultiTransformer(name, svcLoc,
                        {
                            KeyValues("DCH_simhits", {""}),
@@ -25,7 +25,7 @@ DCHdigi::DCHdigi(const std::string& name, ISvcLocator* svcLoc)
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       initialize       ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-StatusCode DCHdigi::initialize() {
+StatusCode DCHdigi_v01::initialize() {
   if (!m_uidSvc)
     ThrowException("Unable to get UniqueIDGenSvc");
 
@@ -90,7 +90,7 @@ StatusCode DCHdigi::initialize() {
 ///////////////////////       operator()       ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 std::tuple<extension::DriftChamberDigiV2Collection, extension::MCRecoDriftChamberDigiV2AssociationCollection>
-DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
+DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
                     const edm4hep::EventHeaderCollection&   headers) const {
   // initialize seed for random engine
   this->PrepareRandomEngine(headers);
@@ -188,7 +188,7 @@ DCHdigi::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       finalize       //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-StatusCode DCHdigi::finalize() {
+StatusCode DCHdigi_v01::finalize() {
   if (m_create_debug_histos.value()) {
     std::unique_ptr<TFile> ofile{TFile::Open(m_out_debug_filename.value().c_str(), "recreate")};
     ofile->cd();
@@ -204,7 +204,7 @@ StatusCode DCHdigi::finalize() {
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       ThrowException       ////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-void DCHdigi::ThrowException(std::string s) const {
+void DCHdigi_v01::ThrowException(std::string s) const {
   error() << s.c_str() << endmsg;
   throw std::runtime_error(s);
 }
@@ -212,7 +212,7 @@ void DCHdigi::ThrowException(std::string s) const {
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       PrintConfiguration       ////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-void DCHdigi::PrintConfiguration(std::ostream& io) {
+void DCHdigi_v01::PrintConfiguration(std::ostream& io) {
   io << "DCHdigi will use the following components:\n";
   io << "\tGeometry Service: " << m_geoSvcName.value().c_str() << "\n";
   io << "\tUID Service: " << m_uidSvcName.value().c_str() << "\n";
@@ -230,7 +230,7 @@ void DCHdigi::PrintConfiguration(std::ostream& io) {
   return;
 }
 
-void DCHdigi::PrepareRandomEngine(const edm4hep::EventHeaderCollection& headers) const {
+void DCHdigi_v01::PrepareRandomEngine(const edm4hep::EventHeaderCollection& headers) const {
   uint32_t evt_n = headers[0].getEventNumber();
   uint32_t run_n = headers[0].getRunNumber();
   size_t   seed  = m_uidSvc->getUniqueID(evt_n, run_n, this->name());
@@ -245,7 +245,7 @@ void DCHdigi::PrepareRandomEngine(const edm4hep::EventHeaderCollection& headers)
 /////       Ancillary functions for calculating the distance to the wire       ////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-TVector3 DCHdigi::Calculate_wire_vector_ez(int ilayer, int nphi) const {
+TVector3 DCHdigi_v01::Calculate_wire_vector_ez(int ilayer, int nphi) const {
   auto& l = this->dch_data->database.at(ilayer);
 
   // See original paper Hoshina et al, Computer Physics Communications 153 (2003) 3
@@ -288,7 +288,7 @@ TVector3 DCHdigi::Calculate_wire_vector_ez(int ilayer, int nphi) const {
   return (p2 - p1).Unit();
 }
 
-TVector3 DCHdigi::Calculate_wire_z0_point(int ilayer, int nphi) const {
+TVector3 DCHdigi_v01::Calculate_wire_z0_point(int ilayer, int nphi) const {
   auto&    l   = this->dch_data->database.at(ilayer);
   double   rz0 = l.radius_sw_z0;
   TVector3 p1(rz0, 0, 0);
@@ -298,7 +298,7 @@ TVector3 DCHdigi::Calculate_wire_z0_point(int ilayer, int nphi) const {
 }
 
 // calculate phi rotation of whole twisted tube, ie, rotation at z=0
-double DCHdigi::Calculate_wire_phi_z0(int ilayer, int nphi) const {
+double DCHdigi_v01::Calculate_wire_phi_z0(int ilayer, int nphi) const {
   auto&  l       = this->dch_data->database.at(ilayer);
   int    ncells  = l.nwires / 2;
   double phistep = TMath::TwoPi() / ncells;
@@ -309,7 +309,7 @@ double DCHdigi::Calculate_wire_phi_z0(int ilayer, int nphi) const {
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////  Calculate vector from hit position to wire   /////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-TVector3 DCHdigi::Calculate_hitpos_to_wire_vector(int ilayer, int nphi, const TVector3& hit_position /*in cm*/) const {
+TVector3 DCHdigi_v01::Calculate_hitpos_to_wire_vector(int ilayer, int nphi, const TVector3& hit_position /*in cm*/) const {
   // Solution distance from a point to a line given here:
   // https://en.wikipedia.org/wiki/Distance_from_a_point_to_a_line#Vector_formulation
   TVector3 n = this->Calculate_wire_vector_ez(ilayer, nphi);
@@ -328,7 +328,7 @@ TVector3 DCHdigi::Calculate_hitpos_to_wire_vector(int ilayer, int nphi, const TV
 ///////////////////////       CalculateNClusters       ////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-bool DCHdigi::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thisParticle) const {
+bool DCHdigi_v01::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thisParticle) const {
   auto  vertex           = thisParticle.getVertex();  // in mm
   auto  vertexRsquared   = vertex[0] * vertex[0] + vertex[1] * vertex[1];
   auto  vertexZabs       = std::fabs(vertex[2]);
@@ -338,7 +338,7 @@ bool DCHdigi::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thi
   return (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
 }
 
-std::pair<uint32_t, std::vector<int> > DCHdigi::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
+std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
 
   const edm4hep::MCParticle& thisParticle = input_sim_hit.getParticle();
   // if gamma, optical photon, or other particle with null mass, or hit with zero energy deposited, return zero clusters

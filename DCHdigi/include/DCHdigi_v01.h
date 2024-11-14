@@ -1,4 +1,4 @@
-/** ======= DCHdigi ==========
+/** ======= DCHdigi_v01 ==========
  * Gaudi Algorithm for DCH digitization
  *
  *
@@ -31,8 +31,8 @@
  * <br>
  */
 
-#ifndef DCHDIGI_H
-#define DCHDIGI_H
+#ifndef DCHDIGI_V01_H
+#define DCHDIGI_V01_H
 
 // Gaudi Transformer baseclass headers
 #include "Gaudi/Property.h"
@@ -59,7 +59,7 @@
 #include <random>
 #include <string>
 
-// data extension for the DCH v2
+// data extension for detector DCH_v2
 #include "DDRec/DCH_info.h"
 
 // ROOT headers
@@ -74,11 +74,11 @@
 /// constant to convert from mm (EDM4hep) to DD4hep (cm)
 constexpr double MM_TO_CM = 0.1;
 
-struct DCHdigi final
+struct DCHdigi_v01 final
     : k4FWCore::MultiTransformer<
           std::tuple<extension::DriftChamberDigiV2Collection, extension::MCRecoDriftChamberDigiV2AssociationCollection>(
               const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
-  DCHdigi(const std::string& name, ISvcLocator* svcLoc);
+  DCHdigi_v01(const std::string& name, ISvcLocator* svcLoc);
 
   StatusCode initialize() override;
   StatusCode finalize() override;
@@ -201,6 +201,6 @@ private:
   TH1D* hSxy;
 };
 
-DECLARE_COMPONENT(DCHdigi);
+DECLARE_COMPONENT(DCHdigi_v01);
 
 #endif

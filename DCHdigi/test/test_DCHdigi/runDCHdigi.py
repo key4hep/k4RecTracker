@@ -16,8 +16,8 @@ from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
 geoservice.detectors = ['./compact/DCH_standalone_o1_v02.xml']
 
-from Configurables import DCHdigi
-DCHdigi = DCHdigi("DCHdigi")
+from Configurables import DCHdigi_v01
+DCHdigi = DCHdigi_v01("DCHdigi")
 DCHdigi.DCH_simhits=["DCHCollection"]
 DCHdigi.DCH_name="DCH_v2"
 DCHdigi.fileDataAlg="DataAlgFORGEANT.root"
