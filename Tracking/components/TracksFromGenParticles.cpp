@@ -10,6 +10,10 @@
 
 // k4FWCore
 #include "k4FWCore/Transformer.h"
+#include "k4FWCore/DataHandle.h"
+// Gaudi
+#include "Gaudi/Algorithm.h"
+#include "GaudiKernel/ToolHandle.h"
 
 #include <string>
 
@@ -26,22 +30,43 @@
  *  @author Brieuc Francois
  */
 
-struct TracksFromGenParticles final
-  : k4FWCore::MultiTransformer<std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection>(const edm4hep::MCParticleCollection&)> {
-  TracksFromGenParticles(const std::string& name, ISvcLocator* svcLoc)
-      : MultiTransformer(
-            name, svcLoc,
-            {KeyValues("InputGenParticles", {"MCParticles"})},
-            {KeyValues("OutputTracks", {"TracksFromGenParticles"}),
-            KeyValues("OutputMCRecoTrackParticleAssociation", {"TracksFromGenParticlesAssociation"})}) {
-  }
+class TracksFromGenParticles : public Gaudi::Algorithm {
 
-std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection> operator()(const edm4hep::MCParticleCollection& genParticleColl) const override {
+  public:
+    TracksFromGenParticles(const std::string& name, ISvcLocator* svcLoc);
+    StatusCode initialize();
+    StatusCode execute(const EventContext&) const;
+    StatusCode finalize();
 
-    auto outputTrackCollection = edm4hep::TrackCollection();
-    auto MCRecoTrackParticleAssociationCollection = edm4hep::TrackMCParticleLinkCollection();
+  private:
+    /// Handle for calo hits (input collection)
+    mutable DataHandle<edm4hep::MCParticleCollection> m_input{"MCParticles", Gaudi::DataHandle::Reader, this};
+    Gaudi::Property<float> m_Bz{this, "Bz", 2., "Z component of the (assumed constant) magnetic field in Tesla."};
+    mutable DataHandle<edm4hep::TrackMCParticleLinkCollection> m_links{"TracksFromGenParticlesAssociation", Gaudi::DataHandle::Writer, this};
+    mutable DataHandle<edm4hep::TrackCollection> m_tracks{"TracksFromGenParticles", Gaudi::DataHandle::Writer, this};
+};
 
-    for (const auto& genParticle : genParticleColl) {
+TracksFromGenParticles::TracksFromGenParticles(const std::string& name, ISvcLocator* svcLoc) :
+Gaudi::Algorithm(name, svcLoc) {
+  declareProperty("InputGenParticles", m_input, "input MCParticles");
+  declareProperty("OutputTracks", m_tracks, "Output tracks");
+  declareProperty("OutputMCRecoTrackParticleAssociation", m_links, "MCRecoTrackParticleAssociation");
+}
+
+StatusCode TracksFromGenParticles::initialize() {
+  StatusCode sc = Gaudi::Algorithm::initialize();
+  if (sc.isFailure()) return sc;
+  return StatusCode::SUCCESS;
+}
+
+StatusCode TracksFromGenParticles::execute(const EventContext&) const {
+    // Get the input collection with Geant4 hits
+    const edm4hep::MCParticleCollection* genParticleColl = m_input.get();
+
+    auto outputTrackCollection = new edm4hep::TrackCollection();
+    auto MCRecoTrackParticleAssociationCollection = new edm4hep::TrackMCParticleLinkCollection();
+
+    for (const auto& genParticle : *genParticleColl) {
       debug() << "Particle decayed in tracker: " << genParticle.isDecayedInTracker() << endmsg;
       debug() << genParticle << endmsg;
 
@@ -73,18 +98,25 @@ std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection> ope
       trackFromGen.addToTrackStates(trackState_AtCalorimeter);
 
       //debug() << trackFromGen << endmsg;
-      outputTrackCollection.push_back(trackFromGen);
+      outputTrackCollection->push_back(trackFromGen);
 
       // Building the association between tracks and genParticles
       auto MCRecoTrackParticleAssociation = edm4hep::MutableTrackMCParticleLink();
       MCRecoTrackParticleAssociation.setFrom(trackFromGen);
       MCRecoTrackParticleAssociation.setTo(genParticle);
-      MCRecoTrackParticleAssociationCollection.push_back(MCRecoTrackParticleAssociation);
+      MCRecoTrackParticleAssociationCollection->push_back(MCRecoTrackParticleAssociation);
     }
-    return std::make_tuple(std::move(outputTrackCollection), std::move(MCRecoTrackParticleAssociationCollection));
-  }
 
-  Gaudi::Property<float> m_Bz{this, "Bz", 2., "Z component of the (assumed constant) magnetic field in Tesla."};
-};
+    // push the outputTrackCollection to event store
+    m_tracks.put(outputTrackCollection);
+    m_links.put(MCRecoTrackParticleAssociationCollection);
+
+    debug() << "Output tracks collection size: " << outputTrackCollection->size() << endmsg;
+
+    return StatusCode::SUCCESS;
+}
+
+StatusCode TracksFromGenParticles::finalize() { return Gaudi::Algorithm::finalize(); }
+
 
 DECLARE_COMPONENT(TracksFromGenParticles)
