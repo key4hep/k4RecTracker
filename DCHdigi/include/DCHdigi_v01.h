@@ -143,7 +143,8 @@ private:
   void ThrowException(std::string s) const;
 
   int CalculateLayerFromCellID(dd4hep::DDSegmentation::CellID id) const {
-    return m_decoder->get(id, "layer") + dch_data->nlayersPerSuperlayer * m_decoder->get(id, "superlayer") + 1;
+    //return m_decoder->get(id, "layer") + dch_data->nlayersPerSuperlayer * m_decoder->get(id, "superlayer") + 1;
+    return dch_data->CalculateILayerFromCellIDFields( m_decoder->get(id, "layer"), m_decoder->get(id, "superlayer") );
   }
 
   int CalculateNphiFromCellID(dd4hep::DDSegmentation::CellID id) const { return m_decoder->get(id, "nphi"); }
@@ -154,13 +155,6 @@ private:
   edm4hep::Vector3d Convert_TVector3_to_EDM4hepVector(const TVector3& v, double scale) const {
     return {v.x() * scale, v.y() * scale, v.z() * scale};
   };
-
-  // the following functions should be upstreamed to the data extension at DD4hep
-  // to avoid code duplication and keep it centralized
-  TVector3 Calculate_hitpos_to_wire_vector(int ilayer, int nphi, const TVector3& hit_position /*in cm*/) const;
-  TVector3 Calculate_wire_vector_ez(int ilayer, int nphi) const;
-  TVector3 Calculate_wire_z0_point(int ilayer, int nphi) const;
-  double   Calculate_wire_phi_z0(int ilayer, int nphi) const;
 
   //------------------------------------------------------------------
   //        cluster calculation, developed by Walaa
