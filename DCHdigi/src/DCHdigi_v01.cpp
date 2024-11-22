@@ -50,6 +50,8 @@ StatusCode DCHdigi_v01::initialize() {
   ///////////////////////////  retrieve data extension     //////////////////////////
   ///////////////////////////////////////////////////////////////////////////////////
   this->dch_data = DCH_DE.extension<dd4hep::rec::DCH_info>();
+  if (not dch_data->IsValid())
+    ThrowException("No valid data extension was found for detector <<" + DCH_name + ">>.");
 
   ///////////////////////////////////////////////////////////////////////////////////
 
@@ -115,13 +117,13 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
 
     // -------------------------------------------------------------------------
     //      calculate hit position projection into the wire
-    TVector3 hit_to_wire_vector         = this->Calculate_hitpos_to_wire_vector(ilayer, nphi, hit_position);
+    TVector3 hit_to_wire_vector         = this->dch_data->Calculate_hitpos_to_wire_vector(ilayer, nphi, hit_position);
     TVector3 hit_projection_on_the_wire = hit_position + hit_to_wire_vector;
     if (m_create_debug_histos.value()) {
       double distance_hit_wire = hit_to_wire_vector.Mag();
       hDpw->Fill(distance_hit_wire);
     }
-    TVector3 wire_direction_ez = this->Calculate_wire_vector_ez(ilayer, nphi);
+    TVector3 wire_direction_ez = this->dch_data->Calculate_wire_vector_ez(ilayer, nphi);
 
     // -------------------------------------------------------------------------
     //       smear the position
@@ -134,7 +136,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     hit_projection_on_the_wire += smearing_z * (wire_direction_ez.Unit());
     if (m_create_debug_histos.value()) {
       // the distance from the hit projection and the wire should be zero
-      TVector3 dummy_vector = this->Calculate_hitpos_to_wire_vector(ilayer, nphi, hit_projection_on_the_wire);
+      TVector3 dummy_vector = this->dch_data->Calculate_hitpos_to_wire_vector(ilayer, nphi, hit_projection_on_the_wire);
       hDww->Fill(dummy_vector.Mag());
     }
 
@@ -193,14 +195,39 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       finalize       //////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-StatusCode DCHdigi_v01::finalize() {
-  if (m_create_debug_histos.value()) {
-    std::unique_ptr<TFile> ofile{TFile::Open(m_out_debug_filename.value().c_str(), "recreate")};
+
+void DCHdigi_v01::Create_outputROOTfile_for_debugHistograms()
+{
+  // save current ROOT directory
+  TDirectory* currentDir = gDirectory;
+
+  // save the debug histograms in a file
+  // file is saved and closed when going out of scope
+  {
+    auto filename = m_out_debug_filename.value().c_str();
+    std::unique_ptr<TFile> ofile{TFile::Open( filename, "recreate")};
+    if (!ofile || ofile->IsZombie())
+    {
+        error() << "Error: Could not open file " << filename << std::endl;
+        return;
+    }
     ofile->cd();
     hDpw->Write();
     hDww->Write();
     hSxy->Write();
     hSz->Write();
+  }
+
+  // Restore previous ROOT directory
+  if(currentDir && ( not currentDir->IsDestructed() ) )
+    currentDir->cd();
+  return;
+}
+
+StatusCode DCHdigi_v01::finalize() {
+  if (m_create_debug_histos.value())
+  {
+     this->Create_outputROOTfile_for_debugHistograms();
   }
 
   return StatusCode::SUCCESS;

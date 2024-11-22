@@ -72,7 +72,6 @@
 #include "AlgData.h"
 
 /// constant to convert from mm (EDM4hep) to DD4hep (cm)
-constexpr double MM_TO_CM = 0.1;
 
 struct DCHdigi_v01 final
     : k4FWCore::MultiTransformer<
@@ -87,6 +86,9 @@ struct DCHdigi_v01 final
   operator()(const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&) const override;
 
 private:
+  /// conversion factor mm to cm, static to the class to avoid clash with DD4hep
+  static constexpr double MM_TO_CM = 0.1;
+
   //------------------------------------------------------------------
   //          machinery for geometry
 
@@ -193,6 +195,10 @@ private:
 
   /// histogram to store smearing perpendicular the wire
   TH1D* hSxy;
+
+  /// Create ROOT file for debug histograms
+  /// Does not change ROOT directory
+  void Create_outputROOTfile_for_debugHistograms();
 };
 
 DECLARE_COMPONENT(DCHdigi_v01);
