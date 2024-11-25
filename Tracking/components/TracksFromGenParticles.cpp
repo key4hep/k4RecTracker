@@ -45,6 +45,9 @@ std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection> ope
       debug() << "Particle decayed in tracker: " << genParticle.isDecayedInTracker() << endmsg;
       debug() << genParticle << endmsg;
 
+      // consider only charged particles
+      if(genParticle.getCharge() == 0) continue;
+
       // Building an helix out of MCParticle properties and B field
       auto helixFromGenParticle = HelixClass_double();
       double genParticleVertex[] = {genParticle.getVertex().x, genParticle.getVertex().y, genParticle.getVertex().z};
@@ -66,10 +69,10 @@ std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection> ope
       trackState_AtFirstHit.location = edm4hep::TrackState::AtFirstHit;
       trackFromGen.addToTrackStates(trackState_AtFirstHit);
       auto trackState_AtLastHit = edm4hep::TrackState(trackState_IP);
-      trackState_AtFirstHit.location = edm4hep::TrackState::AtLastHit;
+      trackState_AtLastHit.location = edm4hep::TrackState::AtLastHit;
       trackFromGen.addToTrackStates(trackState_AtLastHit);
       auto trackState_AtCalorimeter = edm4hep::TrackState(trackState_IP);
-      trackState_AtFirstHit.location = edm4hep::TrackState::AtCalorimeter;
+      trackState_AtCalorimeter.location = edm4hep::TrackState::AtCalorimeter;
       trackFromGen.addToTrackStates(trackState_AtCalorimeter);
 
       //debug() << trackFromGen << endmsg;
