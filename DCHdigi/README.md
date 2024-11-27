@@ -10,10 +10,11 @@
 * Debug histograms are created if `create_debug_histograms` option is enabled (output file name can be given)
 * Stand alone test run simulation of the drift chamber based on twisted tubes, and then apply the digitizer. Dedicated directory with all the files needed is given in `DCHdigi/test/test_DCHdigi/`
 * Random number generator uses the seeds calculated on an event basis by the UID service, from the podio header information (run/event number)
-* This digitizer is meant to be used with `DriftChamber_o1_v02` and is expected to work for the upcoming `DriftChamber_o1_v03`
+* This digitizer is meant to be used with `DriftChamber_o1_v02` from k4geo and is expected to work for the upcoming `DriftChamber_o1_v03`
 
-## DCHsimpleDigitizer
+## DCHsimpleDigitizerExtendedEdm
 
-* Similar to DCHdigi_v01, but it uses the placement matrix of the wires to apply the smearing along/perpendicular to the sense wire
+* Algorithm for creating digitized drift chamber hits (based on edm4hep::TrackerHit3D) from edm4hep::SimTrackerHit. Resolution along z and xy (distance to the wire) has to be specified. The smearing is applied in the wire reference frame, by means of the placement matrix of the wires
 * No cluster counting information is added into the digitized output
 * It relies on a dedicated data extension, similar to DCHdigi_v01
+* This digitizer is meant to be used with `DriftChamber_o1_v01` from k4geo. Deprecated.
