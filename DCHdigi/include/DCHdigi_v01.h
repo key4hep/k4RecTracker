@@ -16,17 +16,19 @@
  * (default name DCH_DigiCollection) <br>
  * @param DCH_name DCH subdetector name <br>
  * (default value DCH_v2) <br>
-  * @param fileDataAlg File needed for calculating cluster count and size <br>
- * (default value /eos/.../DataAlgFORGEANT.root) <br>
-  * @param zResolution_mm Resolution (sigma for gaussian smearing) along the sense wire, in mm <br>
- * (default value 1 mm) <br>
-  * @param xyResolution_mm Resolution (sigma for gaussian smearing) perpendicular the sense wire, in mm <br>
- * (default value 0.1 mm) <br>
-  * @param create_debug_histograms Optional flag to create debug histograms <br>
+ * @param calculate_dndx Optional flag to calcualte dNdx information <br>
  * (default value false) <br>
-  * @param GeoSvcName Geometry service name <br>
+ * @param fileDataAlg File needed for calculating cluster count and size <br>
+ * (default value /eos/.../DataAlgFORGEANT.root) <br>
+ * @param zResolution_mm Resolution (sigma for gaussian smearing) along the sense wire, in mm <br>
+ * (default value 1 mm) <br>
+ * @param xyResolution_mm Resolution (sigma for gaussian smearing) perpendicular the sense wire, in mm <br>
+ * (default value 0.1 mm) <br>
+ * @param create_debug_histograms Optional flag to create debug histograms <br>
+ * (default value false) <br>
+ * @param GeoSvcName Geometry service name <br>
  * (default value GeoSvc) <br>
-  * @param uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring reproducibility. <br>
+ * @param uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring reproducibility. <br>
  * (default value uidSvc) <br>
  * <br>
  */

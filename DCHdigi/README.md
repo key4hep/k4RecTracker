@@ -4,7 +4,7 @@
 
 * Each simulated hit is transformed into a digitized hit. The digitized hit position is the projection of the simulated hit position onto the sense wire (at the center of the cell)
 * Smearing of the digitized hit position along the wire and radially is done according to the input parameter values (`zResolution_mm` and `xyResolution_mm`, respectively)
-* The digitized hit adds new information: number of clusters and their size, which are derived from precalculated distributions contained in an input file specified by the parameter `fileDataAlg`. The method and distributions corresponds to the option 3 described in F. Cuna et al, arXiv:2105.07064
+* The digitized hit adds dNdx information if flag `calculate_dndx` is enabled (default not). This information consist on number of clusters and their size, which are derived from precalculated distributions contained in an input file specified by the parameter `fileDataAlg`. The method and distributions corresponds to the option 3 described in F. Cuna et al, arXiv:2105.07064
 * It requires that the cellID contain the layer and number of cell within the layer (nphi). It does not matter if the segmentation comes from geometrical segmentation by using twisted tubes and hyperboloids (and the cellID is created out of volume IDs), or the segmentation is virtual DD4hep segmentation
 * New digitized hit class is used as an EDM4hep data extension, to be integrated into EDM4hep
 * Debug histograms are created if `create_debug_histograms` option is enabled (output file name can be given)
