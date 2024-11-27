@@ -10,6 +10,7 @@
 * Debug histograms are created if `create_debug_histograms` option is enabled (output file name can be given)
 * Stand alone test run simulation of the drift chamber based on twisted tubes, and then apply the digitizer. Dedicated directory with all the files needed is given in `DCHdigi/test/test_DCHdigi/`
 * Random number generator uses the seeds calculated on an event basis by the UID service, from the podio header information (run/event number)
+* This digitizer is meant to be used with `DriftChamber_o1_v02` and is expected to work for the upcoming `DriftChamber_o1_v03`
 
 ## DCHsimpleDigitizer
 
