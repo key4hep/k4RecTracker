@@ -81,9 +81,9 @@ StatusCode DCHdigi_v01::initialize() {
   PrintConfiguration(ss);
   info() << ss.str().c_str() << endmsg;
   if (m_create_debug_histos.value()) {
-    hDpw = new TH1D("hDpw", "Distance hit to the wire, in cm", 100, 0, 1);
+    hDpw = new TH1D("hDpw", "Distance from sim-hit to the wire, in cm", 100, 0, 1);
     hDpw->SetDirectory(0);
-    hDww = new TH1D("hDww", "Distance hit projection to the wire, in cm. Should be zero", 100, 0, 1);
+    hDww = new TH1D("hDww", "Distance from digi-hit to the wire, in cm. Should be zero because digi-hit central position lies on the wire", 100, 0, 1);
     hDww->SetDirectory(0);
     hSz = new TH1D("hSz", "Smearing along the wire, in cm", 100, 0, 5 * m_z_resolution.value());
     hSz->SetDirectory(0);
@@ -157,8 +157,6 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
     float distanceToWire = distanceToWire_smeared / MM_TO_CM;
 
-    auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit);
-
     extension::MutableDriftChamberDigiV2 oDCHdigihit;
     oDCHdigihit.setCellID(input_sim_hit.getCellID());
     oDCHdigihit.setType(type);
@@ -169,13 +167,18 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setPosition(positionSW);
     oDCHdigihit.setDirectionSW(directionSW);
     oDCHdigihit.setDistanceToWire(distanceToWire);
-    oDCHdigihit.setNCluster(nCluster);
-    // to return the total number of electrons within the step, do the following:
-    //   int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
-    //   oDCHdigihit.setNElectronsTotal(nElectronsTotal);
-    // to copy the vector of each cluster size to the EDM4hep data extension, do the following:
-    for( auto ne : nElectrons_v )
-      oDCHdigihit.addToNElectrons(ne);
+    // For the sake of speed, let the dNdx calculation be optional
+    if( m_calculate_dndx.value() )
+    {
+      auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit);
+      oDCHdigihit.setNCluster(nCluster);
+      // to return the total number of electrons within the step, do the following:
+      //   int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
+      //   oDCHdigihit.setNElectronsTotal(nElectronsTotal);
+      // to copy the vector of each cluster size to the EDM4hep data extension, do the following:
+      for( auto ne : nElectrons_v )
+        oDCHdigihit.addToNElectrons(ne);
+    }
 
     output_digi_hits.push_back(oDCHdigihit);
 

@@ -160,7 +160,11 @@ private:
 
   //------------------------------------------------------------------
   //        cluster calculation, developed by Walaa
-
+  
+  /// Flag to create to calculate cluster counting information
+  Gaudi::Property<bool> m_calculate_dndx{this, "calculate_dndx", false,
+                                              "Calculate number of clusters and electron per cluster"};
+                                              
   /// file with distributions to be sampled
   Gaudi::Property<std::string> m_fileDataAlg{
       this, "fileDataAlg", "/eos/project/f/fccsw-web/www/filesForSimDigiReco/IDEA/DataAlgFORGEANT.root",
@@ -174,6 +178,7 @@ private:
 
   bool IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle &) const ;
 
+
   //------------------------------------------------------------------
   //        debug information
 
@@ -184,10 +189,12 @@ private:
   /// name for the file that will contain the histograms for debugging
   Gaudi::Property<std::string> m_out_debug_filename{this, "out_debug_filename", "dch_digi_alg_debug.root",
                                                     "name for the file that will contain the histograms for debugging"};
-  /// histogram to store distance from hit position to the wire
+  /// histogram to store distance from sim hit position to the sense wire
   TH1D* hDpw;
 
-  /// histogram to store distance from hit projection to the wire (should be zero)
+  /// histogram to store distance from digi-hit to the wire. Should be zero because digi-hit central position lies on the wire.
+  /// This histogram is a consistency check, because the function used to calculate the distance to the wire is different from
+  /// the function used to calculate the digi-hit central position from a sim-hit position
   TH1D* hDww;
 
   /// histogram to store smearing along the wire
