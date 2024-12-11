@@ -28,7 +28,7 @@ install(FILES
 
 install(FILES
   dataFormatExtension/driftChamberHit.yaml
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/extension" COMPONENT dev)
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/extension" COMPONENT dev)
 
 install(FILES
   "${PROJECT_BINARY_DIR}/libextensionDict_rdict.pcm"
@@ -42,15 +42,29 @@ file(GLOB headers
   ${PROJECT_SOURCE_DIR}/include/*.h
 )
 
+include(CheckIncludeFileCXX)
+set(CMAKE_REQUIRED_LIBRARIES DD4hep::DDRec)
+CHECK_INCLUDE_FILE_CXX(DDRec/DCH_info.h DCH_INFO_H_EXIST)
+set(CMAKE_REQUIRED_LIBRARIES)
+set(FILES_DEPENDINGON_DCH_INFO_H "DCHdigi.cpp" )
+if(NOT DCH_INFO_H_EXIST)
+    list(FILTER sources EXCLUDE REGEX "${FILES_DEPENDINGON_DCH_INFO_H}")
+    message(WARNING "Gaudi algorithm defined in ${FILES_DEPENDINGON_DCH_INFO_H} will not be built because header file DDRec/DCH_info.h was not found")
+endif()
+
 gaudi_add_module(${PackageName}
   SOURCES ${sources}
   LINK
+  k4FWCore::k4FWCore
+  k4FWCore::k4Interface
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   extensionDict
-  k4FWCore::k4FWCore
-  k4FWCore::k4Interface
   DD4hep::DDRec
+  DD4hep::DDCore
+  ROOT::MathCore
+  ROOT::MathMore
+  GSL::gsl
 )
 
 target_include_directories(${PackageName} PUBLIC
@@ -71,7 +85,7 @@ install(TARGETS ${PackageName}
   EXPORT ${CMAKE_PROJECT_NAME}Targets
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT bin
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT shlib
-  PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/@{CMAKE_PROJECT_NAME}" COMPONENT dev
+  PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${CMAKE_PROJECT_NAME}" COMPONENT dev
 )
 
 install(FILES ${scripts} DESTINATION test)
@@ -83,3 +97,8 @@ set_test_env(${test_name})
 SET(test_name "test_DCHsimpleDigitizerExtendedEdm")
 ADD_TEST(NAME ${test_name} COMMAND k4run test/runDCHsimpleDigitizerExtendedEdm.py)
 set_test_env(${test_name})
+
+SET(test_name "test_runDCHdigiV2")
+ADD_TEST(NAME ${test_name} COMMAND sh +x test_DCHdigi.sh )
+set_test_env(${test_name})
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/DCHdigi/test/test_DCHdigi")
