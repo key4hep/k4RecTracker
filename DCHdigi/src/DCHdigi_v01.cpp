@@ -154,9 +154,26 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     float        eDepError = 0;
     // length units back to mm
     auto  positionSW     = Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1. / MM_TO_CM);
-    auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
+    //auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
     float distanceToWire = distanceToWire_smeared / MM_TO_CM;
 
+    // The direction of the sense wires can be calculated as:
+    //   RotationZ(WireAzimuthalAngle) * RotationX(stereoangle)
+    // One point of the wire is for example the following:
+    //   RotationZ(WireAzimuthalAngle) * Position(cell_rave_z0, 0 , 0)
+    // variables aredefined below
+    auto WireAzimuthalAngle = this->dch_data->Get_cell_phi_angle(ilayer, nphi);
+    float WireStereoAngle = 0;
+    {
+      auto l = this->dch_data->database.at(ilayer);
+      // radial middle point of the cell at Z=0
+      auto cell_rave_z0 = 0.5*(l.radius_fdw_z0 + l.radius_fuw_z0);
+      // when building the twisted tube, the twist angle is defined as:
+      //     cell_twistangle    = l.StereoSign() * DCH_i->twist_angle
+      // which forces the stereoangle of the wire to have the oposite sign
+      WireStereoAngle = (-1.)*l.StereoSign()*dch_data->stereoangle_z0(cell_rave_z0);      
+    }
+    
     extension::MutableSenseWireHit oDCHdigihit;
     oDCHdigihit.setCellID(input_sim_hit.getCellID());
     oDCHdigihit.setType(type);
@@ -165,7 +182,8 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setEDep(input_sim_hit.getEDep());
     oDCHdigihit.setEDepError(eDepError);
     oDCHdigihit.setPosition(positionSW);
-//    oDCHdigihit.setDirectionSW(directionSW);
+    oDCHdigihit.setWireAzimuthalAngle(WireAzimuthalAngle);
+    oDCHdigihit.setWireStereoAngle(WireStereoAngle);
     oDCHdigihit.setDistanceToWire(distanceToWire);
     // For the sake of speed, let the dNdx calculation be optional
     if( m_calculate_dndx.value() )
