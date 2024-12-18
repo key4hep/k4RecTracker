@@ -12,7 +12,7 @@
  * Processor produces collection of Digitized hits of Drift Chamber v2<br>
  * @param DCH_simhits The name of input collection, type edm4hep::SimTrackerHitCollection <br>
  * (default name empty) <br>
- * @param DCH_DigiCollection The name of out collection, type extension::DriftChamberDigiV2Collection <br>
+ * @param DCH_DigiCollection The name of out collection, type extension::SenseWireHitCollection <br>
  * (default name DCH_DigiCollection) <br>
  * @param DCH_name DCH subdetector name <br>
  * (default value DCH_v2) <br>
@@ -50,8 +50,8 @@
 #include "edm4hep/SimTrackerHitCollection.h"
 
 // EDM4HEP extension
-#include "extension/DriftChamberDigiV2Collection.h"
-#include "extension/MCRecoDriftChamberDigiV2AssociationCollection.h"
+#include "extension/SenseWireHitCollection.h"
+#include "extension/SenseWireHitSimTrackerHitLinkCollection.h"
 
 // DD4hep
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
@@ -77,14 +77,14 @@
 
 struct DCHdigi_v01 final
     : k4FWCore::MultiTransformer<
-          std::tuple<extension::DriftChamberDigiV2Collection, extension::MCRecoDriftChamberDigiV2AssociationCollection>(
+          std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection>(
               const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
   DCHdigi_v01(const std::string& name, ISvcLocator* svcLoc);
 
   StatusCode initialize() override;
   StatusCode finalize() override;
 
-  std::tuple<extension::DriftChamberDigiV2Collection, extension::MCRecoDriftChamberDigiV2AssociationCollection>
+  std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection>
   operator()(const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&) const override;
 
 private:
