@@ -4,7 +4,7 @@
 #include <iostream>
 #include <sstream>
 
-#include "extension/MutableDriftChamberDigiV2.h"
+#include "extension/MutableSenseWireHit.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////
 //////////////////////       DCHdigi_v01 constructor       ////////////////////////////
@@ -96,7 +96,7 @@ StatusCode DCHdigi_v01::initialize() {
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       operator()       ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
-std::tuple<extension::DriftChamberDigiV2Collection, extension::MCRecoDriftChamberDigiV2AssociationCollection>
+std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection>
 DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
                     const edm4hep::EventHeaderCollection&   headers) const {
   // initialize seed for random engine
@@ -105,8 +105,8 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
   debug() << "Input Sim Hit collection size: " << input_sim_hits.size() << endmsg;
 
   // Create the collections we are going to return
-  extension::DriftChamberDigiV2Collection                  output_digi_hits;
-  extension::MCRecoDriftChamberDigiV2AssociationCollection output_digi_sim_association;
+  extension::SenseWireHitCollection                  output_digi_hits;
+  extension::SenseWireHitSimTrackerHitLinkCollection output_digi_sim_association;
 
   //loop over hit collection
   for (const auto& input_sim_hit : input_sim_hits) {
@@ -154,10 +154,27 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     float        eDepError = 0;
     // length units back to mm
     auto  positionSW     = Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1. / MM_TO_CM);
-    auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
+    //auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
     float distanceToWire = distanceToWire_smeared / MM_TO_CM;
 
-    extension::MutableDriftChamberDigiV2 oDCHdigihit;
+    // The direction of the sense wires can be calculated as:
+    //   RotationZ(WireAzimuthalAngle) * RotationX(stereoangle)
+    // One point of the wire is for example the following:
+    //   RotationZ(WireAzimuthalAngle) * Position(cell_rave_z0, 0 , 0)
+    // variables aredefined below
+    auto WireAzimuthalAngle = this->dch_data->Get_cell_phi_angle(ilayer, nphi);
+    float WireStereoAngle = 0;
+    {
+      auto l = this->dch_data->database.at(ilayer);
+      // radial middle point of the cell at Z=0
+      auto cell_rave_z0 = 0.5*(l.radius_fdw_z0 + l.radius_fuw_z0);
+      // when building the twisted tube, the twist angle is defined as:
+      //     cell_twistangle    = l.StereoSign() * DCH_i->twist_angle
+      // which forces the stereoangle of the wire to have the oposite sign
+      WireStereoAngle = (-1.)*l.StereoSign()*dch_data->stereoangle_z0(cell_rave_z0);      
+    }
+    
+    extension::MutableSenseWireHit oDCHdigihit;
     oDCHdigihit.setCellID(input_sim_hit.getCellID());
     oDCHdigihit.setType(type);
     oDCHdigihit.setQuality(quality);
@@ -165,13 +182,13 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setEDep(input_sim_hit.getEDep());
     oDCHdigihit.setEDepError(eDepError);
     oDCHdigihit.setPosition(positionSW);
-    oDCHdigihit.setDirectionSW(directionSW);
+    oDCHdigihit.setWireAzimuthalAngle(WireAzimuthalAngle);
+    oDCHdigihit.setWireStereoAngle(WireStereoAngle);
     oDCHdigihit.setDistanceToWire(distanceToWire);
     // For the sake of speed, let the dNdx calculation be optional
     if( m_calculate_dndx.value() )
     {
       auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit);
-      oDCHdigihit.setNCluster(nCluster);
       // to return the total number of electrons within the step, do the following:
       //   int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
       //   oDCHdigihit.setNElectronsTotal(nElectronsTotal);
@@ -182,16 +199,16 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
 
     output_digi_hits.push_back(oDCHdigihit);
 
-    extension::MutableMCRecoDriftChamberDigiV2Association oDCHsimdigi_association;
-    oDCHsimdigi_association.setDigi(oDCHdigihit);
-    oDCHsimdigi_association.setSim(input_sim_hit);
+    extension::MutableSenseWireHitSimTrackerHitLink oDCHsimdigi_association;
+    oDCHsimdigi_association.setFrom(oDCHdigihit);
+    oDCHsimdigi_association.setTo(input_sim_hit);
     output_digi_sim_association.push_back(oDCHsimdigi_association);
 
   }  // end loop over hit collection
 
   /////////////////////////////////////////////////////////////////
-  return std::make_tuple<extension::DriftChamberDigiV2Collection,
-                         extension::MCRecoDriftChamberDigiV2AssociationCollection>(
+  return std::make_tuple<extension::SenseWireHitCollection,
+                         extension::SenseWireHitSimTrackerHitLinkCollection>(
       std::move(output_digi_hits), std::move(output_digi_sim_association));
 }
 
