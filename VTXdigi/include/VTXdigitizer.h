@@ -12,15 +12,7 @@
 
 // EDM4HEP
 #include "edm4hep/SimTrackerHitCollection.h"
-#include "edm4hep/TrackCollection.h"
-#if __has_include("edm4hep/TrackerHit3DCollection.h")
 #include "edm4hep/TrackerHit3DCollection.h"
-#else
-#include "edm4hep/TrackerHitCollection.h"
-namespace edm4hep {
-  using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
-}  // namespace edm4hep
-#endif
 #include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
 
 // DD4HEP

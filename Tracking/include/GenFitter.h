@@ -1,7 +1,6 @@
 #pragma once
 
 // GAUDI
-#include "Gaudi/Property.h"
 #include "Gaudi/Algorithm.h"
 
 // K4FWCORE
@@ -9,14 +8,7 @@
 
 // EDM4HEP
 #include "edm4hep/TrackCollection.h"
-#if __has_include("edm4hep/TrackerHit3DCollection.h")
 #include "edm4hep/TrackerHit3DCollection.h"
-#else
-#include "edm4hep/TrackerHitCollection.h"
-namespace edm4hep {
-  using TrackerHit3DCollection = edm4hep::TrackerHitCollection;
-}  // namespace edm4hep
-#endif
 
 // GENFIT
 //#include "WireMeasurement.h"
