@@ -97,11 +97,11 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
     // loop over the gen particles, find charged ones, and create the corresponding reco particles
     int iparticle = 0;
     for (const auto& genParticle : *genParticleColl) {
-      debug() << "Particle decayed in tracker: " << genParticle.isDecayedInTracker() << endmsg;
+      debug() << endmsg;
       debug() << "Gen. particle: " << genParticle << endmsg;
-
       debug() <<"  particle "<<iparticle++<<"  PDG: "<< genParticle.getPDG()  << " energy: "<<genParticle.getEnergy()
               << " charge: "<< genParticle.getCharge() << endmsg;
+      debug() << "Particle decayed in tracker: " << genParticle.isDecayedInTracker() << endmsg;
 
       // consider only charged particles
       if (genParticle.getCharge() == 0) continue;
@@ -227,33 +227,15 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
                                                                     (float)posAtCalorimeter[2]);
         // attach the TrackState to the track
         trackFromGen.addToTrackStates(trackState_AtCalorimeter);
-      }
-      else
-      {
-	      // particles without SimTrackerHit (do they exist?)
-	      // create dummy TrackState positions, all set to IP
-	      // FIXME: check if really needed for Pandora, there will probably
-	      // be some cut on the minimum number of hits...
-	      warning() << "Found particle without SimTrackerHit" << endmsg;
-        auto trackState_AtFirstHit = edm4hep::TrackState(trackState_IP);
-        trackState_AtFirstHit.location = edm4hep::TrackState::AtFirstHit;
-        trackFromGen.addToTrackStates(trackState_AtFirstHit);
-        auto trackState_AtLastHit = edm4hep::TrackState(trackState_IP);
-        trackState_AtLastHit.location = edm4hep::TrackState::AtLastHit;
-        trackFromGen.addToTrackStates(trackState_AtLastHit);
-        auto trackState_AtCalorimeter = edm4hep::TrackState(trackState_IP);
-        trackState_AtCalorimeter.location = edm4hep::TrackState::AtCalorimeter;
-        trackFromGen.addToTrackStates(trackState_AtCalorimeter);
-      }
 
-      //debug() << trackFromGen << endmsg;
-      outputTrackCollection->push_back(trackFromGen);
+        outputTrackCollection->push_back(trackFromGen);
 
-      // Building the association between tracks and genParticles
-      auto MCRecoTrackParticleAssociation = edm4hep::MutableTrackMCParticleLink();
-      MCRecoTrackParticleAssociation.setFrom(trackFromGen);
-      MCRecoTrackParticleAssociation.setTo(genParticle);
-      MCRecoTrackParticleAssociationCollection->push_back(MCRecoTrackParticleAssociation);
+        // Building the association between tracks and genParticles
+        auto MCRecoTrackParticleAssociation = edm4hep::MutableTrackMCParticleLink();
+        MCRecoTrackParticleAssociation.setFrom(trackFromGen);
+        MCRecoTrackParticleAssociation.setTo(genParticle);
+        MCRecoTrackParticleAssociationCollection->push_back(MCRecoTrackParticleAssociation);
+      }
     }
 
     // push the outputTrackCollection to event store
