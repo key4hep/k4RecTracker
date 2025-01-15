@@ -25,13 +25,11 @@
  *  GaudiAlg version of TracksFromGenParticles, that builds an edm4hep::TrackCollection out of an edm4hep::MCParticleCollection.
  *  It just builds an helix out of the genParticle position, momentum, charge and user defined z component of the (constant) magnetic field.
  *  From this helix, different edm4hep::TrackStates (AtIP, AtFirstHit, AtLastHit and AtCalorimeter) are defined.
- *  The first and last hits are defined as those with smallest and largest R in the input SimTrackerHit collection
- *  FIXME: create a merged hit collection that contains hits from multiple collections e.g.
- *         VertexBarrelCollection, VertexEndcapCollection, DCHCollection, SiWrBCollection, SiWrDCollection
+ *  The first and last hits are defined as those with smallest and largest R in the input SimTrackerHit collections
  *  This is meant to enable technical development needing edm4hep::Track and performance studies where having generator based trackis is a reasonable approximation.
  *  Possible inprovement:
  *    - Retrieve magnetic field from geometry: const DD4hep::Field::MagneticField& magneticField = detector.field(); DD4hep::DDRec::Vector3D field = magneticField.magneticField(point);
- *
+ *    - Handle properly tracks that hit the ECAL endcaps
  *  @author Brieuc Francois
  *  @author Archil Durglishvili
  *  @author Giovanni Marchiori
@@ -48,8 +46,6 @@ class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
   private:
     /// Handle for input MC particles
     mutable DataHandle<edm4hep::MCParticleCollection> m_inputMCParticles{"MCParticles", Gaudi::DataHandle::Reader, this};
-    /// Handle for input sim tracker hits
-    /// mutable DataHandle<edm4hep::SimTrackerHitCollection> m_inputSimTrackerHits{"SimTrackerHit", Gaudi::DataHandle::Reader, this};
     /// List of input sim tracker hit collections
     Gaudi::Property<std::vector<std::string>> m_inputSimTrackerHitCollections{this, "InputSimTrackerHits", {}, "Names of SimTrackerHit collections to read"};
     /// the vector of input DataHandles for the tracker hit collections
@@ -67,7 +63,6 @@ class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
 TracksFromGenParticlesAlg::TracksFromGenParticlesAlg(const std::string& name, ISvcLocator* svcLoc) :
 Gaudi::Algorithm(name, svcLoc) {
   declareProperty("InputGenParticles", m_inputMCParticles, "input MCParticles");
-  // declareProperty("InputSimTrackerHits", m_inputSimTrackerHits, "input SimTrackerHits");
   declareProperty("OutputTracks", m_tracks, "Output tracks");
   declareProperty("OutputMCRecoTrackParticleAssociation", m_links, "MCRecoTrackParticleAssociation");
 }
@@ -76,7 +71,7 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
   StatusCode sc = Gaudi::Algorithm::initialize();
   if (sc.isFailure()) return sc;
 
-  // FIXME: check for errors
+  // FIXME: handle exceptions if collections not found
   for ( const auto& col : m_inputSimTrackerHitCollections ) {
     debug() << "Creating handle for input SimTrackerHit collection : " << col << endmsg;
     m_inputSimTrackerHitCollectionHandles.push_back(new DataHandle<edm4hep::SimTrackerHitCollection>(col, Gaudi::DataHandle::Reader, this));
@@ -88,8 +83,6 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
 StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
     // Get the input MC particle collection
     const edm4hep::MCParticleCollection* genParticleColl = m_inputMCParticles.get();
-    // Get the input collection with the tracker hits
-    // const edm4hep::SimTrackerHitCollection* simTrackerHitColl = m_inputSimTrackerHits.get();
     // Create the output track collection and track gen<->reco links collection
     auto outputTrackCollection = new edm4hep::TrackCollection();
     auto MCRecoTrackParticleAssociationCollection = new edm4hep::TrackMCParticleLinkCollection();
@@ -130,11 +123,6 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
 
       // find SimTrackerHits associated to genParticle
       std::vector<std::array<double,6> > trackHits;
-      // for (const auto& hit : *simTrackerHitColl) {
-      //   const edm4hep::MCParticle particle = hit.getParticle();
-      //   std::array<double,6> ahit{hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2]};
-      //   if(particle.getVertex() == genParticle.getVertex() && particle.getMomentum() == genParticle.getMomentum()) trackHits.push_back(ahit);
-      // }
       for ( size_t ih=0; ih<m_inputSimTrackerHitCollectionHandles.size(); ih++ ) {
         auto handle = dynamic_cast<DataHandle<edm4hep::SimTrackerHitCollection>*> (m_inputSimTrackerHitCollectionHandles[ih]);
         const edm4hep::SimTrackerHitCollection* coll = handle->get();
