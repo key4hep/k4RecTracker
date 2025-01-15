@@ -73,6 +73,7 @@ make get_data
 * `DCHdigi`: drift chamber digitization (for now, this step produces 'reco' collection)
 * `ARCdigi`: ARC digitization (for now, this step produces 'reco' collection)
 * `VTXdigi`: vertex detector digitization (for now, this step produces 'reco' collection)
+* `VTXdigiDetailed`: vertex detector and silicon sensors tracker detector digitization with detailed charge readout (for now, this step produces 'reco' collection)
 * `Tracking`: tracking algorithms orchestrating [GenFit](https://github.com/GenFit/GenFit)
 
 ## Execute Examples 
