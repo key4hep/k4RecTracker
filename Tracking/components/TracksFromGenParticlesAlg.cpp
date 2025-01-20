@@ -18,7 +18,11 @@
 #include "GaudiKernel/ToolHandle.h"
 
 // DD4HEP
+#include <DDRec/DetectorData.h>
 #include "DD4hep/Detector.h"
+#include "DD4hep/DD4hepUnits.h"
+#include "DD4hep/DetType.h"
+#include "DD4hep/DetectorSelector.h"
 
 // C++
 #include <string>
@@ -38,6 +42,49 @@
  *  @author Giovanni Marchiori
  */
 
+// the next two functions have been copied from k4GaudiPandora and DDMarlinPandora / DDPandoraPFANewProcessor
+// ideally they could be put in a separate file named e.g. DDUtils.cc
+
+double getFieldFromCompact(){
+
+  dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
+  const double position[3]={0,0,0}; // position to calculate magnetic field at (the origin in this case)
+  double magneticFieldVector[3]={0,0,0}; // initialise object to hold magnetic field
+  mainDetector.field().magneticField(position,magneticFieldVector); // get the magnetic field vector from DD4hep
+
+  return magneticFieldVector[2]/dd4hep::tesla; // z component at (0,0,0)
+
+}
+
+dd4hep::rec::LayeredCalorimeterData * getExtension(unsigned int includeFlag, unsigned int excludeFlag=0) {
+
+  dd4hep::rec::LayeredCalorimeterData * theExtension = 0;
+
+  dd4hep::Detector & mainDetector = dd4hep::Detector::getInstance();
+  const std::vector< dd4hep::DetElement>& theDetectors = dd4hep::DetectorSelector(mainDetector).detectors(  includeFlag, excludeFlag );
+
+  // debug() <<
+  std::cout << " getExtension :  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
+                          << "  found : " << theDetectors.size() << "  - first det: " << theDetectors.at(0).name()
+                          //<< endmsg;
+                          << std::endl;
+
+  if( theDetectors.size()  != 1 ){
+
+    std::stringstream es ;
+    es << " getExtension: selection is not unique (or empty)  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
+       << " --- found detectors : " ;
+    for( unsigned i=0, N= theDetectors.size(); i<N ; ++i ){
+      es << theDetectors.at(i).name() << ", " ;
+    }
+    throw std::runtime_error( es.str() ) ;
+  }
+
+  theExtension = theDetectors.at(0).extension<dd4hep::rec::LayeredCalorimeterData>();
+
+  return theExtension;
+}
+
 class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
 
   public:
@@ -56,7 +103,12 @@ class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
     /// Solenoid magnetic field, to be retrieved from detector
     float m_Bz;
     /// Inner radius of the ECAL
-    Gaudi::Property<float> m_RadiusAtCalo{this, "RadiusAtCalo", 2172.8, "Inner radius (in mm) of the calorimeter where the TrackState::AtCalorimeter should be defined."};
+    // Gaudi::Property<float> m_RadiusAtCalo{this, "RadiusAtCalo", 2172.8, "Inner radius (in mm) of the calorimeter where the TrackState::AtCalorimeter should be defined."};
+    float m_ecalBarrelInnerR;
+    float m_ecalBarrelMaxZ;
+    float m_ecalEndcapInnerR;
+    float m_ecalEndcapMinZ;
+    float m_ecalEndcapMaxZ;
     /// Handle for the output track collection
     mutable DataHandle<edm4hep::TrackCollection> m_tracks{"TracksFromGenParticlesAlg", Gaudi::DataHandle::Writer, this};
     /// Handle for the output links between reco and gen particles
@@ -83,12 +135,36 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
   }
 
   // retrieve B field
-  dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
-  const double position[3]  = {0, 0, 0};  // position to calculate magnetic field at (the origin in this case)
-  double magneticFieldVector[3] = {0, 0, 0};               // initialise object to hold magnetic field
-  mainDetector.field().magneticField(position, magneticFieldVector);  // get the magnetic field vector from DD4hep
-  m_Bz = magneticFieldVector[2] / dd4hep::tesla;  // z component at (0,0,0)
+  m_Bz = getFieldFromCompact();
+  // (also available as getFieldFromCompact in DDMarlinPandora/src/DDPandoraPFANewProcessor.cc)
+  // dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
+  // const double position[3]  = {0, 0, 0};  // position to calculate magnetic field at (the origin in this case)
+  // double magneticFieldVector[3] = {0, 0, 0};               // initialise object to hold magnetic field
+  // mainDetector.field().magneticField(position, magneticFieldVector);  // get the magnetic field vector from DD4hep
+  // m_Bz = magneticFieldVector[2] / dd4hep::tesla;  // z component at (0,0,0)
   debug() << "B field (T) is : " << m_Bz << endmsg;
+
+  // retrieve ecal dimensions:
+  // - barrel: inner R, zmax
+  // - endcap: inner R, zmin, zmax
+  // if using getExtension from DDMarlinPandora/src/DDPandoraPFANewProcessor.cc:
+  const dd4hep::rec::LayeredCalorimeterData * eCalBarrelExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
+                                                                                  ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
+  const dd4hep::rec::LayeredCalorimeterData * eCalEndcapExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
+                                                                                  ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
+  m_ecalBarrelInnerR = eCalBarrelExtension->extent[0] / dd4hep::mm;
+  m_ecalBarrelMaxZ = eCalBarrelExtension->extent[3] / dd4hep::mm;
+  m_ecalEndcapInnerR = eCalEndcapExtension->extent[0] / dd4hep::mm;
+  m_ecalEndcapMinZ = eCalEndcapExtension->extent[2] / dd4hep::mm;
+  m_ecalEndcapMaxZ = eCalEndcapExtension->extent[3] / dd4hep::mm;
+  debug() << "ECAL barrel extent: Rmin [mm] = " << m_ecalBarrelInnerR << endmsg;
+  debug() << "ECAL barrel extent: Zmax [mm] = " << m_ecalBarrelMaxZ << endmsg;
+  debug() << "ECAL endcap extent: Rmin [mm] = " << m_ecalEndcapInnerR << endmsg;
+  debug() << "ECAL endcap extent: Zmin [mm] = " << m_ecalEndcapMinZ << endmsg;
+  debug() << "ECAL barrel extent: Zmax [mm] = " << m_ecalEndcapMaxZ << endmsg;
+
+  // if using detector constants:
+
   return StatusCode::SUCCESS;
 }
 
@@ -141,7 +217,7 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
         for (const auto& hit : *coll) {
           const edm4hep::MCParticle particle = hit.getParticle();
           std::array<double,6> ahit{hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2]};
-          if(particle.getVertex() == genParticle.getVertex() && particle.getMomentum() == genParticle.getMomentum()) trackHits.push_back(ahit);
+          if(particle.getObjectID() == genParticle.getObjectID()) trackHits.push_back(ahit);
         }
       }
     
@@ -206,7 +282,7 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
         // TrackState at Calorimeter
         auto trackState_AtCalorimeter = edm4hep::TrackState{};
         double pointAtCalorimeter[] = {0.,0.,0.,0.,0.,0.};
-        auto time = helixAtLastHit.getPointOnCircle(m_RadiusAtCalo, posAtLastHit, pointAtCalorimeter);
+        auto time = helixAtLastHit.getPointOnCircle(m_ecalBarrelInnerR, posAtLastHit, pointAtCalorimeter);
         double posAtCalorimeter[] = {pointAtCalorimeter[0], pointAtCalorimeter[1], pointAtCalorimeter[2]};
         debug() << "Radius at calorimeter: " << std::sqrt(pointAtCalorimeter[0]*pointAtCalorimeter[0] + pointAtCalorimeter[1]*pointAtCalorimeter[1]) << endmsg;
         double momAtCalorimeter[] = {0.,0.,0.};
