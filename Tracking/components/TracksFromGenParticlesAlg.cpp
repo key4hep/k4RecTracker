@@ -17,6 +17,9 @@
 #include "Gaudi/Algorithm.h"
 #include "GaudiKernel/ToolHandle.h"
 
+// DD4HEP
+#include "DD4hep/Detector.h"
+
 // C++
 #include <string>
 
@@ -50,8 +53,8 @@ class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
     Gaudi::Property<std::vector<std::string>> m_inputSimTrackerHitCollections{this, "InputSimTrackerHits", {}, "Names of SimTrackerHit collections to read"};
     /// the vector of input DataHandles for the tracker hit collections
     std::vector<DataObjectHandleBase*> m_inputSimTrackerHitCollectionHandles;
-    /// Solenoid magnetic fild
-    Gaudi::Property<float> m_Bz{this, "Bz", 2., "Z component of the (assumed constant) magnetic field in Tesla."};
+    /// Solenoid magnetic field, to be retrieved from detector
+    float m_Bz;
     /// Inner radius of the ECAL
     Gaudi::Property<float> m_RadiusAtCalo{this, "RadiusAtCalo", 2172.8, "Inner radius (in mm) of the calorimeter where the TrackState::AtCalorimeter should be defined."};
     /// Handle for the output track collection
@@ -65,6 +68,8 @@ Gaudi::Algorithm(name, svcLoc) {
   declareProperty("InputGenParticles", m_inputMCParticles, "input MCParticles");
   declareProperty("OutputTracks", m_tracks, "Output tracks");
   declareProperty("OutputMCRecoTrackParticleAssociation", m_links, "MCRecoTrackParticleAssociation");
+
+  m_Bz = 0.;
 }
 
 StatusCode TracksFromGenParticlesAlg::initialize() {
@@ -77,6 +82,13 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
     m_inputSimTrackerHitCollectionHandles.push_back(new DataHandle<edm4hep::SimTrackerHitCollection>(col, Gaudi::DataHandle::Reader, this));
   }
 
+  // retrieve B field
+  dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
+  const double position[3]  = {0, 0, 0};  // position to calculate magnetic field at (the origin in this case)
+  double magneticFieldVector[3] = {0, 0, 0};               // initialise object to hold magnetic field
+  mainDetector.field().magneticField(position, magneticFieldVector);  // get the magnetic field vector from DD4hep
+  m_Bz = magneticFieldVector[2] / dd4hep::tesla;  // z component at (0,0,0)
+  debug() << "B field (T) is : " << m_Bz << endmsg;
   return StatusCode::SUCCESS;
 }
 
@@ -135,11 +147,11 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
     
       if(!trackHits.empty())
       {
-	      // particles with at least one SimTrackerHit
-	      debug() << "Number of SimTrackerHits: " << trackHits.size() << endmsg;
-	
+        // particles with at least one SimTrackerHit
+        debug() << "Number of SimTrackerHits: " << trackHits.size() << endmsg;
+
         // sort the hits according to radial distance from beam axis
-	      // FIXME: does this work well also for tracks going to endcaps of vtx/wrapper?
+        // FIXME: does this work well also for tracks going to endcaps of vtx/wrapper?
         std::sort(trackHits.begin(), trackHits.end(), [](const std::array<double,6> a, const std::array<double,6> b) {
           double rhoA = std::sqrt(a[0]*a[0] + a[1]*a[1]);
           double rhoB = std::sqrt(b[0]*b[0] + b[1]*b[1]);
@@ -148,7 +160,7 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
 
         // TrackState at First Hit
         auto trackState_AtFirstHit = edm4hep::TrackState {};
-	      auto firstHit = trackHits.front();
+        auto firstHit = trackHits.front();
         double posAtFirstHit[] = {firstHit[0], firstHit[1], firstHit[2]};
         double momAtFirstHit[] = {firstHit[3], firstHit[4], firstHit[5]};
         debug() << "Radius of first hit: " << std::sqrt(firstHit[0]*firstHit[0] + firstHit[1]*firstHit[1]) << endmsg;
@@ -169,7 +181,7 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
 
         // TrackState at Last Hit
         auto trackState_AtLastHit = edm4hep::TrackState{};
-	      auto lastHit = trackHits.back();
+        auto lastHit = trackHits.back();
         double posAtLastHit[] = {lastHit[0], lastHit[1], lastHit[2]};
         double momAtLastHit[] = {lastHit[3], lastHit[4], lastHit[5]};
         debug() << "Radius of last hit: " << std::sqrt(lastHit[0]*lastHit[0] + lastHit[1]*lastHit[1]) << endmsg;
