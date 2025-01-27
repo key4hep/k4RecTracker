@@ -10,6 +10,9 @@
 // marlin
 #include <marlinutil/HelixClass_double.h>
 
+// pandora
+#include <Objects/Helix.h>
+
 // k4FWCore
 #include "k4FWCore/DataHandle.h"
 
@@ -34,56 +37,10 @@
  *  From this helix, different edm4hep::TrackStates (AtIP, AtFirstHit, AtLastHit and AtCalorimeter) are defined.
  *  The first and last hits are defined as those with smallest and largest R in the input SimTrackerHit collections
  *  This is meant to enable technical development needing edm4hep::Track and performance studies where having generator based trackis is a reasonable approximation.
- *  Possible inprovement:
- *    - Retrieve magnetic field from geometry: const DD4hep::Field::MagneticField& magneticField = detector.field(); DD4hep::DDRec::Vector3D field = magneticField.magneticField(point);
- *    - Handle properly tracks that hit the ECAL endcaps
  *  @author Brieuc Francois
  *  @author Archil Durglishvili
  *  @author Giovanni Marchiori
  */
-
-// the next two functions have been copied from k4GaudiPandora and DDMarlinPandora / DDPandoraPFANewProcessor
-// ideally they could be put in a separate file named e.g. DDUtils.cc
-
-double getFieldFromCompact(){
-
-  dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
-  const double position[3]={0,0,0}; // position to calculate magnetic field at (the origin in this case)
-  double magneticFieldVector[3]={0,0,0}; // initialise object to hold magnetic field
-  mainDetector.field().magneticField(position,magneticFieldVector); // get the magnetic field vector from DD4hep
-
-  return magneticFieldVector[2]/dd4hep::tesla; // z component at (0,0,0)
-
-}
-
-dd4hep::rec::LayeredCalorimeterData * getExtension(unsigned int includeFlag, unsigned int excludeFlag=0) {
-
-  dd4hep::rec::LayeredCalorimeterData * theExtension = 0;
-
-  dd4hep::Detector & mainDetector = dd4hep::Detector::getInstance();
-  const std::vector< dd4hep::DetElement>& theDetectors = dd4hep::DetectorSelector(mainDetector).detectors(  includeFlag, excludeFlag );
-
-  // debug() <<
-  std::cout << " getExtension :  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
-                          << "  found : " << theDetectors.size() << "  - first det: " << theDetectors.at(0).name()
-                          //<< endmsg;
-                          << std::endl;
-
-  if( theDetectors.size()  != 1 ){
-
-    std::stringstream es ;
-    es << " getExtension: selection is not unique (or empty)  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
-       << " --- found detectors : " ;
-    for( unsigned i=0, N= theDetectors.size(); i<N ; ++i ){
-      es << theDetectors.at(i).name() << ", " ;
-    }
-    throw std::runtime_error( es.str() ) ;
-  }
-
-  theExtension = theDetectors.at(0).extension<dd4hep::rec::LayeredCalorimeterData>();
-
-  return theExtension;
-}
 
 class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
 
@@ -102,18 +59,57 @@ class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
     std::vector<DataObjectHandleBase*> m_inputSimTrackerHitCollectionHandles;
     /// Solenoid magnetic field, to be retrieved from detector
     float m_Bz;
-    /// Inner radius of the ECAL
-    // Gaudi::Property<float> m_RadiusAtCalo{this, "RadiusAtCalo", 2172.8, "Inner radius (in mm) of the calorimeter where the TrackState::AtCalorimeter should be defined."};
-    float m_ecalBarrelInnerR;
-    float m_ecalBarrelMaxZ;
-    float m_ecalEndcapInnerR;
-    float m_ecalEndcapMinZ;
-    float m_ecalEndcapMaxZ;
+    /// ECAL barrel and endcap extent
+    float m_eCalBarrelInnerR;
+    float m_eCalBarrelMaxZ;
+    float m_eCalEndCapInnerR;
+    float m_eCalEndCapInnerZ;
+    float m_eCalEndCapOuterZ;
     /// Handle for the output track collection
     mutable DataHandle<edm4hep::TrackCollection> m_tracks{"TracksFromGenParticlesAlg", Gaudi::DataHandle::Writer, this};
     /// Handle for the output links between reco and gen particles
     mutable DataHandle<edm4hep::TrackMCParticleLinkCollection> m_links{"TracksFromGenParticlesAlgAssociation", Gaudi::DataHandle::Writer, this};
+
+  // the next two functions have been copied from k4GaudiPandora and DDMarlinPandora / DDPandoraPFANewProcessor
+  // ideally they could be put in a separate file named e.g. DDUtils.cc
+  double getFieldFromCompact();
+  dd4hep::rec::LayeredCalorimeterData * getExtension(unsigned int includeFlag, unsigned int excludeFlag=0);
 };
+
+double TracksFromGenParticlesAlg::getFieldFromCompact() {
+    dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
+    const double position[3]={0,0,0}; // position to calculate magnetic field at (the origin in this case)
+    double magneticFieldVector[3]={0,0,0}; // initialise object to hold magnetic field
+    mainDetector.field().magneticField(position,magneticFieldVector); // get the magnetic field vector from DD4hep
+  return magneticFieldVector[2]/dd4hep::tesla; // z component at (0,0,0)
+}
+
+dd4hep::rec::LayeredCalorimeterData * TracksFromGenParticlesAlg::getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
+
+  dd4hep::rec::LayeredCalorimeterData * theExtension = 0;
+
+  dd4hep::Detector & mainDetector = dd4hep::Detector::getInstance();
+  const std::vector< dd4hep::DetElement>& theDetectors = dd4hep::DetectorSelector(mainDetector).detectors(  includeFlag, excludeFlag );
+
+  debug() << " getExtension :  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
+                          << "  found : " << theDetectors.size() << "  - first det: " << theDetectors.at(0).name()
+                          << endmsg;
+
+  if( theDetectors.size()  != 1 ){
+
+    std::stringstream es ;
+    es << " getExtension: selection is not unique (or empty)  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
+       << " --- found detectors : " ;
+    for( unsigned i=0, N= theDetectors.size(); i<N ; ++i ){
+      es << theDetectors.at(i).name() << ", " ;
+    }
+    throw std::runtime_error( es.str() ) ;
+  }
+
+  theExtension = theDetectors.at(0).extension<dd4hep::rec::LayeredCalorimeterData>();
+
+  return theExtension;
+}
 
 TracksFromGenParticlesAlg::TracksFromGenParticlesAlg(const std::string& name, ISvcLocator* svcLoc) :
 Gaudi::Algorithm(name, svcLoc) {
@@ -136,34 +132,31 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
 
   // retrieve B field
   m_Bz = getFieldFromCompact();
-  // (also available as getFieldFromCompact in DDMarlinPandora/src/DDPandoraPFANewProcessor.cc)
-  // dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
-  // const double position[3]  = {0, 0, 0};  // position to calculate magnetic field at (the origin in this case)
-  // double magneticFieldVector[3] = {0, 0, 0};               // initialise object to hold magnetic field
-  // mainDetector.field().magneticField(position, magneticFieldVector);  // get the magnetic field vector from DD4hep
-  // m_Bz = magneticFieldVector[2] / dd4hep::tesla;  // z component at (0,0,0)
   debug() << "B field (T) is : " << m_Bz << endmsg;
+
+  // retrieve tracker dimensions
+  //const dd4hep::rec::LayeredCalorimeterData * wrapperBarrelExtension = getExtension( ( dd4hep::DetType::TRACKER | dd4hep::DetType::BARREL ) , dd4hep::DetType::VERTEX );
+  //const dd4hep::rec::LayeredCalorimeterData * wrapperEndcapExtension = getExtension( ( dd4hep::DetType::TRACKER | dd4hep::DetType::ENDCAP ), dd4hep::DetType::VERTEX );
+  //const dd4hep::rec::LayeredCalorimeterData * vertexBarrelExtension = getExtension( ( dd4hep::DetType::TRACKER | dd4hep::DetType::BARREL | dd4hep::DetType::VERTEX ) );
+  //const dd4hep::rec::LayeredCalorimeterData * vertexEndcapExtension = getExtension( ( dd4hep::DetType::TRACKER | dd4hep::DetType::ENDCAP | dd4hep::DetType::VERTEX ) );
 
   // retrieve ecal dimensions:
   // - barrel: inner R, zmax
   // - endcap: inner R, zmin, zmax
-  // if using getExtension from DDMarlinPandora/src/DDPandoraPFANewProcessor.cc:
   const dd4hep::rec::LayeredCalorimeterData * eCalBarrelExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
                                                                                   ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
   const dd4hep::rec::LayeredCalorimeterData * eCalEndcapExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
                                                                                   ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
-  m_ecalBarrelInnerR = eCalBarrelExtension->extent[0] / dd4hep::mm;
-  m_ecalBarrelMaxZ = eCalBarrelExtension->extent[3] / dd4hep::mm;
-  m_ecalEndcapInnerR = eCalEndcapExtension->extent[0] / dd4hep::mm;
-  m_ecalEndcapMinZ = eCalEndcapExtension->extent[2] / dd4hep::mm;
-  m_ecalEndcapMaxZ = eCalEndcapExtension->extent[3] / dd4hep::mm;
-  debug() << "ECAL barrel extent: Rmin [mm] = " << m_ecalBarrelInnerR << endmsg;
-  debug() << "ECAL barrel extent: Zmax [mm] = " << m_ecalBarrelMaxZ << endmsg;
-  debug() << "ECAL endcap extent: Rmin [mm] = " << m_ecalEndcapInnerR << endmsg;
-  debug() << "ECAL endcap extent: Zmin [mm] = " << m_ecalEndcapMinZ << endmsg;
-  debug() << "ECAL barrel extent: Zmax [mm] = " << m_ecalEndcapMaxZ << endmsg;
-
-  // if using detector constants:
+  m_eCalBarrelInnerR = eCalBarrelExtension->extent[0] / dd4hep::mm;
+  m_eCalBarrelMaxZ = eCalBarrelExtension->extent[3] / dd4hep::mm;
+  m_eCalEndCapInnerR = eCalEndcapExtension->extent[0] / dd4hep::mm;
+  m_eCalEndCapInnerZ = eCalEndcapExtension->extent[2] / dd4hep::mm;
+  m_eCalEndCapOuterZ = eCalEndcapExtension->extent[3] / dd4hep::mm;
+  debug() << "ECAL barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
+  debug() << "ECAL barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
+  debug() << "ECAL endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
+  debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
+  debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
 
   return StatusCode::SUCCESS;
 }
@@ -171,6 +164,7 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
 StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
     // Get the input MC particle collection
     const edm4hep::MCParticleCollection* genParticleColl = m_inputMCParticles.get();
+
     // Create the output track collection and track gen<->reco links collection
     auto outputTrackCollection = new edm4hep::TrackCollection();
     auto MCRecoTrackParticleAssociationCollection = new edm4hep::TrackMCParticleLinkCollection();
@@ -209,14 +203,14 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
       trackState_IP.referencePoint = edm4hep::Vector3f((float)genParticleVertex[0],(float)genParticleVertex[1],(float)genParticleVertex[2]);
       trackFromGen.addToTrackStates(trackState_IP);
 
-      // find SimTrackerHits associated to genParticle
-      std::vector<std::array<double,6> > trackHits;
+      // find SimTrackerHits associated to genParticle, store hit position, momentum and time
+      std::vector<std::array<double,7> > trackHits;
       for ( size_t ih=0; ih<m_inputSimTrackerHitCollectionHandles.size(); ih++ ) {
         auto handle = dynamic_cast<DataHandle<edm4hep::SimTrackerHitCollection>*> (m_inputSimTrackerHitCollectionHandles[ih]);
         const edm4hep::SimTrackerHitCollection* coll = handle->get();
         for (const auto& hit : *coll) {
           const edm4hep::MCParticle particle = hit.getParticle();
-          std::array<double,6> ahit{hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2]};
+          std::array<double,7> ahit{hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2], hit.getTime()};
           if(particle.getObjectID() == genParticle.getObjectID()) trackHits.push_back(ahit);
         }
       }
@@ -226,12 +220,9 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
         // particles with at least one SimTrackerHit
         debug() << "Number of SimTrackerHits: " << trackHits.size() << endmsg;
 
-        // sort the hits according to radial distance from beam axis
-        // FIXME: does this work well also for tracks going to endcaps of vtx/wrapper?
-        std::sort(trackHits.begin(), trackHits.end(), [](const std::array<double,6> a, const std::array<double,6> b) {
-          double rhoA = std::sqrt(a[0]*a[0] + a[1]*a[1]);
-          double rhoB = std::sqrt(b[0]*b[0] + b[1]*b[1]);
-          return rhoA < rhoB;
+        // sort the hits according to their time
+        std::sort(trackHits.begin(), trackHits.end(), [](const std::array<double,7> a, const std::array<double,7> b) {
+          return a[6]<b[6];
         });
 
         // TrackState at First Hit
@@ -282,9 +273,35 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
         // TrackState at Calorimeter
         auto trackState_AtCalorimeter = edm4hep::TrackState{};
         double pointAtCalorimeter[] = {0.,0.,0.,0.,0.,0.};
-        auto time = helixAtLastHit.getPointOnCircle(m_ecalBarrelInnerR, posAtLastHit, pointAtCalorimeter);
-        double posAtCalorimeter[] = {pointAtCalorimeter[0], pointAtCalorimeter[1], pointAtCalorimeter[2]};
-        debug() << "Radius at calorimeter: " << std::sqrt(pointAtCalorimeter[0]*pointAtCalorimeter[0] + pointAtCalorimeter[1]*pointAtCalorimeter[1]) << endmsg;
+
+        // First project to endcap
+        float minGenericTime(std::numeric_limits<float>::max());
+        const pandora::Helix helix(trackState_IP.phi,
+                                   trackState_IP.D0,
+                                   trackState_IP.Z0,
+                                   trackState_IP.omega,
+                                   trackState_IP.tanLambda,
+                                   m_Bz);
+        const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
+
+        pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
+        const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
+        (void)helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ, referencePoint,
+                                bestECalProjection, minGenericTime);
+
+        // Then project to barrel surface(s), and keep projection with lower arrival time
+        pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
+        float genericTime(std::numeric_limits<float>::max());
+        const pandora::StatusCode statusCode(helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint, barrelProjection, genericTime));
+        if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (genericTime < minGenericTime)) {
+          minGenericTime = genericTime;
+          bestECalProjection = barrelProjection;
+        }
+
+        // auto time = helixAtLastHit.getPointOnCircle(m_eCalBarrelInnerR, posAtLastHit, pointAtCalorimeter);
+        // double posAtCalorimeter[] = {pointAtCalorimeter[0], pointAtCalorimeter[1], pointAtCalorimeter[2]};
+        double posAtCalorimeter[] = {bestECalProjection.GetX(), bestECalProjection.GetY(), bestECalProjection.GetZ()};
+        debug() << "Radius at calorimeter: " << std::sqrt(posAtCalorimeter[0]*posAtCalorimeter[0] + posAtCalorimeter[1]*posAtCalorimeter[1]) << endmsg;
         double momAtCalorimeter[] = {0.,0.,0.};
         // get extrapolated momentum from the helix with ref point at last hit
         helixAtLastHit.getExtrapolatedMomentum(posAtCalorimeter, momAtCalorimeter);
