@@ -4,7 +4,15 @@ project(${PackageName})
 
 #find_package(GenFit)
 find_package(MarlinUtil REQUIRED)
-
+list(APPEND CMAKE_MODULE_PATH $ENV{PANDORAPFA}/cmakemodules)
+find_package(PandoraSDK REQUIRED)
+FOREACH( pkg  MarlinUtil PandoraSDK )
+  IF( ${pkg}_FOUND )
+    INCLUDE_DIRECTORIES( ${${pkg}_INCLUDE_DIRS} )
+    LINK_LIBRARIES( ${${pkg}_LIBRARIES} )
+    ADD_DEFINITIONS ( ${${pkg}_DEFINITIONS} )
+  ENDIF()
+ENDFOREACH()
 #if (GenFit_FOUND)
 
 file(GLOB sources
