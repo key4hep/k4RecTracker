@@ -272,7 +272,6 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
 
         // TrackState at Calorimeter
         auto trackState_AtCalorimeter = edm4hep::TrackState{};
-        double pointAtCalorimeter[] = {0.,0.,0.,0.,0.,0.};
 
         // First project to endcap
         float minGenericTime(std::numeric_limits<float>::max());
@@ -298,8 +297,6 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
           bestECalProjection = barrelProjection;
         }
 
-        // auto time = helixAtLastHit.getPointOnCircle(m_eCalBarrelInnerR, posAtLastHit, pointAtCalorimeter);
-        // double posAtCalorimeter[] = {pointAtCalorimeter[0], pointAtCalorimeter[1], pointAtCalorimeter[2]};
         double posAtCalorimeter[] = {bestECalProjection.GetX(), bestECalProjection.GetY(), bestECalProjection.GetZ()};
         debug() << "Radius at calorimeter: " << std::sqrt(posAtCalorimeter[0]*posAtCalorimeter[0] + posAtCalorimeter[1]*posAtCalorimeter[1]) << endmsg;
         double momAtCalorimeter[] = {0.,0.,0.};
