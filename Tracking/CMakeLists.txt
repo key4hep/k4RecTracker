@@ -3,7 +3,7 @@ set(PackageName Tracking)
 project(${PackageName})
 
 #find_package(GenFit)
-FIND_PACKAGE(MarlinUtil)
+find_package(MarlinUtil REQUIRED)
 
 #if (GenFit_FOUND)
 
