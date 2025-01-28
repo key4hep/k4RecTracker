@@ -26,6 +26,8 @@ namespace edm4hep {
 
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
+#include "DD4hep/DetType.h"
+#include "DDRec/DetectorData.h" // for detector extensions
 #include "DDRec/Vector3D.h"
 #include "DDRec/Vector2D.h"
 #include "DDRec/SurfaceManager.h"
@@ -79,6 +81,12 @@ private:
   // Volume manager to get the physical cell sensitive volume
   dd4hep::VolumeManager m_volman;
 
+  // Normal Vector direction in sensor local frame (may differ according to geometry definition within k4geo)
+  StringProperty m_LocalNormalVectorDir{this, "LocalNormalVectorDir", "", "Normal Vector direction in sensor local frame (may differ according to geometry definition within k4geo)"};
+
+  // List of sensor thickness per layer in millimeter
+  std::vector<float> m_sensorThickness;
+  
   // x resolution in um
   Gaudi::Property<std::vector<float>> m_x_resolution{this, "xResolution", {0.1}, "Spatial resolutions in the x direction per layer [um] (r-phi direction in barrel, z direction in disks)"};
 
@@ -93,6 +101,13 @@ private:
 
   // Option to force hits onto sensitive surface
   BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"};
+
+  // Tangent of sensor's Lorentz angle (default is 0.1)
+  FloatProperty m_tanLorentzAnglePerTesla{this, "tanLorentzAnglePerTesla", {0.1}, "Tangent of sensor's Lorentz angle per Tesla (default is 0.1)"};
+
+  FloatProperty m_Sigma50{this, "Sigma50", 0.00151, "Charge diffusion in millimeters for 50 micron Si. Default = 0.00151mm taken from CMS"};
+
+  float m_Dist50; //=0.050  // Define 50microns in mm
 
   // Random Number Service
   SmartIF<IRndmGenSvc> m_randSvc;
@@ -156,16 +171,23 @@ private:
   }; // End SignalPoint class definition
     
 private:
-  // Additioal member functions
+  // Additional member functions
   // Private methods
+  template<typename T> void getSensorThickness();
+  
   void primary_ionization(const edm4hep::SimTrackerHit& hit,
 			  std::vector<ChargeDepositUnit>& ionizationPoints) const;
+
   void drift(const edm4hep::SimTrackerHit& hit,
 	     const std::vector<ChargeDepositUnit>& ionizationPoints,
 	     std::vector<SignalPoint>& collectionPoints) const;
 
+  dd4hep::rec::Vector3D DriftDirection(const edm4hep::SimTrackerHit& hit) const;
+  
   void induce_signal(const edm4hep::SimTrackerHit& hit,
 		     const std::vector<SignalPoint>& collectionPoints,
 		     std::vector<dd4hep::DDSegmentation::CellID,float>& signal_map) const;
+
+  void SetProperDirectFrame(TGeoHMatrix& sensorTransformMatrix) const;
   
 };
