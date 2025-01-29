@@ -60,4 +60,8 @@ SET(test_name "test_TracksFromGenParticles")
 ADD_TEST(NAME ${test_name} COMMAND k4run test/runTracksFromGenParticles.py)
 set_test_env(${test_name})
 
+SET(test_name "test_TracksFromGenParticlesAlg")
+ADD_TEST(NAME ${test_name} COMMAND k4run test/runTracksFromGenParticlesAlg.py)
+set_test_env(${test_name})
+
 #endif()
