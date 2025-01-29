@@ -33,10 +33,11 @@
 /** @class TracksFromGenParticlesAlg
  *
  *  GaudiAlg version of TracksFromGenParticles, that builds an edm4hep::TrackCollection out of an edm4hep::MCParticleCollection.
- *  It just builds an helix out of the genParticle position, momentum, charge and user defined z component of the (constant) magnetic field.
+ *  It just builds an helix out of the genParticle position, momentum, charge and z component of the (constant) magnetic field, retrieved from the detector.
  *  From this helix, different edm4hep::TrackStates (AtIP, AtFirstHit, AtLastHit and AtCalorimeter) are defined.
- *  The first and last hits are defined as those with smallest and largest R in the input SimTrackerHit collections
- *  This is meant to enable technical development needing edm4hep::Track and performance studies where having generator based trackis is a reasonable approximation.
+ *  The first and last hits are defined as those with smallest and largest time in the input SimTrackerHit collections
+ *  Extrapolation to the EM calorimeter inner face is done using the positions of the barrel and endcap retrieved from the detector data extensions.
+ *  This is meant to enable technical development needing edm4hep::Track and performance studies where having generator based tracks is a reasonable approximation.
  *  @author Brieuc Francois
  *  @author Archil Durglishvili
  *  @author Giovanni Marchiori
