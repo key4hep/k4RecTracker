@@ -30,23 +30,23 @@
 // C++
 #include <string>
 
-/** @class TracksFromGenParticlesAlg
+/** @class TracksFromGenParticlesWithECalExtrapAlg
  *
  *  GaudiAlg version of TracksFromGenParticles, that builds an edm4hep::TrackCollection out of an edm4hep::MCParticleCollection.
  *  It just builds an helix out of the genParticle position, momentum, charge and z component of the (constant) magnetic field, retrieved from the detector.
- *  From this helix, different edm4hep::TrackStates (AtIP, AtFirstHit, AtLastHit and AtCalorimeter) are defined.
+ *  From this helix, different edm4hep::TrackStates (AtIP, AtFirstHit, AtLastHit) are defined.
  *  The first and last hits are defined as those with smallest and largest time in the input SimTrackerHit collections
- *  Extrapolation to the EM calorimeter inner face is done using the positions of the barrel and endcap retrieved from the detector data extensions.
+ *  The algorithm also performs extrapolation to the EM calorimeter inner face is done using the positions of the barrel and endcap retrieved from the detector data extensions.
  *  This is meant to enable technical development needing edm4hep::Track and performance studies where having generator based tracks is a reasonable approximation.
  *  @author Brieuc Francois
  *  @author Archil Durglishvili
  *  @author Giovanni Marchiori
  */
 
-class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
+class TracksFromGenParticlesWithECalExtrapAlg : public Gaudi::Algorithm {
 
   public:
-    TracksFromGenParticlesAlg(const std::string& name, ISvcLocator* svcLoc);
+    TracksFromGenParticlesWithECalExtrapAlg(const std::string& name, ISvcLocator* svcLoc);
     StatusCode initialize();
     StatusCode execute(const EventContext&) const;
     StatusCode finalize();
@@ -64,6 +64,7 @@ class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
     float m_eCalBarrelInnerR;
     float m_eCalBarrelMaxZ;
     float m_eCalEndCapInnerR;
+    float m_eCalEndCapOuterR;
     float m_eCalEndCapInnerZ;
     float m_eCalEndCapOuterZ;
     /// Handle for the output track collection
@@ -77,7 +78,7 @@ class TracksFromGenParticlesAlg : public Gaudi::Algorithm {
     dd4hep::rec::LayeredCalorimeterData * getExtension(unsigned int includeFlag, unsigned int excludeFlag=0);
 };
 
-double TracksFromGenParticlesAlg::getFieldFromCompact() {
+double TracksFromGenParticlesWithECalExtrapAlg::getFieldFromCompact() {
   dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
   const double position[3]={0,0,0}; // position to calculate magnetic field at (the origin in this case)
   double magneticFieldVector[3]={0,0,0}; // initialise object to hold magnetic field
@@ -85,7 +86,7 @@ double TracksFromGenParticlesAlg::getFieldFromCompact() {
   return magneticFieldVector[2]/dd4hep::tesla; // z component at (0,0,0)
 }
 
-dd4hep::rec::LayeredCalorimeterData * TracksFromGenParticlesAlg::getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
+dd4hep::rec::LayeredCalorimeterData * TracksFromGenParticlesWithECalExtrapAlg::getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
 
   dd4hep::rec::LayeredCalorimeterData * theExtension = 0;
 
@@ -112,7 +113,7 @@ dd4hep::rec::LayeredCalorimeterData * TracksFromGenParticlesAlg::getExtension(un
   return theExtension;
 }
 
-TracksFromGenParticlesAlg::TracksFromGenParticlesAlg(const std::string& name, ISvcLocator* svcLoc) :
+TracksFromGenParticlesWithECalExtrapAlg::TracksFromGenParticlesWithECalExtrapAlg(const std::string& name, ISvcLocator* svcLoc) :
 Gaudi::Algorithm(name, svcLoc) {
   declareProperty("InputGenParticles", m_inputMCParticles, "input MCParticles");
   declareProperty("OutputTracks", m_tracks, "Output tracks");
@@ -120,7 +121,7 @@ Gaudi::Algorithm(name, svcLoc) {
   m_Bz = 0.;
 }
 
-StatusCode TracksFromGenParticlesAlg::initialize() {
+StatusCode TracksFromGenParticlesWithECalExtrapAlg::initialize() {
   StatusCode sc = Gaudi::Algorithm::initialize();
   if (sc.isFailure()) return sc;
 
@@ -160,9 +161,11 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
     const dd4hep::rec::LayeredCalorimeterData * eCalEndCapExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
                                                                                     ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
     m_eCalEndCapInnerR = eCalEndCapExtension->extent[0] / dd4hep::mm;
+    m_eCalEndCapOuterR = eCalEndCapExtension->extent[1] / dd4hep::mm;
     m_eCalEndCapInnerZ = eCalEndCapExtension->extent[2] / dd4hep::mm;
     m_eCalEndCapOuterZ = eCalEndCapExtension->extent[3] / dd4hep::mm;
     debug() << "ECAL endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
+    debug() << "ECAL endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
     debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
     debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
   }
@@ -173,7 +176,7 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
   return StatusCode::SUCCESS;
 }
 
-StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
+StatusCode TracksFromGenParticlesWithECalExtrapAlg::execute(const EventContext&) const {
   // Get the input MC particle collection
   const edm4hep::MCParticleCollection* genParticleColl = m_inputMCParticles.get();
 
@@ -302,6 +305,9 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
         if (m_eCalEndCapInnerR>0) {          
           (void)helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ, referencePoint,
                                   bestECalProjection, minGenericTime);
+          // GM: if the radius of the point on the plane corresponding to the endcap inner face is
+          // lower than the inner radius of the calorimeter, we might want to ignore it
+          // for the moment let's keep it as it might be useful for debugging the reconstruction
         }
 
         // Then project to barrel surface(s), and keep projection with lower arrival time
@@ -313,6 +319,9 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
             minGenericTime = genericTime;
             bestECalProjection = barrelProjection;
           }
+          // GM: again, if the Z of the point on the cylinder of the barrel is beyond the
+          // max/min z of the detector, we might want to ignore it - but let's keep it
+          // for the moment as it might be useful for debugging the reconstruction
         }
 
         // get extrapolated position
@@ -361,7 +370,7 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
   return StatusCode::SUCCESS;
 }
 
-StatusCode TracksFromGenParticlesAlg::finalize() { return Gaudi::Algorithm::finalize(); }
+StatusCode TracksFromGenParticlesWithECalExtrapAlg::finalize() { return Gaudi::Algorithm::finalize(); }
 
 
-DECLARE_COMPONENT(TracksFromGenParticlesAlg)
+DECLARE_COMPONENT(TracksFromGenParticlesWithECalExtrapAlg)
