@@ -143,21 +143,22 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
   // retrieve ecal dimensions:
   // - barrel: inner R, zmax
   // - endcap: inner R, zmin, zmax
-  const dd4hep::rec::LayeredCalorimeterData * eCalBarrelExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
-                                                                                  ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
-  const dd4hep::rec::LayeredCalorimeterData * eCalEndCapExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
-                                                                                  ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
-  if (eCalBarrelExtension) {
+  try {
+    const dd4hep::rec::LayeredCalorimeterData * eCalBarrelExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
+                                                                                    ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
     m_eCalBarrelInnerR = eCalBarrelExtension->extent[0] / dd4hep::mm;
     m_eCalBarrelMaxZ = eCalBarrelExtension->extent[3] / dd4hep::mm;
     debug() << "ECAL barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
     debug() << "ECAL barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
   }
-  else {
+  catch(...) {
     warning() << "ECAL barrel extension not found" << endmsg;
     m_eCalBarrelInnerR = 0.; // set to 0, will use it later to avoid projecting to the barrel
-  }
-  if (eCalEndCapExtension) {
+  };
+
+  try {
+    const dd4hep::rec::LayeredCalorimeterData * eCalEndCapExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
+                                                                                    ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
     m_eCalEndCapInnerR = eCalEndCapExtension->extent[0] / dd4hep::mm;
     m_eCalEndCapInnerZ = eCalEndCapExtension->extent[2] / dd4hep::mm;
     m_eCalEndCapOuterZ = eCalEndCapExtension->extent[3] / dd4hep::mm;
@@ -165,10 +166,10 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
     debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
     debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
   }
-  else {
+  catch(...) {
     warning() << "ECAL endcap extension not found" << endmsg;
     m_eCalEndCapInnerR = 0.; // set to 0, will use it later to avoid projecting to the endcap
-  }
+  };
   return StatusCode::SUCCESS;
 }
 
