@@ -3,7 +3,7 @@ from Gaudi.Configuration import INFO, WARNING, DEBUG
 import os
 
 if not os.path.isfile("ddsim_output_edm4hep.root"):
-    os.system("ddsim --enableGun --gun.distribution uniform --gun.energy '10*GeV' --gun.particle e- --numberOfEvents 100 --outputFile ddsim_output_edm4hep.root --random.enableEventSeed --random.seed 42 --compactFile $K4GEO/FCCee/IDEA/compact/IDEA_o1_v02/IDEA_o1_v02.xml")
+    os.system("ddsim --enableGun --gun.distribution uniform --gun.energy '10*GeV' --gun.particle e- --numberOfEvents 100 --outputFile ddsim_output_edm4hep.root --random.enableEventSeed --random.seed 42 --compactFile $K4GEO/FCCee/ALLEGRO/compact/ALLEGRO_o1_v03/ALLEGRO_o1_v03.xml")
 
 # Loading the output of the SIM step
 from k4FWCore import IOSvc
