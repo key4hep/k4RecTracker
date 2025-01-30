@@ -24,7 +24,7 @@ tracksFromGenParticles = TracksFromGenParticles("TracksFromGenParticles",
 from Configurables import PlotTrackHitDistances, RootHistSvc
 from Configurables import Gaudi__Histograming__Sink__Root as RootHistoSink
 plotTrackHitDistances = PlotTrackHitDistances("PlotTrackHitDistances",
-                                             InputSimTrackerHits = ["CDCHHits"],
+                                             InputSimTrackerHits = ["DCHCollection"],
                                              InputTracksFromGenParticlesAssociation = tracksFromGenParticles.OutputMCRecoTrackParticleAssociation, 
                                              Bz = 2.0)
 
