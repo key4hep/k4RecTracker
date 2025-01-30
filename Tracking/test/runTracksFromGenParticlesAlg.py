@@ -1,5 +1,5 @@
 from k4FWCore import ApplicationMgr
-from Gaudi.Configuration import INFO, WARNING, DEBUG
+from Gaudi.Configuration import INFO, DEBUG
 import os
 
 if not os.path.isfile("ddsim_output_edm4hep.root"):
@@ -41,9 +41,9 @@ tracksFromGenParticles = TracksFromGenParticlesAlg("TracksFromGenParticles",
 from Configurables import PlotTrackHitDistances, RootHistSvc
 from Configurables import Gaudi__Histograming__Sink__Root as RootHistoSink
 plotTrackHitDistances = PlotTrackHitDistances("PlotTrackHitDistances",
-                                              InputSimTrackerHits = ["DCHCollection"],
-                                              InputTracksFromGenParticlesAssociation = ["TracksFromGenParticlesAssociation"],
-                                              Bz = 2.0)
+                                              InputSimTrackerHits=["DCHCollection"],
+                                              InputTracksFromGenParticlesAssociation=["TracksFromGenParticlesAssociation"],
+                                              Bz=2.0)
 
 hps = RootHistSvc("HistogramPersistencySvc")
 root_hist_svc = RootHistoSink("RootHistoSink")
@@ -59,7 +59,7 @@ plotTrackHitDistances.AuditExecute = True
 
 from Configurables import EventDataSvc
 ApplicationMgr(
-    TopAlg= [tracksFromGenParticles, plotTrackHitDistances],
+    TopAlg=[tracksFromGenParticles, plotTrackHitDistances],
     EvtSel='NONE',
     EvtMax=-1,
     ExtSvc=[root_hist_svc, EventDataSvc("EventDataSvc"), audsvc, geoservice],

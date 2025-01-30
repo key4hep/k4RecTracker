@@ -117,7 +117,6 @@ Gaudi::Algorithm(name, svcLoc) {
   declareProperty("InputGenParticles", m_inputMCParticles, "input MCParticles");
   declareProperty("OutputTracks", m_tracks, "Output tracks");
   declareProperty("OutputMCRecoTrackParticleAssociation", m_links, "MCRecoTrackParticleAssociation");
-
   m_Bz = 0.;
 }
 
@@ -146,19 +145,30 @@ StatusCode TracksFromGenParticlesAlg::initialize() {
   // - endcap: inner R, zmin, zmax
   const dd4hep::rec::LayeredCalorimeterData * eCalBarrelExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
                                                                                   ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
-  const dd4hep::rec::LayeredCalorimeterData * eCalEndcapExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
+  const dd4hep::rec::LayeredCalorimeterData * eCalEndCapExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
                                                                                   ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
-  m_eCalBarrelInnerR = eCalBarrelExtension->extent[0] / dd4hep::mm;
-  m_eCalBarrelMaxZ = eCalBarrelExtension->extent[3] / dd4hep::mm;
-  m_eCalEndCapInnerR = eCalEndcapExtension->extent[0] / dd4hep::mm;
-  m_eCalEndCapInnerZ = eCalEndcapExtension->extent[2] / dd4hep::mm;
-  m_eCalEndCapOuterZ = eCalEndcapExtension->extent[3] / dd4hep::mm;
-  debug() << "ECAL barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
-  debug() << "ECAL barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
-  debug() << "ECAL endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
-  debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
-  debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
-
+  if (eCalBarrelExtension) {
+    m_eCalBarrelInnerR = eCalBarrelExtension->extent[0] / dd4hep::mm;
+    m_eCalBarrelMaxZ = eCalBarrelExtension->extent[3] / dd4hep::mm;
+    debug() << "ECAL barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
+    debug() << "ECAL barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
+  }
+  else {
+    warning() << "ECAL barrel extension not found" << endmsg;
+    m_eCalBarrelInnerR = 0.; // set to 0, will use it later to avoid projecting to the barrel
+  }
+  if (eCalEndCapExtension) {
+    m_eCalEndCapInnerR = eCalEndCapExtension->extent[0] / dd4hep::mm;
+    m_eCalEndCapInnerZ = eCalEndCapExtension->extent[2] / dd4hep::mm;
+    m_eCalEndCapOuterZ = eCalEndCapExtension->extent[3] / dd4hep::mm;
+    debug() << "ECAL endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
+    debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
+    debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
+  }
+  else {
+    warning() << "ECAL endcap extension not found" << endmsg;
+    m_eCalEndCapInnerR = 0.; // set to 0, will use it later to avoid projecting to the endcap
+  }
   return StatusCode::SUCCESS;
 }
 
@@ -272,52 +282,64 @@ StatusCode TracksFromGenParticlesAlg::execute(const EventContext&) const {
       trackFromGen.addToTrackStates(trackState_AtLastHit);
 
       // TrackState at Calorimeter
-      auto trackState_AtCalorimeter = edm4hep::TrackState{};
+      if (m_eCalBarrelInnerR>0. || m_eCalEndCapInnerR>0.) {
+        auto trackState_AtCalorimeter = edm4hep::TrackState{};
+        pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
 
-      // First project to endcap
-      float minGenericTime(std::numeric_limits<float>::max());
-      const pandora::Helix helix(trackState_IP.phi,
-                                  trackState_IP.D0,
-                                  trackState_IP.Z0,
-                                  trackState_IP.omega,
-                                  trackState_IP.tanLambda,
-                                  m_Bz);
-      const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
+        // create helix to project
+        const pandora::Helix helix(trackState_IP.phi,
+                                   trackState_IP.D0,
+                                   trackState_IP.Z0,
+                                   trackState_IP.omega,
+                                   trackState_IP.tanLambda,
+                                   m_Bz);
+        const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
+        const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
+        
+        // First project to endcap
+        float minGenericTime(std::numeric_limits<float>::max());
+        if (m_eCalEndCapInnerR>0) {          
+          (void)helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ, referencePoint,
+                                  bestECalProjection, minGenericTime);
+        }
 
-      pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
-      const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
-      (void)helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ, referencePoint,
-                              bestECalProjection, minGenericTime);
+        // Then project to barrel surface(s), and keep projection with lower arrival time
+        if (m_eCalBarrelInnerR>0) {
+          pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
+          float genericTime(std::numeric_limits<float>::max());
+          const pandora::StatusCode statusCode(helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint, barrelProjection, genericTime));
+          if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (genericTime < minGenericTime)) {
+            minGenericTime = genericTime;
+            bestECalProjection = barrelProjection;
+          }
+        }
 
-      // Then project to barrel surface(s), and keep projection with lower arrival time
-      pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
-      float genericTime(std::numeric_limits<float>::max());
-      const pandora::StatusCode statusCode(helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint, barrelProjection, genericTime));
-      if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (genericTime < minGenericTime)) {
-        minGenericTime = genericTime;
-        bestECalProjection = barrelProjection;
+        // get extrapolated position
+        double posAtCalorimeter[] = {bestECalProjection.GetX(), bestECalProjection.GetY(), bestECalProjection.GetZ()};
+        debug() << "Radius at calorimeter: " << std::sqrt(posAtCalorimeter[0]*posAtCalorimeter[0] + posAtCalorimeter[1]*posAtCalorimeter[1]) << endmsg;
+        
+        // get extrapolated momentum from the helix with ref point at last hit
+        double momAtCalorimeter[] = {0.,0.,0.};
+        helixAtLastHit.getExtrapolatedMomentum(posAtCalorimeter, momAtCalorimeter);
+        
+        // produce new helix at calorimeter position
+        auto helixAtCalorimeter = HelixClass_double();
+        helixAtCalorimeter.Initialize_VP(posAtCalorimeter, momAtCalorimeter, genParticle.getCharge(), m_Bz);
+        
+        // fill the TrackState parameters
+        trackState_AtCalorimeter.location = edm4hep::TrackState::AtCalorimeter;
+        trackState_AtCalorimeter.D0 = helixAtCalorimeter.getD0();
+        trackState_AtCalorimeter.phi = helixAtCalorimeter.getPhi0();
+        trackState_AtCalorimeter.omega = helixAtCalorimeter.getOmega();
+        trackState_AtCalorimeter.Z0 = helixAtCalorimeter.getZ0();
+        trackState_AtCalorimeter.tanLambda = helixAtCalorimeter.getTanLambda();
+        trackState_AtCalorimeter.referencePoint = edm4hep::Vector3f((float)posAtCalorimeter[0],
+                                                                    (float)posAtCalorimeter[1],
+                                                                    (float)posAtCalorimeter[2]);
+        // attach the TrackState to the track
+        trackFromGen.addToTrackStates(trackState_AtCalorimeter);
       }
 
-      double posAtCalorimeter[] = {bestECalProjection.GetX(), bestECalProjection.GetY(), bestECalProjection.GetZ()};
-      debug() << "Radius at calorimeter: " << std::sqrt(posAtCalorimeter[0]*posAtCalorimeter[0] + posAtCalorimeter[1]*posAtCalorimeter[1]) << endmsg;
-      double momAtCalorimeter[] = {0.,0.,0.};
-      // get extrapolated momentum from the helix with ref point at last hit
-      helixAtLastHit.getExtrapolatedMomentum(posAtCalorimeter, momAtCalorimeter);
-      // produce new helix at calorimeter position
-      auto helixAtCalorimeter = HelixClass_double();
-      helixAtCalorimeter.Initialize_VP(posAtCalorimeter, momAtCalorimeter, genParticle.getCharge(), m_Bz);
-      // fill the TrackState parameters
-      trackState_AtCalorimeter.location = edm4hep::TrackState::AtCalorimeter;
-      trackState_AtCalorimeter.D0 = helixAtCalorimeter.getD0();
-      trackState_AtCalorimeter.phi = helixAtCalorimeter.getPhi0();
-      trackState_AtCalorimeter.omega = helixAtCalorimeter.getOmega();
-      trackState_AtCalorimeter.Z0 = helixAtCalorimeter.getZ0();
-      trackState_AtCalorimeter.tanLambda = helixAtCalorimeter.getTanLambda();
-      trackState_AtCalorimeter.referencePoint = edm4hep::Vector3f((float)posAtCalorimeter[0],
-                                                                  (float)posAtCalorimeter[1],
-                                                                  (float)posAtCalorimeter[2]);
-      // attach the TrackState to the track
-      trackFromGen.addToTrackStates(trackState_AtCalorimeter);
 
       outputTrackCollection->push_back(trackFromGen);
 
