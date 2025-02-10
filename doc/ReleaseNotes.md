@@ -1,3 +1,30 @@
+# v00.04.00
+
+* 2025-01-31 Giovanni Marchiori ([PR#43](https://github.com/key4hep/k4RecTracker/pull/43))
+  - Add a Gaudi::Algorithm to create tracks from generator-level particles with charge!=0 and number of simtrackerhits>0 (temporary work around needed because one can not use the edm4hep <--> lcio converters with IOSvc and functionals)
+  - Track states at IP, first tracker hit, last tracker hit and extrapolation to calorimeter are calculated and saved by the algorithm
+
+* 2024-12-29 jmcarcell ([PR#40](https://github.com/key4hep/k4RecTracker/pull/40))
+  - Remove the check for TrackerHit3D from edm4hep
+
+* 2024-12-26 jmcarcell ([PR#29](https://github.com/key4hep/k4RecTracker/pull/29))
+  - Add REQUIRED for MarlinUtil in CMakeLists.txt
+
+* 2024-12-19 Alvaro Tolosa Delgado ([PR#42](https://github.com/key4hep/k4RecTracker/pull/42))
+  - DCHdigi_v01 now uses evolved data extension `SenseWireHit`
+
+* 2024-12-18 BrieucF ([PR#41](https://github.com/key4hep/k4RecTracker/pull/41))
+  - Add SenseWireHit data type in extension to validate the content of https://github.com/key4hep/EDM4hep/pull/385
+
+* 2024-11-27 Alvaro Tolosa Delgado ([PR#27](https://github.com/key4hep/k4RecTracker/pull/27))
+  - New digitizer for DCH v2 (based on twisted tubes). It calculates cluster information and smears the position along and perpendicular the wire separately. New custom EDM4hep data extension was added to include these data.
+
+* 2024-11-25 Archil Durglishvili ([PR#39](https://github.com/key4hep/k4RecTracker/pull/39))
+  - Only a charged genParticle is considered to form a track in TracksFromGenParticles algorithm
+
+* 2024-11-08 jmcarcell ([PR#37](https://github.com/key4hep/k4RecTracker/pull/37))
+  - Fix service retrieval after deprecations in Gaudi v39r1, see https://gitlab.cern.ch/gaudi/Gaudi/-/merge_requests/1637
+
 # v00-03-00
 
 * 2024-09-28 jmcarcell ([PR#35](https://github.com/key4hep/k4RecTracker/pull/35))
