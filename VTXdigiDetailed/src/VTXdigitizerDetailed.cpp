@@ -12,6 +12,7 @@ VTXdigitizerDetailed::VTXdigitizerDetailed(const std::string& aName, ISvcLocator
 VTXdigitizerDetailed::~VTXdigitizerDetailed() {}
 
 StatusCode VTXdigitizerDetailed::initialize() {
+
   // Initialise LocalNormalVectorDir with forcing the user to declare a value
   if ( !(m_LocalNormalVectorDir=="x" || m_LocalNormalVectorDir=="y" || m_LocalNormalVectorDir=="z") ) {
     error() << "LocalNormalVectorDir property should be declared as a string with the direction (x,y or z) of the normal vector to sensitive surface in the sensor local frame (may differ according to the geometry definition within k4geo). Add a - sign before the direction in case of indirect frame." << endmsg;
@@ -23,22 +24,6 @@ StatusCode VTXdigitizerDetailed::initialize() {
   if (!m_randSvc) {
     error() << "Couldn't get RndmGenSvc!" << endmsg;
     return StatusCode::FAILURE;
-  }
-
-  m_gauss_x_vec.resize(m_x_resolution.size());
-  for (size_t i = 0; i < m_x_resolution.size(); ++i) {
-    if (m_gauss_x_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_x_resolution[i])).isFailure()) {
-      error() << "Couldn't initialize RndmGenSvc!" << endmsg;
-      return StatusCode::FAILURE;
-    }
-  }
-
-  m_gauss_y_vec.resize(m_y_resolution.size());
-  for (size_t i = 0; i < m_y_resolution.size(); ++i) {  
-    if (m_gauss_y_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_y_resolution[i])).isFailure()) {
-      error() << "Couldn't initialize RndmGenSvc!" << endmsg;
-      return StatusCode::FAILURE;
-    }
   }
 
   m_gauss_t_vec.resize(m_t_resolution.size());
@@ -57,7 +42,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   // set the cellID decoder
   m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder(); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
-
+  
   if (m_decoder->fieldDescription().find("layer") == std::string::npos){
     error() 
       << " Readout " << m_readoutName << " does not contain layer id!"
@@ -69,19 +54,23 @@ StatusCode VTXdigitizerDetailed::initialize() {
   m_volman = m_geoSvc->getDetector()->volumeManager();
 
   // Get the sensor thickness per layer in mm
-  //getSensorThickness();
   dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag()); // Get detector Type
-  if (type.is(dd4hep::DetType::BARREL)) // if this is a barrel detector
+  if (type.is(dd4hep::DetType::BARREL)) { // if this is a barrel detector
     getSensorThickness<dd4hep::rec::ZPlanarData>();
-  else if (type.is(dd4hep::DetType::ENDCAP)) // If this is an Endcap Detector
+  }
+  else if (type.is(dd4hep::DetType::ENDCAP)) { // If this is an Endcap Detector
     getSensorThickness<dd4hep::rec::ZDiskPetalsData>();
+  }
   else {
     error() << m_detectorName << " : Detector type should be BARREL or ENDCAP " << endmsg;
     return StatusCode::FAILURE;
   }
-
-  // Initilize the diffusion parameters
+  
+  // InitiAlize the diffusion parameters
   m_Dist50 = 0.050; // Define 50microns in mm
+
+  // initialise the cluster width
+  m_ClusterWidth = 3.0;
   
   return StatusCode::SUCCESS;
 }
@@ -117,133 +106,17 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
     
     std::vector<ChargeDepositUnit> ionizationPoints;
     std::vector<SignalPoint> collectionPoints;
+    hit_map_type hit_map;
+    
     primary_ionization(input_sim_hit, ionizationPoints);
+
     drift(input_sim_hit, ionizationPoints, collectionPoints);
-    
-    // END TEST new digitizer members
+
+    get_charge_per_pixel(input_sim_hit, collectionPoints, hit_map);
+
+    generate_output(input_sim_hit, output_digi_hits, output_sim_digi_link_col, hit_map);
       
-    auto output_digi_hit = output_digi_hits->create();
-    auto output_sim_digi_link = output_sim_digi_link_col->create();
-
-    // smear the hit position: need to go in the local frame of the silicon sensor to smear in the direction along/perpendicular to the stave
-
-    // retrieve the cell detElement
-    dd4hep::DDSegmentation::CellID cellID = input_sim_hit.getCellID();
-    debug() << "Digitisation of " << m_readoutName << ", cellID: " << cellID << endmsg;
-
-    // Get transformation matrix of sensor
-    const auto& sensorTransformMatrix = m_volman.lookupVolumePlacement(cellID).matrix();
-
-    // Retrieve global position in mm and apply unit transformation (translation matrix is stored in cm)
-    double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
-                                      input_sim_hit.getPosition().y * dd4hep::mm,
-                                      input_sim_hit.getPosition().z * dd4hep::mm};
-    dd4hep::rec::Vector3D simHitGlobalPositionVector(simHitGlobalPosition[0], simHitGlobalPosition[1],
-                                                    simHitGlobalPosition[2]);
-    double simHitLocalPosition[3]  = {0, 0, 0};
-    
-    if(m_forceHitsOntoSurface){
-      dd4hep::Detector& theDetector = dd4hep::Detector::getInstance();
-      dd4hep::rec::SurfaceManager& surfMan = *theDetector.extension<dd4hep::rec::SurfaceManager>() ;
-      dd4hep::DetElement det = m_geoSvc->getDetector()->detector(m_detectorName) ;
-      _map = surfMan.map( det.name() ) ;
-
-      if( ! _map )
-        error() << " Could not find surface map for detector " << det.name() << " in SurfaceManager " << endmsg;
-
-      dd4hep::rec::SurfaceMap::const_iterator sI = _map->find(cellID) ;
-      if( sI == _map->end() )
-        error() << " VTXdigitizerDetailed: no surface found for cellID " << m_decoder->valueString(cellID) << std::endl << endmsg;
-
-      dd4hep::rec::Vector3D newPos ;
-      const dd4hep::rec::ISurface* surf = sI->second ;    
-
-      // Check if Hit is inside sensitive 
-      if ( ! surf->insideBounds( simHitGlobalPositionVector ) ) {
-        
-        info() << "Hit at " << simHitGlobalPositionVector << " is not on surface " << *surf  
-                << ". Distance: " << surf->distance(simHitGlobalPositionVector )
-                << std::endl << endmsg;        
-
-        if( m_forceHitsOntoSurface ){
-          dd4hep::rec::Vector2D lv = surf->globalToLocal(simHitGlobalPositionVector) ;
-          dd4hep::rec::Vector3D oldPosOnSurf = surf->localToGlobal( lv ) ; 
-          
-          info() << "Moved hit to " << oldPosOnSurf << ", distance " << (oldPosOnSurf-simHitGlobalPositionVector).r()
-                  << std::endl << endmsg;
-            
-          simHitGlobalPositionVector = oldPosOnSurf ;
-        } 
-      }
-    }
-    
-    // get the simHit coordinate in cm in the sensor reference frame to be able to apply smearing
-    sensorTransformMatrix.MasterToLocal(simHitGlobalPosition, simHitLocalPosition);
-    debug() << "Cell ID string: " << m_decoder->valueString(cellID) << endmsg;
-    debug() << "Global simHit x " << simHitGlobalPosition[0] << " [mm] --> Local simHit x " << simHitLocalPosition[0]
-            << " [cm]" << endmsg;
-    debug() << "Global simHit y " << simHitGlobalPosition[1] << " [mm] --> Local simHit y " << simHitLocalPosition[1]
-            << " [cm]" << endmsg;
-    debug() << "Global simHit z " << simHitGlobalPosition[2] << " [mm] --> Local simHit z " << simHitLocalPosition[2]
-            << " [cm]" << endmsg;
-
-    // build a vector to easily apply smearing of distance to the wire
-    dd4hep::rec::Vector3D simHitLocalPositionVector(simHitLocalPosition[0], simHitLocalPosition[1],
-                                                    simHitLocalPosition[2]);
-    
-    // Smear the hit in the local sensor coordinates
-    double digiHitLocalPosition[3];
-    int iLayer = m_decoder->get(cellID, "layer");      
-    debug() << "readout: " << m_readoutName << ", layer id: " << iLayer << endmsg;
-    if (m_readoutName == "VertexBarrelCollection" ||
-        m_readoutName == "SiWrBCollection" ||
-	m_readoutName == "InnerTrackerBarrelCollection" ||
-	m_readoutName == "OuterTrackerBarrelCollection") {  // In barrel, the sensor box is along y-z
-      digiHitLocalPosition[0] = simHitLocalPositionVector.x();
-      digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_x_vec[iLayer].shoot() * dd4hep::mm;
-      digiHitLocalPosition[2] = simHitLocalPositionVector.z() + m_gauss_y_vec[iLayer].shoot() * dd4hep::mm;
-    } else if (m_readoutName == "VertexEndcapCollection" ||
-               m_readoutName == "SiWrDCollection" ||
-	       m_readoutName == "InnerTrackerEndcapCollection" ||
-	       m_readoutName == "OuterTrackerEndcapCollection") {  // In the disks, the sensor box is already in x-y
-      digiHitLocalPosition[0] = simHitLocalPositionVector.x() + m_gauss_x_vec[iLayer].shoot() * dd4hep::mm;
-      digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_y_vec[iLayer].shoot() * dd4hep::mm;
-      digiHitLocalPosition[2] = simHitLocalPositionVector.z();
-    } else {
-      error()
-          << "VTX readout name (m_readoutName) unknown or xResolution/yResolution/tResolution not defining all detector layer resolutions!"
-          << endmsg;
-      return StatusCode::FAILURE;
-    }
-    
-    // go back to the global frame
-    double digiHitGlobalPosition[3] = {0, 0, 0};
-    sensorTransformMatrix.LocalToMaster(digiHitLocalPosition, digiHitGlobalPosition);
-
-    // go back to mm
-    edm4hep::Vector3d digiHitGlobalPositionVector(digiHitGlobalPosition[0] / dd4hep::mm,
-                                                  digiHitGlobalPosition[1] / dd4hep::mm,
-                                                  digiHitGlobalPosition[2] / dd4hep::mm);
-
-    debug() << "Global digiHit x " << digiHitGlobalPositionVector[0] << " [mm] --> Local digiHit x "
-            << digiHitLocalPosition[0] << " [cm]" << endmsg;
-    debug() << "Global digiHit y " << digiHitGlobalPositionVector[1] << " [mm] --> Local digiHit y "
-            << digiHitLocalPosition[1] << " [cm]" << endmsg;
-    debug() << "Global digiHit z " << digiHitGlobalPositionVector[2] << " [mm] --> Local digiHit z "
-            << digiHitLocalPosition[2] << " [cm]" << endmsg;
-    debug() << "Moving to next hit... " << std::endl << endmsg;
-
-    output_digi_hit.setEDep(input_sim_hit.getEDep());
-    output_digi_hit.setPosition(digiHitGlobalPositionVector);
-
-    // Apply time smearing
-    output_digi_hit.setTime(input_sim_hit.getTime() + m_gauss_t_vec[iLayer].shoot());
-
-    output_digi_hit.setCellID(cellID);
-
-    // Set the link between sim and digi hit
-    output_sim_digi_link.setFrom(output_digi_hit);
-    output_sim_digi_link.setTo(input_sim_hit);
+    // END TEST new digitizer members
     
   }
   return StatusCode::SUCCESS;
@@ -253,19 +126,21 @@ StatusCode VTXdigitizerDetailed::finalize() { return StatusCode::SUCCESS; }
 
 void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit, std::vector<ChargeDepositUnit>& ionizationPoints) const {
   /** Generate primary ionization along the track segment.
-   *Divide the track into small sub-segments of 5 microns
-   *Straight line approximation for trajectory of the incoming particle inside the active media
+   *  Divide the track into small sub-segments of 5 microns
+   *  Straight line approximation for trajectory of the incoming particle inside the active media
+   *  The positions are given in mm
    */
   
-  const float segmentLength = 0.005 * dd4hep::mm; //5microns in mm
-  float pathLength = hit.getPathLength() * dd4hep::mm; // Path Length of the particle in the active material
+  const float segmentLength = 0.005; //5microns in mm
+  float pathLength = hit.getPathLength(); // Path Length of the particle in the active material in mm
   int numberOfSegments = int(pathLength / segmentLength); // Number of segments
+  //std::cout << pathLength << ":" << numberOfSegments << std::endl; // TEST
   if (numberOfSegments <1) { numberOfSegments = 1; }
 
-  float GeVperElectron = 3.61E-09 * dd4hep::GeV; // Mean ionization energy in silicon
+  float GeVperElectron = 3.61E-09; // Mean ionization energy in silicon [GeV]
   float charge;
   float eDep = hit.getEDep() * dd4hep::GeV; // Total energy deposited by the particle in this hit
-
+  
   debug() << "Enter Primary_ionization, numberOfSegments=" << numberOfSegments << ", shift=" << pathLength << ", energy=" << eDep << "GeV" << endmsg;
   
   // Get the global position of the hit (defined by default in Geant4 as the mean between the entry and exit point in the active material)
@@ -274,7 +149,7 @@ void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit,
     hit.getPosition().y * dd4hep::mm,
     hit.getPosition().z * dd4hep::mm}; 
   
-  // Get the 3D momentum in global frame
+  // Get the 3D momentum in global frames
   double hitGlobalMomentum[3] = {hit.getMomentum().x * dd4hep::GeV,
                                  hit.getMomentum().y * dd4hep::GeV,
 				 hit.getMomentum().z * dd4hep::GeV};
@@ -282,30 +157,30 @@ void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit,
   // Convert the global position and momentum into local frame
   // retrieve the cell detElement
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-
+  
   // Get transformation matrix of sensor and get central position and momentum vector in local frame
   //const auto& sensorTransformMatrix = m_volman.lookupVolumePlacement(cellID).matrix();
   TGeoHMatrix sensorTransformMatrix = m_volman.lookupDetElement(cellID).nominal().worldTransformation();
   SetProperDirectFrame(sensorTransformMatrix); // Change coordinates to have z orthogonal to sensor with direct frame
   double hitLocalCentralPosition[3] = {0, 0, 0};
   double hitLocalMomentum[3] = {0, 0, 0};
-
+  
   // get the simHit coordinate in cm in the sensor reference frame
   sensorTransformMatrix.MasterToLocal(hitGlobalCentralPosition, hitLocalCentralPosition);
   sensorTransformMatrix.MasterToLocalVect(hitGlobalMomentum, hitLocalMomentum);
   
-  // build vectors to simplify next calculation
-  dd4hep::rec::Vector3D hitLocalCentralPositionVec(hitLocalCentralPosition[0],
-						   hitLocalCentralPosition[1],
-						   hitLocalCentralPosition[2]);
-  dd4hep::rec::Vector3D hitLocalMomentumVec(hitLocalMomentum[0],
-					    hitLocalMomentum[1],
-					    hitLocalMomentum[2]);
+  // build vectors to simplify next calculation and come back to mm
+  dd4hep::rec::Vector3D hitLocalCentralPositionVec(hitLocalCentralPosition[0] / dd4hep::mm,
+						   hitLocalCentralPosition[1] / dd4hep::mm,
+						   hitLocalCentralPosition[2] / dd4hep::mm);
+  dd4hep::rec::Vector3D hitLocalMomentumVec(hitLocalMomentum[0] / dd4hep::mm,
+					    hitLocalMomentum[1] / dd4hep::mm,
+					    hitLocalMomentum[2] / dd4hep::mm);
 
-  // Get particle direction in local frame normalized to path Length
+  // Get particle direction in local frame normalized to path Length in mm
   dd4hep::rec::Vector3D direction = (pathLength/hitLocalMomentumVec.r())*hitLocalMomentumVec; 
 
-  // Get the entry point in the active material
+  // Get the entry point in the active material in mm
   dd4hep::rec::Vector3D entryPoint = hitLocalCentralPositionVec - 0.5 * direction;
 
   // Maybe add a test that the point is inside the material or go to the closest material and do the same for exit point and then redefine the length
@@ -313,12 +188,12 @@ void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit,
   // Calulate the charge deposited per segment
   ionizationPoints.resize(numberOfSegments);
   for (int i = 0; i != numberOfSegments; i++) {
-    // Divide the segment into equal length sub-segments
+    // Divide the segment into equal length sub-segments in mm
     dd4hep::rec::Vector3D point = entryPoint + float((i + 0.5) / numberOfSegments) * direction;
     
     charge = eDep / GeVperElectron / float(numberOfSegments); // Here, do not consider energy fluctuation. To consider it, see the Geant4 Physics Reference Manual
 
-    ChargeDepositUnit cdu(charge, point); // Define position,charge point
+    ChargeDepositUnit cdu(charge, point); // Define position(mm),charge(Number of electrons) point
     ionizationPoints[i] = cdu; // save
     
   }// end loop over segments
@@ -330,6 +205,7 @@ void VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::v
    *  Even for strips, consider a uniform E-field
    *  The sensor depth is explicitly considered to be along z
    *  For now, the drift is considered to be instantaneous. Later On, should consider time and time uncertainty
+   *  The positions are in mm
    */
   
   debug() << "Enter drift " << endmsg;
@@ -351,14 +227,14 @@ void VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::v
   // Get the sensor thickness
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
   int layerID = m_decoder->get(cellID, "layer");
-  double moduleThickness = m_sensorThickness[layerID];
+  double moduleThickness = m_sensorThickness[layerID]; // In mm
   
   float SigmaX = 1.; // Charge spread
   float SigmaY = 1.;
   float DriftDistance; // Distance between charge generation and collection
   float DriftLength;   // Actual drift length
   float Sigma;
-
+  
   for (unsigned int i = 0; i < ionizationPoints.size(); i++) {
     float SegX, SegY, SegZ; // Position
     SegX = ionizationPoints[i].x();
@@ -368,7 +244,7 @@ void VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::v
     // Distance from the collection plane
     // Include explicitly the E drift direction (to positive z)
     DriftDistance = moduleThickness / 2. - (dir_z * SegZ);
-
+    
     if (DriftDistance < 0.)
       DriftDistance = 0.;
     else if (DriftDistance > moduleThickness)
@@ -399,7 +275,12 @@ void VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::v
 
     // Load the charge distribution parameters
     collectionPoints[i] = sp;
-      
+
+    // TEST
+    //std::cout << i << std::endl;
+    //std::cout << "Ion pos : " << SegX << ":" << SegY << ":" << SegZ  << std::endl;
+    //std::cout << "Drifted Pos: " << CloudCenterX << ":" << CloudCenterY << std::endl;
+    // END TEST
   } // End loop over ionization points
   
 } // End drift
@@ -415,7 +296,7 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   // Get detector
   const dd4hep::Detector* detector = m_geoSvc->getDetector();
 
-  // Get hit global position
+  // Get hit global position in mm (magnetic Field mapped in mm)
   dd4hep::rec::Vector3D hitPosition(hit.getPosition().x * dd4hep::mm,
 				    hit.getPosition().y * dd4hep::mm,
 				    hit.getPosition().z * dd4hep::mm);
@@ -424,7 +305,7 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   const auto& magneticField = detector->field();
   double BFieldGlobal[3];
   magneticField.magneticField(hitPosition,BFieldGlobal);
-    
+  
   // Get B field in local frame
   double BFieldLocal[3] = { 0, 0, 0 };
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
@@ -432,8 +313,9 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   SetProperDirectFrame(sensorTransformMatrix); // Change coordinates to have z orthogonal to sensor with direct frame
   sensorTransformMatrix.MasterToLocalVect(BFieldGlobal, BFieldLocal);
 
-  dd4hep::rec::Vector3D BFieldLocalVec(BFieldLocal[0], BFieldLocal[1], BFieldLocal[2]);
-
+  // Retrieve local magnetic field in a vector and in Tesla
+  dd4hep::rec::Vector3D BFieldLocalVec(BFieldLocal[0] / dd4hep::tesla, BFieldLocal[1] / dd4hep::tesla, BFieldLocal[2] / dd4hep::tesla); 
+  
   // Get the drift direction
   float dir_x = 0.;
   float dir_y = 0.;
@@ -454,6 +336,210 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   
 } // End DriftDirection
 
+void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
+			  const std::vector<SignalPoint>& collectionPoints,
+			  hit_map_type& hit_map) const {
+  
+  /** Get the map of recorded charges per pixel for a collection of drifted charges for a given hit
+   */
+
+  // Get the pixel dimensions in mm along x and y in the (modified) local frame with z orthogonal (see SetProperDirectFrame function)
+  float PixSizeX, PixSizeY;
+  const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
+  PixSizeX = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[0] / dd4hep::mm;
+  PixSizeY = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[1] / dd4hep::mm;
+  
+  // map to store the pixel integrals in the x and y directions
+  std::map<int, float, std::less<int>> x, y;
+  
+  // Assign signal per readout channel and store sorted by channel number (in modified local frame)
+  // Iterate over collection points on the collection plane
+  for (std::vector<SignalPoint>::const_iterator i = collectionPoints.begin(); i < collectionPoints.end(); i++) {
+    float CloudCenterX = i->x(); // Charge position in x in mm
+    float CloudCenterY = i->y(); // Charge position in y
+    float SigmaX = i->sigma_x(); // Charge spread in x in mm
+    float SigmaY = i->sigma_y(); // Charge spread in y
+    float Charge = i->amplitude(); // Charge amplitude in number of e-
+
+    // Find the maximum cloud spread in 2D Plane, assume 3*sigma
+    float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
+    float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
+    float CloudMinY = CloudCenterY - m_ClusterWidth * SigmaY;
+    float CloudMaxY = CloudCenterY + m_ClusterWidth * SigmaY;
+
+    // Convert the maximum cloud spread into pixel IDs
+    // Considers that the pixel of indice (0,0) is centered in position (0,0)
+    int IpxCloudMinX = int(floor((CloudMinX + 0.5 * PixSizeX) / PixSizeX));
+    int IpxCloudMaxX = int(floor((CloudMaxX + 0.5 * PixSizeX) / PixSizeX));
+    int IpxCloudMinY = int(floor((CloudMinY + 0.5 * PixSizeY) / PixSizeY));
+    int IpxCloudMaxY = int(floor((CloudMaxY + 0.5 * PixSizeY) / PixSizeY));
+
+    x.clear(); // clezar temporary integration arrays
+    y.clear();
+
+    // Integrate charge strips in x
+    for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
+
+      float LowerBound = (float(IpxCloudMinX) - 0.5) * PixSizeX; // Lower bound of the strip
+      float UpperBound = (float(IpxCloudMaxX) + 0.5) * PixSizeX; // Uper bound of the strip
+
+      float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterX)/(sqrt(2)*SigmaX)) - erf((LowerBound-CloudCenterX)/(sqrt(2)*SigmaX))); // Charge proportion in the strip calculated from erf function
+      
+      x[ix] = TotalStripCharge;
+
+    } // End Integrate charge strips in x
+
+    // Integrate charge strips in y
+    for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
+
+      float LowerBound = (float(IpxCloudMinY) - 0.5) * PixSizeY; // Lower bound of the strip
+      float UpperBound = (float(IpxCloudMaxY) + 0.5) * PixSizeY; // Uper bound of the strip
+
+      float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterY)/(sqrt(2)*SigmaY)) - erf((LowerBound-CloudCenterY)/(sqrt(2)*SigmaY))); // Charge proportion in the strip calculated from erf function
+      
+      y[iy] = TotalStripCharge;
+
+    } // End Integrate charge strips in y
+
+    // Get the 2D charge integrals by folding x and y strips
+    // Should add at this point a check that the pixel lies inside material - Not implemented for now
+    for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
+      for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
+
+	float ChargeInPixel = Charge * x[ix] * y[iy];
+
+	hit_map[ix][iy] += ChargeInPixel; // load the charge inside the pixel in the pixels map
+	
+      } // end loop over y
+    } // end loop over x
+  } // End loop over charge collection
+  //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
+} // End get_charge_per_pixel
+
+void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
+						  edm4hep::TrackerHitPlaneCollection* output_digi_hits,
+						  edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col,
+						  const hit_map_type& hit_map) const {
+  /** Get a single point from the hit_map by getting the average position and time
+   *  Return the position and uncertainty in global coordinates with recorded energy and time as a TrackerhitplaneCollection
+   *  For now, the position is taken from a weighted average, maybe try with a 2D Gaussian fit
+   */
+
+  // Get the pixel dimensions in mm along x and y in the (modified) local frame with z orthogonal (see SetProperDirectFrame function)
+  float PixSizeX, PixSizeY;
+  const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
+  PixSizeX = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[0] / dd4hep::mm;
+  PixSizeY = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[1] / dd4hep::mm;
+    
+  double DigiLocalX = 0.; // Local position of the digitized hit
+  double DigiLocalY = 0.;
+
+  double sumWeights = 0.; // Sum of all weights (sum of charges recorded in all pixels)
+  std::map<int,double> Qix; // Weight (charge) per x layer
+  std::map<int,double> Qiy; // Weight (charge) per y layer 
+
+  // loop to load the weights per x and y layers
+  for (auto const& ix : hit_map) {
+    for (auto const& iy : ix.second) {
+      double weight = iy.second;
+      Qix[ix.first] += weight;
+      Qiy[iy.first] += weight;
+      sumWeights += weight;
+    } // Loop over map in Y direction
+  }// Loop over map in X direction
+
+  double sumWeightsSqX = 0.; // Sum of the square of weights along x (used later for position resolution)
+  double sumWeightsSqY = 0.;
+
+  double pixLocalX, pixLocalY; // Initiate pixels position
+  // Loop to get the weighted average of the X position
+  for (auto const& ix : Qix) {
+    
+    pixLocalX = ix.first * PixSizeX; // Pixel local X position // Considers that the pixel of indice (0,0) is centered in position (0,0)
+    DigiLocalX += ix.second * pixLocalX;
+    sumWeightsSqX += ix.second * ix.second; // Load the square sum of the weights
+    
+  } // loop over x
+  
+  DigiLocalX = DigiLocalX / sumWeights;
+  
+  // Loop to get the weighted average of the Y position
+  for (auto const& iy : Qiy) {
+    
+    pixLocalY = iy.first * PixSizeY; // Pixel local Y position
+    DigiLocalY += iy.second * pixLocalY;
+    sumWeightsSqY += iy.second * iy.second; // Load the square sum of the weights
+    
+  } // loop over y
+  
+  DigiLocalY = DigiLocalY / sumWeights;
+
+  // Get the position resolution in Local frame
+  double resU = (PixSizeX / sqrt(12)) * sqrt(sumWeightsSqX) / sumWeights; // Position uncertainty along X. Consider Uniform distribution of charges in a pixel
+  double resV = (PixSizeY / sqrt(12)) * sqrt(sumWeightsSqY) / sumWeights;
+  
+  double dirLocalX[3] = { 1., 0., 0. }; // X direction in local frame
+  double dirLocalY[3] = { 0., 1., 0. }; // X direction in local frame
+  double dirGlobalU[3]; // Global direction U (corresponding to local X)
+  double dirGlobalV[3]; // Global direction V (cooresponding to local Y)
+  double DigiLocalPos[3] = {DigiLocalX * dd4hep::mm, DigiLocalY * dd4hep::mm, 0.}; //Local Position in cm, necessary for transformation to global with transform matrix
+  double DigiGlobalPos[3]; // Global position in cm
+  
+  // Get the transformation matrix between local and global frames
+  auto sensorTransformMatrix = m_volman.lookupDetElement(cellID).nominal().worldTransformation();
+  SetProperDirectFrame(sensorTransformMatrix); // Change coordinates to have z orthogonal to sensor with direct frame
+
+  // Transform the local positions and directions to global ones
+  sensorTransformMatrix.LocalToMaster(DigiLocalPos, DigiGlobalPos);
+  sensorTransformMatrix.LocalToMasterVect(dirLocalX, dirGlobalU);
+  sensorTransformMatrix.LocalToMasterVect(dirLocalY, dirGlobalV);
+
+  // Go back to mm
+  edm4hep::Vector3d DigiGlobalPosVec(DigiGlobalPos[0] / dd4hep::mm,
+				     DigiGlobalPos[1] / dd4hep::mm,
+				     DigiGlobalPos[2] / dd4hep::mm);
+
+  // Get global directions of the sensor for the HitPlane
+  dd4hep::rec::Vector3D dirGlobalUVec(dirGlobalU[0], dirGlobalU[1], dirGlobalU[2]);
+  dd4hep::rec::Vector3D dirGlobalVVec(dirGlobalV[0], dirGlobalV[1], dirGlobalV[2]);
+
+  float u_direction[2];
+  u_direction[0] = dirGlobalUVec.theta();
+  u_direction[1] = dirGlobalUVec.phi();
+  
+  float v_direction[2];
+  v_direction[0] = dirGlobalVVec.theta();
+  v_direction[1] = dirGlobalVVec.phi();
+  
+  // Create and fill the output collection of digitized hits
+  auto output_digi_hit = output_digi_hits->create();
+  auto output_sim_digi_link = output_sim_digi_link_col->create();
+  
+  output_digi_hit.setEDep(sumWeights);
+  // setEDepError ?
+  
+  output_digi_hit.setPosition(DigiGlobalPosVec);
+  
+  // Apply time smearing
+  int iLayer = m_decoder->get(cellID, "layer");
+  output_digi_hit.setTime(hit.getTime() + m_gauss_t_vec[iLayer].shoot());
+  
+  output_digi_hit.setCellID(cellID);
+
+  // Set sensor directions
+  output_digi_hit.setU(u_direction);
+  output_digi_hit.setV(v_direction);
+
+  // Set the position uncertainty
+  output_digi_hit.setDu(resU);
+  output_digi_hit.setDv(resV);
+  
+  // Set the link between sim and digi hit
+  output_sim_digi_link.setFrom(output_digi_hit);
+  output_sim_digi_link.setTo(hit);
+  
+} // End get_hist_signal_point
+
 void VTXdigitizerDetailed::SetProperDirectFrame(TGeoHMatrix& sensorTransformMatrix) const {
   /** Change the sensorTransformMatrix to have a direct frame with z orthogonal to sensor surface
    */
@@ -467,11 +553,11 @@ void VTXdigitizerDetailed::SetProperDirectFrame(TGeoHMatrix& sensorTransformMatr
 
   // If the orthogonal direction is along X or Y in local frame, rotate the frame to have Z orthogonal to sensors instead
   if (LocalNormalVectorDir=="x") {
-    TGeoRotation rot("rot",90.,90.,0.);
+    TGeoRotation rot("rot",90.,90.,0.); // X->Z / Y->X / Z->Y
     sensorTransformMatrix.Multiply(rot);
   }
   if (LocalNormalVectorDir=="y") {
-    TGeoRotation rot("rot",0.,-90.,0.);
+    TGeoRotation rot("rot",0.,-90.,0.); // X->X / Y->Z / Z->-Y
     sensorTransformMatrix.Multiply(rot);
   }
 

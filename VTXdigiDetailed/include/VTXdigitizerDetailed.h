@@ -39,9 +39,10 @@ namespace edm4hep {
 /** @class VTXdigitizerDetailed
  *
  *  Algorithm for creating digitized (meaning 'reconstructed' for now) vertex detector hits (edm4hep::TrackerHitPlane) from Geant4 hits (edm4hep::SimTrackerHit).
- *  
- *  @author Brieuc Francois, Armin Ilg, Jessy Daniel
- *  @date   2025-01
+ *  It considers the production, drift and collection of charges in pixel/strip sensors. The time is considered with a simple smear for now 
+ *
+ *  @author Jessy Daniel, Brieuc Francois, Armin Ilg
+ *  @date   2025-02
  *
  */
 
@@ -86,12 +87,6 @@ private:
 
   // List of sensor thickness per layer in millimeter
   std::vector<float> m_sensorThickness;
-  
-  // x resolution in um
-  Gaudi::Property<std::vector<float>> m_x_resolution{this, "xResolution", {0.1}, "Spatial resolutions in the x direction per layer [um] (r-phi direction in barrel, z direction in disks)"};
-
-  // y resolution in um
-  Gaudi::Property<std::vector<float>> m_y_resolution{this, "yResolution", {0.1}, "Spatial resolutions in the y direction per layer [um] (r direction in barrel, r-phi direction in disks)"};
 
   // t resolution in ns
   Gaudi::Property<std::vector<float>> m_t_resolution{this, "tResolution", {0.1}, "Time resolutions per layer [ns]"};
@@ -105,16 +100,16 @@ private:
   // Tangent of sensor's Lorentz angle (default is 0.1)
   FloatProperty m_tanLorentzAnglePerTesla{this, "tanLorentzAnglePerTesla", {0.1}, "Tangent of sensor's Lorentz angle per Tesla (default is 0.1)"};
 
-  FloatProperty m_Sigma50{this, "Sigma50", 0.00151, "Charge diffusion in millimeters for 50 micron Si. Default = 0.00151mm taken from CMS"};
+  FloatProperty m_Sigma50{this, "Sigma50", 0.00151, "Charge diffusion in millimeters for 50 micron Si. Default = 0.00151mm taken from CMS"}; 
 
   float m_Dist50; //=0.050  // Define 50microns in mm
 
+  float m_ClusterWidth; //=3.0  // Define the area of integration of the charge in number of sigma around the central position
+  
   // Random Number Service
   SmartIF<IRndmGenSvc> m_randSvc;
 
-  // Gaussian random number generator used for smearing
-  std::vector<Rndm::Numbers> m_gauss_x_vec;
-  std::vector<Rndm::Numbers> m_gauss_y_vec;
+  // Gaussian random number generator used for time smearing
   std::vector<Rndm::Numbers> m_gauss_t_vec;
 
   // Define a class for 3D ionization points and energy
@@ -153,6 +148,8 @@ private:
     const dd4hep::rec::Vector2D position() const { return _pos; }
     float x() const { return _pos.u(); }
     float y() const { return _pos.v(); }
+    float sigma_x() const { return _sigma_x; }
+    float sigma_y() const { return _sigma_y; } 
     float time() const { return _time; }
     float amplitude() const { return _amplitude; }
     const edm4hep::SimTrackerHit& hit() { return *_hitp; }
@@ -169,6 +166,8 @@ private:
     float _sigma_y;
     const edm4hep::SimTrackerHit* _hitp;
   }; // End SignalPoint class definition
+
+  typedef std::map<int,std::map<int,float,std::less<int>>,std::less<int>> hit_map_type;
     
 private:
   // Additional member functions
@@ -184,9 +183,11 @@ private:
 
   dd4hep::rec::Vector3D DriftDirection(const edm4hep::SimTrackerHit& hit) const;
   
-  void induce_signal(const edm4hep::SimTrackerHit& hit,
-		     const std::vector<SignalPoint>& collectionPoints,
-		     std::vector<dd4hep::DDSegmentation::CellID,float>& signal_map) const;
+  void get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
+			    const std::vector<SignalPoint>& collectionPoints,
+			    hit_map_type& hit_map) const;
+
+  void generate_output(const edm4hep::SimTrackerHit hit, edm4hep::TrackerHitPlaneCollection* output_digi_hits, edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col, const hit_map_type& hit_map) const;
 
   void SetProperDirectFrame(TGeoHMatrix& sensorTransformMatrix) const;
   
