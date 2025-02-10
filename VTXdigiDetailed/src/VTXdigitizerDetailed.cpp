@@ -18,6 +18,22 @@ StatusCode VTXdigitizerDetailed::initialize() {
     error() << "LocalNormalVectorDir property should be declared as a string with the direction (x,y or z) of the normal vector to sensitive surface in the sensor local frame (may differ according to the geometry definition within k4geo). Add a - sign before the direction in case of indirect frame." << endmsg;
     return StatusCode::FAILURE;
   }
+
+  // Initialise the debugging histograms
+  if (m_DebugHistos) {
+    if (m_DebugFileName=="") {
+      error() << "Please provide a name for the file containing the debug histograms with option DebugFileName." << endmsg;
+      return StatusCode::FAILURE;
+    }
+    hErrorX = new TH1D("hErrorX","Distance in X in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
+    hErrorX->SetDirectory(0);
+    hErrorY = new TH1D("hErrorY","Distance in Y in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
+    hErrorY->SetDirectory(0);
+    hErrorZ = new TH1D("hErrorZ","Distance in Z in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
+    hErrorZ->SetDirectory(0);
+    hError = new TH1D("hError","Distance between the true hit and digitized one in mm", 1000, 0., 0.1);
+    hError->SetDirectory(0);
+  }
   
   // Initialize random services
   m_randSvc = service("RndmGenSvc", false);
@@ -102,8 +118,6 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
   
   for (const auto& input_sim_hit : *input_sim_hits) {
     
-    // TEST new digitizer members
-    
     std::vector<ChargeDepositUnit> ionizationPoints;
     std::vector<SignalPoint> collectionPoints;
     hit_map_type hit_map;
@@ -115,14 +129,19 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
     get_charge_per_pixel(input_sim_hit, collectionPoints, hit_map);
 
     generate_output(input_sim_hit, output_digi_hits, output_sim_digi_link_col, hit_map);
-      
-    // END TEST new digitizer members
     
-  }
+  }  
   return StatusCode::SUCCESS;
 }
 
-StatusCode VTXdigitizerDetailed::finalize() { return StatusCode::SUCCESS; }
+StatusCode VTXdigitizerDetailed::finalize() {
+
+  if (m_DebugHistos) {
+    Create_outputROOTfile_for_debugHistograms();
+  }
+  
+  return StatusCode::SUCCESS;
+}
 
 void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit, std::vector<ChargeDepositUnit>& ionizationPoints) const {
   /** Generate primary ionization along the track segment.
@@ -514,8 +533,9 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   // Create and fill the output collection of digitized hits
   auto output_digi_hit = output_digi_hits->create();
   auto output_sim_digi_link = output_sim_digi_link_col->create();
-  
-  output_digi_hit.setEDep(sumWeights);
+
+  float GeVperElectron = 3.61E-09; // Mean ionization energy in silicon [GeV]
+  output_digi_hit.setEDep(sumWeights * GeVperElectron / dd4hep::GeV); // Energy in GeV from number of charges
   // setEDepError ?
   
   output_digi_hit.setPosition(DigiGlobalPosVec);
@@ -531,12 +551,33 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   output_digi_hit.setV(v_direction);
 
   // Set the position uncertainty
-  output_digi_hit.setDu(resU);
-  output_digi_hit.setDv(resV);
+  //output_digi_hit.setDu(resU);
+  //output_digi_hit.setDv(resV);
   
   // Set the link between sim and digi hit
   output_sim_digi_link.setFrom(output_digi_hit);
   output_sim_digi_link.setTo(hit);
+
+  // Fill the debug histograms if needed
+  if (m_DebugHistos) {
+    // Get the global position of the hit (defined by default in Geant4 as the mean between the entry and exit point in the active material)
+    // and apply unit transformation (translation matrix is stored in cm
+    double hitGlobalCentralPosition[3] = {hit.getPosition().x * dd4hep::mm,
+      hit.getPosition().y * dd4hep::mm,
+      hit.getPosition().z * dd4hep::mm};
+
+    double hitLocalCentralPosition[3] = {0, 0, 0};
+    // get the simHit coordinate in cm in the sensor reference frame
+    sensorTransformMatrix.MasterToLocal(hitGlobalCentralPosition, hitLocalCentralPosition);
+    
+    double DistX = DigiLocalX - hitLocalCentralPosition[0] / dd4hep::mm;
+    double DistY = DigiLocalY - hitLocalCentralPosition[1] / dd4hep::mm;
+    double DistZ = 0. - hitLocalCentralPosition[3] / dd4hep::mm;
+    hErrorX->Fill(DistX);
+    hErrorY->Fill(DistY);
+    hErrorZ->Fill(DistZ);
+    hError->Fill(sqrt(DistX * DistX + DistY * DistY + DistZ * DistZ));
+  } // End Debug Histos
   
 } // End get_hist_signal_point
 
@@ -566,3 +607,33 @@ void VTXdigitizerDetailed::SetProperDirectFrame(TGeoHMatrix& sensorTransformMatr
     sensorTransformMatrix.ReflectX(false);
   }
 } // End SetProperDirectFrame
+
+
+void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
+  /** This is an internal function to save the debug histograms in the corresponding rootfile
+   */
+  
+  // save current ROOT directory
+  TDirectory* currentDir = gDirectory;
+
+  // save the debug histograms in a file
+  // file is saved and closed when going out of scope
+  auto filename = m_DebugFileName.value().c_str();
+  std::unique_ptr<TFile> ofile{TFile::Open( filename, "recreate")};
+  if (!ofile || ofile->IsZombie())
+    {
+      error() << "Error: Could not open file " << filename << std::endl;
+      return;
+    }
+  ofile->cd();
+  hErrorX->Write();
+  hErrorY->Write();
+  hErrorZ->Write();
+  hError->Write();
+  
+  // Restore previous ROOT directory
+  if(currentDir && ( not currentDir->IsDestructed() ) )
+    currentDir->cd();
+  return;
+  
+} // End Create_outputROOTfile_for_debugHistograms

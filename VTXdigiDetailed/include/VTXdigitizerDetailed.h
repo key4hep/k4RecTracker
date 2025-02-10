@@ -1,5 +1,10 @@
 #pragma once
 
+// ROOT headers
+#include "TFile.h"
+#include "TH1D.h"
+#include "TDirectory.h"
+
 // GAUDI
 #include "Gaudi/Property.h"
 #include "Gaudi/Algorithm.h"
@@ -190,5 +195,17 @@ private:
   void generate_output(const edm4hep::SimTrackerHit hit, edm4hep::TrackerHitPlaneCollection* output_digi_hits, edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col, const hit_map_type& hit_map) const;
 
   void SetProperDirectFrame(TGeoHMatrix& sensorTransformMatrix) const;
-  
+
+private:
+  // Additional Debug information
+
+  BooleanProperty m_DebugHistos{this, "DebugHistos", false, "If set to true, create a file containing debug histograms. Should then also set DebugFileName to set the name of the debug root file."};
+  Gaudi::Property<std::string> m_DebugFileName{this,"DebugFileName", "", "Name of the file containing debug histograms."};
+
+  TH1D* hErrorX; // Histogram to store the distance in X between the true hit and digitized one in mm
+  TH1D* hErrorY; // Histogram to store the distance in Y between the true hit and digitized one in mm
+  TH1D* hErrorZ; // Histogram to store the distance in Z between the true hit and digitized one in mm
+  TH1D* hError;  // Histogram to store the distance between the true hit and digitized one in mm
+
+  void Create_outputROOTfile_for_debugHistograms() const;
 };
