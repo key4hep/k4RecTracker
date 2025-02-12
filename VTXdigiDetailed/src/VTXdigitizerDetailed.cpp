@@ -572,7 +572,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
     
     double DistX = DigiLocalX - hitLocalCentralPosition[0] / dd4hep::mm;
     double DistY = DigiLocalY - hitLocalCentralPosition[1] / dd4hep::mm;
-    double DistZ = 0. - hitLocalCentralPosition[3] / dd4hep::mm;
+    double DistZ = 0. - hitLocalCentralPosition[2] / dd4hep::mm;
     hErrorX->Fill(DistX);
     hErrorY->Fill(DistY);
     hErrorZ->Fill(DistZ);
