@@ -551,8 +551,8 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   output_digi_hit.setV(v_direction);
 
   // Set the position uncertainty
-  //output_digi_hit.setDu(resU);
-  //output_digi_hit.setDv(resV);
+  output_digi_hit.setDu(resU);
+  output_digi_hit.setDv(resV);
   
   // Set the link between sim and digi hit
   output_sim_digi_link.setFrom(output_digi_hit);
