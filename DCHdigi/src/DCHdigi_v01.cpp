@@ -285,8 +285,10 @@ void DCHdigi_v01::PrintConfiguration(std::ostream& io) {
 }
 
 void DCHdigi_v01::PrepareRandomEngine(const edm4hep::EventHeaderCollection& headers) const {
-  size_t   seed  = m_uidSvc->getUniqueID(headers, this->name());
-  m_engine.seed(seed);
+  auto engine_seed = m_uidSvc->getUniqueID(headers, this->name());
+  m_engine.seed(engine_seed);
+  auto random_seed = m_uidSvc->getUniqueID(headers, this->name()+"_1");
+  myRandom.SetSeed(random_seed);
   // advance internal state to minimize possibility of creating correlations
   m_engine.discard(10);
   for (int i = 0; i < 10; ++i)
