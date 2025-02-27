@@ -182,9 +182,11 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setEDep(input_sim_hit.getEDep());
     oDCHdigihit.setEDepError(eDepError);
     oDCHdigihit.setPosition(positionSW);
+    oDCHdigihit.setPositionAlongWireError(smearing_z);
     oDCHdigihit.setWireAzimuthalAngle(WireAzimuthalAngle);
     oDCHdigihit.setWireStereoAngle(WireStereoAngle);
     oDCHdigihit.setDistanceToWire(distanceToWire);
+    oDCHdigihit.setDistanceToWireError(smearing_xy);
     // For the sake of speed, let the dNdx calculation be optional
     if( m_calculate_dndx.value() )
     {
