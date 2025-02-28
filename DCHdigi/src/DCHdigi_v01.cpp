@@ -285,10 +285,10 @@ void DCHdigi_v01::PrintConfiguration(std::ostream& io) {
 }
 
 void DCHdigi_v01::PrepareRandomEngine(const edm4hep::EventHeaderCollection& headers) const {
-  uint32_t evt_n = headers[0].getEventNumber();
-  uint32_t run_n = headers[0].getRunNumber();
-  size_t   seed  = m_uidSvc->getUniqueID(evt_n, run_n, this->name());
-  m_engine.seed(seed);
+  auto engine_seed = m_uidSvc->getUniqueID(headers, this->name());
+  m_engine.seed(engine_seed);
+  auto random_seed = m_uidSvc->getUniqueID(headers, this->name()+"_1");
+  myRandom.SetSeed(random_seed);
   // advance internal state to minimize possibility of creating correlations
   m_engine.discard(10);
   for (int i = 0; i < 10; ++i)
@@ -452,7 +452,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
 
     // The following loop calculate number of clusters of size > 1, NClp
     for (int while1counter = 0; Eloss > (EIzp + EIzs) && maxExECl > totExECl && while1counter < 1e6; while1counter++) {
-      ExECl = land->GetRandom(0, maxEcut);
+      ExECl = land->GetRandom(0, maxEcut, &myRandom);
 
       if (ExECl > EIzs) {
         Eloss -= EIzp;
@@ -484,7 +484,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
     // The following loop calculate number of clusters of size 1, NCl1
     for (int while2counter = 0; Eloss >= EIzp && while2counter < 1e6; while2counter++) {
       Eloss -= EIzp;
-      ExECl1 = exGauss->GetRandom();
+      ExECl1 = exGauss->GetRandom(&myRandom);
       if (ExECl1 > Eloss) {
         ExECl1 = Eloss;
       }
