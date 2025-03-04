@@ -100,9 +100,9 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
   // initialize seed for random engine
   this->PrepareRandomEngine(headers);
   // Gaussian random number generator used for the smearing of the z position, in cm!
-  std::normal_distribution<double> m_gauss_z_cm{0., m_z_resolution.value() * MM_TO_CM};
+  std::normal_distribution<double> gauss_z_cm{0., m_z_resolution.value() * MM_TO_CM};
   // Gaussian random number generator used for the smearing of the xy position, in cm!
-  std::normal_distribution<double> m_gauss_xy_cm{0., m_xy_resolution.value() * MM_TO_CM};
+  std::normal_distribution<double> gauss_xy_cm{0., m_xy_resolution.value() * MM_TO_CM};
 
   debug() << "Input Sim Hit collection size: " << input_sim_hits.size() << endmsg;
 
