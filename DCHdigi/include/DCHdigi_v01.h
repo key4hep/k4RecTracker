@@ -127,12 +127,6 @@ private:
   inline static thread_local std::mt19937_64 m_engine;
   void                                       PrepareRandomEngine(const edm4hep::EventHeaderCollection& headers) const;
 
-  // Operator std::normal_distribution<T>::operator()(Generator& g) is a non-const member function and thus cannot be called for a constant object. So we defined the distribution as mutable.
-  // Gaussian random number generator used for the smearing of the z position, in cm!
-  mutable std::normal_distribution<double> m_gauss_z_cm;
-  // Gaussian random number generator used for the smearing of the xy position, in cm!
-  mutable std::normal_distribution<double> m_gauss_xy_cm;
-
   /// members with internal state (such as random engines) must be defined thread local
   inline static thread_local TRandom3 myRandom;
   //------------------------------------------------------------------

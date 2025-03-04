@@ -31,11 +31,9 @@ StatusCode DCHdigi_v01::initialize() {
 
   if( 0 > m_z_resolution.value() )
     ThrowException("Z resolution input value can not be negative!");
-  m_gauss_z_cm  = std::normal_distribution<double>(0., m_z_resolution.value() * MM_TO_CM);
 
   if( 0 > m_xy_resolution.value() )
     ThrowException("Radial (XY) resolution input value can not be negative!");
-  m_gauss_xy_cm = std::normal_distribution<double>(0., m_xy_resolution.value() * MM_TO_CM);
 
   //-----------------
   // Retrieve the subdetector
@@ -101,6 +99,10 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
                     const edm4hep::EventHeaderCollection&   headers) const {
   // initialize seed for random engine
   this->PrepareRandomEngine(headers);
+  // Gaussian random number generator used for the smearing of the z position, in cm!
+  std::normal_distribution<double> gauss_z_cm{0., m_z_resolution.value() * MM_TO_CM};
+  // Gaussian random number generator used for the smearing of the xy position, in cm!
+  std::normal_distribution<double> gauss_xy_cm{0., m_xy_resolution.value() * MM_TO_CM};
 
   debug() << "Input Sim Hit collection size: " << input_sim_hits.size() << endmsg;
 
@@ -129,7 +131,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     //       smear the position
 
     //       smear position along the wire
-    double smearing_z = m_gauss_z_cm(m_engine);
+    double smearing_z = gauss_z_cm(m_engine);
     if (m_create_debug_histos.value())
       hSz->Fill(smearing_z);
 
@@ -141,7 +143,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     }
 
     //       smear position perpendicular to the wire
-    double smearing_xy = m_gauss_xy_cm(m_engine);
+    double smearing_xy = gauss_xy_cm(m_engine);
     if (m_create_debug_histos.value())
       hSxy->Fill(smearing_xy);
     float distanceToWire_real = hit_to_wire_vector.Mag();
