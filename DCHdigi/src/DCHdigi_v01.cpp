@@ -131,7 +131,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     //       smear the position
 
     //       smear position along the wire
-    double smearing_z = m_gauss_z_cm(m_engine);
+    double smearing_z = gauss_z_cm(m_engine);
     if (m_create_debug_histos.value())
       hSz->Fill(smearing_z);
 
@@ -143,7 +143,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     }
 
     //       smear position perpendicular to the wire
-    double smearing_xy = m_gauss_xy_cm(m_engine);
+    double smearing_xy = gauss_xy_cm(m_engine);
     if (m_create_debug_histos.value())
       hSxy->Fill(smearing_xy);
     float distanceToWire_real = hit_to_wire_vector.Mag();
