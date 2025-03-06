@@ -203,7 +203,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     // For the sake of speed, let the dNdx calculation be optional
     if( m_calculate_dndx.value() )
     {
-      auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit, &myRandom);
+      auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit, myRandom);
       // to return the total number of electrons within the step, do the following:
       //   int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
       //   oDCHdigihit.setNElectronsTotal(nElectronsTotal);
@@ -312,7 +312,7 @@ bool DCHdigi_v01::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle&
   return (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
 }
 
-std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit, TRandom3 * myRandom) const {
+std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit, TRandom3 & myRandom) const {
 
   const edm4hep::MCParticle& thisParticle = input_sim_hit.getParticle();
   // if gamma, optical photon, or other particle with null mass, or hit with zero energy deposited, return zero clusters
@@ -442,7 +442,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
     } else {
       ExSgmlen = ExSgmhad * TMath::Sqrt(LengthTrack);
     }
-    float maxExECl = (Eloss - maxEx0len + myRandom->Gaus(0, ExSgmlen)) / maxExSlp;
+    float maxExECl = (Eloss - maxEx0len + myRandom.Gaus(0, ExSgmlen)) / maxExSlp;
 
     if (maxExECl < EIzs) {
       maxExECl = 0.0;
@@ -453,7 +453,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
 
     // The following loop calculate number of clusters of size > 1, NClp
     for (int while1counter = 0; Eloss > (EIzp + EIzs) && maxExECl > totExECl && while1counter < 1e6; while1counter++) {
-      ExECl = land->GetRandom(0, maxEcut, myRandom);
+      ExECl = land->GetRandom(0, maxEcut, &myRandom);
 
       if (ExECl > EIzs) {
         Eloss -= EIzp;
@@ -469,7 +469,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
         float tmpCorr = 0.0;
         for (int i = 0; i < nhEp; ++i) {
           if (ExECl >= (i == 0 ? 0 : hEpcut[i - 1]) && ExECl < hEpcut[i]) {
-            tmpCorr = myRandom->Gaus(CorrpMean[i], CorrpSgm[i]);
+            tmpCorr = myRandom.Gaus(CorrpMean[i], CorrpSgm[i]);
           }
         }
         int ClSz = TMath::Nint(ExECl * CorrSlp + CorrInt - tmpCorr);
@@ -485,7 +485,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
     // The following loop calculate number of clusters of size 1, NCl1
     for (int while2counter = 0; Eloss >= EIzp && while2counter < 1e6; while2counter++) {
       Eloss -= EIzp;
-      ExECl1 = exGauss->GetRandom(myRandom);
+      ExECl1 = exGauss->GetRandom(&myRandom);
       if (ExECl1 > Eloss) {
         ExECl1 = Eloss;
       }
@@ -513,14 +513,14 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
       if (tmphE >= nhE)
         tmphE = nhE - 1;
       if (tmphE == nhE - 1) {
-        rndCorr = myRandom->Uniform(0, 1);
+        rndCorr = myRandom.Uniform(0, 1);
         if (rndCorr < Corrdglfrac[tmphE]) {
-          tmpCl = myRandom->Gaus(Corrdglmeang[tmphE], Corrdglsgmg[tmphE]);
+          tmpCl = myRandom.Gaus(Corrdglmeang[tmphE], Corrdglsgmg[tmphE]);
         } else {
-          tmpCl = myRandom->Landau(Corrdglmpvl[tmphE], Corrdglsgml[tmphE]);
+          tmpCl = myRandom.Landau(Corrdglmpvl[tmphE], Corrdglsgml[tmphE]);
         }
       } else {
-        tmpCl = myRandom->Gaus(Corrdgmean[tmphE], Corrdgsgm[tmphE]);
+        tmpCl = myRandom.Gaus(Corrdgmean[tmphE], Corrdgsgm[tmphE]);
       }
 
       int ClSz = TMath::Nint(Ekdelta * CorrSlp + CorrInt - tmpCl);
