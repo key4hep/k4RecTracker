@@ -91,6 +91,18 @@ StatusCode DCHdigi_v01::initialize() {
   return StatusCode::SUCCESS;
 }
 
+std::tuple<std::mt19937_64, TRandom3> DCHdigi_v01::CreateRandomEngines(const edm4hep::EventHeaderCollection& headers) const {
+  auto engine_seed = m_uidSvc->getUniqueID(headers, this->name());
+  auto rng_engine = std::mt19937_64(engine_seed);
+  auto random_seed = m_uidSvc->getUniqueID(headers, this->name()+"_1");
+  auto myRandom = TRandom3(random_seed);
+  // advance internal state to minimize possibility of creating correlations
+  rng_engine.discard(10);
+  for (int i = 0; i < 10; ++i)
+    myRandom.Rndm();
+  return {rng_engine, myRandom};
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       operator()       ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -98,17 +110,7 @@ std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerH
 DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
                     const edm4hep::EventHeaderCollection&   headers) const {
   /// initialize engines
-  std::mt19937_64 rng_engine;
-  TRandom3 myRandom;
-  // initialize seed for random engine
-  auto engine_seed = m_uidSvc->getUniqueID(headers, this->name());
-  rng_engine.seed(engine_seed);
-  auto random_seed = m_uidSvc->getUniqueID(headers, this->name()+"_1");
-  myRandom.SetSeed(random_seed);
-  // advance internal state to minimize possibility of creating correlations
-  rng_engine.discard(10);
-  for (int i = 0; i < 10; ++i)
-    myRandom.Rndm();
+  auto [rng_engine, myRandom] = this->CreateRandomEngines(headers);
     
   // Gaussian random number generator used for the smearing of the z position, in cm!
   std::normal_distribution<double> gauss_z_cm{0., m_z_resolution.value() * MM_TO_CM};

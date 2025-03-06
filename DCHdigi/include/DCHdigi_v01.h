@@ -124,6 +124,8 @@ private:
   /// create seed using the uid
   SmartIF<IUniqueIDGenSvc> m_uidSvc;
 
+  /// Create random engine, initialized with seed out of Event Header
+  std::tuple<std::mt19937_64, TRandom3> CreateRandomEngines(const edm4hep::EventHeaderCollection& headers) const;
   //------------------------------------------------------------------
   //        ancillary functions
 
