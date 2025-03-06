@@ -98,15 +98,15 @@ std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerH
 DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
                     const edm4hep::EventHeaderCollection&   headers) const {
   /// initialize engines
-  std::mt19937_64 m_engine;
+  std::mt19937_64 rng_engine;
   TRandom3 myRandom;
   // initialize seed for random engine
   auto engine_seed = m_uidSvc->getUniqueID(headers, this->name());
-  m_engine.seed(engine_seed);
+  rng_engine.seed(engine_seed);
   auto random_seed = m_uidSvc->getUniqueID(headers, this->name()+"_1");
   myRandom.SetSeed(random_seed);
   // advance internal state to minimize possibility of creating correlations
-  m_engine.discard(10);
+  rng_engine.discard(10);
   for (int i = 0; i < 10; ++i)
     myRandom.Rndm();
     
@@ -142,7 +142,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     //       smear the position
 
     //       smear position along the wire
-    double smearing_z = gauss_z_cm(m_engine);
+    double smearing_z = gauss_z_cm(rng_engine);
     if (m_create_debug_histos.value())
       hSz->Fill(smearing_z);
 
@@ -154,7 +154,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     }
 
     //       smear position perpendicular to the wire
-    double smearing_xy = gauss_xy_cm(m_engine);
+    double smearing_xy = gauss_xy_cm(rng_engine);
     if (m_create_debug_histos.value())
       hSxy->Fill(smearing_xy);
     float distanceToWire_real = hit_to_wire_vector.Mag();
