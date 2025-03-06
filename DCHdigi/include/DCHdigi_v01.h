@@ -123,12 +123,7 @@ private:
 
   /// create seed using the uid
   SmartIF<IUniqueIDGenSvc> m_uidSvc;
-  /// use thread local engine from C++ standard
-  thread_local std::mt19937_64 m_engine;
-  void                                       PrepareRandomEngine(const edm4hep::EventHeaderCollection& headers) const;
 
-  /// members with internal state (such as random engines) must be defined thread local
-  thread_local TRandom3 myRandom;
   //------------------------------------------------------------------
   //        ancillary functions
 
@@ -170,7 +165,7 @@ private:
   AlgData* flData;
 
   /// code developed by Walaa for calculating number of clusters and cluster size of each one
-  std::pair<uint32_t, std::vector<int>> CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const;
+  std::pair<uint32_t, std::vector<int>> CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit, TRandom3 * myRandom) const;
 
   bool IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle &) const ;
 
