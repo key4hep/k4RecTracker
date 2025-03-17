@@ -2,9 +2,6 @@ from k4FWCore import ApplicationMgr
 from Gaudi.Configuration import INFO, DEBUG
 import os
 
-if not os.path.isfile("ddsim_output_edm4hep.root"):
-    os.system("ddsim --enableGun --gun.distribution uniform --gun.energy '10*GeV' --gun.particle mu- --gun.thetaMin 20 --gun.thetaMax 160 --numberOfEvents 100 --outputFile ddsim_output_edm4hep.root --random.enableEventSeed --random.seed 42 --compactFile $K4GEO/FCCee/ALLEGRO/compact/ALLEGRO_o1_v03/ALLEGRO_o1_v03.xml")
-
 # Loading the output of the SIM step
 from k4FWCore import IOSvc
 io_svc = IOSvc("IOSvc")
