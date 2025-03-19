@@ -8,8 +8,8 @@ if not os.path.isfile("ddsim_output_edm4hep.root"):
 # Loading the output of the SIM step
 from k4FWCore import IOSvc
 io_svc = IOSvc("IOSvc")
-io_svc.input = "ddsim_output_edm4hep.root"
-io_svc.output = "tracks_from_genParticle_output.root"
+io_svc.Input = "ddsim_output_edm4hep.root"
+io_svc.Output = "tracks_from_genParticle_output.root"
 
 # Calling TracksFromGenParticles
 from Configurables import TracksFromGenParticles
