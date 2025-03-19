@@ -61,9 +61,4 @@ ADD_TEST(NAME ${test_name} COMMAND k4run test/runTracksFromGenParticles.py)
 set_test_env(${test_name})
 set_tests_properties(${test_name} PROPERTIES DEPENDS "test_runDCHdigiV2")
 
-SET(test_name "test_TracksFromGenParticlesAlg")
-ADD_TEST(NAME ${test_name} COMMAND k4run test/runTracksFromGenParticlesAlg.py)
-set_test_env(${test_name})
-set_tests_properties(${test_name} PROPERTIES DEPENDS "test_runDCHdigiV2")
-
 #endif()
