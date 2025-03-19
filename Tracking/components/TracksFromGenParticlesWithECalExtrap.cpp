@@ -21,6 +21,7 @@
 #include "DD4hep/DD4hepUnits.h"
 #include "DD4hep/DetType.h"
 #include "DD4hep/DetectorSelector.h"
+#include "DD4hep/Readout.h"
 
 // C++
 #include <string>
@@ -33,8 +34,13 @@ using SimTrackerHitColl = std::vector<const edm4hep::SimTrackerHitCollection*>;
  *  It just builds an helix out of the genParticle position, momentum, charge and z component of the (constant) magnetic field, retrieved from the detector.
  *  From this helix, different edm4hep::TrackStates (AtIP, AtFirstHit, AtLastHit) are defined.
  *  The first and last hits are defined as those with smallest and largest time in the input SimTrackerHit collections
- *  The algorithm also performs extrapolation to the EM calorimeter inner face is done using the positions of the barrel and endcap retrieved from the detector data extensions.
+ *  The algorithm also performs extrapolation to the EM calorimeter inner face. This is done using the positions of the barrel and endcap retrieved from the detector data extensions.
  *  This is meant to enable technical development needing edm4hep::Track and performance studies where having generator based tracks is a reasonable approximation.
+ *  GM TODO:
+ *  - we could replace the generator-level SimTrackerHit collections with the digitised TrackerHit3D collections and create associations between the "reconstructed"
+ *    tracks and the digitised hits (how to associate hit<->track? hit->sim hit->particle? or geometric matching?)
+ *  - in case of intersections of the extrapolation with both ECAL barrel and endcap inner faces, we could keep both (could be useful for reconstruction)
+ *    instead of only the one with lower arrival time
  *  @author Brieuc Francois
  *  @author Archil Durglishvili
  *  @author Giovanni Marchiori
@@ -42,6 +48,7 @@ using SimTrackerHitColl = std::vector<const edm4hep::SimTrackerHitCollection*>;
 
 struct TracksFromGenParticlesWithECalExtrap final
   : k4FWCore::MultiTransformer<std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection>(const edm4hep::MCParticleCollection&, const SimTrackerHitColl&)> {
+
   TracksFromGenParticlesWithECalExtrap(const std::string& name, ISvcLocator* svcLoc)
       : MultiTransformer(
             name, svcLoc,
@@ -50,7 +57,7 @@ struct TracksFromGenParticlesWithECalExtrap final
             {KeyValues("OutputTracks", {"TracksFromGenParticles"}),
              KeyValues("OutputMCRecoTrackParticleAssociation", {"TracksFromGenParticlesAssociation"})}) {
   }
-  
+
   double getFieldFromCompact() {
     dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
     const double position[3]={0,0,0}; // position to calculate magnetic field at (the origin in this case)
@@ -58,7 +65,7 @@ struct TracksFromGenParticlesWithECalExtrap final
     mainDetector.field().magneticField(position, magneticFieldVector); // get the magnetic field vector from DD4hep
     return magneticFieldVector[2]/dd4hep::tesla; // z component at (0,0,0)
   }
-  
+
   dd4hep::rec::LayeredCalorimeterData * getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
 
     dd4hep::rec::LayeredCalorimeterData * theExtension = 0;
@@ -124,6 +131,11 @@ struct TracksFromGenParticlesWithECalExtrap final
       warning() << "ECAL endcap extension not found" << endmsg;
       m_eCalEndCapInnerR = 0.; // set to 0, will use it later to avoid projecting to the endcap
     };
+
+    // setup system decoder
+    m_systemEncoder = new dd4hep::DDSegmentation::BitFieldCoder(m_systemEncoding);
+    m_indexSystem = m_systemEncoder->index("system");
+
     return StatusCode::SUCCESS;
   }
 
@@ -145,6 +157,9 @@ struct TracksFromGenParticlesWithECalExtrap final
       // consider only charged particles
       if(genParticle.getCharge() == 0) continue;
 
+      // GM: should skip also particles that cannot be reconstructed in tracker (vertex at too large radius, low energy)
+      if (genParticle.getEnergy() < 0.010) continue; // cut at 10 MeV
+
       // Building an helix out of MCParticle properties and B field
       auto helixFromGenParticle = HelixClass_double();
       auto vertex = genParticle.getVertex();
@@ -164,17 +179,31 @@ struct TracksFromGenParticlesWithECalExtrap final
       trackState_IP.omega = helixFromGenParticle.getOmega();
       trackState_IP.Z0 = helixFromGenParticle.getZ0();
       trackState_IP.tanLambda = helixFromGenParticle.getTanLambda();
-      trackState_IP.referencePoint = edm4hep::Vector3f((float)genParticleVertex[0],(float)genParticleVertex[1],(float)genParticleVertex[2]);
+      // trackState_IP.referencePoint = edm4hep::Vector3f((float)genParticleVertex[0],(float)genParticleVertex[1],(float)genParticleVertex[2]);
+      // check this on CLD root files! Does it make any difference?
+      trackState_IP.referencePoint = edm4hep::Vector3f(0.0, 0.0, 0.0);
       trackFromGen.addToTrackStates(trackState_IP);
 
       // find SimTrackerHits associated to genParticle, store hit position, momentum and time
+      // and calculate number of hits in each subdetector
       std::vector<std::array<double,7> > trackHits;
+      std::vector<int32_t> v(m_trackerIDs.size());
       for ( size_t ih=0; ih<simTrackerHitCollVec.size(); ih++ ) {
         const edm4hep::SimTrackerHitCollection* coll = simTrackerHitCollVec[ih];
         for (const auto& hit : *coll) {
           const edm4hep::MCParticle particle = hit.getParticle();
           std::array<double,7> ahit{hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2], hit.getTime()};
-          if(particle.getObjectID() == genParticle.getObjectID()) trackHits.push_back(ahit);
+          if(particle.getObjectID() == genParticle.getObjectID()) {
+            trackHits.push_back(ahit);
+            uint cellID = hit.getCellID();
+            uint systemID = m_systemEncoder->get(cellID, m_indexSystem);
+            for (size_t idxTracker=0; idxTracker < m_trackerIDs.size(); idxTracker++) {
+              if (systemID == m_trackerIDs[idxTracker]) {
+                v[idxTracker]++;
+                break;
+              }
+            }
+          }
         }
       }
 
@@ -194,7 +223,10 @@ struct TracksFromGenParticlesWithECalExtrap final
         auto firstHit = trackHits.front();
         double posAtFirstHit[] = {firstHit[0], firstHit[1], firstHit[2]};
         double momAtFirstHit[] = {firstHit[3], firstHit[4], firstHit[5]};
-        debug() << "Radius of first hit: " << std::sqrt(firstHit[0]*firstHit[0] + firstHit[1]*firstHit[1]) << endmsg;
+        debug() << "First hit: x, y, z, r = " << firstHit[0] << " "
+                                              << firstHit[1] << " "
+                                              << firstHit[2] << " "
+                                              << sqrt(firstHit[0]*firstHit[0] + firstHit[1]*firstHit[1]) << endmsg;
         // get extrapolated momentum from the helix with ref point at IP
         helixFromGenParticle.getExtrapolatedMomentum(posAtFirstHit,momAtFirstHit);
         // produce new helix at first hit position
@@ -215,7 +247,10 @@ struct TracksFromGenParticlesWithECalExtrap final
         auto lastHit = trackHits.back();
         double posAtLastHit[] = {lastHit[0], lastHit[1], lastHit[2]};
         double momAtLastHit[] = {lastHit[3], lastHit[4], lastHit[5]};
-        debug() << "Radius of last hit: " << std::sqrt(lastHit[0]*lastHit[0] + lastHit[1]*lastHit[1]) << endmsg;
+        debug() << "Last hit: x, y, z, r = " << lastHit[0] << " "
+                                             << lastHit[1] << " "
+                                             << lastHit[2] << " "
+                                             << sqrt(lastHit[0]*lastHit[0] + lastHit[1]*lastHit[1]) << endmsg;
         // get extrapolated momentum from the helix with ref point at first hit
         helixAtFirstHit.getExtrapolatedMomentum(posAtLastHit, momAtLastHit);
         // produce new helix at last hit position
@@ -228,7 +263,7 @@ struct TracksFromGenParticlesWithECalExtrap final
         trackState_AtLastHit.omega = helixAtLastHit.getOmega();
         trackState_AtLastHit.Z0 = helixAtLastHit.getZ0();
         trackState_AtLastHit.tanLambda = helixAtLastHit.getTanLambda();
-        trackState_AtLastHit.referencePoint = edm4hep::Vector3f((float)posAtLastHit[0], 
+        trackState_AtLastHit.referencePoint = edm4hep::Vector3f((float)posAtLastHit[0],
                                                                 (float)posAtLastHit[1],
                                                                 (float)posAtLastHit[2]);
         // attach the TrackState to the track
@@ -241,17 +276,17 @@ struct TracksFromGenParticlesWithECalExtrap final
 
           // create helix to project
           const pandora::Helix helix(trackState_IP.phi,
-                                    trackState_IP.D0,
-                                    trackState_IP.Z0,
-                                    trackState_IP.omega,
-                                    trackState_IP.tanLambda,
-                                    m_Bz);
+                                     trackState_IP.D0,
+                                     trackState_IP.Z0,
+                                     trackState_IP.omega,
+                                     trackState_IP.tanLambda,
+                                     m_Bz);
           const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
           const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
-          
+
           // First project to endcap
           float minGenericTime(std::numeric_limits<float>::max());
-          if (m_eCalEndCapInnerR>0) {          
+          if (m_eCalEndCapInnerR>0) {
             (void)helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ, referencePoint,
                                     bestECalProjection, minGenericTime);
             // GM: if the radius of the point on the plane corresponding to the endcap inner face is
@@ -275,16 +310,19 @@ struct TracksFromGenParticlesWithECalExtrap final
 
           // get extrapolated position
           double posAtCalorimeter[] = {bestECalProjection.GetX(), bestECalProjection.GetY(), bestECalProjection.GetZ()};
-          debug() << "Radius at calorimeter: " << std::sqrt(posAtCalorimeter[0]*posAtCalorimeter[0] + posAtCalorimeter[1]*posAtCalorimeter[1]) << endmsg;
-          
+          debug() << "Projection at calo: x, y, z, r = " << posAtCalorimeter[0] << " "
+                                                         << posAtCalorimeter[1] << " "
+                                                         << posAtCalorimeter[2] << " "
+                                                         << sqrt(posAtCalorimeter[0]*posAtCalorimeter[0] + posAtCalorimeter[1]*posAtCalorimeter[1]) << endmsg;
+
           // get extrapolated momentum from the helix with ref point at last hit
           double momAtCalorimeter[] = {0.,0.,0.};
           helixAtLastHit.getExtrapolatedMomentum(posAtCalorimeter, momAtCalorimeter);
-          
+
           // produce new helix at calorimeter position
           auto helixAtCalorimeter = HelixClass_double();
           helixAtCalorimeter.Initialize_VP(posAtCalorimeter, momAtCalorimeter, genParticle.getCharge(), m_Bz);
-          
+
           // fill the TrackState parameters
           trackState_AtCalorimeter.location = edm4hep::TrackState::AtCalorimeter;
           trackState_AtCalorimeter.D0 = helixAtCalorimeter.getD0();
@@ -297,6 +335,11 @@ struct TracksFromGenParticlesWithECalExtrap final
                                                                       (float)posAtCalorimeter[2]);
           // attach the TrackState to the track
           trackFromGen.addToTrackStates(trackState_AtCalorimeter);
+        }
+
+        // fill information about number of hits in the various subdetectors
+        for (auto nhits : v) {
+          trackFromGen.addToSubdetectorHitNumbers(nhits);
         }
 
         outputTrackCollection.push_back(trackFromGen);
@@ -312,15 +355,26 @@ struct TracksFromGenParticlesWithECalExtrap final
     return std::make_tuple(std::move(outputTrackCollection), std::move(MCRecoTrackParticleAssociationCollection));
   }
 
+private:
   /// Solenoid magnetic field, to be retrieved from detector
   float m_Bz;
-  /// ECAL barrel and endcap extent
+
+  /// ECAL barrel and endcap extent, to be retrieved from detector
   float m_eCalBarrelInnerR;
   float m_eCalBarrelMaxZ;
   float m_eCalEndCapInnerR;
   float m_eCalEndCapOuterR;
   float m_eCalEndCapInnerZ;
   float m_eCalEndCapOuterZ;
+
+  /// configurable properties (depend on detector) for calculating number of hits vs subdetector
+  Gaudi::Property<std::string> m_systemEncoding{
+    this, "systemEncoding", "system:5", "System encoding string"};
+  Gaudi::Property<std::vector<uint>> m_trackerIDs{
+    this, "TrackerIDs", {}, "System IDs of tracking subdetectors"};
+  /// General decoder to encode the tracker sub-system to determine
+  dd4hep::DDSegmentation::BitFieldCoder* m_systemEncoder;
+  int m_indexSystem;
 };
 
 DECLARE_COMPONENT(TracksFromGenParticlesWithECalExtrap)
