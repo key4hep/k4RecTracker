@@ -181,9 +181,9 @@ struct TracksFromGenParticles final
       trackState_IP.omega = helixFromGenParticle.getOmega();
       trackState_IP.Z0 = helixFromGenParticle.getZ0();
       trackState_IP.tanLambda = helixFromGenParticle.getTanLambda();
-      // trackState_IP.referencePoint = edm4hep::Vector3f((float)genParticleVertex[0],(float)genParticleVertex[1],(float)genParticleVertex[2]);
+      trackState_IP.referencePoint = edm4hep::Vector3f((float)genParticleVertex[0],(float)genParticleVertex[1],(float)genParticleVertex[2]);
       // check this on CLD root files! Does it make any difference?
-      trackState_IP.referencePoint = edm4hep::Vector3f(0.0, 0.0, 0.0);
+      // trackState_IP.referencePoint = edm4hep::Vector3f(0.0, 0.0, 0.0);
       trackFromGen.addToTrackStates(trackState_IP);
 
       // find SimTrackerHits associated to genParticle, store hit position, momentum and time
