@@ -25,19 +25,19 @@ geoservice.detectors = [
 geoservice.OutputLevel = INFO
 
 # Calling TracksFromGenParticles
-from Configurables import TracksFromGenParticlesWithECalExtrap
-tracksFromGenParticles = TracksFromGenParticlesWithECalExtrap("TracksFromGenParticles",
-                                                              InputGenParticles=["MCParticles"],
-                                                              InputSimTrackerHits=["VertexBarrelCollection",
-                                                                                   "VertexEndcapCollection",
-                                                                                   "DCHCollection",
-                                                                                   "SiWrBCollection",
-                                                                                   "SiWrDCollection"],
-                                                              OutputTracks=["TracksFromGenParticles"],
-                                                              OutputMCRecoTrackParticleAssociation=["TracksFromGenParticlesAssociation"],
-                                                              TrackerIDs=[1,2,3,23,24],
-                                                              ExtrapolateToECal=True,
-                                                              OutputLevel=DEBUG)
+from Configurables import TracksFromGenParticles
+tracksFromGenParticles = TracksFromGenParticles("TracksFromGenParticles",
+                                                InputGenParticles=["MCParticles"],
+                                                InputSimTrackerHits=["VertexBarrelCollection",
+                                                                     "VertexEndcapCollection",
+                                                                     "DCHCollection",
+                                                                     "SiWrBCollection",
+                                                                     "SiWrDCollection"],
+                                                OutputTracks=["TracksFromGenParticles"],
+                                                OutputMCRecoTrackParticleAssociation=["TracksFromGenParticlesAssociation"],
+                                                TrackerIDs=[1,2,3,23,24],
+                                                ExtrapolateToECal=True,
+                                                OutputLevel=DEBUG)
 
 # produce a TH1 with distances between tracks and simTrackerHits
 from Configurables import PlotTrackHitDistances, RootHistSvc
