@@ -232,8 +232,6 @@ struct TracksFromGenParticles final
                 << firstHit[1] << " "
                 << firstHit[2] << " "
                 << rAtFirstHit << endmsg;
-        // get extrapolated momentum from the helix with ref point at IP
-        helixFromGenParticle.getExtrapolatedMomentum(posAtFirstHit,momAtFirstHit);
         debug() << "First hit: px, py, pz = "
                 << firstHit[3] << " "
                 << firstHit[4] << " "
@@ -261,8 +259,6 @@ struct TracksFromGenParticles final
                                              << lastHit[1] << " "
                                              << lastHit[2] << " "
                                              << sqrt(lastHit[0]*lastHit[0] + lastHit[1]*lastHit[1]) << endmsg;
-        // get extrapolated momentum from the helix with ref point at first hit
-        helixAtFirstHit.getExtrapolatedMomentum(posAtLastHit, momAtLastHit);
         debug() << "Last hit: px, py, pz = "
                 << lastHit[3] << " "
                 << lastHit[4] << " "
@@ -307,7 +303,6 @@ struct TracksFromGenParticles final
             // lower than the inner radius of the calorimeter, we might want to ignore it
             // for the moment let's keep it as it might be useful for debugging the reconstruction
           }
-
           // Then project to barrel surface(s), and keep projection with lower arrival time
           if (m_eCalBarrelInnerR>0) {
             pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
@@ -318,6 +313,7 @@ struct TracksFromGenParticles final
               minGenericTime = genericTime;
               bestECalProjection = barrelProjection;
             }
+
             // GM: again, if the Z of the point on the cylinder of the barrel is beyond the
             // max/min z of the detector, we might want to ignore it - but let's keep it
             // for the moment as it might be useful for debugging the reconstruction
