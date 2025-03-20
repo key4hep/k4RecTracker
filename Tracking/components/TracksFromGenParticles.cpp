@@ -186,7 +186,8 @@ struct TracksFromGenParticles final
       trackState_IP.referencePoint = edm4hep::Vector3f((float)genParticleVertex[0],(float)genParticleVertex[1],(float)genParticleVertex[2]);
       trackFromGen.addToTrackStates(trackState_IP);
 
-      // find SimTrackerHits associated to genParticle, store hit position, momentum and time
+      // find SimTrackerHits associated to genParticle (and not produced by secondaries)
+      // store hit position, momentum and time
       // and calculate number of hits in each subdetector
       std::vector<std::array<double,7> > trackHits;
       std::vector<int32_t> v(m_trackerIDs.size());
@@ -355,9 +356,10 @@ struct TracksFromGenParticles final
           trackFromGen.addToSubdetectorHitNumbers(nhits);
         }
 
+        // add track to output collection
         outputTrackCollection.push_back(trackFromGen);
 
-        // Building the association between tracks and genParticles
+        // build the association between tracks and genParticles
         auto MCRecoTrackParticleAssociation = edm4hep::MutableTrackMCParticleLink();
         MCRecoTrackParticleAssociation.setFrom(trackFromGen);
         MCRecoTrackParticleAssociation.setTo(genParticle);
