@@ -193,6 +193,7 @@ struct TracksFromGenParticles final
       for ( size_t ih=0; ih<simTrackerHitCollVec.size(); ih++ ) {
         const edm4hep::SimTrackerHitCollection* coll = simTrackerHitCollVec[ih];
         for (const auto& hit : *coll) {
+          if (hit.isProducedBySecondary()) continue;
           const edm4hep::MCParticle particle = hit.getParticle();
           std::array<double,7> ahit{hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2], hit.getTime()};
           if(particle.getObjectID() == genParticle.getObjectID()) {
