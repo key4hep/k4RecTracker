@@ -305,19 +305,20 @@ struct TracksFromGenParticles final
             // for the moment let's keep it as it might be useful for debugging the reconstruction
           }
           // Then project to barrel surface(s), and keep projection with lower arrival time
+          // but only if barrel extrapolation is within the z acceptance of the detector
           if (m_eCalBarrelInnerR>0) {
             pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
             float genericTime(std::numeric_limits<float>::max());
             const pandora::StatusCode statusCode(helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint,
                                                  barrelProjection, genericTime));
-            if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (genericTime < minGenericTime)) {
+            if (
+              (pandora::STATUS_CODE_SUCCESS == statusCode) &&
+              (genericTime < minGenericTime) &&
+              (std::fabs(barrelProjection.GetZ())<= m_eCalBarrelMaxZ)
+            ) {
               minGenericTime = genericTime;
               bestECalProjection = barrelProjection;
             }
-
-            // GM: again, if the Z of the point on the cylinder of the barrel is beyond the
-            // max/min z of the detector, we might want to ignore it - but let's keep it
-            // for the moment as it might be useful for debugging the reconstruction
           }
 
           // get extrapolated position
