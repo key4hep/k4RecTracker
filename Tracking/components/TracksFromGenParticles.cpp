@@ -285,6 +285,7 @@ struct TracksFromGenParticles final
         if (m_eCalBarrelInnerR>0. || m_eCalEndCapInnerR>0.) {
           auto trackState_AtCalorimeter = edm4hep::TrackState{};
           pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
+          float minGenericTime(std::numeric_limits<float>::max());
 
           // create helix to project
           // rather than using parameters at production, better to use those from
@@ -296,13 +297,23 @@ struct TracksFromGenParticles final
           const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
 
           // First project to endcap
-          float minGenericTime(std::numeric_limits<float>::max());
           if (m_eCalEndCapInnerR>0) {
-            (void)helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ, referencePoint,
-                                    bestECalProjection, minGenericTime);
-            // GM: if the radius of the point on the plane corresponding to the endcap inner face is
-            // lower than the inner radius of the calorimeter, we might want to ignore it
-            // for the moment let's keep it as it might be useful for debugging the reconstruction
+            pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
+            float genericTime(std::numeric_limits<float>::max());
+            const pandora::StatusCode statusCode(helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ, referencePoint,
+                                                 endCapProjection, genericTime));
+            float x = endCapProjection.GetX();
+            float y = endCapProjection.GetY();
+            float r = std::sqrt(x*x+y*y);
+            if (
+              (pandora::STATUS_CODE_SUCCESS == statusCode) &&
+              (genericTime < minGenericTime) &&
+              (r >= m_eCalEndCapInnerR) &&
+              (r <= m_eCalEndCapOuterR)
+            ) {
+              minGenericTime = genericTime;
+              bestECalProjection = endCapProjection;
+            }
           }
           // Then project to barrel surface(s), and keep projection with lower arrival time
           // but only if barrel extrapolation is within the z acceptance of the detector
@@ -339,6 +350,7 @@ struct TracksFromGenParticles final
           helixAtCalorimeter.Initialize_VP(posAtCalorimeter, momAtCalorimeter, genParticle.getCharge(), m_Bz);
 
           // fill the TrackState parameters
+          // if there is no valid extrapolation, the point is at 0,0,0
           trackState_AtCalorimeter.location = edm4hep::TrackState::AtCalorimeter;
           trackState_AtCalorimeter.D0 = helixAtCalorimeter.getD0();
           trackState_AtCalorimeter.phi = std::atan2(momAtCalorimeter[1], momAtCalorimeter[0]);
