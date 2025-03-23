@@ -75,7 +75,7 @@ StatusCode ARCdigitizer::execute(const EventContext&) const {
     if (m_apply_SiPM_effi_to_digi && m_flat_SiPM_effi >= 0.0 && m_uniform.shoot() > m_flat_SiPM_effi)
       continue;
     auto output_digi_hit = output_digi_hits->create();
-    auto pos             = converter.position(it->first);
+    auto pos = converter.position(it->first);
     output_digi_hit.setCellID(it->first);
     output_digi_hit.setPosition(edm4hep::Vector3d(pos.X(), pos.Y(), pos.Z()));
     output_digi_hit.setEDep(it->second.first);

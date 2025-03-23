@@ -55,11 +55,12 @@ StatusCode DCHsimpleDigitizer::execute(const EventContext&) const {
   edm4hep::TrackerHit3DCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   for (const auto& input_sim_hit : *input_sim_hits) {
     auto output_digi_hit = output_digi_hits->create();
-    // smear the hit position: need to go in the wire local frame to smear in the direction aligned/perpendicular with the wire for z/distanceToWire, taking e.g. stereo angle into account
-    // retrieve the cell detElement
-    dd4hep::DDSegmentation::CellID cellID         = input_sim_hit.getCellID();
-    auto                           cellDetElement = m_volman.lookupDetElement(cellID);
-    // retrieve the wire (in DD4hep 1.23 there is no easy way to access the volume daughters we have to pass by detElements, in later versions volumes can be used)
+    // smear the hit position: need to go in the wire local frame to smear in the direction aligned/perpendicular with
+    // the wire for z/distanceToWire, taking e.g. stereo angle into account retrieve the cell detElement
+    dd4hep::DDSegmentation::CellID cellID = input_sim_hit.getCellID();
+    auto cellDetElement = m_volman.lookupDetElement(cellID);
+    // retrieve the wire (in DD4hep 1.23 there is no easy way to access the volume daughters we have to pass by
+    // detElements, in later versions volumes can be used)
     const std::string& wireDetElementName =
         Form("superLayer_%ld_layer_%ld_phi_%ld_wire", m_decoder->get(cellID, "superLayer"),
              m_decoder->get(cellID, "layer"), m_decoder->get(cellID, "phi"));
@@ -70,8 +71,9 @@ StatusCode DCHsimpleDigitizer::execute(const EventContext&) const {
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,
                                       input_sim_hit.getPosition().z * dd4hep::mm};
-    double simHitLocalPosition[3]  = {0, 0, 0};
-    // get the simHit coordinate in cm in the wire reference frame to be able to apply smearing of radius perpendicular to the wire
+    double simHitLocalPosition[3] = {0, 0, 0};
+    // get the simHit coordinate in cm in the wire reference frame to be able to apply smearing of radius perpendicular
+    // to the wire
     wireTransformMatrix.MasterToLocal(simHitGlobalPosition, simHitLocalPosition);
     debug() << "Cell ID string: " << m_decoder->valueString(cellID) << endmsg;
     ;
@@ -86,9 +88,11 @@ StatusCode DCHsimpleDigitizer::execute(const EventContext&) const {
                                                     simHitLocalPosition[2]);
     // get the smeared distance to the wire (cylindrical coordinate as the smearing should be perpendicular to the wire)
     double smearedDistanceToWire = simHitLocalPositionVector.rho() + m_gauss_xy.shoot() * dd4hep::mm;
-    // smear the z position (in local coordinate the z axis is aligned with the wire i.e. it take the stereo angle into account);
+    // smear the z position (in local coordinate the z axis is aligned with the wire i.e. it take the stereo angle into
+    // account);
     double smearedZ = simHitLocalPositionVector.z() + m_gauss_z.shoot() * dd4hep::mm;
-    // build the local position vector of the smeared hit using cylindrical coordinates. When we will have edm4hep::DCHit there will be probably no need
+    // build the local position vector of the smeared hit using cylindrical coordinates. When we will have
+    // edm4hep::DCHit there will be probably no need
     ROOT::Math::Cylindrical3D digiHitLocalPositionVector(smearedDistanceToWire, smearedZ,
                                                          simHitLocalPositionVector.phi());
     debug() << "Local simHit distance to the wire: " << simHitLocalPositionVector.rho()
@@ -98,8 +102,8 @@ StatusCode DCHsimpleDigitizer::execute(const EventContext&) const {
     debug() << "Local simHit phi: " << simHitLocalPositionVector.phi()
             << " Local digiHit distance to the wire: " << digiHitLocalPositionVector.Phi() << endmsg;
     // go back to the global frame
-    double digiHitLocalPosition[3]  = {digiHitLocalPositionVector.x(), digiHitLocalPositionVector.y(),
-                                       digiHitLocalPositionVector.z()};
+    double digiHitLocalPosition[3] = {digiHitLocalPositionVector.x(), digiHitLocalPositionVector.y(),
+                                      digiHitLocalPositionVector.z()};
     double digiHitGlobalPosition[3] = {0, 0, 0};
     wireTransformMatrix.LocalToMaster(digiHitLocalPosition, digiHitGlobalPosition);
     // go back to mm

@@ -3,9 +3,6 @@
 
 #include <iostream>
 
-#include <TSpline.h>
-#include <gsl/gsl_interp.h>
-#include <gsl/gsl_spline.h>
 #include "Math/InterpolationTypes.h"
 #include "Math/Interpolator.h"
 #include "TCanvas.h"
@@ -14,6 +11,9 @@
 #include "TFile.h"
 #include "TGraph.h"
 #include "TTree.h"
+#include <TSpline.h>
+#include <gsl/gsl_interp.h>
+#include <gsl/gsl_spline.h>
 
 class AlgData {
 public:
@@ -24,32 +24,32 @@ public:
   inline void read_file(TString dataAlg);
   inline TF1* read_graph(TString dataAlg, TString cvName, TString fitName);
 
-  inline TF1*                      get_fit();
-  inline TFormula*                 get_formula();
-  inline double                    get_Fitvalue(double betagamma) const;
+  inline TF1* get_fit();
+  inline TFormula* get_formula();
+  inline double get_Fitvalue(double betagamma) const;
   inline ROOT::Math::Interpolator* Interpvalue(std::vector<double> bg, std::vector<double> Ydata, int Intertype);
-  inline void                      Load_file(TString dataAlg);
-  inline void                      Load_interp();
-  inline double                    get_MPVExtra(double betagamma) const;
-  inline double                    get_SgmExtra(double betagamma) const;
-  inline double                    get_MeanExtra1(double betagamma) const;
-  inline double                    get_SgmExtra1(double betagamma) const;
-  inline double                    get_SlopeExtra1(double betagamma) const;
-  inline double                    get_FracExtra1(double betagamma) const;
-  inline double                    get_FfracExtra(double betagamma);
-  inline double                    get_maxEx0(double betagamma);
-  inline double                    get_maxExSlp();
-  inline double                    get_ExSgmlep();
-  inline double                    get_ExSgmhad();
-  inline double                    get_Ffrac(double betagamma);
-  inline double                    get_Fmpv1(double betagamma);
-  inline double                    get_Fsgm1(double betagamma);
-  inline double                    get_Fmpv2(double betagamma);
-  inline double                    get_Fsgm2(double betagamma);
-  inline double                    get_ClSzCorrInt(double betagamma);
-  inline double                    get_ClSzCorrSlp(double betagamma);
-  inline std::vector<double>       get_ClSzCorrpmean(double betagamma);
-  inline std::vector<double>       get_ClSzCorrpsgm(double betagamma);
+  inline void Load_file(TString dataAlg);
+  inline void Load_interp();
+  inline double get_MPVExtra(double betagamma) const;
+  inline double get_SgmExtra(double betagamma) const;
+  inline double get_MeanExtra1(double betagamma) const;
+  inline double get_SgmExtra1(double betagamma) const;
+  inline double get_SlopeExtra1(double betagamma) const;
+  inline double get_FracExtra1(double betagamma) const;
+  inline double get_FfracExtra(double betagamma);
+  inline double get_maxEx0(double betagamma);
+  inline double get_maxExSlp();
+  inline double get_ExSgmlep();
+  inline double get_ExSgmhad();
+  inline double get_Ffrac(double betagamma);
+  inline double get_Fmpv1(double betagamma);
+  inline double get_Fsgm1(double betagamma);
+  inline double get_Fmpv2(double betagamma);
+  inline double get_Fsgm2(double betagamma);
+  inline double get_ClSzCorrInt(double betagamma);
+  inline double get_ClSzCorrSlp(double betagamma);
+  inline std::vector<double> get_ClSzCorrpmean(double betagamma);
+  inline std::vector<double> get_ClSzCorrpsgm(double betagamma);
 
   inline std::vector<double> get_ClSzCorrdgmean(double betagamma);
   inline std::vector<double> get_ClSzCorrdgsgm(double betagamma);
@@ -65,7 +65,7 @@ private:
   TChain* data1;
   TChain* datalep;
   TChain* datahad;
-  TFile*  file;
+  TFile* file;
 
   double bgT, bgTlep, bgThad, tmpmaxEx0Tot, tmpErrmaxEx0Tot, tmpmaxExSlpTot, tmpErrmaxExSlpTot, tmpExSgmTotlep,
       tmpExSgmTothad;
@@ -73,26 +73,26 @@ private:
       tmptFerrmpv2Tot, tmptFsgm2Tot, tmptFerrsgm2Tot;
   double tmpCorrIntTot, tmpErrCorrIntTot, tmpCorrSlpTot, tmpErrCorrSlpTot;
 
-  std::vector<double>* tmpCorrmeanSliceTot    = nullptr;
+  std::vector<double>* tmpCorrmeanSliceTot = nullptr;
   std::vector<double>* tmpErrCorrmeanSliceTot = nullptr;
-  std::vector<double>* tmpCorrsgmSliceTot     = nullptr;
-  std::vector<double>* tmpErrCorrsgmSliceTot  = nullptr;
+  std::vector<double>* tmpCorrsgmSliceTot = nullptr;
+  std::vector<double>* tmpErrCorrsgmSliceTot = nullptr;
 
-  std::vector<double>* tmpCorrdglfracSliceTot     = nullptr;
-  std::vector<double>* tmpErrCorrdglfracSliceTot  = nullptr;
-  std::vector<double>* tmpCorrdglmeangSliceTot    = nullptr;
+  std::vector<double>* tmpCorrdglfracSliceTot = nullptr;
+  std::vector<double>* tmpErrCorrdglfracSliceTot = nullptr;
+  std::vector<double>* tmpCorrdglmeangSliceTot = nullptr;
   std::vector<double>* tmpErrCorrdglmeangSliceTot = nullptr;
-  std::vector<double>* tmpCorrdglsgmgSliceTot     = nullptr;
-  std::vector<double>* tmpErrCorrdglsgmgSliceTot  = nullptr;
-  std::vector<double>* tmpCorrdglmpvSliceTot      = nullptr;
-  std::vector<double>* tmpErrCorrdglmpvSliceTot   = nullptr;
-  std::vector<double>* tmpCorrdglsgmlSliceTot     = nullptr;
-  std::vector<double>* tmpErrCorrdglsgmlSliceTot  = nullptr;
+  std::vector<double>* tmpCorrdglsgmgSliceTot = nullptr;
+  std::vector<double>* tmpErrCorrdglsgmgSliceTot = nullptr;
+  std::vector<double>* tmpCorrdglmpvSliceTot = nullptr;
+  std::vector<double>* tmpErrCorrdglmpvSliceTot = nullptr;
+  std::vector<double>* tmpCorrdglsgmlSliceTot = nullptr;
+  std::vector<double>* tmpErrCorrdglsgmlSliceTot = nullptr;
 
-  std::vector<double>* tmpCorrdgmeanSliceTot    = nullptr;
+  std::vector<double>* tmpCorrdgmeanSliceTot = nullptr;
   std::vector<double>* tmpErrCorrdgmeanSliceTot = nullptr;
-  std::vector<double>* tmpCorrdgsgmSliceTot     = nullptr;
-  std::vector<double>* tmpErrCorrdgsgmSliceTot  = nullptr;
+  std::vector<double>* tmpCorrdgsgmSliceTot = nullptr;
+  std::vector<double>* tmpErrCorrdgsgmSliceTot = nullptr;
 
   //____________________________________________________//
   std::vector<double> bgv, bglep, bghad;
@@ -140,9 +140,9 @@ private:
   std::vector<double> ClSzCorrdglmeang;
   std::vector<double> ClSzCorrdglsgmg;
 
-  double      maxExSlp;
-  double      ExSgmlep;
-  double      ExSgmhad;
+  double maxExSlp;
+  double ExSgmlep;
+  double ExSgmhad;
   inline void Calc_maxExSlp();
   inline void Calc_ExSgmlep();
   inline void Calc_ExSgmhad();
@@ -150,47 +150,47 @@ private:
   //___________________________________________//
 
   std::map<TString, ROOT::Math::Interpolator*> itpm;
-  ROOT::Math::Interpolator*                    itp1;
+  ROOT::Math::Interpolator* itp1;
 };
 
 //_______________________________________________//
 
 AlgData::AlgData() {
   DataAlg = "";
-  data1   = nullptr;
+  data1 = nullptr;
   datalep = nullptr;
   datahad = nullptr;
-  file    = nullptr;
+  file = nullptr;
 
-  tmpCorrmeanSliceTot    = nullptr;
+  tmpCorrmeanSliceTot = nullptr;
   tmpErrCorrmeanSliceTot = nullptr;
-  tmpCorrsgmSliceTot     = nullptr;
-  tmpErrCorrsgmSliceTot  = nullptr;
+  tmpCorrsgmSliceTot = nullptr;
+  tmpErrCorrsgmSliceTot = nullptr;
 
-  tmpCorrdglfracSliceTot     = nullptr;
-  tmpErrCorrdglfracSliceTot  = nullptr;
-  tmpCorrdglmeangSliceTot    = nullptr;
+  tmpCorrdglfracSliceTot = nullptr;
+  tmpErrCorrdglfracSliceTot = nullptr;
+  tmpCorrdglmeangSliceTot = nullptr;
   tmpErrCorrdglmeangSliceTot = nullptr;
-  tmpCorrdglsgmgSliceTot     = nullptr;
-  tmpErrCorrdglsgmgSliceTot  = nullptr;
-  tmpCorrdglmpvSliceTot      = nullptr;
-  tmpErrCorrdglmpvSliceTot   = nullptr;
-  tmpCorrdglsgmlSliceTot     = nullptr;
-  tmpErrCorrdglsgmlSliceTot  = nullptr;
+  tmpCorrdglsgmgSliceTot = nullptr;
+  tmpErrCorrdglsgmgSliceTot = nullptr;
+  tmpCorrdglmpvSliceTot = nullptr;
+  tmpErrCorrdglmpvSliceTot = nullptr;
+  tmpCorrdglsgmlSliceTot = nullptr;
+  tmpErrCorrdglsgmlSliceTot = nullptr;
 
-  tmpCorrdgmeanSliceTot    = nullptr;
+  tmpCorrdgmeanSliceTot = nullptr;
   tmpErrCorrdgmeanSliceTot = nullptr;
-  tmpCorrdgsgmSliceTot     = nullptr;
-  tmpErrCorrdgsgmSliceTot  = nullptr;
+  tmpCorrdgsgmSliceTot = nullptr;
+  tmpErrCorrdgsgmSliceTot = nullptr;
 
-  Ft             = nullptr;
-  FtFormula      = nullptr;
-  FitMPVExtra    = nullptr;
-  FitSgmExtra    = nullptr;
-  FitMeanExtra1  = nullptr;
-  FitSgmExtra1   = nullptr;
+  Ft = nullptr;
+  FtFormula = nullptr;
+  FitMPVExtra = nullptr;
+  FitSgmExtra = nullptr;
+  FitMeanExtra1 = nullptr;
+  FitSgmExtra1 = nullptr;
   FitSlopeExtra1 = nullptr;
-  FitFracExtra1  = nullptr;
+  FitFracExtra1 = nullptr;
 }
 
 AlgData::~AlgData() {
@@ -203,7 +203,7 @@ void AlgData::read_file(TString dataAlg) {
 
   std::cout << " ---reading of---" << DataAlg << std::endl;
 
-  data1   = new TChain("DataAlg");
+  data1 = new TChain("DataAlg");
   datalep = new TChain("DataAlglep");
   datahad = new TChain("DataAlghad");
 
@@ -330,24 +330,24 @@ void AlgData::read_file(TString dataAlg) {
 }
 
 TF1* AlgData::read_graph(TString dataAlg, TString cvName, TString fitName) {
-  DataAlg             = dataAlg;
-  file                = TFile::Open(dataAlg.Data(), "read");
-  TCanvas*  cv        = (TCanvas*)file->Get(cvName.Data());
-  TGraph*   gr        = (TGraph*)cv->GetListOfPrimitives()->FindObject("Graph");
-  TF1*      ft        = (TF1*)gr->GetListOfFunctions()->FindObject(fitName.Data());
+  DataAlg = dataAlg;
+  file = TFile::Open(dataAlg.Data(), "read");
+  TCanvas* cv = (TCanvas*)file->Get(cvName.Data());
+  TGraph* gr = (TGraph*)cv->GetListOfPrimitives()->FindObject("Graph");
+  TF1* ft = (TF1*)gr->GetListOfFunctions()->FindObject(fitName.Data());
   TFormula* ftFormula = (TFormula*)ft->GetFormula();
-  FtFormula           = ftFormula;
+  FtFormula = ftFormula;
   return ft;
 }
 
 void AlgData::Load_file(TString dataAlg) {
   read_file(dataAlg.Data());
-  FitMPVExtra    = read_graph(dataAlg.Data(), "cMPVExtrabgTot", "fit_MPV");
-  FitSgmExtra    = read_graph(dataAlg.Data(), "cSgmExtrabgTot", "fit_sgmEx");
-  FitMeanExtra1  = read_graph(dataAlg.Data(), "cMeanExtra1bgTot", "expeff");
-  FitSgmExtra1   = read_graph(dataAlg.Data(), "cSgmExtra1bgTot", "expeffNeg");
+  FitMPVExtra = read_graph(dataAlg.Data(), "cMPVExtrabgTot", "fit_MPV");
+  FitSgmExtra = read_graph(dataAlg.Data(), "cSgmExtrabgTot", "fit_sgmEx");
+  FitMeanExtra1 = read_graph(dataAlg.Data(), "cMeanExtra1bgTot", "expeff");
+  FitSgmExtra1 = read_graph(dataAlg.Data(), "cSgmExtra1bgTot", "expeffNeg");
   FitSlopeExtra1 = read_graph(dataAlg.Data(), "cSlopeExtra1bgTot", "fit_slp");
-  FitFracExtra1  = read_graph(dataAlg.Data(), "cfracbgTot", "fit_frEx");
+  FitFracExtra1 = read_graph(dataAlg.Data(), "cfracbgTot", "fit_frEx");
   Calc_ExSgmhad();
   Calc_ExSgmlep();
   Calc_maxExSlp();
@@ -370,7 +370,7 @@ double AlgData::get_FracExtra1(double betagamma) const { return FitFracExtra1->E
 double AlgData::get_SlopeExtra1(double betagamma) const { return FitSlopeExtra1->Eval(betagamma); }
 
 ROOT::Math::Interpolator* AlgData::Interpvalue(std::vector<double> bg, std::vector<double> Ydata, int Intertype) {
-  //tipo di interpolazione 0=linear;1=pol;2=cspline;4=akima
+  // tipo di interpolazione 0=linear;1=pol;2=cspline;4=akima
   return itp1 = new ROOT::Math::Interpolator(bg, Ydata, (ROOT::Math::Interpolation::Type)Intertype);
 }
 
@@ -390,13 +390,13 @@ void AlgData::Load_interp() {
     Corrmean.push_back(nameCm + i);
     Corrsgm.push_back(nameCs + i);
     itpm[Corrmean.at(i)] = Interpvalue(bgv, CorrmeanSliceTot[i], 4);
-    itpm[Corrsgm.at(i)]  = Interpvalue(bgv, CorrsgmSliceTot[i], 4);
+    itpm[Corrsgm.at(i)] = Interpvalue(bgv, CorrsgmSliceTot[i], 4);
   }
 
   for (unsigned int j = 0; j < tmpCorrdglfracSliceTot->size(); ++j) {
-    TString nameCdf   = "Corrdglfrac";
-    TString nameCdm   = "Corrdglmeang";
-    TString nameCds   = "Corrdglsgmg";
+    TString nameCdf = "Corrdglfrac";
+    TString nameCdm = "Corrdglmeang";
+    TString nameCds = "Corrdglsgmg";
     TString nameCdmpv = "Corrdglmpv";
     TString nameCdsgl = "Corrdglsgmgl";
     Corrdglfrac.push_back(nameCdf + j);
@@ -404,20 +404,20 @@ void AlgData::Load_interp() {
     Corrdglsgmg.push_back(nameCds + j);
     Corrdglmpv.push_back(nameCdmpv + j);
     Corrdglsgml.push_back(nameCdsgl + j);
-    itpm[Corrdglfrac.at(j)]  = Interpvalue(bgv, CorrdglfracSliceTot[j], 4);
+    itpm[Corrdglfrac.at(j)] = Interpvalue(bgv, CorrdglfracSliceTot[j], 4);
     itpm[Corrdglmeang.at(j)] = Interpvalue(bgv, CorrdglmeangSliceTot[j], 4);
-    itpm[Corrdglsgmg.at(j)]  = Interpvalue(bgv, CorrdglsgmgSliceTot[j], 4);
-    itpm[Corrdglmpv.at(j)]   = Interpvalue(bgv, CorrdglmpvSliceTot[j], 4);
-    itpm[Corrdglsgml.at(j)]  = Interpvalue(bgv, CorrdglsgmlSliceTot[j], 4);
+    itpm[Corrdglsgmg.at(j)] = Interpvalue(bgv, CorrdglsgmgSliceTot[j], 4);
+    itpm[Corrdglmpv.at(j)] = Interpvalue(bgv, CorrdglmpvSliceTot[j], 4);
+    itpm[Corrdglsgml.at(j)] = Interpvalue(bgv, CorrdglsgmlSliceTot[j], 4);
   }
 
   for (unsigned int n = 0; n < tmpCorrdgmeanSliceTot->size(); ++n) {
-    TString nameCdmg  = "Corrdgmean";
+    TString nameCdmg = "Corrdgmean";
     TString nameCdsgg = "Corrdgsgm";
     Corrdgmean.push_back(nameCdmg + n);
     Corrdgsgm.push_back(nameCdsgg + n);
     itpm[Corrdgmean.at(n)] = Interpvalue(bgv, CorrdgmeanSliceTot[n], 4);
-    itpm[Corrdgsgm.at(n)]  = Interpvalue(bgv, CorrdgsgmSliceTot[n], 4);
+    itpm[Corrdgsgm.at(n)] = Interpvalue(bgv, CorrdgsgmSliceTot[n], 4);
   }
 }
 
@@ -534,4 +534,4 @@ void AlgData::Calc_ExSgmhad() {
   ExSgmhad = sum / (double)ExSgmTothad.size();
 }
 
-#endif  // ALGDATA_H_INCLUDED
+#endif // ALGDATA_H_INCLUDED

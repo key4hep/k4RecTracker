@@ -17,13 +17,13 @@ StatusCode GenFitter::execute(const EventContext&) const {
   verbose() << "Input Hit collection size: " << input_hits->size() << endmsg;
 
   // Convert edm4hep::TrackerHitCollection to Genfit measurements
-  //for (const auto& input_hit : *input_hits) {
+  // for (const auto& input_hit : *input_hits) {
   //  m_wire_measurements.push_back(genfit::WireMeasurement());
   //}
 
   // Produce dummy tracks
   edm4hep::TrackCollection* output_tracks = m_output_tracks.createAndPut();
-  auto                      output_track  = output_tracks->create();
+  auto output_track = output_tracks->create();
   output_track.setChi2(1.);
   output_track.setNdf(1);
   return StatusCode::SUCCESS;

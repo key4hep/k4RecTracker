@@ -11,12 +11,12 @@
 #include "edm4hep/TrackerHit3DCollection.h"
 
 // GENFIT
-//#include "WireMeasurement.h"
+// #include "WireMeasurement.h"
 
 /** @class GenFitter
  *
- *  
- *  
+ *
+ *
  *  @author Maria Dolores Garcia, Brieuc Francois
  *  @date   2023-03
  *
@@ -45,5 +45,5 @@ private:
   // Output track collection name
   mutable DataHandle<edm4hep::TrackCollection> m_output_tracks{"outputTracks", Gaudi::DataHandle::Writer, this};
   // Transient genfit measurements used internally by genfit to run the tracking
-  //std::vector<genfit::WireMeasurement> m_wire_measurements;
+  // std::vector<genfit::WireMeasurement> m_wire_measurements;
 };
