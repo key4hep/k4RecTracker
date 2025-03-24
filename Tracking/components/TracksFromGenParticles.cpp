@@ -196,11 +196,20 @@ struct TracksFromGenParticles final
       for ( size_t ih=0; ih<simTrackerHitCollVec.size(); ih++ ) {
         const edm4hep::SimTrackerHitCollection* coll = simTrackerHitCollVec[ih];
         for (const auto& hit : *coll) {
+          // skip hits that are produced by secondary particles:
+          // they are pointing to the parent particles if the secondary one
+          // is not kept in the MCParticle collection
           if (hit.isProducedBySecondary()) continue;
+
+          // check that the ID of the particle that created the it is the same as the MCParticle being considered
           const edm4hep::MCParticle particle = hit.getParticle();
           if(particle.getObjectID() == genParticle.getObjectID()) {
+
+            // store hit position, track momentum at hit and hit time in trackHits
             std::array<double,7> ahit{hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2], hit.getTime()};
             trackHits.push_back(ahit);
+
+            // find systemID of hit and increase hit counter for corresponding subdetector
             uint cellID = hit.getCellID();
             int systemID = m_systemEncoder->get(cellID, m_indexSystem);
             for (size_t idxTracker=0; idxTracker < m_trackerIDs.size(); idxTracker++) {
