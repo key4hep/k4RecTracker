@@ -190,17 +190,17 @@ struct TracksFromGenParticles final
       // store hit position, momentum and time
       // and calculate number of hits in each subdetector
       std::vector<std::array<double,7> > trackHits;
-      std::vector<int32_t> v(m_trackerIDs.size());
+      std::vector<int> v(m_trackerIDs.size());
       for ( size_t ih=0; ih<simTrackerHitCollVec.size(); ih++ ) {
         const edm4hep::SimTrackerHitCollection* coll = simTrackerHitCollVec[ih];
         for (const auto& hit : *coll) {
           if (hit.isProducedBySecondary()) continue;
           const edm4hep::MCParticle particle = hit.getParticle();
-          std::array<double,7> ahit{hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2], hit.getTime()};
           if(particle.getObjectID() == genParticle.getObjectID()) {
+            std::array<double,7> ahit{hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2], hit.getTime()};
             trackHits.push_back(ahit);
             uint cellID = hit.getCellID();
-            uint systemID = m_systemEncoder->get(cellID, m_indexSystem);
+            int systemID = m_systemEncoder->get(cellID, m_indexSystem);
             for (size_t idxTracker=0; idxTracker < m_trackerIDs.size(); idxTracker++) {
               if (systemID == m_trackerIDs[idxTracker]) {
                 v[idxTracker]++;
@@ -403,7 +403,7 @@ private:
   Gaudi::Property<std::string> m_systemEncoding{
     this, "SystemEncoding", "system:5", "System encoding string"
   };
-  Gaudi::Property<std::vector<uint>> m_trackerIDs{
+  Gaudi::Property<std::vector<int>> m_trackerIDs{
     this, "TrackerIDs", {}, "System IDs of tracking subdetectors"
   };
 
