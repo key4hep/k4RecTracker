@@ -395,24 +395,35 @@ private:
   float m_eCalEndCapInnerZ;
   float m_eCalEndCapOuterZ;
 
-  /// configurable property to decide whether to calculate track state at ECAL or not
+  /// Configurable property to decide whether to calculate track state at ECAL or not
   Gaudi::Property<bool> m_extrapolateToECal{
     this, "ExtrapolateToECal", false, "Calculate track state at ECal inner face or not"
   };
-  /// configurable property to keep only particles with energy above a given threshold
+
+  /// Configurable property to keep only particles with energy above a given threshold
   Gaudi::Property<float> m_minParticleMomentum{
     this, "MinimumParticleMomentum", 0.010, "Keep only particles with momentum (in GeV) greater than MinimumParticleMomentum"
   };
-  /// configurable properties (depend on detector) for calculating number of hits vs subdetector
-  Gaudi::Property<std::string> m_systemEncoding{
-    this, "SystemEncoding", "system:5", "System encoding string"
-  };
+
+  /// Configurable property listing the systemIDs of the variuos tracker subdetectors
   Gaudi::Property<std::vector<int>> m_trackerIDs{
     this, "TrackerIDs", {}, "System IDs of tracking subdetectors"
   };
 
-  /// General decoder to encode the tracker sub-system to determine
+  /// General decoder to retrieve from each hit what is the
+  /// system it belongs to. The tool will count number of hits in the different
+  /// tracking subsystems based on the hit systemID, and on the list of systemIDs
+  /// passed through TrackerIDs
   dd4hep::DDSegmentation::BitFieldCoder* m_systemEncoder;
+
+  /// Configurable property storing string and number of bits used
+  /// to encode the systemID in the hits of the various tracking devices
+  /// (we do not care about the other fields of the readout)
+  Gaudi::Property<std::string> m_systemEncoding{
+    this, "SystemEncoding", "system:5", "System encoding string"
+  };
+
+  /// Used to retrieve systemID by index rather than by string
   int m_indexSystem;
 };
 
