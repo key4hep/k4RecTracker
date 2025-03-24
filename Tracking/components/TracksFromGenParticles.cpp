@@ -39,8 +39,6 @@ using SimTrackerHitColl = std::vector<const edm4hep::SimTrackerHitCollection*>;
  *  GM TODO:
  *  - we could replace the generator-level SimTrackerHit collections with the digitised TrackerHit3D collections and create associations between the "reconstructed"
  *    tracks and the digitised hits (how to associate hit<->track? hit->sim hit->particle? or geometric matching?)
- *  - in case of intersections of the extrapolation with both ECAL barrel and endcap inner faces, we could keep both (could be useful for reconstruction)
- *    instead of only the one with lower arrival time
  *  @author Brieuc Francois
  *  @author Archil Durglishvili
  *  @author Giovanni Marchiori
@@ -140,6 +138,40 @@ struct TracksFromGenParticles final
 
     return StatusCode::SUCCESS;
   }
+
+  edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector& ecalProjection, const HelixClass_double& helixAtLastHit) const {
+
+    edm4hep::TrackState trackState_AtCalorimeter = edm4hep::TrackState{};
+
+    double posAtCalorimeter[] = {ecalProjection.GetX(), ecalProjection.GetY(), ecalProjection.GetZ()};
+    debug()
+      << "Projection at calo: x, y, z, r = "
+      << posAtCalorimeter[0] << " "
+      << posAtCalorimeter[1] << " "
+      << posAtCalorimeter[2] << " "
+      << sqrt(posAtCalorimeter[0]*posAtCalorimeter[0] + posAtCalorimeter[1]*posAtCalorimeter[1]) << endmsg;
+
+    // get extrapolated momentum from the helix with ref point at last hit
+    double momAtCalorimeter[] = {0.,0.,0.};
+    helixAtLastHit.getExtrapolatedMomentum(posAtCalorimeter, momAtCalorimeter);
+
+    // produce new helix at calorimeter position
+    auto helixAtCalorimeter = HelixClass_double();
+    helixAtCalorimeter.Initialize_VP(posAtCalorimeter, momAtCalorimeter, helixAtLastHit.getCharge(), m_Bz);
+
+    // fill the TrackState parameters
+    trackState_AtCalorimeter.location = edm4hep::TrackState::AtCalorimeter;
+    trackState_AtCalorimeter.D0 = helixAtCalorimeter.getD0();
+    trackState_AtCalorimeter.phi = std::atan2(momAtCalorimeter[1], momAtCalorimeter[0]);
+    trackState_AtCalorimeter.omega = helixAtCalorimeter.getOmega();
+    trackState_AtCalorimeter.Z0 = helixAtCalorimeter.getZ0();
+    trackState_AtCalorimeter.tanLambda = helixAtCalorimeter.getTanLambda();
+    trackState_AtCalorimeter.referencePoint = edm4hep::Vector3f(posAtCalorimeter[0],
+                                                                posAtCalorimeter[1],
+                                                                posAtCalorimeter[2]);
+    return trackState_AtCalorimeter;
+  }
+
 
   std::tuple<edm4hep::TrackCollection, edm4hep::TrackMCParticleLinkCollection> operator()(const edm4hep::MCParticleCollection& genParticleColl, const SimTrackerHitColl& simTrackerHitCollVec) const override {
 
@@ -292,8 +324,8 @@ struct TracksFromGenParticles final
 
         // TrackState at Calorimeter
         if (m_eCalBarrelInnerR>0. || m_eCalEndCapInnerR>0.) {
-          auto trackState_AtCalorimeter = edm4hep::TrackState{};
           pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
+          pandora::CartesianVector secondBestECalProjection(0.f, 0.f, 0.f);
           float minGenericTime(std::numeric_limits<float>::max());
 
           // create helix to project
@@ -306,8 +338,9 @@ struct TracksFromGenParticles final
           const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
 
           // First project to endcap
+          pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
+          bool hasEndCapProjection(false);
           if (m_eCalEndCapInnerR>0) {
-            pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
             float genericTime(std::numeric_limits<float>::max());
             const pandora::StatusCode statusCode(helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ, referencePoint,
                                                  endCapProjection, genericTime));
@@ -322,55 +355,48 @@ struct TracksFromGenParticles final
             ) {
               minGenericTime = genericTime;
               bestECalProjection = endCapProjection;
+              hasEndCapProjection = true;
             }
           }
-          // Then project to barrel surface(s), and keep projection with lower arrival time
-          // but only if barrel extrapolation is within the z acceptance of the detector
+
+          // Then project to barrel surface(s), and keep projection
+          // if extrapolation is within the z acceptance of the detector
+          pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
+          bool hasBarrelProjection = false;
           if (m_eCalBarrelInnerR>0) {
-            pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
             float genericTime(std::numeric_limits<float>::max());
             const pandora::StatusCode statusCode(helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint,
                                                  barrelProjection, genericTime));
             if (
               (pandora::STATUS_CODE_SUCCESS == statusCode) &&
-              (genericTime < minGenericTime) &&
               (std::fabs(barrelProjection.GetZ())<= m_eCalBarrelMaxZ)
             ) {
-              minGenericTime = genericTime;
-              bestECalProjection = barrelProjection;
+              hasBarrelProjection = true;
+              if (genericTime < minGenericTime) {
+                minGenericTime = genericTime;
+                secondBestECalProjection = bestECalProjection;
+                bestECalProjection = barrelProjection;
+              }
+              else {
+                secondBestECalProjection = barrelProjection;
+              }
             }
           }
 
+          // store extrapolation to calo
+          // by default, store extrapolation with lower arrival time
           // get extrapolated position
-          double posAtCalorimeter[] = {bestECalProjection.GetX(), bestECalProjection.GetY(), bestECalProjection.GetZ()};
-          debug()
-            << "Projection at calo: x, y, z, r = "
-            << posAtCalorimeter[0] << " "
-            << posAtCalorimeter[1] << " "
-            << posAtCalorimeter[2] << " "
-            << sqrt(posAtCalorimeter[0]*posAtCalorimeter[0] + posAtCalorimeter[1]*posAtCalorimeter[1]) << endmsg;
+          edm4hep::TrackState trackState_AtCalorimeter = getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit);
 
-          // get extrapolated momentum from the helix with ref point at last hit
-          double momAtCalorimeter[] = {0.,0.,0.};
-          helixAtLastHit.getExtrapolatedMomentum(posAtCalorimeter, momAtCalorimeter);
-
-          // produce new helix at calorimeter position
-          auto helixAtCalorimeter = HelixClass_double();
-          helixAtCalorimeter.Initialize_VP(posAtCalorimeter, momAtCalorimeter, genParticle.getCharge(), m_Bz);
-
-          // fill the TrackState parameters
-          // if there is no valid extrapolation, the point is at 0,0,0
-          trackState_AtCalorimeter.location = edm4hep::TrackState::AtCalorimeter;
-          trackState_AtCalorimeter.D0 = helixAtCalorimeter.getD0();
-          trackState_AtCalorimeter.phi = std::atan2(momAtCalorimeter[1], momAtCalorimeter[0]);
-          trackState_AtCalorimeter.omega = helixAtCalorimeter.getOmega();
-          trackState_AtCalorimeter.Z0 = helixAtCalorimeter.getZ0();
-          trackState_AtCalorimeter.tanLambda = helixAtCalorimeter.getTanLambda();
-          trackState_AtCalorimeter.referencePoint = edm4hep::Vector3f(posAtCalorimeter[0],
-                                                                      posAtCalorimeter[1],
-                                                                      posAtCalorimeter[2]);
           // attach the TrackState to the track
           trackFromGen.addToTrackStates(trackState_AtCalorimeter);
+
+          // attach second extrapolation if desired
+          if (!m_keepOnlyBestExtrapolation and hasBarrelProjection and hasEndCapProjection) {
+            edm4hep::TrackState trackState_AtCalorimeter_2 = getExtrapolationAtCalorimeter(secondBestECalProjection, helixAtLastHit);
+            trackState_AtCalorimeter_2.location = edm4hep::TrackState::AtOther;
+            trackFromGen.addToTrackStates(trackState_AtCalorimeter_2);
+          }
         }
 
         // fill information about number of hits in the various subdetectors
@@ -407,6 +433,14 @@ private:
   /// Configurable property to decide whether to calculate track state at ECAL or not
   Gaudi::Property<bool> m_extrapolateToECal{
     this, "ExtrapolateToECal", false, "Calculate track state at ECal inner face or not"
+  };
+
+  /// Configurable property to keep only first extrapolation to ECAL or also second one
+  /// if both barrel and endcap are reached. The second projection will be set with
+  /// location AtOther as there reconstruction (LCIO preprocessing for Pandora) forbids
+  /// a second AtCalorimeter track state
+  Gaudi::Property<bool> m_keepOnlyBestExtrapolation{
+    this, "KeepOnlyBestExtrapolation", true, "Keep only extrapolation with shortest time or not"
   };
 
   /// Configurable property to keep only particles with energy above a given threshold
