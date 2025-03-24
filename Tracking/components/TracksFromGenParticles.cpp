@@ -185,7 +185,7 @@ struct TracksFromGenParticles final
       trackState_IP.omega = helixFromGenParticle.getOmega();
       trackState_IP.Z0 = helixFromGenParticle.getZ0();
       trackState_IP.tanLambda = helixFromGenParticle.getTanLambda();
-      trackState_IP.referencePoint = edm4hep::Vector3f((float)genParticleVertex[0],(float)genParticleVertex[1],(float)genParticleVertex[2]);
+      trackState_IP.referencePoint = edm4hep::Vector3f(genParticleVertex[0], genParticleVertex[1], genParticleVertex[2]);
       trackFromGen.addToTrackStates(trackState_IP);
 
       // find SimTrackerHits associated to genParticle (and not produced by secondaries)
@@ -250,7 +250,7 @@ struct TracksFromGenParticles final
         trackState_AtFirstHit.omega = helixAtFirstHit.getOmega();
         trackState_AtFirstHit.Z0 = helixAtFirstHit.getZ0();
         trackState_AtFirstHit.tanLambda = helixAtFirstHit.getTanLambda();
-        trackState_AtFirstHit.referencePoint = edm4hep::Vector3f((float)posAtFirstHit[0],(float)posAtFirstHit[1],(float)posAtFirstHit[2]);
+        trackState_AtFirstHit.referencePoint = edm4hep::Vector3f(posAtFirstHit[0], posAtFirstHit[1], posAtFirstHit[2]);
         trackFromGen.addToTrackStates(trackState_AtFirstHit);
 
         // TrackState at Last Hit
@@ -277,9 +277,7 @@ struct TracksFromGenParticles final
         trackState_AtLastHit.omega = helixAtLastHit.getOmega();
         trackState_AtLastHit.Z0 = helixAtLastHit.getZ0();
         trackState_AtLastHit.tanLambda = helixAtLastHit.getTanLambda();
-        trackState_AtLastHit.referencePoint = edm4hep::Vector3f((float)posAtLastHit[0],
-                                                                (float)posAtLastHit[1],
-                                                                (float)posAtLastHit[2]);
+        trackState_AtLastHit.referencePoint = edm4hep::Vector3f(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
         // attach the TrackState to the track
         trackFromGen.addToTrackStates(trackState_AtLastHit);
 
@@ -359,9 +357,9 @@ struct TracksFromGenParticles final
           trackState_AtCalorimeter.omega = helixAtCalorimeter.getOmega();
           trackState_AtCalorimeter.Z0 = helixAtCalorimeter.getZ0();
           trackState_AtCalorimeter.tanLambda = helixAtCalorimeter.getTanLambda();
-          trackState_AtCalorimeter.referencePoint = edm4hep::Vector3f((float)posAtCalorimeter[0],
-                                                                      (float)posAtCalorimeter[1],
-                                                                      (float)posAtCalorimeter[2]);
+          trackState_AtCalorimeter.referencePoint = edm4hep::Vector3f(posAtCalorimeter[0],
+                                                                      posAtCalorimeter[1],
+                                                                      posAtCalorimeter[2]);
           // attach the TrackState to the track
           trackFromGen.addToTrackStates(trackState_AtCalorimeter);
         }
