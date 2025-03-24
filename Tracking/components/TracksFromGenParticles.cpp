@@ -150,19 +150,21 @@ struct TracksFromGenParticles final
     // loop over the gen particles, find charged ones, and create the corresponding reco particles
     int iparticle = 0;
     for (const auto& genParticle : genParticleColl) {
+      edm4hep::Vector3d p = genParticle.getMomentum();
+      double pmag = std::sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
       debug() << endmsg;
       debug() << "Gen. particle: " << genParticle << endmsg;
-      debug() <<"  particle "<<iparticle++<<"  PDG: "<< genParticle.getPDG()  << " energy: "<<genParticle.getEnergy()
+      debug() <<"  particle "<<iparticle++<<"  PDG: "<< genParticle.getPDG()  << " momentum: "<< pmag
               << " charge: "<< genParticle.getCharge() << endmsg;
       debug() << "Particle decayed in tracker: " << genParticle.isDecayedInTracker() << endmsg;
 
       // consider only charged particles
       if(genParticle.getCharge() == 0) continue;
 
-      // GM: should skip also particles that cannot be reconstructed in tracker (vertex at too large radius, low energy)
-      if (genParticle.getEnergy() < 0.010) continue; // cut at 10 MeV
+      // skip low momentum particles that cannot be reconstructed in tracker
+      if (pmag < m_minParticleMomentum) continue;
 
-      // Building an helix out of MCParticle properties and B field
+      // build an helix out of MCParticle properties and B field
       auto helixFromGenParticle = HelixClass_double();
       auto vertex = genParticle.getVertex();
       auto endpoint = genParticle.getEndpoint();
@@ -172,7 +174,7 @@ struct TracksFromGenParticles final
       double genParticleMomentum[] = {genParticle.getMomentum().x, genParticle.getMomentum().y, genParticle.getMomentum().z};
       helixFromGenParticle.Initialize_VP(genParticleVertex, genParticleMomentum, genParticle.getCharge(), m_Bz);
 
-      // Setting the track and trackStates at IP properties
+      // set the track and trackStates at IP properties
       auto trackFromGen = edm4hep::MutableTrack();
       auto trackState_IP = edm4hep::TrackState {};
       trackState_IP.location = edm4hep::TrackState::AtIP;
@@ -398,6 +400,10 @@ private:
   /// configurable property to decide whether to calculate track state at ECAL or not
   Gaudi::Property<bool> m_extrapolateToECal{
     this, "ExtrapolateToECal", false, "Calculate track state at ECal inner face or not"
+  };
+  /// configurable property to keep only particles with energy above a given threshold
+  Gaudi::Property<float> m_minParticleMomentum{
+    this, "MinimumParticleMomentum", 0.010, "Keep only particles with momentum (in GeV) greater than MinimumParticleMomentum"
   };
   /// configurable properties (depend on detector) for calculating number of hits vs subdetector
   Gaudi::Property<std::string> m_systemEncoding{
