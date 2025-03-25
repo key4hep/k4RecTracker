@@ -1,7 +1,7 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.12 FATAL_ERROR)
 
 set( PackageName k4RecTracker )
-project(${PackageName})
+project(${PackageName} LANGUAGES CXX)
 
 # please keep this layout for version setting, used by the automatic tagging script
 set(${PackageName}_VERSION_MAJOR 0)
@@ -18,6 +18,7 @@ find_package(DD4hep REQUIRED COMPONENTS DDRec DDG4 DDParsers)
 set(DD4HEP_SET_RPATH ON)
 dd4hep_set_compiler_flags()
 find_package(ROOT COMPONENTS RIO Tree MathCore)
+find_package(podio 1.2 REQUIRED)
 find_package(EDM4HEP)
 find_package(k4FWCore)
 find_package(Gaudi)

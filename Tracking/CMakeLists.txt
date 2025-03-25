@@ -56,12 +56,14 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 
+
+SET(test_name "test_CreateInputForTrackTests")
+ADD_TEST(NAME ${test_name} COMMAND bash -c "ddsim --enableGun --gun.distribution uniform --gun.energy '10*GeV' --gun.particle e- --numberOfEvents 100 --outputFile ddsim_output_edm4hep.root --random.enableEventSeed --random.seed 42 --compactFile $K4GEO/FCCee/ALLEGRO/compact/ALLEGRO_o1_v03/ALLEGRO_o1_v03.xml")
+set_test_env(${test_name})
+
 SET(test_name "test_TracksFromGenParticles")
 ADD_TEST(NAME ${test_name} COMMAND k4run test/runTracksFromGenParticles.py)
 set_test_env(${test_name})
-
-SET(test_name "test_TracksFromGenParticlesAlg")
-ADD_TEST(NAME ${test_name} COMMAND k4run test/runTracksFromGenParticlesAlg.py)
-set_test_env(${test_name})
+set_tests_properties(${test_name} PROPERTIES DEPENDS test_CreateInputForTrackTests)
 
 #endif()

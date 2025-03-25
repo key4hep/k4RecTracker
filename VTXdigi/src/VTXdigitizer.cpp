@@ -6,7 +6,8 @@ VTXdigitizer::VTXdigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
     : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizer") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim vertex hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized vertex hit collection name");
-  declareProperty("outputSimDigiAssociation", m_output_sim_digi_link, "Output link between sim hits and digitized hits");
+  declareProperty("outputSimDigiAssociation", m_output_sim_digi_link,
+                  "Output link between sim hits and digitized hits");
 }
 
 VTXdigitizer::~VTXdigitizer() {}
@@ -28,7 +29,7 @@ StatusCode VTXdigitizer::initialize() {
   }
 
   m_gauss_y_vec.resize(m_y_resolution.size());
-  for (size_t i = 0; i < m_y_resolution.size(); ++i) {  
+  for (size_t i = 0; i < m_y_resolution.size(); ++i) {
     if (m_gauss_y_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_y_resolution[i])).isFailure()) {
       error() << "Couldn't initialize RndmGenSvc!" << endmsg;
       return StatusCode::FAILURE;
@@ -36,7 +37,7 @@ StatusCode VTXdigitizer::initialize() {
   }
 
   m_gauss_t_vec.resize(m_t_resolution.size());
-  for (size_t i = 0; i < m_t_resolution.size(); ++i) {  
+  for (size_t i = 0; i < m_t_resolution.size(); ++i) {
     if (m_gauss_t_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_t_resolution[i])).isFailure()) {
       error() << "Couldn't initialize RndmGenSvc!" << endmsg;
       return StatusCode::FAILURE;
@@ -50,15 +51,16 @@ StatusCode VTXdigitizer::initialize() {
   }
 
   // set the cellID decoder
-  m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder(); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
+  m_decoder = m_geoSvc->getDetector()
+                  ->readout(m_readoutName)
+                  .idSpec()
+                  .decoder(); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
 
-  if (m_decoder->fieldDescription().find("layer") == std::string::npos){
-    error() 
-      << " Readout " << m_readoutName << " does not contain layer id!"
-      << endmsg;
+  if (m_decoder->fieldDescription().find("layer") == std::string::npos) {
+    error() << " Readout " << m_readoutName << " does not contain layer id!" << endmsg;
     return StatusCode::FAILURE;
   }
-  
+
   // retrieve the volume manager
   m_volman = m_geoSvc->getDetector()->volumeManager();
 
@@ -77,7 +79,8 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
     auto output_digi_hit = output_digi_hits->create();
     auto output_sim_digi_link = output_sim_digi_link_col->create();
 
-    // smear the hit position: need to go in the local frame of the silicon sensor to smear in the direction along/perpendicular to the stave
+    // smear the hit position: need to go in the local frame of the silicon sensor to smear in the direction
+    // along/perpendicular to the stave
 
     // retrieve the cell detElement
     dd4hep::DDSegmentation::CellID cellID = input_sim_hit.getCellID();
@@ -91,41 +94,43 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
                                       input_sim_hit.getPosition().y * dd4hep::mm,
                                       input_sim_hit.getPosition().z * dd4hep::mm};
     dd4hep::rec::Vector3D simHitGlobalPositionVector(simHitGlobalPosition[0], simHitGlobalPosition[1],
-                                                    simHitGlobalPosition[2]);
-    double simHitLocalPosition[3]  = {0, 0, 0};
+                                                     simHitGlobalPosition[2]);
+    double simHitLocalPosition[3] = {0, 0, 0};
 
-    if(m_forceHitsOntoSurface){
+    if (m_forceHitsOntoSurface) {
       dd4hep::Detector& theDetector = dd4hep::Detector::getInstance();
-      dd4hep::rec::SurfaceManager& surfMan = *theDetector.extension<dd4hep::rec::SurfaceManager>() ;
-      dd4hep::DetElement det = m_geoSvc->getDetector()->detector(m_detectorName) ;
-      _map = surfMan.map( det.name() ) ;
+      dd4hep::rec::SurfaceManager& surfMan = *theDetector.extension<dd4hep::rec::SurfaceManager>();
+      dd4hep::DetElement det = m_geoSvc->getDetector()->detector(m_detectorName);
+      _map = surfMan.map(det.name());
 
-      if( ! _map )
+      if (!_map)
         error() << " Could not find surface map for detector " << det.name() << " in SurfaceManager " << endmsg;
 
-      dd4hep::rec::SurfaceMap::const_iterator sI = _map->find(cellID) ;
-      if( sI == _map->end() )
-        error() << " VTXdigitizer: no surface found for cellID " << m_decoder->valueString(cellID) << std::endl << endmsg;
+      dd4hep::rec::SurfaceMap::const_iterator sI = _map->find(cellID);
+      if (sI == _map->end())
+        error() << " VTXdigitizer: no surface found for cellID " << m_decoder->valueString(cellID) << std::endl
+                << endmsg;
 
-      dd4hep::rec::Vector3D newPos ;
-      const dd4hep::rec::ISurface* surf = sI->second ;    
+      dd4hep::rec::Vector3D newPos;
+      const dd4hep::rec::ISurface* surf = sI->second;
 
-      // Check if Hit is inside sensitive 
-      if ( ! surf->insideBounds( simHitGlobalPositionVector ) ) {
-        
-        info() << "Hit at " << simHitGlobalPositionVector << " is not on surface " << *surf  
-                << ". Distance: " << surf->distance(simHitGlobalPositionVector )
-                << std::endl << endmsg;        
+      // Check if Hit is inside sensitive
+      if (!surf->insideBounds(simHitGlobalPositionVector)) {
 
-        if( m_forceHitsOntoSurface ){
-          dd4hep::rec::Vector2D lv = surf->globalToLocal(simHitGlobalPositionVector) ;
-          dd4hep::rec::Vector3D oldPosOnSurf = surf->localToGlobal( lv ) ; 
-          
-          info() << "Moved hit to " << oldPosOnSurf << ", distance " << (oldPosOnSurf-simHitGlobalPositionVector).r()
-                  << std::endl << endmsg;
-            
-          simHitGlobalPositionVector = oldPosOnSurf ;
-        } 
+        info() << "Hit at " << simHitGlobalPositionVector << " is not on surface " << *surf
+               << ". Distance: " << surf->distance(simHitGlobalPositionVector) << std::endl
+               << endmsg;
+
+        if (m_forceHitsOntoSurface) {
+          dd4hep::rec::Vector2D lv = surf->globalToLocal(simHitGlobalPositionVector);
+          dd4hep::rec::Vector3D oldPosOnSurf = surf->localToGlobal(lv);
+
+          info() << "Moved hit to " << oldPosOnSurf << ", distance " << (oldPosOnSurf - simHitGlobalPositionVector).r()
+                 << std::endl
+                 << endmsg;
+
+          simHitGlobalPositionVector = oldPosOnSurf;
+        }
       }
     }
 
@@ -146,22 +151,22 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
 
     // Smear the hit in the local sensor coordinates
     double digiHitLocalPosition[3];
-    int iLayer = m_decoder->get(cellID, "layer");      
+    int iLayer = m_decoder->get(cellID, "layer");
     debug() << "readout: " << m_readoutName << ", layer id: " << iLayer << endmsg;
     if (m_readoutName == "VertexBarrelCollection" ||
-        m_readoutName == "SiWrBCollection") {  // In barrel, the sensor box is along y-z
+        m_readoutName == "SiWrBCollection") { // In barrel, the sensor box is along y-z
       digiHitLocalPosition[0] = simHitLocalPositionVector.x();
       digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_x_vec[iLayer].shoot() * dd4hep::mm;
       digiHitLocalPosition[2] = simHitLocalPositionVector.z() + m_gauss_y_vec[iLayer].shoot() * dd4hep::mm;
     } else if (m_readoutName == "VertexEndcapCollection" ||
-               m_readoutName == "SiWrDCollection") {  // In the disks, the sensor box is already in x-y
+               m_readoutName == "SiWrDCollection") { // In the disks, the sensor box is already in x-y
       digiHitLocalPosition[0] = simHitLocalPositionVector.x() + m_gauss_x_vec[iLayer].shoot() * dd4hep::mm;
       digiHitLocalPosition[1] = simHitLocalPositionVector.y() + m_gauss_y_vec[iLayer].shoot() * dd4hep::mm;
       digiHitLocalPosition[2] = simHitLocalPositionVector.z();
     } else {
-      error()
-          << "VTX readout name (m_readoutName) unknown or xResolution/yResolution/tResolution not defining all detector layer resolutions!"
-          << endmsg;
+      error() << "VTX readout name (m_readoutName) unknown or xResolution/yResolution/tResolution not defining all "
+                 "detector layer resolutions!"
+              << endmsg;
       return StatusCode::FAILURE;
     }
 
@@ -193,7 +198,6 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
     // Set the link between sim and digi hit
     output_sim_digi_link.setFrom(output_digi_hit);
     output_sim_digi_link.setTo(input_sim_hit);
-
   }
   return StatusCode::SUCCESS;
 }

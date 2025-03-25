@@ -1,8 +1,8 @@
 #pragma once
 
 // GAUDI
-#include "Gaudi/Property.h"
 #include "Gaudi/Algorithm.h"
+#include "Gaudi/Property.h"
 #include "GaudiKernel/IRndmGenSvc.h"
 #include "GaudiKernel/RndmGenerators.h"
 
@@ -20,14 +20,15 @@
 #include "extension/MCRecoDriftChamberDigiAssociationCollection.h"
 
 // DD4HEP
-#include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
+#include "DD4hep/Detector.h" // for dd4hep::VolumeManager
 #include "DDSegmentation/BitFieldCoder.h"
 
 /** @class DCHsimpleDigitizerExtendedEdm
  *
  *  Algorithm for creating digitized drift chamber hits (extension::DriftChamberDigi) from edm4hep::SimTrackerHit.
- *  You have to specify the expected resolution in z and in xy (distance to the wire). The smearing is applied in the wire reference frame.
- *  
+ *  You have to specify the expected resolution in z and in xy (distance to the wire). The smearing is applied in the
+ * wire reference frame.
+ *
  *  @author Brieuc Francois
  *  @date   2023-03
  *
@@ -52,13 +53,17 @@ public:
 
 private:
   // Input sim tracker hit collection name
-  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader,
+                                                                        this};
   // Output digitized tracker hit collection name
-  mutable DataHandle<extension::DriftChamberDigiCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<extension::DriftChamberDigiCollection> m_output_digi_hits{"outputDigiHits",
+                                                                               Gaudi::DataHandle::Writer, this};
   // Output association between digitized and simulated hit collections
-  mutable DataHandle<extension::MCRecoDriftChamberDigiAssociationCollection> m_output_sim_digi_association{"outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<extension::MCRecoDriftChamberDigiAssociationCollection> m_output_sim_digi_association{
+      "outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
   // Output digitized tracker hit in local coordinates collection name. Only filled in debug mode
-  mutable DataHandle<extension::DriftChamberDigiLocalCollection> m_output_digi_local_hits{"outputDigiLocalHits", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<extension::DriftChamberDigiLocalCollection> m_output_digi_local_hits{
+      "outputDigiLocalHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "CDCHHits", "Name of the detector readout"};
@@ -77,10 +82,14 @@ private:
   // Flag to produce debugging distributions
   Gaudi::Property<bool> m_debugMode{this, "debugMode", false, "Flag to produce debugging distributions"};
   // Declaration of debugging distributions
-  mutable DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaDistToWire{"leftHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
-  mutable DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaLocalZ{"leftHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
-  mutable DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaDistToWire{"rightHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
-  mutable DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaLocalZ{"rightHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
+  mutable DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaDistToWire{
+      "leftHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
+  mutable DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaLocalZ{
+      "leftHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
+  mutable DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaDistToWire{
+      "rightHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
+  mutable DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaLocalZ{
+      "rightHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
 
   // Random Number Service
   SmartIF<IRndmGenSvc> m_randSvc;

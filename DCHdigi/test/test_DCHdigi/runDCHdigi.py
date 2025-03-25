@@ -9,8 +9,8 @@ from Configurables import EventDataSvc, UniqueIDGenSvc
 from k4FWCore import ApplicationMgr, IOSvc
 
 svc = IOSvc("IOSvc")
-svc.input = [ "dch_proton_10GeV.root"]
-svc.output = "dch_proton_10GeV_digi.root"
+svc.Input = [ "dch_proton_10GeV.root"]
+svc.Output = "dch_proton_10GeV_digi.root"
 
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")

@@ -1,8 +1,8 @@
 #pragma once
 
 // GAUDI
-#include "Gaudi/Property.h"
 #include "Gaudi/Algorithm.h"
+#include "Gaudi/Property.h"
 #include "GaudiKernel/IRndmGenSvc.h"
 #include "GaudiKernel/RndmGenerators.h"
 
@@ -15,14 +15,15 @@
 #include "edm4hep/TrackerHit3DCollection.h"
 
 // DD4HEP
-#include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
+#include "DD4hep/Detector.h" // for dd4hep::VolumeManager
 #include "DDSegmentation/BitFieldCoder.h"
 
 /** @class DCHsimpleDigitizer
  *
- *  Algorithm for creating digitized drift chamber hits (still based on edm4hep::TrackerHit3D) from edm4hep::SimTrackerHit.
- *  You have to specify the expected resolution in z and in xy (distance to the wire). The smearing is applied in the wire reference frame.
- *  
+ *  Algorithm for creating digitized drift chamber hits (still based on edm4hep::TrackerHit3D) from
+ * edm4hep::SimTrackerHit. You have to specify the expected resolution in z and in xy (distance to the wire). The
+ * smearing is applied in the wire reference frame.
+ *
  *  @author Brieuc Francois
  *  @date   2023-03
  *
@@ -47,9 +48,11 @@ public:
 
 private:
   // Input sim tracker hit collection name
-  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
+  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader,
+                                                                        this};
   // Output digitized tracker hit collection name
-  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer,
+                                                                         this};
 
   // Detector readout name
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "CDCHHits", "Name of the detector readout"};
