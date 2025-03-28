@@ -181,17 +181,31 @@ struct TracksFromGenParticles final
 
     // loop over the gen particles, find charged ones, and create the corresponding reco particles
     int iparticle = 0;
-    for (const auto& genParticle : genParticleColl) {
+    for (const edm4hep::MCParticle& genParticle : genParticleColl) {
       edm4hep::Vector3d p = genParticle.getMomentum();
       double pmag = std::sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
       debug() << endmsg;
-      debug() << "Gen. particle: " << genParticle << endmsg;
-      debug() <<"  particle "<<iparticle++<<"  PDG: "<< genParticle.getPDG()  << " momentum: "<< pmag
-              << " charge: "<< genParticle.getCharge() << endmsg;
-      debug() << "Particle decayed in tracker: " << genParticle.isDecayedInTracker() << endmsg;
+      verbose() << "Gen. particle: " << genParticle << endmsg;
+      debug() << "Particle " << iparticle++
+              << "  identifier: " << genParticle.getObjectID()
+              << "  PDG: " << genParticle.getPDG()
+              << "  momentum: " << pmag
+              << "  charge: " << genParticle.getCharge() << endmsg;
+      debug() << "  generator status: " << genParticle.getGeneratorStatus()
+              << "  simulator status: " << genParticle.getSimulatorStatus() << endmsg;
+      {
+        auto daughters = genParticle.getDaughters();
+        if (daughters.size()>0) {
+          debug() << "  daughters: ";
+          for (const auto& daughter : daughters) {
+            debug() << " " << daughter.getObjectID();
+          }
+          debug() << endmsg;
+        }
+      }
 
       // consider only charged particles
-      if(genParticle.getCharge() == 0) continue;
+      if (genParticle.getCharge() == 0) continue;
 
       // skip low momentum particles that cannot be reconstructed in tracker
       if (pmag < m_minParticleMomentum) continue;
@@ -200,7 +214,7 @@ struct TracksFromGenParticles final
       auto helixFromGenParticle = HelixClass_double();
       auto vertex = genParticle.getVertex();
       auto endpoint = genParticle.getEndpoint();
-      debug() << "Vertex radius: " << sqrt(vertex.x*vertex.x+vertex.y*vertex.y) << endmsg;
+      debug() << "Vertex radius: " << sqrt(vertex.x*vertex.x+vertex.y*vertex.y) << " , time: " << genParticle.getTime() << endmsg;
       debug() << "Endpoint radius: " << sqrt(endpoint.x*endpoint.x+endpoint.y*endpoint.y) << endmsg;
       double genParticleVertex[] = {vertex.x, vertex.y, vertex.z};
       double genParticleMomentum[] = {genParticle.getMomentum().x, genParticle.getMomentum().y, genParticle.getMomentum().z};
