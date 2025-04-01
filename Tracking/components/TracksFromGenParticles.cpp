@@ -184,16 +184,18 @@ struct TracksFromGenParticles final
     for (const edm4hep::MCParticle& genParticle : genParticleColl) {
       edm4hep::Vector3d p = genParticle.getMomentum();
       double pmag = std::sqrt(p.x*p.x + p.y*p.y + p.z*p.z);
-      debug() << endmsg;
-      verbose() << "Gen. particle: " << genParticle << endmsg;
-      debug() << "Particle " << iparticle++
-              << "  identifier: " << genParticle.getObjectID()
-              << "  PDG: " << genParticle.getPDG()
-              << "  momentum: " << pmag
-              << "  charge: " << genParticle.getCharge() << endmsg;
-      debug() << "  generator status: " << genParticle.getGeneratorStatus()
-              << "  simulator status: " << genParticle.getSimulatorStatus() << endmsg;
-      {
+
+      if (msgLevel() <= MSG::DEBUG) {
+        debug() << endmsg;
+        verbose() << "Gen. particle: " << genParticle << endmsg;
+        debug() << "Particle " << iparticle++
+                << "  identifier: " << genParticle.getObjectID()
+                << "  PDG: " << genParticle.getPDG()
+                << "  momentum: " << pmag
+                << "  charge: " << genParticle.getCharge() << endmsg;
+        debug() << "  generator status: " << genParticle.getGeneratorStatus()
+                << "  simulator status: " << genParticle.getSimulatorStatus() << endmsg;
+
         auto daughters = genParticle.getDaughters();
         if (daughters.size()>0) {
           debug() << "  daughters: ";
