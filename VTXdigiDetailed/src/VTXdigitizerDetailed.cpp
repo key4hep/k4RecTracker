@@ -37,6 +37,8 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
     // histo for Threshold Studies 
     hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "Charge after threshold", 100, 0., 1000.);
+    hChargeAboveThreshold->SetXTitle("Charge in Pixel (electrons)");
+    hChargeAboveThreshold->SetYTitle("Number of Pixels");
     hChargeAboveThreshold->SetDirectory(0);
     hActivePixelCount = new TH1D("hActivePixelCount", "Active Pixels Count", 100, 0, 1000);
     hActivePixelCount->SetDirectory(0);
@@ -100,10 +102,14 @@ StatusCode VTXdigitizerDetailed::initialize() {
   m_ClusterWidth = 3.0;
 
   info() << "Threshold value: " << m_Threshold << endmsg;
-  
+  info() << "Initializing VTXdigitizerDetailed with the following parameters:" << endmsg;
+  info() << "Detector Name: " << m_detectorName << endmsg;
+  info() << "Readout Name: " << m_readoutName << endmsg;
+  info() << "Threshold: " << m_Threshold << endmsg;
+  info() << "Debug Histograms: " << (m_DebugHistos ? "Enabled" : "Disabled") << endmsg;
   return StatusCode::SUCCESS;
 }
-
+ 
 template<typename T> void VTXdigitizerDetailed::getSensorThickness() {
   /** Retrieve the sensor thickness per layer in millimeter
    */
@@ -143,7 +149,8 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
 
     generate_output(input_sim_hit, output_digi_hits, output_sim_digi_link_col, hit_map);
     
-  }  
+  }
+  info() << "Execution of VTXdigitizerDetailed completed." << endmsg;  
   return StatusCode::SUCCESS;
 }
 
@@ -173,7 +180,7 @@ void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit,
   float charge;
   float eDep = hit.getEDep() * dd4hep::GeV; // Total energy deposited by the particle in this hit
   
-  debug() << "Enter Primary_ionization, numberOfSegments=" << numberOfSegments << ", shift=" << pathLength << ", energy=" << eDep << "GeV" << endmsg;
+  info() << "Enter Primary_ionization, numberOfSegments=" << numberOfSegments << ", shift=" << pathLength << ", energy=" << eDep << "GeV" << endmsg;
   
   // Get the global position of the hit (defined by default in Geant4 as the mean between the entry and exit point in the active material)
   // and apply unit transformation (translation matrix is stored in cm
@@ -368,6 +375,16 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   
 } // End DriftDirection
 
+// Fonction utilitaire pour compter les pixels actifs
+size_t VTXdigitizerDetailed::countActivePixels(const hit_map_type& hit_map) const {
+
+  size_t totalActivePixels = 0;
+  for (const auto& x_entry : hit_map) {
+      totalActivePixels += x_entry.second.size(); // Compte les pixels actifs en Y pour chaque X
+  }
+  return totalActivePixels;
+}
+
 void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
 			  const std::vector<SignalPoint>& collectionPoints,
 			  hit_map_type& hit_map) const {
@@ -437,18 +454,31 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     // Should add at this point a check that the pixel lies inside material - Not implemented for now
     for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
       for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
+        info() << "ix: " << ix << ", iy: " << iy << ", Charge: " << Charge << endmsg;
   	    float ChargeInPixel = Charge * x[ix] * y[iy];
-    //Threshold studies
+        info() << "ChargeInPixel: " << ChargeInPixel << ", Threshold: " << m_Threshold << endmsg;
+
         if (ChargeInPixel >= m_Threshold) {
-          hit_map[ix][iy] += ChargeInPixel;
-        // Optionnel : remplir un histo de debug
-        if (m_DebugHistos) {
-            hChargeAboveThreshold->Fill(ChargeInPixel); // load the charge inside the pixel in the pixels map 
+        
+            hit_map[ix][iy] += ChargeInPixel;
+
+            if (m_DebugHistos) {
+                hChargeAboveThreshold->Fill(ChargeInPixel);
+            // Utilisation de la nouvelle méthode pour compter les pixels actifs
+              size_t activePixelCount = countActivePixels(hit_map);
+              info() << "Total active pixels: " << activePixelCount << endmsg;
+              hActivePixelCount->Fill(activePixelCount); 
           } // end loop over y
         } // end loop over x
       } // End loop over charge collection
       //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
     } // End get_charge_per_pixel
+     
+  if (hit_map.empty()) 
+    {
+    info() << "hit_map is empty. No pixels passed the threshold." << endmsg;
+      return; // Rien à faire si aucun pixel n'est actif
+    } 
   }
 }
 void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
@@ -472,9 +502,14 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   double sumWeights = 0.; // Sum of all weights (sum of charges recorded in all pixels)
   std::map<int,double> Qix; // Weight (charge) per x layer
   std::map<int,double> Qiy; // Weight (charge) per y layer 
-
+  if (hit_map.empty()) 
+    {
+    info() << "hit_map is empty. No pixels passed the threshold." << endmsg;
+      return; // Rien à faire si aucun pixel n'est actif
+    } 
   // loop to load the weights per x and y layers
   for (auto const& ix : hit_map) {
+  
     for (auto const& iy : ix.second) {
       double weight = iy.second;
       Qix[ix.first] += weight;
@@ -482,6 +517,10 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
       sumWeights += weight;
     } // Loop over map in Y direction
   }// Loop over map in X direction
+  //if (sumWeights <= 0) {
+    //warning() << " sumWeights <= 0, pas de charge à convertir. Skip output." << endmsg;
+    //return;
+  //}
   double sumWeightsSqX = 0.; // Sum of the square of weights along x (used later for position resolution)
   double sumWeightsSqY = 0.;
 

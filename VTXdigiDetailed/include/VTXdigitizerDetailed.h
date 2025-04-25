@@ -60,6 +60,9 @@ public:
    */
   virtual StatusCode finalize() final;
 
+  typedef std::map<int, std::map<int, float, std::less<int>>, std::less<int>> hit_map_type; // Déplacé dans public
+  size_t countActivePixels(const hit_map_type& hit_map) const; // Déclaration de la méthode
+
 private:
   // Input sim vertex hit collection name
   mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
@@ -90,7 +93,7 @@ private:
 
   // Threshold in electron 
 
-  Gaudi::Property<float> m_Threshold{this, "Threshold", 100000.0, "Charge Threshold in e (default: 0.0)"};
+  Gaudi::Property<float> m_Threshold{this, "Threshold", 400.0 , "Charge Threshold in e (default: 0.0)"};
 
   //Threshold smearing in electron
 
@@ -172,7 +175,7 @@ private:
     const edm4hep::SimTrackerHit* _hitp;
   }; // End SignalPoint class definition
 
-  typedef std::map<int,std::map<int,float,std::less<int>>,std::less<int>> hit_map_type;
+  //typedef std::map<int,std::map<int,float,std::less<int>>,std::less<int>> hit_map_type;
     
 private:
   // Additional member functions
