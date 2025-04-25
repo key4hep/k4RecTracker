@@ -25,6 +25,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
       error() << "Please provide a name for the file containing the debug histograms with option DebugFileName." << endmsg;
       return StatusCode::FAILURE;
     }
+
     hErrorX = new TH1D("hErrorX","Distance in X in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
     hErrorX->SetDirectory(0);
     hErrorY = new TH1D("hErrorY","Distance in Y in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
@@ -33,6 +34,16 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hErrorZ->SetDirectory(0);
     hError = new TH1D("hError","Distance between the true hit and digitized one in mm", 1000, 0., 0.1);
     hError->SetDirectory(0);
+
+    // histo for Threshold Studies 
+    hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "Charge after threshold", 100, 0., 1000.);
+    hChargeAboveThreshold->SetDirectory(0);
+    hActivePixelCount = new TH1D("hActivePixelCount", "Active Pixels Count", 100, 0, 1000);
+    hActivePixelCount->SetDirectory(0);
+    //h_pixel_thr = new TH1D("h_pixel_thr","Number of pixels above threshold", 100, 0., maximum);
+    //h_pixel_thr->SetDirectory(0);
+    //Applied_Trhreshold = new TH1D("Applied_Trhreshold","Applied threshold", 100, 0., maximum);
+    //Applied_Trhreshold->SetDirectory(0);
   }
   
   // Initialize random services
@@ -87,6 +98,8 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   // initialise the cluster width
   m_ClusterWidth = 3.0;
+
+  info() << "Threshold value: " << m_Threshold << endmsg;
   
   return StatusCode::SUCCESS;
 }
@@ -367,7 +380,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
   PixSizeX = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[0] / dd4hep::mm;
   PixSizeY = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[1] / dd4hep::mm;
-  
+
   // map to store the pixel integrals in the x and y directions
   std::map<int, float, std::less<int>> x, y;
   
@@ -424,17 +437,20 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     // Should add at this point a check that the pixel lies inside material - Not implemented for now
     for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
       for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
-
-	float ChargeInPixel = Charge * x[ix] * y[iy];
-
-	hit_map[ix][iy] += ChargeInPixel; // load the charge inside the pixel in the pixels map
-	
-      } // end loop over y
-    } // end loop over x
-  } // End loop over charge collection
-  //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
-} // End get_charge_per_pixel
-
+  	    float ChargeInPixel = Charge * x[ix] * y[iy];
+    //Threshold studies
+        if (ChargeInPixel >= m_Threshold) {
+          hit_map[ix][iy] += ChargeInPixel;
+        // Optionnel : remplir un histo de debug
+        if (m_DebugHistos) {
+            hChargeAboveThreshold->Fill(ChargeInPixel); // load the charge inside the pixel in the pixels map 
+          } // end loop over y
+        } // end loop over x
+      } // End loop over charge collection
+      //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
+    } // End get_charge_per_pixel
+  }
+}
 void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
 						  edm4hep::TrackerHitPlaneCollection* output_digi_hits,
 						  edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col,
@@ -466,7 +482,6 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
       sumWeights += weight;
     } // Loop over map in Y direction
   }// Loop over map in X direction
-
   double sumWeightsSqX = 0.; // Sum of the square of weights along x (used later for position resolution)
   double sumWeightsSqY = 0.;
 
@@ -577,6 +592,11 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
     hErrorY->Fill(DistY);
     hErrorZ->Fill(DistZ);
     hError->Fill(sqrt(DistX * DistX + DistY * DistY + DistZ * DistZ));
+    // Remplir ChargeAboveThreshold et ActivePixelCount
+    // Utiliser ton seuil ici
+    
+
+    
   } // End Debug Histos
   
 } // End get_hist_signal_point
@@ -618,18 +638,25 @@ void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
 
   // save the debug histograms in a file
   // file is saved and closed when going out of scope
-  auto filename = m_DebugFileName.value().c_str();
-  std::unique_ptr<TFile> ofile{TFile::Open( filename, "recreate")};
-  if (!ofile || ofile->IsZombie())
+  {
+    auto filename = m_DebugFileName.value().c_str();
+    std::unique_ptr<TFile> ofile{TFile::Open( filename, "recreate")};
+    if (!ofile || ofile->IsZombie())
     {
       error() << "Error: Could not open file " << filename << std::endl;
       return;
     }
-  ofile->cd();
-  hErrorX->Write();
-  hErrorY->Write();
-  hErrorZ->Write();
-  hError->Write();
+    ofile->cd();
+    hErrorX->Write();
+    hErrorY->Write();
+    hErrorZ->Write();
+    hError->Write();
+    hChargeAboveThreshold->Write();
+    hActivePixelCount->Write();
+  }
+
+  //h_pixel_thr->Write();
+  //Applied_Trhreshold->Write();
   
   // Restore previous ROOT directory
   if(currentDir && ( not currentDir->IsDestructed() ) )
@@ -637,3 +664,4 @@ void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
   return;
   
 } // End Create_outputROOTfile_for_debugHistograms
+        

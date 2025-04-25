@@ -88,6 +88,14 @@ private:
   // t resolution in ns
   Gaudi::Property<std::vector<float>> m_t_resolution{this, "tResolution", {0.1}, "Time resolutions per layer [ns]"};
 
+  // Threshold in electron 
+
+  Gaudi::Property<float> m_Threshold{this, "Threshold", 100000.0, "Charge Threshold in e (default: 0.0)"};
+
+  //Threshold smearing in electron
+
+ // Gaudi::Property<float> m_ThresholdSmearing{this, "ThresholdSmearing", 0.0, "Sigma of Threshold Gaussian Smearing in e (default: 0.0)"};
+
   // Surface manager used to project hits onto sensitive surface with forceHitsOntoSurface argument
   mutable const dd4hep::rec::SurfaceMap* _map;
 
@@ -198,6 +206,11 @@ private:
   TH1D* hErrorY; // Histogram to store the distance in Y between the true hit and digitized one in mm
   TH1D* hErrorZ; // Histogram to store the distance in Z between the true hit and digitized one in mm
   TH1D* hError;  // Histogram to store the distance between the true hit and digitized one in mm
+  TH1D* hChargeAboveThreshold; // Histogram to store the charge above threshold
+  TH1D* hActivePixelCount; // Histogram to store the number of active pixels
+  //TH1D* Applied_Trhreshold; // Histogram to store the applied threshold
+  //TH1D* h_pixel_thr; // Histogram to store the number of pixels above threshold
+  //TH1D* h_pixel_thr_smear; // Histogram to store the number of pixels above threshold after smearing 
 
   void Create_outputROOTfile_for_debugHistograms() const;
 };
