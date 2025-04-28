@@ -3,6 +3,7 @@
 // ROOT headers
 #include "TFile.h"
 #include "TH1D.h"
+#include "TH2D.h"
 #include "TDirectory.h"
 
 // GAUDI
@@ -61,7 +62,8 @@ public:
   virtual StatusCode finalize() final;
 
   typedef std::map<int, std::map<int, float, std::less<int>>, std::less<int>> hit_map_type; // Déplacé dans public
-  size_t countActivePixels(const hit_map_type& hit_map) const; // Déclaration de la méthode
+  //size_t countActivePixels(const hit_map_type& hit_map) const; // Déclaration de la méthode
+  bool Apply_Threshold(double& ChargeInPixel) const;
 
 private:
   // Input sim vertex hit collection name
@@ -93,11 +95,11 @@ private:
 
   // Threshold in electron 
 
-  Gaudi::Property<float> m_Threshold{this, "Threshold", 400.0 , "Charge Threshold in e (default: 0.0)"};
+  Gaudi::Property<float> m_Threshold{this, "Threshold", 0.0 , "Charge Threshold in e (default: 0.0)"};
 
   //Threshold smearing in electron
 
- // Gaudi::Property<float> m_ThresholdSmearing{this, "ThresholdSmearing", 0.0, "Sigma of Threshold Gaussian Smearing in e (default: 0.0)"};
+  Gaudi::Property<float> m_ThresholdSmearing{this, "ThresholdSmearing", 0.0, "Sigma of Threshold Gaussian Smearing in e (default: 0.0)"};
 
   // Surface manager used to project hits onto sensitive surface with forceHitsOntoSurface argument
   mutable const dd4hep::rec::SurfaceMap* _map;
@@ -119,6 +121,8 @@ private:
 
   // Gaussian random number generator used for time smearing
   std::vector<Rndm::Numbers> m_gauss_t_vec;
+
+  Rndm::Numbers m_gauss_threshold; // pour faire le smearing du threshold
 
   // Define a class for 3D ionization points and energy
   /**
@@ -210,7 +214,8 @@ private:
   TH1D* hErrorZ; // Histogram to store the distance in Z between the true hit and digitized one in mm
   TH1D* hError;  // Histogram to store the distance between the true hit and digitized one in mm
   TH1D* hChargeAboveThreshold; // Histogram to store the charge above threshold
-  TH1D* hActivePixelCount; // Histogram to store the number of active pixels
+  TH2D* h2_charge_distribution;
+  //TH1D* hActivePixelCount; // Histogram to store the number of active pixels
   //TH1D* Applied_Trhreshold; // Histogram to store the applied threshold
   //TH1D* h_pixel_thr; // Histogram to store the number of pixels above threshold
   //TH1D* h_pixel_thr_smear; // Histogram to store the number of pixels above threshold after smearing 
