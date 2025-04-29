@@ -1,5 +1,5 @@
 #include "VTXdigitizerDetailed.h"
-#include "TCanvas.h" 
+
 
 DECLARE_COMPONENT(VTXdigitizerDetailed)
 
@@ -37,20 +37,22 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hError->SetDirectory(0);
 
     // histo for Threshold Studies 
-    hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "True Pixel Charge after threshold", 100, 0., 20000.);
-    hChargeAboveThreshold->SetXTitle("Charge in Pixel ( or weight) (ke)");
-    hChargeAboveThreshold->SetYTitle("Number of Pixels");
+    hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "True Pixel Charge after threshold", 100, 0., 1000.);
+    hChargeAboveThreshold->SetXTitle("Charge in Pixel ( or weight ) (ke)");
     hChargeAboveThreshold->SetDirectory(0);
-    h2_charge_distribution = new TH2D("charge_distribution", "Repartition de la charge sur les pixels", 100, 0, 50, 100, 0, 50); // 100 bins pour chaque axe X et Y entre 0 et 50 mm
-    h2_charge_distribution->Draw("COLZ");
-    h2_charge_distribution->SetDirectory(0);
-     // Afficher avec une carte de couleurs (COLZ)
-   // hActivePixelCount = new TH1D("hActivePixelCount", "Active Pixels Count", 100, 0, 50);
-   // hActivePixelCount->SetDirectory(0);
-    //h_pixel_thr = new TH1D("h_pixel_thr","Number of pixels above threshold", 100, 0., maximum);
-    //h_pixel_thr->SetDirectory(0);
-    //Applied_Trhreshold = new TH1D("Applied_Trhreshold","Applied threshold", 100, 0., maximum);
-    //Applied_Trhreshold->SetDirectory(0);
+    hChargeBeforeThreshold = new TH1D("hChargeBeforeThreshold", "True Pixel Charge before threshold", 100, 0., 1000.);
+    hChargeBeforeThreshold->SetXTitle("Charge in Pixel Without Threshold ( or weight ) (ke)");
+    hChargeBeforeThreshold->SetDirectory(0);
+    // Hypothèses : Quand on voit x = 15 on peut penser au fait qu'un hit = digis = cluster active 15 pixels
+    hActivePixelCountBeforeThreshold = new TH1D("hActivePixelCountPerCluster?", "Active Pixels Count", 100, 0, 100);
+    hActivePixelCountBeforeThreshold->SetXTitle("Number of Active Pixels Per Cluster ? Before Threshold");
+    hActivePixelCountBeforeThreshold->SetDirectory(0);
+    hActivePixelCountAfterThreshold = new TH1D("hActivePixelCountAfterThresholdPerCluster?", "Active Pixels Count After Threshold", 100, 0, 100);
+    hActivePixelCountAfterThreshold->SetXTitle("Number of Active Pixels Per Cluster? After Threshold");
+    hActivePixelCountAfterThreshold->SetDirectory(0);
+    hChargePerClusterOrDigis = new TH1D("hChargePerClusterOrDigis", "Charge per Cluster or Digis", 100, 0., 1000.);
+    hChargePerClusterOrDigis->SetXTitle("Charge in Cluster or Digis (ke)");
+    hChargePerClusterOrDigis->SetDirectory(0);
   }
   
   // Initialize random services
@@ -403,7 +405,8 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
 
   // map to store the pixel integrals in the x and y directions
   std::map<int, float, std::less<int>> x, y;
-  
+
+
   // Assign signal per readout channel and store sorted by channel number (in modified local frame)
   // Iterate over collection points on the collection plane
   for (std::vector<SignalPoint>::const_iterator i = collectionPoints.begin(); i < collectionPoints.end(); i++) {
@@ -458,39 +461,19 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
       for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
 
-        // Show information about pixel pos and charge related to the signal point
+        // Show information about pixel pos and charge related to the Segment 
         //debug() << "SignalPoint: " << i->x() << ":" << i->y() << ":" << i->sigma_x() << ":" << i->sigma_y() << ":" << i->amplitude() << endmsg;
-        debug() << "ix: " << ix << ", iy: " << iy << ", Charge: " << Charge << endmsg;
 
-        // Calculate the charge associated to one signal point for a pixel
+        // Calculate the charge associated to one signal point for a pixel par segment
   	    float ChargeInPixel = Charge * x[ix] * y[iy];
 
-        // Attention : ChargeInPixel = SignalPoint to pixel / weight = True ChargeInPixel
-        debug() << "ChargeInPixel: " << ChargeInPixel << ", Threshold: " << m_Threshold<< m_ThresholdSmearing << endmsg ;
-
-       // if (ChargeInPixel >= m_Threshold) {
+        hit_map[ix][iy] += ChargeInPixel; // Add the charge to the pixel map
         
-          hit_map[ix][iy] += ChargeInPixel;
-
-          //info() << "----- hit_map content -----" << endmsg;
-          //for (const auto& x_pair : hit_map) {
-          //  int ix_print = x_pair.first;
-          //  for (const auto& y_pair : x_pair.second) {
-          //    int iy_print = y_pair.first;
-          //    double charge = y_pair.second;
-          //    info() << "Pixel (" << ix_print << "," << iy_print << ") --> charge = " << charge << endmsg;
-          //      }
-          //    }
-          //  info() << "----------------------------" << endmsg;
-
-          //if (m_DebugHistos) {
-            //  hChargeAboveThreshold->Fill(ChargeInPixel);
-             // hActivePixelCount->Fill(activePixelCount); 
-          } // end loop over y
-        } // end loop over x
-      } // End loop over charge collection
+        }// end loop over y
+      } // end loop over x
+    } // End loop over charge collection
       //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
-    } // End get_charge_per_pixel
+  } // End get_charge_per_pixel
      
 
 bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
@@ -507,7 +490,8 @@ bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
   // Protection contre les seuils négatifs
   ThresholdInE = std::max(ThresholdInE, 0.0);
 
-  info() << "ChargeInE (weight): " << ChargeInE << ", ThresholdInE (after smearing): " << ThresholdInE << endmsg;
+  // Permet de voir la charge qui passe par la fonction et le seuil appliqué à cette charge 
+  debug() << "ChargeInE (weight): " << ChargeInE << ", ThresholdInE (after smearing): " << ThresholdInE << endmsg;
 
   // Retourner si la charge est supérieure ou égale au seuil
   return ChargeInE >= ThresholdInE;
@@ -536,30 +520,51 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   std::map<int,double> Qix; // Weight (charge) per x layer
   std::map<int,double> Qiy; // Weight (charge) per y layer 
 
+  //Initialize ActivePixelCountBeforeThreshold
+  int ActivePixelCountBeforeThreshold = 0;
+  //Initialize ActivePixelCountAfterThreshold
+  int ActivePixelCountAfterThreshold = 0;
+
+
   // loop to load the weights per x and y layers
   for (auto const& ix : hit_map) {
     for (auto const& iy : ix.second) {
         double weight = iy.second;
         
-        // Debugging : afficher la charge avant de vérifier le seuil
-        info()<< "Charge Weight " << weight << std::endl;
+        if (m_DebugHistos) {
+          ActivePixelCountBeforeThreshold++;
+          hChargeBeforeThreshold->Fill(weight); // /1e3 // Fill the histogram with the charge before threshold 
+          hActivePixelCountBeforeThreshold->Fill(ActivePixelCountBeforeThreshold);// Fill the histogram with the charge before threshold
+        }
         
-        if (weight > 0 && Apply_Threshold(weight)) {
+        // Debugging : afficher la charge avant de vérifier le seuil
+        //debug()<< "Charge Weight " << weight << std::endl;
+        
+        if (weight > 0 && Apply_Threshold(weight)) 
+          {
+         
           if (m_DebugHistos){
-            hChargeAboveThreshold->Fill(weight);
+            ActivePixelCountAfterThreshold++;
+            hChargeAboveThreshold->Fill(weight); // Fill the histogram with the charge above threshold
+            hActivePixelCountAfterThreshold->Fill(ActivePixelCountAfterThreshold);
           }
           // Enregistrer les charges qui passent le seuil
           Qix[ix.first] += weight;
           Qiy[iy.first] += weight;
           sumWeights += weight;
           } 
-    }
-}
+        }
+    } // end loop over y
 
   if (sumWeights <= 0) {
-    warning() << " sumWeights <= 0, pas de charge à convertir. Skip output." << endmsg;
+    debug() << " sumWeights <= 0, pas de charge à convertir. Skip output." << endmsg;
     return;
+  }  
+
+  if (m_DebugHistos) {
+    hChargePerClusterOrDigis->Fill(sumWeights);
   }
+  
   double sumWeightsSqX = 0.; // Sum of the square of weights along x (used later for position resolution)
   double sumWeightsSqY = 0.;
 
@@ -653,22 +658,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
 
   // Fill the debug histograms if needed
   if (m_DebugHistos) {
-    
-    // Remplir l'histogramme 2D avec la charge de chaque pixel
-    for (auto const& ix : hit_map) {
-      for (auto const& iy : ix.second) {
-      double weight = iy.second; // Poids (charge) du pixel
-      
-      if (weight > 0 && Apply_Threshold(weight)) { // Appliquer le seuil
-          int ix_coord = ix.first * PixSizeX; // Coordonnée X du pixel
-          int iy_coord = iy.first * PixSizeY; // Coordonnée Y du pixel
-          
-          // Remplir l'histogramme avec la charge
-          h2_charge_distribution->Fill(ix_coord, iy_coord, weight);
-        }
-      } 
-    }
-    
+  
     // Get the global position of the hit (defined by default in Geant4 as the mean between the entry and exit point in the active material)
     // and apply unit transformation (translation matrix is stored in cm
     double hitGlobalCentralPosition[3] = {hit.getPosition().x * dd4hep::mm,
@@ -686,11 +676,6 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
     hErrorY->Fill(DistY);
     hErrorZ->Fill(DistZ);
     hError->Fill(sqrt(DistX * DistX + DistY * DistY + DistZ * DistZ));
-   
-    // Remplir ChargeAboveThreshold et ActivePixelCount
-    // Utiliser ton seuil ici
-    
-
     
   } // End Debug Histos
   
@@ -747,8 +732,10 @@ void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
     hErrorZ->Write();
     hError->Write();
     hChargeAboveThreshold->Write();
-    h2_charge_distribution->Write();
-    //hActivePixelCount->Write();
+    hChargeBeforeThreshold->Write();
+    hActivePixelCountBeforeThreshold->Write();
+    hActivePixelCountAfterThreshold->Write();
+    hChargePerClusterOrDigis->Write();
   }
 
 

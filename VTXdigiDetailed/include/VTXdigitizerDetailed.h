@@ -214,11 +214,11 @@ private:
   TH1D* hErrorZ; // Histogram to store the distance in Z between the true hit and digitized one in mm
   TH1D* hError;  // Histogram to store the distance between the true hit and digitized one in mm
   TH1D* hChargeAboveThreshold; // Histogram to store the charge above threshold
-  TH2D* h2_charge_distribution;
-  //TH1D* hActivePixelCount; // Histogram to store the number of active pixels
-  //TH1D* Applied_Trhreshold; // Histogram to store the applied threshold
-  //TH1D* h_pixel_thr; // Histogram to store the number of pixels above threshold
-  //TH1D* h_pixel_thr_smear; // Histogram to store the number of pixels above threshold after smearing 
+  TH1D* hChargeBeforeThreshold; // Histogram to store the charge before threshold
+  TH1D* hActivePixelCountBeforeThreshold;  // Histogram to store the number of active pixels
+  TH1D* hActivePixelCountAfterThreshold; // Histogram to store the number of pixels above threshold
+  TH1D* hChargePerClusterOrDigis; // Histogram to store charge per Digis ie Cluster sumweights
+  
 
   void Create_outputROOTfile_for_debugHistograms() const;
 };
