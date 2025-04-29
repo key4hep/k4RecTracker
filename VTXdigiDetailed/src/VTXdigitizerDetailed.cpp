@@ -38,10 +38,10 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
     // histo for Threshold Studies 
     hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "True Pixel Charge after threshold", 100, 0., 1000.);
-    hChargeAboveThreshold->SetXTitle("Charge in Pixel ( or weight ) (ke)");
+    hChargeAboveThreshold->SetXTitle("Charge in Pixel ( or weight ) (100 e)");
     hChargeAboveThreshold->SetDirectory(0);
     hChargeBeforeThreshold = new TH1D("hChargeBeforeThreshold", "True Pixel Charge before threshold", 100, 0., 1000.);
-    hChargeBeforeThreshold->SetXTitle("Charge in Pixel Without Threshold ( or weight ) (ke)");
+    hChargeBeforeThreshold->SetXTitle("Charge in Pixel Without Threshold ( or weight ) (100 e)");
     hChargeBeforeThreshold->SetDirectory(0);
     // Hypothèses : Quand on voit x = 15 on peut penser au fait qu'un hit = digis = cluster active 15 pixels
     hActivePixelCountBeforeThreshold = new TH1D("hActivePixelCountPerCluster?", "Active Pixels Count", 100, 0, 100);
@@ -51,7 +51,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hActivePixelCountAfterThreshold->SetXTitle("Number of Active Pixels Per Cluster? After Threshold");
     hActivePixelCountAfterThreshold->SetDirectory(0);
     hChargePerClusterOrDigis = new TH1D("hChargePerClusterOrDigis", "Charge per Cluster or Digis", 100, 0., 1000.);
-    hChargePerClusterOrDigis->SetXTitle("Charge in Cluster or Digis (ke)");
+    hChargePerClusterOrDigis->SetXTitle("Charge in Cluster or Digis ( 100 e)");
     hChargePerClusterOrDigis->SetDirectory(0);
   }
   
@@ -533,7 +533,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
         
         if (m_DebugHistos) {
           ActivePixelCountBeforeThreshold++;
-          hChargeBeforeThreshold->Fill(weight); // /1e3 // Fill the histogram with the charge before threshold 
+          hChargeBeforeThreshold->Fill(weight / 1e2 ); // /1e3 // Fill the histogram with the charge before threshold 
           hActivePixelCountBeforeThreshold->Fill(ActivePixelCountBeforeThreshold);// Fill the histogram with the charge before threshold
         }
         
@@ -545,7 +545,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
          
           if (m_DebugHistos){
             ActivePixelCountAfterThreshold++;
-            hChargeAboveThreshold->Fill(weight); // Fill the histogram with the charge above threshold
+            hChargeAboveThreshold->Fill(weight / 1e2); // Fill the histogram with the charge above threshold
             hActivePixelCountAfterThreshold->Fill(ActivePixelCountAfterThreshold);
           }
           // Enregistrer les charges qui passent le seuil
@@ -562,7 +562,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   }  
 
   if (m_DebugHistos) {
-    hChargePerClusterOrDigis->Fill(sumWeights);
+    hChargePerClusterOrDigis->Fill(sumWeights / 1e2);
   }
   
   double sumWeightsSqX = 0.; // Sum of the square of weights along x (used later for position resolution)
