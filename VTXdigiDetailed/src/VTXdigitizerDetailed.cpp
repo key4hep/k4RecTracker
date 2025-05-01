@@ -458,7 +458,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
       y[iy] = TotalStripCharge;
 
     } // End Integrate charge strips in y
-
+    
     // Get the 2D charge integrals by folding x and y strips
     // Should add at this point a check that the pixel lies inside material - Not implemented for now
     for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
@@ -615,6 +615,8 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   double dirGlobalV[3]; // Global direction V (cooresponding to local Y)
   double DigiLocalPos[3] = {DigiLocalX * dd4hep::mm, DigiLocalY * dd4hep::mm, 0.}; //Local Position in cm, necessary for transformation to global with transform matrix
   double DigiGlobalPos[3]; // Global position in cm
+
+  debug() << "DigiLocalX: " << DigiLocalPos[0] << ", DigiLocalY: " << DigiLocalPos[1] << endmsg;
   
   // Get the transformation matrix between local and global frames
   auto sensorTransformMatrix = m_volman.lookupDetElement(cellID).nominal().worldTransformation();
