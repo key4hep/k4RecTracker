@@ -3,6 +3,7 @@
 // ROOT headers
 #include "TFile.h"
 #include "TH1D.h"
+#include "TH2D.h"
 #include "TDirectory.h"
 
 // GAUDI
@@ -60,6 +61,10 @@ public:
    */
   virtual StatusCode finalize() final;
 
+  typedef std::map<int, std::map<int, float, std::less<int>>, std::less<int>> hit_map_type; // Déplacé dans public
+  //size_t countActivePixels(const hit_map_type& hit_map) const; // Déclaration de la méthode
+  bool Apply_Threshold(double& ChargeInPixel) const;
+
 private:
   // Input sim vertex hit collection name
   mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
@@ -88,6 +93,14 @@ private:
   // t resolution in ns
   Gaudi::Property<std::vector<float>> m_t_resolution{this, "tResolution", {0.1}, "Time resolutions per layer [ns]"};
 
+  // Threshold in electron 
+
+  Gaudi::Property<float> m_Threshold{this, "Threshold", 0.0 , "Charge Threshold in e (default: 0.0)"};
+
+  //Threshold smearing in electron
+
+  Gaudi::Property<float> m_ThresholdSmearing{this, "ThresholdSmearing", 0.0, "Sigma of Threshold Gaussian Smearing in e (default: 0.0)"};
+
   // Surface manager used to project hits onto sensitive surface with forceHitsOntoSurface argument
   mutable const dd4hep::rec::SurfaceMap* _map;
 
@@ -108,6 +121,8 @@ private:
 
   // Gaussian random number generator used for time smearing
   std::vector<Rndm::Numbers> m_gauss_t_vec;
+
+  Rndm::Numbers m_gauss_threshold; // pour faire le smearing du threshold
 
   // Define a class for 3D ionization points and energy
   /**
@@ -164,7 +179,7 @@ private:
     const edm4hep::SimTrackerHit* _hitp;
   }; // End SignalPoint class definition
 
-  typedef std::map<int,std::map<int,float,std::less<int>>,std::less<int>> hit_map_type;
+  //typedef std::map<int,std::map<int,float,std::less<int>>,std::less<int>> hit_map_type;
     
 private:
   // Additional member functions
@@ -198,6 +213,12 @@ private:
   TH1D* hErrorY; // Histogram to store the distance in Y between the true hit and digitized one in mm
   TH1D* hErrorZ; // Histogram to store the distance in Z between the true hit and digitized one in mm
   TH1D* hError;  // Histogram to store the distance between the true hit and digitized one in mm
+  TH1D* hChargeAboveThreshold; // Histogram to store the charge above threshold
+  TH1D* hChargeBeforeThreshold; // Histogram to store the charge before threshold
+  TH1D* hActivePixelCountBeforeThreshold;  // Histogram to store the number of active pixels
+  TH1D* hActivePixelCountAfterThreshold; // Histogram to store the number of pixels above threshold
+  TH1D* hChargePerClusterOrDigis; // Histogram to store charge per Digis ie Cluster sumweights
+  
 
   void Create_outputROOTfile_for_debugHistograms() const;
 };

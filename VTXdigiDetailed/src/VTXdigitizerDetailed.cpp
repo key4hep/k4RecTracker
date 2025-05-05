@@ -1,5 +1,6 @@
 #include "VTXdigitizerDetailed.h"
 
+
 DECLARE_COMPONENT(VTXdigitizerDetailed)
 
 VTXdigitizerDetailed::VTXdigitizerDetailed(const std::string& aName, ISvcLocator* aSvcLoc)
@@ -25,6 +26,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
       error() << "Please provide a name for the file containing the debug histograms with option DebugFileName." << endmsg;
       return StatusCode::FAILURE;
     }
+
     hErrorX = new TH1D("hErrorX","Distance in X in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
     hErrorX->SetDirectory(0);
     hErrorY = new TH1D("hErrorY","Distance in Y in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
@@ -33,6 +35,27 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hErrorZ->SetDirectory(0);
     hError = new TH1D("hError","Distance between the true hit and digitized one in mm", 1000, 0., 0.1);
     hError->SetDirectory(0);
+
+    // histo for Threshold Studies 
+    hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "True Pixel Charge after threshold", 100, 0., 1000.);
+    hChargeAboveThreshold->SetXTitle("Charge in Pixel ( or weight ) (100 e)");
+    hChargeAboveThreshold->SetDirectory(0);
+    hChargeBeforeThreshold = new TH1D("hChargeBeforeThreshold", "True Pixel Charge before threshold", 100, 0., 1000.);
+    hChargeBeforeThreshold->SetXTitle("Charge in Pixel Without Threshold ( or weight ) (100 e)");
+    hChargeBeforeThreshold->SetDirectory(0);
+    // Hypothèses : Quand on voit x = 15 on peut penser au fait qu'un hit = digis = cluster active 15 pixels
+    hActivePixelCountBeforeThreshold = new TH1D("hActivePixelCountPerCluster?", "Active Pixels Count", 100, 0, 50);
+    hActivePixelCountBeforeThreshold->SetXTitle("Number of Active Pixels Per Cluster ? Before Threshold");
+    hActivePixelCountBeforeThreshold->SetYTitle("Number of Cluster ? Before Threshold");
+
+    hActivePixelCountBeforeThreshold->SetDirectory(0);
+    hActivePixelCountAfterThreshold = new TH1D("hActivePixelCountAfterThresholdPerCluster?", "Active Pixels Count After Threshold", 100, 0, 50);
+    hActivePixelCountAfterThreshold->SetXTitle("Number of Active Pixels Per Cluster? After Threshold");
+    hActivePixelCountAfterThreshold->SetYTitle("Number of Cluster? After Threshold");
+    hActivePixelCountAfterThreshold->SetDirectory(0);
+    hChargePerClusterOrDigis = new TH1D("hChargePerClusterOrDigis", "Charge per Cluster or Digis", 100, 0., 1000.);
+    hChargePerClusterOrDigis->SetXTitle("Charge in Cluster or Digis ( 100 e)");
+    hChargePerClusterOrDigis->SetDirectory(0);
   }
   
   // Initialize random services
@@ -48,6 +71,12 @@ StatusCode VTXdigitizerDetailed::initialize() {
       error() << "Couldn't initialize RndmGenSvc!" << endmsg;
       return StatusCode::FAILURE;
     }
+  }
+
+// Initialize Gaussian random generator for threshold smearing
+  if (m_gauss_threshold.initialize(m_randSvc, Rndm::Gauss(m_Threshold, m_ThresholdSmearing)).isFailure()) {
+    error() << "Couldn't initialize Gaussian generator for threshold smearing!" << endmsg;
+    return StatusCode::FAILURE;
   }
 
   // check if readout exists
@@ -87,10 +116,17 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   // initialise the cluster width
   m_ClusterWidth = 3.0;
-  
+
+  info() << "Threshold value: " << m_Threshold << endmsg;
+  info() << "Threshold Smearing : " << m_ThresholdSmearing << endmsg; 
+  info() << "Initializing VTXdigitizerDetailed with the following parameters:" << endmsg;
+  info() << "Detector Name: " << m_detectorName << endmsg;
+  info() << "Readout Name: " << m_readoutName << endmsg;
+  info() << "Threshold: " << m_Threshold << endmsg;
+  info() << "Debug Histograms: " << (m_DebugHistos ? "Enabled" : "Disabled") << endmsg;
   return StatusCode::SUCCESS;
 }
-
+ 
 template<typename T> void VTXdigitizerDetailed::getSensorThickness() {
   /** Retrieve the sensor thickness per layer in millimeter
    */
@@ -130,7 +166,8 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
 
     generate_output(input_sim_hit, output_digi_hits, output_sim_digi_link_col, hit_map);
     
-  }  
+  }
+  info() << "Execution of VTXdigitizerDetailed completed." << endmsg;  
   return StatusCode::SUCCESS;
 }
 
@@ -355,6 +392,7 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   
 } // End DriftDirection
 
+
 void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
 			  const std::vector<SignalPoint>& collectionPoints,
 			  hit_map_type& hit_map) const {
@@ -362,15 +400,16 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
   /** Get the map of recorded charges per pixel for a collection of drifted charges for a given hit
    */
 
-  // Get the pixel dimensions in mm along x and y in the (modified) local frame with z orthogonal (see SetProperDirectFrame function)
-  float PixSizeX, PixSizeY;
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-  PixSizeX = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[0] / dd4hep::mm;
-  PixSizeY = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[1] / dd4hep::mm;
-  
+  const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName).segmentation();
+  auto cellDims = segmentation.cellDimensions(cellID);
+   
+  const float PixSizeX = cellDims[0] / dd4hep::mm;
+  const float PixSizeY = cellDims[1] / dd4hep::mm;
+ 
   // map to store the pixel integrals in the x and y directions
   std::map<int, float, std::less<int>> x, y;
-  
+
   // Assign signal per readout channel and store sorted by channel number (in modified local frame)
   // Iterate over collection points on the collection plane
   for (std::vector<SignalPoint>::const_iterator i = collectionPoints.begin(); i < collectionPoints.end(); i++) {
@@ -393,7 +432,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     int IpxCloudMinY = int(floor((CloudMinY + 0.5 * PixSizeY) / PixSizeY));
     int IpxCloudMaxY = int(floor((CloudMaxY + 0.5 * PixSizeY) / PixSizeY));
 
-    x.clear(); // clezar temporary integration arrays
+    x.clear(); // clear temporary integration arrays
     y.clear();
 
     // Integrate charge strips in x
@@ -419,21 +458,48 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
       y[iy] = TotalStripCharge;
 
     } // End Integrate charge strips in y
-
+    
     // Get the 2D charge integrals by folding x and y strips
     // Should add at this point a check that the pixel lies inside material - Not implemented for now
     for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
       for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
 
-	float ChargeInPixel = Charge * x[ix] * y[iy];
+        // Show information about pixel pos and charge related to the Segment 
+        //debug() << "SignalPoint: " << i->x() << ":" << i->y() << ":" << i->sigma_x() << ":" << i->sigma_y() << ":" << i->amplitude() << endmsg;
 
-	hit_map[ix][iy] += ChargeInPixel; // load the charge inside the pixel in the pixels map
-	
-      } // end loop over y
-    } // end loop over x
-  } // End loop over charge collection
-  //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
-} // End get_charge_per_pixel
+        // Calculate the charge associated to one signal point for a pixel par segment
+  	    float ChargeInPixel = Charge * x[ix] * y[iy];
+
+        hit_map[ix][iy] += ChargeInPixel; // Add the charge to the pixel map
+        
+        }// end loop over y
+      } // end loop over x
+    } // End loop over charge collection
+      //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
+  } // End get_charge_per_pixel
+     
+
+bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
+  // Générer un seuil et un smear du seuil pour fluctation collect de charge 
+  // Le seuil est tiré d'une distribution gaussienne de moyenne m_Threshold et d'écart-type m_ThresholdSmearing
+  double ThresholdInE = 0;  
+  
+  if (m_ThresholdSmearing > 0) {
+    ThresholdInE = m_gauss_threshold();
+  } else {
+    ThresholdInE = m_Threshold; // Si m_ThresholdSmearing est 0, pas de smearing
+  }
+
+  // Protection contre les seuils négatifs
+  ThresholdInE = std::max(ThresholdInE, 0.0);
+
+  // Permet de voir la charge qui passe par la fonction et le seuil appliqué à cette charge 
+  debug() << "ChargeInE (weight): " << ChargeInE << ", ThresholdInE (after smearing): " << ThresholdInE << endmsg;
+
+  // Retourner si la charge est supérieure ou égale au seuil
+  return ChargeInE >= ThresholdInE;
+}
+
 
 void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
 						  edm4hep::TrackerHitPlaneCollection* output_digi_hits,
@@ -445,27 +511,73 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
    */
 
   // Get the pixel dimensions in mm along x and y in the (modified) local frame with z orthogonal (see SetProperDirectFrame function)
-  float PixSizeX, PixSizeY;
+
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-  PixSizeX = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[0] / dd4hep::mm;
-  PixSizeY = m_geoSvc->getDetector()->readout(m_readoutName).segmentation().cellDimensions(cellID)[1] / dd4hep::mm;
-    
+  const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName).segmentation();
+  auto cellDims = segmentation.cellDimensions(cellID);
+  
+  const float PixSizeX = cellDims[0] / dd4hep::mm;
+  const float PixSizeY = cellDims[1] / dd4hep::mm;
+
+  //
+
   double DigiLocalX = 0.; // Local position of the digitized hit
   double DigiLocalY = 0.;
 
-  double sumWeights = 0.; // Sum of all weights (sum of charges recorded in all pixels)
-  std::map<int,double> Qix; // Weight (charge) per x layer
-  std::map<int,double> Qiy; // Weight (charge) per y layer 
 
-  // loop to load the weights per x and y layers
-  for (auto const& ix : hit_map) {
-    for (auto const& iy : ix.second) {
-      double weight = iy.second;
-      Qix[ix.first] += weight;
-      Qiy[iy.first] += weight;
-      sumWeights += weight;
-    } // Loop over map in Y direction
-  }// Loop over map in X direction
+  // Unordored Map for efficiency 
+
+  using ChargeMap = std::unordered_map<int, double>;
+  ChargeMap Qix, Qiy;
+
+  double sumWeights = 0.; // Sum of all weights (sum of charges recorded in all pixels)
+  int CountBeforeThreshold = 0;
+  int CountAfterThreshold = 0;
+
+  // Loop over hit map to apply threshold and accumulate weights
+    // loop to load the weights per x and y layers
+    for (auto const& ix : hit_map) {
+      for (auto const& iy : ix.second) {
+          double weight = iy.second;
+          
+          if (m_DebugHistos) {
+            ++CountBeforeThreshold;
+            hChargeBeforeThreshold->Fill(weight / 1e2 ); // /1e3 // Fill the histogram with the charge before threshold 
+            // Fill the histogram with the charge before threshold
+          }
+          
+          // Debugging : afficher la charge avant de vérifier le seuil
+          //debug()<< "Charge Weight " << weight << std::endl;
+          
+          if (weight > 0 && Apply_Threshold(weight)) 
+            {
+           
+            if (m_DebugHistos){
+              ++CountAfterThreshold;
+              hChargeAboveThreshold->Fill(weight / 1e2); // Fill the histogram with the charge above threshold
+              
+            }
+            // Enregistrer les charges qui passent le seuil
+            Qix[ix.first] += weight;
+            Qiy[iy.first] += weight;
+            sumWeights += weight;
+          } 
+      }
+    } // end loop over y
+
+  if (m_DebugHistos) {
+    hActivePixelCountBeforeThreshold->Fill(CountBeforeThreshold);
+  }
+
+  if (sumWeights <= 0.) {
+    debug() << "sumWeights <= 0, pas de charge à convertir. Skip output." << endmsg;
+    return;
+  }
+
+  if (m_DebugHistos) {
+    hActivePixelCountAfterThreshold->Fill(CountAfterThreshold);
+    hChargePerClusterOrDigis->Fill(sumWeights / 1e2);
+  }
 
   double sumWeightsSqX = 0.; // Sum of the square of weights along x (used later for position resolution)
   double sumWeightsSqY = 0.;
@@ -503,6 +615,8 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   double dirGlobalV[3]; // Global direction V (cooresponding to local Y)
   double DigiLocalPos[3] = {DigiLocalX * dd4hep::mm, DigiLocalY * dd4hep::mm, 0.}; //Local Position in cm, necessary for transformation to global with transform matrix
   double DigiGlobalPos[3]; // Global position in cm
+
+  debug() << "DigiLocalX: " << DigiLocalPos[0] << ", DigiLocalY: " << DigiLocalPos[1] << endmsg;
   
   // Get the transformation matrix between local and global frames
   auto sensorTransformMatrix = m_volman.lookupDetElement(cellID).nominal().worldTransformation();
@@ -560,6 +674,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
 
   // Fill the debug histograms if needed
   if (m_DebugHistos) {
+  
     // Get the global position of the hit (defined by default in Geant4 as the mean between the entry and exit point in the active material)
     // and apply unit transformation (translation matrix is stored in cm
     double hitGlobalCentralPosition[3] = {hit.getPosition().x * dd4hep::mm,
@@ -577,6 +692,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
     hErrorY->Fill(DistY);
     hErrorZ->Fill(DistZ);
     hError->Fill(sqrt(DistX * DistX + DistY * DistY + DistZ * DistZ));
+    
   } // End Debug Histos
   
 } // End get_hist_signal_point
@@ -618,22 +734,31 @@ void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
 
   // save the debug histograms in a file
   // file is saved and closed when going out of scope
-  auto filename = m_DebugFileName.value().c_str();
-  std::unique_ptr<TFile> ofile{TFile::Open( filename, "recreate")};
-  if (!ofile || ofile->IsZombie())
+  {
+    auto filename = m_DebugFileName.value().c_str();
+    std::unique_ptr<TFile> ofile{TFile::Open( filename, "recreate")};
+    if (!ofile || ofile->IsZombie())
     {
       error() << "Error: Could not open file " << filename << std::endl;
       return;
     }
-  ofile->cd();
-  hErrorX->Write();
-  hErrorY->Write();
-  hErrorZ->Write();
-  hError->Write();
-  
+    ofile->cd();
+    hErrorX->Write();
+    hErrorY->Write();
+    hErrorZ->Write();
+    hError->Write();
+    hChargeAboveThreshold->Write();
+    hChargeBeforeThreshold->Write();
+    hActivePixelCountBeforeThreshold->Write();
+    hActivePixelCountAfterThreshold->Write();
+    hChargePerClusterOrDigis->Write();
+  }
+
+
   // Restore previous ROOT directory
   if(currentDir && ( not currentDir->IsDestructed() ) )
     currentDir->cd();
   return;
   
 } // End Create_outputROOTfile_for_debugHistograms
+        

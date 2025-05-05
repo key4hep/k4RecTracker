@@ -74,19 +74,19 @@ private:
   // Volume manager to get the physical cell sensitive volume
   dd4hep::VolumeManager m_volman;
 
-  // x resolution in um
+  // x resolution in mm
   Gaudi::Property<std::vector<float>> m_x_resolution{
       this,
       "xResolution",
       {0.1},
-      "Spatial resolutions in the x direction per layer [um] (r-phi direction in barrel, z direction in disks)"};
+      "Spatial resolutions in the x direction per layer [mm] (r-phi direction in barrel, z direction in disks)"};
 
-  // y resolution in um
+  // y resolution in mm
   Gaudi::Property<std::vector<float>> m_y_resolution{
       this,
       "yResolution",
       {0.1},
-      "Spatial resolutions in the y direction per layer [um] (r direction in barrel, r-phi direction in disks)"};
+      "Spatial resolutions in the y direction per layer [mm] (r direction in barrel, r-phi direction in disks)"};
 
   // t resolution in ns
   Gaudi::Property<std::vector<float>> m_t_resolution{this, "tResolution", {0.1}, "Time resolutions per layer [ns]"};
