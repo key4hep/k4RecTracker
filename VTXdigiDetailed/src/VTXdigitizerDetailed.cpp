@@ -36,26 +36,46 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hError = new TH1D("hError","Distance between the true hit and digitized one in mm", 1000, 0., 0.1);
     hError->SetDirectory(0);
 
-    // histo for Threshold Studies 
-    hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "True Pixel Charge after threshold", 100, 0., 1000.);
-    hChargeAboveThreshold->SetXTitle("Charge in Pixel ( or weight ) (100 e)");
-    hChargeAboveThreshold->SetDirectory(0);
-    hChargeBeforeThreshold = new TH1D("hChargeBeforeThreshold", "True Pixel Charge before threshold", 100, 0., 1000.);
-    hChargeBeforeThreshold->SetXTitle("Charge in Pixel Without Threshold ( or weight ) (100 e)");
-    hChargeBeforeThreshold->SetDirectory(0);
-    // Hypothèses : Quand on voit x = 15 on peut penser au fait qu'un hit = digis = cluster active 15 pixels
-    hActivePixelCountBeforeThreshold = new TH1D("hActivePixelCountPerCluster?", "Active Pixels Count", 100, 0, 50);
-    hActivePixelCountBeforeThreshold->SetXTitle("Number of Active Pixels Per Cluster ? Before Threshold");
-    hActivePixelCountBeforeThreshold->SetYTitle("Number of Cluster ? Before Threshold");
+    //////Threshold Studies 
 
+    //Before Threshold 
+    hChargeBeforeThreshold = new TH1D("hChargeBeforeThreshold", "Pixel Charge before threshold", 100, 0., 100.);
+    hChargeBeforeThreshold->SetXTitle("Pixel Charge Without Threshold (ke)");
+    hChargeBeforeThreshold->SetYTitle("Pixels");
+    hChargeBeforeThreshold->SetDirectory(0);
+
+    hActivePixelCountBeforeThreshold = new TH1D("hActivePixelCountPerCluster", "Active Pixels Before Threshold", 100, 0, 50);
+    hActivePixelCountBeforeThreshold->SetXTitle("Active Pixels Per Cluster Before Threshold");
+    hActivePixelCountBeforeThreshold->SetYTitle("Clusters Before Threshold");
     hActivePixelCountBeforeThreshold->SetDirectory(0);
-    hActivePixelCountAfterThreshold = new TH1D("hActivePixelCountAfterThresholdPerCluster?", "Active Pixels Count After Threshold", 100, 0, 50);
-    hActivePixelCountAfterThreshold->SetXTitle("Number of Active Pixels Per Cluster? After Threshold");
-    hActivePixelCountAfterThreshold->SetYTitle("Number of Cluster? After Threshold");
+
+
+    // After Threshold
+    hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "Pixel Charge after threshold", 100, 0., 100.);
+    hChargeAboveThreshold->SetXTitle("Pixel Charge (ke)");
+    hChargeAboveThreshold->SetYTitle("Pixels");
+    hChargeAboveThreshold->SetDirectory(0);
+
+    hActivePixelCountAfterThreshold = new TH1D("hActivePixelCountAfterThresholdPerCluster?", "Active Pixels After Threshold", 100, 0, 50);
+    hActivePixelCountAfterThreshold->SetXTitle("Active Pixels Per Cluster After Threshold");
+    hActivePixelCountAfterThreshold->SetYTitle("Clusters After Threshold");
     hActivePixelCountAfterThreshold->SetDirectory(0);
-    hChargePerClusterOrDigis = new TH1D("hChargePerClusterOrDigis", "Charge per Cluster or Digis", 100, 0., 1000.);
-    hChargePerClusterOrDigis->SetXTitle("Charge in Cluster or Digis ( 100 e)");
+
+    // Charge per cluster or digis
+    hChargePerClusterOrDigis = new TH1D("hChargePerClusterOrDigis", "Charge per Cluster / Digis", 100, 0., 100.);
+    hChargePerClusterOrDigis->SetXTitle("Charge in Cluster / Digis (ke)");
     hChargePerClusterOrDigis->SetDirectory(0);
+
+    /// Drift due to magnetic field
+
+    hXDriftDueToMagField = new TH1D("hXDriftDueToMagField", "X Drift due to magnetic field", 100, -0.5, 0.5);
+    hXDriftDueToMagField->SetXTitle("X Drift due to magnetic field (mm)");
+    hXDriftDueToMagField->SetDirectory(0);
+
+    hYDriftDueToMagField = new TH1D("hYDriftDueToMagField", "Y Drift due to magnetic field", 100, -0.5, 0.5);
+    hYDriftDueToMagField->SetXTitle("Y Drift due to magnetic field (mm)");
+    hYDriftDueToMagField->SetDirectory(0);
+
   }
   
   // Initialize random services
@@ -310,6 +330,11 @@ void VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::v
     float XDriftDueToMagField = DriftDistance * tanLorentzAngleX;
     float YDriftDueToMagField = DriftDistance * tanLorentzAngleY;
 
+    if (m_DebugHistos) {
+      hXDriftDueToMagField->Fill(XDriftDueToMagField);
+      hYDriftDueToMagField->Fill(YDriftDueToMagField);
+    }
+
     // Shift cloud center
     float CloudCenterX = SegX + XDriftDueToMagField;
     float CloudCenterY = SegY + YDriftDueToMagField;
@@ -480,23 +505,28 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
      
 
 bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
-  // Générer un seuil et un smear du seuil pour fluctation collect de charge 
-  // Le seuil est tiré d'une distribution gaussienne de moyenne m_Threshold et d'écart-type m_ThresholdSmearing
+  /** Apply the threshold to the charge
+   *  The threshold is defined in electrons
+   *  The threshold is smeared with a Gaussian distribution if m_ThresholdSmearing > 0
+   *  The threshold is applied to the charge
+   *  If the charge is above the threshold, return true
+   *  If the charge is below the threshold, return false
+   */
+
+  // Get the threshold in electrons
   double ThresholdInE = 0;  
   
   if (m_ThresholdSmearing > 0) {
     ThresholdInE = m_gauss_threshold();
   } else {
-    ThresholdInE = m_Threshold; // Si m_ThresholdSmearing est 0, pas de smearing
+    ThresholdInE = m_Threshold;
   }
 
-  // Protection contre les seuils négatifs
+  // In order to avoid negative threshold values, we set the minimum value to 0
   ThresholdInE = std::max(ThresholdInE, 0.0);
 
-  // Permet de voir la charge qui passe par la fonction et le seuil appliqué à cette charge 
   debug() << "ChargeInE (weight): " << ChargeInE << ", ThresholdInE (after smearing): " << ThresholdInE << endmsg;
 
-  // Retourner si la charge est supérieure ou égale au seuil
   return ChargeInE >= ThresholdInE;
 }
 
@@ -540,24 +570,23 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
       for (auto const& iy : ix.second) {
           double weight = iy.second;
           
-          if (m_DebugHistos) {
+          if (m_DebugHistos) 
+          {
             ++CountBeforeThreshold;
-            hChargeBeforeThreshold->Fill(weight / 1e2 ); // /1e3 // Fill the histogram with the charge before threshold 
-            // Fill the histogram with the charge before threshold
+            hChargeBeforeThreshold->Fill(weight / 1e3 ); // Fill the histogram with the charge before threshold in (ke)
           }
+
+          //debug()<< "Charge Before Threshold " << weight << std::endl;
           
-          // Debugging : afficher la charge avant de vérifier le seuil
-          //debug()<< "Charge Weight " << weight << std::endl;
-          
-          if (weight > 0 && Apply_Threshold(weight)) 
+          if (weight > 0 && Apply_Threshold(weight)) // Check if the charge is above the threshold
             {
            
             if (m_DebugHistos){
               ++CountAfterThreshold;
-              hChargeAboveThreshold->Fill(weight / 1e2); // Fill the histogram with the charge above threshold
+              hChargeAboveThreshold->Fill(weight / 1e3); // Fill the histogram with the charge above threshold in (ke)
               
             }
-            // Enregistrer les charges qui passent le seuil
+            
             Qix[ix.first] += weight;
             Qiy[iy.first] += weight;
             sumWeights += weight;
@@ -576,7 +605,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
 
   if (m_DebugHistos) {
     hActivePixelCountAfterThreshold->Fill(CountAfterThreshold);
-    hChargePerClusterOrDigis->Fill(sumWeights / 1e2);
+    hChargePerClusterOrDigis->Fill(sumWeights / 1e3);
   }
 
   double sumWeightsSqX = 0.; // Sum of the square of weights along x (used later for position resolution)
@@ -746,12 +775,18 @@ void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
     hErrorX->Write();
     hErrorY->Write();
     hErrorZ->Write();
-    hError->Write();
-    hChargeAboveThreshold->Write();
+    hError->Write();    
+    hXDriftDueToMagField->Write();
+    hYDriftDueToMagField->Write();
+
     hChargeBeforeThreshold->Write();
     hActivePixelCountBeforeThreshold->Write();
+
+    hChargeAboveThreshold->Write();
     hActivePixelCountAfterThreshold->Write();
     hChargePerClusterOrDigis->Write();
+   
+
   }
 
 
