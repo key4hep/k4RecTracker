@@ -138,13 +138,13 @@ StatusCode VTXdigitizerDetailed::initialize() {
   // initialise the cluster width
   m_ClusterWidth = 3.0;
 
-  info() << "Threshold value: " << m_Threshold << endmsg;
-  info() << "Threshold Smearing : " << m_ThresholdSmearing << endmsg; 
-  info() << "Initializing VTXdigitizerDetailed with the following parameters:" << endmsg;
-  info() << "Detector Name: " << m_detectorName << endmsg;
-  info() << "Readout Name: " << m_readoutName << endmsg;
-  info() << "Threshold: " << m_Threshold << endmsg;
-  info() << "Debug Histograms: " << (m_DebugHistos ? "Enabled" : "Disabled") << endmsg;
+  debug() << "Initializing VTXdigitizerDetailed with the following parameters:" << endmsg;
+  debug() << "Detector Name: " << m_detectorName << endmsg;
+  debug() << "Readout Name: " << m_readoutName << endmsg;
+
+  debug() << "Threshold: " << m_Threshold << endmsg; 
+  debug() << "Threshold Smearing : " << m_ThresholdSmearing << endmsg;
+
   return StatusCode::SUCCESS;
 }
  
@@ -600,7 +600,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   }
 
   if (sumWeights <= 0.) {
-    debug() << "sumWeights <= 0, pas de charge à convertir. Skip output." << endmsg;
+    debug() << "sumWeights <= 0 Skip output." << endmsg;
     return;
   }
 
