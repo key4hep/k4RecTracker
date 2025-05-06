@@ -62,8 +62,9 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hActivePixelCountAfterThreshold->SetDirectory(0);
 
     // Charge per cluster or digis
-    hChargePerClusterOrDigis = new TH1D("hChargePerClusterOrDigis", "Charge per Cluster / Digis", 100, 0., 100.);
-    hChargePerClusterOrDigis->SetXTitle("Charge in Cluster / Digis (ke)");
+    hChargePerClusterOrDigis = new TH1D("hChargePerClusterOrDigis", "Charge per Cluster", 100, 0., 100.);
+    hChargePerClusterOrDigis->SetXTitle("Charge in Cluster (ke)");
+    hChargePerClusterOrDigis->SetYTitle("Clusters");
     hChargePerClusterOrDigis->SetDirectory(0);
 
     /// Drift due to magnetic field
