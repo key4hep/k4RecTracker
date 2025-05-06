@@ -44,9 +44,9 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hChargeBeforeThreshold->SetYTitle("Pixels");
     hChargeBeforeThreshold->SetDirectory(0);
 
-    hActivePixelCountBeforeThreshold = new TH1D("hActivePixelCountPerCluster", "Active Pixels Before Threshold", 100, 0, 50);
-    hActivePixelCountBeforeThreshold->SetXTitle("Active Pixels Per Cluster Before Threshold");
-    hActivePixelCountBeforeThreshold->SetYTitle("Clusters Before Threshold");
+    hActivePixelCountBeforeThreshold = new TH1D("hActivePixelCountPerCluster", "Active Pixels Before Threshold per Cluster", 100, 0, 50);
+    hActivePixelCountBeforeThreshold->SetXTitle("Active Pixels");
+    hActivePixelCountBeforeThreshold->SetYTitle("Clusters");
     hActivePixelCountBeforeThreshold->SetDirectory(0);
 
 
@@ -56,9 +56,9 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hChargeAboveThreshold->SetYTitle("Pixels");
     hChargeAboveThreshold->SetDirectory(0);
 
-    hActivePixelCountAfterThreshold = new TH1D("hActivePixelCountAfterThresholdPerCluster?", "Active Pixels After Threshold", 100, 0, 50);
-    hActivePixelCountAfterThreshold->SetXTitle("Active Pixels Per Cluster After Threshold");
-    hActivePixelCountAfterThreshold->SetYTitle("Clusters After Threshold");
+    hActivePixelCountAfterThreshold = new TH1D("hActivePixelCountAfterThresholdPerCluster", "Active Pixels After Threshold per Cluster", 100, 0, 50);
+    hActivePixelCountAfterThreshold->SetXTitle("Active Pixels");
+    hActivePixelCountAfterThreshold->SetYTitle("Clusters");
     hActivePixelCountAfterThreshold->SetDirectory(0);
 
     // Charge per cluster or digis
@@ -69,11 +69,11 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
     /// Drift due to magnetic field
 
-    hXDriftDueToMagField = new TH1D("hXDriftDueToMagField", "X Drift due to magnetic field", 100, -0.5, 0.5);
+    hXDriftDueToMagField = new TH1D("hXDriftDueToMagField", "X Drift due to magnetic field", 100, -0.04, 0.04);
     hXDriftDueToMagField->SetXTitle("X Drift due to magnetic field (mm)");
     hXDriftDueToMagField->SetDirectory(0);
 
-    hYDriftDueToMagField = new TH1D("hYDriftDueToMagField", "Y Drift due to magnetic field", 100, -0.5, 0.5);
+    hYDriftDueToMagField = new TH1D("hYDriftDueToMagField", "Y Drift due to magnetic field", 100, -0.04, 0.04);
     hYDriftDueToMagField->SetXTitle("Y Drift due to magnetic field (mm)");
     hYDriftDueToMagField->SetDirectory(0);
 
