@@ -77,6 +77,16 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hYDriftDueToMagField->SetXTitle("Y Drift due to magnetic field (mm)");
     hYDriftDueToMagField->SetDirectory(0);
 
+    //Occupancy studies 
+
+    hDigisPerLayer  = new TH1D("hDigisPerLayer", "Digis per Layer", 10, 0, 10); // 100 bins max par exemple
+    hDigisPerLayer->SetDirectory(0);
+
+    hActivePixelPerlayer = new TH1D("hActivePixelPerlayer", "Active Pixels per Layer", 10, 0, 10);
+    hActivePixelPerlayer->SetXTitle("Layer");
+    hActivePixelPerlayer->SetYTitle("Number of active pixels");
+    hActivePixelPerlayer->SetDirectory(0);
+
   }
   
   // Initialize random services
@@ -187,6 +197,18 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
 
     generate_output(input_sim_hit, output_digi_hits, output_sim_digi_link_col, hit_map);
     
+  }
+
+  // Comptage des digis par layer uniquement si mode debug activé
+  if (m_DebugHistos) {
+    std::map<int, int> digisPerLayer;
+
+    for (const auto& digi_hit : *output_digi_hits) {
+      uint64_t cellID = digi_hit.getCellID();
+      int layer = m_decoder->get(cellID, "layer");
+     // int side = m_decoder->get(cellID, "side");
+      hDigisPerLayer->Fill(layer);
+    }
   }
   info() << "Execution of VTXdigitizerDetailed completed." << endmsg;  
   return StatusCode::SUCCESS;
@@ -492,19 +514,16 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
 
         // Show information about pixel pos and charge related to the Segment 
         //debug() << "SignalPoint: " << i->x() << ":" << i->y() << ":" << i->sigma_x() << ":" << i->sigma_y() << ":" << i->amplitude() << endmsg;
-
         // Calculate the charge associated to one signal point for a pixel par segment
   	    float ChargeInPixel = Charge * x[ix] * y[iy];
 
         hit_map[ix][iy] += ChargeInPixel; // Add the charge to the pixel map
-        
         }// end loop over y
       } // end loop over x
     } // End loop over charge collection
       //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
-  } // End get_charge_per_pixel
+} // End get_charge_per_pixel
      
-
 bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
   /** Apply the threshold to the charge
    *  The threshold is defined in electrons
@@ -564,13 +583,18 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   double sumWeights = 0.; // Sum of all weights (sum of charges recorded in all pixels)
   int CountBeforeThreshold = 0;
   int CountAfterThreshold = 0;
-
+  int nPixels = 0;
+  debug() << "------ Carte de charge (hit_map) ------" << endmsg;
   // Loop over hit map to apply threshold and accumulate weights
     // loop to load the weights per x and y layers
     for (auto const& ix : hit_map) {
       for (auto const& iy : ix.second) {
-          double weight = iy.second;
           
+          double weight = iy.second;
+          int x = ix.first;
+          int y = iy.first;
+          debug() << "Pixel (" << x << ", " << y << ") : Charge = " << weight << endmsg;
+          nPixels++;  // on compte **chaque pixel unique** ici
           if (m_DebugHistos) 
           {
             ++CountBeforeThreshold;
@@ -594,7 +618,8 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
           } 
       }
     } // end loop over y
-
+  debug() << "--------------------------------------" << endmsg;
+  debug() << "Nombre total de pixels avec charge : " << nPixels << endmsg;
   if (m_DebugHistos) {
     hActivePixelCountBeforeThreshold->Fill(CountBeforeThreshold);
   }
@@ -607,6 +632,9 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   if (m_DebugHistos) {
     hActivePixelCountAfterThreshold->Fill(CountAfterThreshold);
     hChargePerClusterOrDigis->Fill(sumWeights / 1e3);
+
+    int iLayer = m_decoder->get(cellID, "layer");
+    hActivePixelPerlayer->Fill(iLayer, CountAfterThreshold);
   }
 
   double sumWeightsSqX = 0.; // Sum of the square of weights along x (used later for position resolution)
@@ -786,6 +814,8 @@ void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
     hChargeAboveThreshold->Write();
     hActivePixelCountAfterThreshold->Write();
     hChargePerClusterOrDigis->Write();
+    hDigisPerLayer->Write();
+    hActivePixelPerlayer->Write();
    
 
   }
