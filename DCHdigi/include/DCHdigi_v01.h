@@ -7,9 +7,8 @@
  *
  * <h4>Input collections and prerequisites</h4>
  * Processor requires a collection of SimTrackerHits <br>
- * This code uses DD4hep length natural unit (cm), but EDM4hep data is (usually) in mm. Please be careful with units.  <br>
- * <h4>Output</h4>
- * Processor produces collection of Digitized hits of Drift Chamber v2<br>
+ * This code uses DD4hep length natural unit (cm), but EDM4hep data is (usually) in mm. Please be careful with units.
+ * <br> <h4>Output</h4> Processor produces collection of Digitized hits of Drift Chamber v2<br>
  * @param DCH_simhits The name of input collection, type edm4hep::SimTrackerHitCollection <br>
  * (default name empty) <br>
  * @param DCH_DigiCollection The name of out collection, type extension::SenseWireHitCollection <br>
@@ -28,9 +27,8 @@
  * (default value false) <br>
  * @param GeoSvcName Geometry service name <br>
  * (default value GeoSvc) <br>
- * @param uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring reproducibility. <br>
- * (default value uidSvc) <br>
- * <br>
+ * @param uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring
+ * reproducibility. <br> (default value uidSvc) <br> <br>
  */
 
 #ifndef DCHDIGI_V01_H
@@ -54,7 +52,7 @@
 #include "extension/SenseWireHitSimTrackerHitLinkCollection.h"
 
 // DD4hep
-#include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
+#include "DD4hep/Detector.h" // for dd4hep::VolumeManager
 #include "DDSegmentation/BitFieldCoder.h"
 
 // STL
@@ -138,8 +136,8 @@ private:
   void ThrowException(std::string s) const;
 
   int CalculateLayerFromCellID(dd4hep::DDSegmentation::CellID id) const {
-    //return m_decoder->get(id, "layer") + dch_data->nlayersPerSuperlayer * m_decoder->get(id, "superlayer") + 1;
-    return dch_data->CalculateILayerFromCellIDFields( m_decoder->get(id, "layer"), m_decoder->get(id, "superlayer") );
+    // return m_decoder->get(id, "layer") + dch_data->nlayersPerSuperlayer * m_decoder->get(id, "superlayer") + 1;
+    return dch_data->CalculateILayerFromCellIDFields(m_decoder->get(id, "layer"), m_decoder->get(id, "superlayer"));
   }
 
   int CalculateNphiFromCellID(dd4hep::DDSegmentation::CellID id) const { return m_decoder->get(id, "nphi"); }
@@ -153,11 +151,11 @@ private:
 
   //------------------------------------------------------------------
   //        cluster calculation, developed by Walaa
-  
+
   /// Flag to create to calculate cluster counting information
   Gaudi::Property<bool> m_calculate_dndx{this, "calculate_dndx", false,
-                                              "Calculate number of clusters and electron per cluster"};
-                                              
+                                         "Calculate number of clusters and electron per cluster"};
+
   /// file with distributions to be sampled
   Gaudi::Property<std::string> m_fileDataAlg{
       this, "fileDataAlg", "/eos/project/f/fccsw-web/www/filesForSimDigiReco/IDEA/DataAlgFORGEANT.root",
@@ -185,9 +183,9 @@ private:
   /// histogram to store distance from sim hit position to the sense wire
   TH1D* hDpw;
 
-  /// histogram to store distance from digi-hit to the wire. Should be zero because digi-hit central position lies on the wire.
-  /// This histogram is a consistency check, because the function used to calculate the distance to the wire is different from
-  /// the function used to calculate the digi-hit central position from a sim-hit position
+  /// histogram to store distance from digi-hit to the wire. Should be zero because digi-hit central position lies on
+  /// the wire. This histogram is a consistency check, because the function used to calculate the distance to the wire
+  /// is different from the function used to calculate the digi-hit central position from a sim-hit position
   TH1D* hDww;
 
   /// histogram to store smearing along the wire
