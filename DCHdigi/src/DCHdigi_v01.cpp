@@ -208,7 +208,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setDistanceToWireError(smearing_xy);
     // For the sake of speed, let the dNdx calculation be optional
     if (m_calculate_dndx.value()) {
-      auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit);
+      auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit, myRandom);
       // to return the total number of electrons within the step, do the following:
       //   int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
       //   oDCHdigihit.setNElectronsTotal(nElectronsTotal);
