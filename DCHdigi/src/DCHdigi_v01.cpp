@@ -302,13 +302,13 @@ void DCHdigi_v01::PrintConfiguration(std::ostream& io) {
 ///////////////////////       CalculateNClusters       ////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 
-bool DCHdigi_v01::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thisParticle ) const {
-  auto  vertex           = thisParticle.getVertex();  // in mm
-  auto  vertexRsquared   = vertex[0] * vertex[0] + vertex[1] * vertex[1];
-  auto  vertexZabs       = std::fabs(vertex[2]);
-  float DCH_halflengh    = dch_data->Lhalf / dd4hep::mm;              //2000;
-  float DCH_rin_squared  = std::pow(dch_data->rin / dd4hep::mm, 2);   //350 * 350;
-  float DCH_rout_squared = std::pow(dch_data->rout / dd4hep::mm, 2);  //2000 * 2000;
+bool DCHdigi_v01::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle& thisParticle) const {
+  auto vertex = thisParticle.getVertex(); // in mm
+  auto vertexRsquared = vertex[0] * vertex[0] + vertex[1] * vertex[1];
+  auto vertexZabs = std::fabs(vertex[2]);
+  float DCH_halflengh = dch_data->Lhalf / dd4hep::mm;                // 2000;
+  float DCH_rin_squared = std::pow(dch_data->rin / dd4hep::mm, 2);   // 350 * 350;
+  float DCH_rout_squared = std::pow(dch_data->rout / dd4hep::mm, 2); // 2000 * 2000;
   return (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
 }
 
@@ -508,7 +508,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
     // TODO Alvaro: what is this for?
     {
       float tmpCl;
-      int   tmphE = (Ekdelta - minE) / binE;
+      int tmphE = (Ekdelta - minE) / binE;
       if (tmphE >= nhE)
         tmphE = nhE - 1;
       if (tmphE == nhE - 1) {
