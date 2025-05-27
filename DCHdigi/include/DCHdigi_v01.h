@@ -165,10 +165,9 @@ private:
   AlgData* flData;
 
   /// code developed by Walaa for calculating number of clusters and cluster size of each one
-  std::pair<uint32_t, std::vector<int>> CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit, TRandom3 & myRandom) const;
+  std::pair<uint32_t, std::vector<int>> CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const;
 
-  bool IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle &) const ;
-
+  bool IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle&) const;
 
   //------------------------------------------------------------------
   //        debug information

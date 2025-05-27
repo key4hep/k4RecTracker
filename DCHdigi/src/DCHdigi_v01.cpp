@@ -30,10 +30,10 @@ StatusCode DCHdigi_v01::initialize() {
   if (!m_uidSvc)
     ThrowException("Unable to get UniqueIDGenSvc");
 
-  if( 0 > m_z_resolution.value() )
+  if (0 > m_z_resolution.value())
     ThrowException("Z resolution input value can not be negative!");
 
-  if( 0 > m_xy_resolution.value() )
+  if (0 > m_xy_resolution.value())
     ThrowException("Radial (XY) resolution input value can not be negative!");
 
   //-----------------
@@ -172,8 +172,8 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     std::int32_t quality = 0;
     float eDepError = 0;
     // length units back to mm
-    auto  positionSW     = Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1. / MM_TO_CM);
-    //auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
+    auto positionSW = Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1. / MM_TO_CM);
+    // auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
     float distanceToWire = distanceToWire_smeared / MM_TO_CM;
 
     // The direction of the sense wires can be calculated as:
@@ -396,7 +396,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
   CorrInt = flData->get_ClSzCorrInt(bg);
 
   double Tmax = (2.0 * me * pow(bg, 2) /
-                  (1 + (2.0 * (1 + pow(bg, 2)) * me / thisparticle_mass) + pow(me / thisparticle_mass, 2))) *
+                 (1 + (2.0 * (1 + pow(bg, 2)) * me / thisparticle_mass) + pow(me / thisparticle_mass, 2))) *
                 1e+6;
   float maxEcut = cut;
   if (Tmax < maxEcut) {
@@ -412,7 +412,6 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
       // TODO Alvaro: gamma rays treated as hadrons, is that ok?
       ExSgmhad = flData->get_ExSgmhad();
     }
-
 
     /*________________________________________________________________________________*/
 
@@ -465,7 +464,7 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
         totExECl += ExECl;
         Eloss -= ExECl;
         NClp++;
-        //CLSZ
+        // CLSZ
         float tmpCorr = 0.0;
         for (int i = 0; i < nhEp; ++i) {
           if (ExECl >= (i == 0 ? 0 : hEpcut[i - 1]) && ExECl < hEpcut[i]) {
