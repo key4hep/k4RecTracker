@@ -12,7 +12,6 @@
 #include "k4FWCore/Transformer.h"
 
 // edm4hep
-#include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackMCParticleLinkCollection.h"
 #include "edm4hep/EventHeaderCollection.h"
 #include "edm4hep/RecDqdxCollection.h"
@@ -21,14 +20,13 @@
 #include <random>
 
 class DCH_dNdx_FromTracks final
-    : public k4FWCore::Transformer<edm4hep::RecDqdxCollection(const edm4hep::TrackMCParticleLinkCollection&, const edm4hep::EventHeaderCollection&, const edm4hep::TrackCollection&)> {
+    : public k4FWCore::Transformer<edm4hep::RecDqdxCollection(const edm4hep::TrackMCParticleLinkCollection&, const edm4hep::EventHeaderCollection&)> {
 
 public:
     DCH_dNdx_FromTracks(const std::string& name, ISvcLocator* svcLoc);
 
     edm4hep::RecDqdxCollection operator()(const edm4hep::TrackMCParticleLinkCollection& input,
-                                          const edm4hep::EventHeaderCollection& header,
-                                          const edm4hep::TrackCollection& tracks) const override;
+                                          const edm4hep::EventHeaderCollection& header) const override;
 
     StatusCode initialize() final;
 
