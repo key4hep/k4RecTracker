@@ -5,6 +5,7 @@
 
 // EDM4hep
 #include "edm4hep/Quantity.h"
+#include "edm4hep/utils/vector_utils.h"
 
 DECLARE_COMPONENT(DCH_dNdx_FromTracks)
 
@@ -39,12 +40,35 @@ edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackM
     debug() << "Random mean for this event: " << random_mean << endmsg;
 
 
-    for (size_t i = 0; i < input.size(); ++i) {
-        debug() << "Processing track " << i << endmsg;
+    unsigned int i = 0;
+    for (auto link : input) {
+        debug() << "Processing track " << i++ << endmsg;
+
+        // Get the track and corresponding MCParticle
+        const auto& mc_particle = link.getTo();
+        const auto& track = link.getFrom();
+        // Check for validity
+        if (!mc_particle.isAvailable() || !track.isAvailable()) {
+            warning() << "Invalid link found, skipping." << endmsg;
+            continue;
+        }
+        // Basic debug info
+        debug() << "Linked MCParticle PDGID: " << mc_particle.getPDG() << endmsg;
+        debug() << "Linking Track ID: " << track.id() << endmsg;
+
+        double momentum = edm4hep::utils::magnitude(mc_particle.getMomentum());
+        double mass     = mc_particle.getMass();
+        debug() << "MCParticle momentum: " << momentum << endmsg;
+        debug() << "MCParticle mass: " << mass << endmsg;
+        // TODO: safeguards for zero mass and no charge
+
+        double betagamma = momentum/mass;
+
+
 
         int random_hits = poisson_dist(m_engine);
         debug() << "Random number of hits: " << random_hits << endmsg;
-        info() << "Track " << i << " has " << random_hits << " hits." << endmsg;
+        info() << "Track has " << random_hits << " hits." << endmsg;
 
         auto dqdx = outputCollection.create();
         edm4hep::Quantity q;
@@ -52,15 +76,10 @@ edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackM
         q.value = static_cast<float>(random_hits);
         q.error = std::sqrt(q.value);
 
-        const auto& link = input[i];
-        const auto& mc_particle = link.getTo();
-        const auto& link_track = link.getFrom();
-        debug() << "Linked MCParticle PDGID: " << mc_particle.getPDG() << endmsg;
-        debug() << "Linking Track ID: " << link_track.id() << endmsg;
-
+        
 
         dqdx.setDQdx(q);
-        dqdx.setTrack(link_track);
+        dqdx.setTrack(track);
     }
 
 
