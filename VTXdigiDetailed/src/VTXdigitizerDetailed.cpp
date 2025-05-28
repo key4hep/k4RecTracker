@@ -486,8 +486,8 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     // Integrate charge strips in x
     for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
 
-      float LowerBound = (float(IpxCloudMinX) - 0.5) * PixSizeX; // Lower bound of the strip
-      float UpperBound = (float(IpxCloudMaxX) + 0.5) * PixSizeX; // Uper bound of the strip
+      float LowerBound = (float(ix) - 0.5) * PixSizeX; // Lower bound of the strip
+      float UpperBound = (float(ix) + 0.5) * PixSizeX; // Uper bound of the strip
 
       float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterX)/(sqrt(2)*SigmaX)) - erf((LowerBound-CloudCenterX)/(sqrt(2)*SigmaX))); // Charge proportion in the strip calculated from erf function
       
@@ -498,8 +498,8 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     // Integrate charge strips in y
     for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
 
-      float LowerBound = (float(IpxCloudMinY) - 0.5) * PixSizeY; // Lower bound of the strip
-      float UpperBound = (float(IpxCloudMaxY) + 0.5) * PixSizeY; // Uper bound of the strip
+      float LowerBound = (float(iy) - 0.5) * PixSizeY; // Lower bound of the strip
+      float UpperBound = (float(iy) + 0.5) * PixSizeY; // Uper bound of the strip
 
       float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterY)/(sqrt(2)*SigmaY)) - erf((LowerBound-CloudCenterY)/(sqrt(2)*SigmaY))); // Charge proportion in the strip calculated from erf function
       
