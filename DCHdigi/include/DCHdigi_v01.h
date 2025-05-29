@@ -121,19 +121,9 @@ private:
 
   /// create seed using the uid
   SmartIF<IUniqueIDGenSvc> m_uidSvc;
-  /// use thread local engine from C++ standard
-  inline static thread_local std::mt19937_64 m_engine;
-  void PrepareRandomEngine(const edm4hep::EventHeaderCollection& headers) const;
 
-  // Operator std::normal_distribution<T>::operator()(Generator& g) is a non-const member function and thus cannot be
-  // called for a constant object. So we defined the distribution as mutable. Gaussian random number generator used for
-  // the smearing of the z position, in cm!
-  mutable std::normal_distribution<double> m_gauss_z_cm;
-  // Gaussian random number generator used for the smearing of the xy position, in cm!
-  mutable std::normal_distribution<double> m_gauss_xy_cm;
-
-  /// members with internal state (such as random engines) must be defined thread local
-  inline static thread_local TRandom3 myRandom;
+  /// Create random engine, initialized with seed out of Event Header
+  std::tuple<std::mt19937_64, TRandom3> CreateRandomEngines(const edm4hep::EventHeaderCollection& headers) const;
   //------------------------------------------------------------------
   //        ancillary functions
 
@@ -175,7 +165,7 @@ private:
   AlgData* flData;
 
   /// code developed by Walaa for calculating number of clusters and cluster size of each one
-  std::pair<uint32_t, std::vector<int>> CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const;
+  std::pair<uint32_t, std::vector<int>> CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit, TRandom3 & myRandom) const;
 
   bool IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle&) const;
 
