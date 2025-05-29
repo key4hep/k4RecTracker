@@ -25,10 +25,12 @@
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
 #include "DD4hep/DetType.h"
+#include "DD4hep/Shapes.h"
 #include "DDRec/DetectorData.h" // for detector extensions
 #include "DDRec/Vector3D.h"
 #include "DDRec/Vector2D.h"
 #include "DDRec/SurfaceManager.h"
+#include "DDSegmentation/CartesianGridXY.h"
 
 #include "DDSegmentation/BitFieldCoder.h"
 
@@ -61,10 +63,9 @@ public:
    */
   virtual StatusCode finalize() final;
 
-  typedef std::map<int, std::map<int, float, std::less<int>>, std::less<int>> hit_map_type; // Déplacé dans public
-  //size_t countActivePixels(const hit_map_type& hit_map) const; // Déclaration de la méthode
-  bool Apply_Threshold(double& ChargeInPixel) const;
-
+  // Typedef public si besoin
+  typedef std::map<int, std::map<int, float>> hit_map_type;
+  
 private:
   // Input sim vertex hit collection name
   mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
@@ -73,6 +74,8 @@ private:
   // Output link between sim hits and digitized hits
   mutable DataHandle<edm4hep::TrackerHitSimTrackerHitLinkCollection> m_output_sim_digi_link{"outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
 
+  // Threshold 
+  bool Apply_Threshold(double& ChargeInPixel) const;
   // Detector name
   Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
   // Detector readout names

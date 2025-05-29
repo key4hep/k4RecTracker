@@ -442,88 +442,136 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
 
 
 void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
-			  const std::vector<SignalPoint>& collectionPoints,
-			  hit_map_type& hit_map) const {
-  
-  /** Get the map of recorded charges per pixel for a collection of drifted charges for a given hit
-   */
-
+                                                const std::vector<SignalPoint>& collectionPoints,
+                                                hit_map_type& hit_map) const {
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
   const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName).segmentation();
-  auto cellDims = segmentation.cellDimensions(cellID);
-   
+  const auto cellDims = segmentation.cellDimensions(cellID);
+  
   const float PixSizeX = cellDims[0] / dd4hep::mm;
   const float PixSizeY = cellDims[1] / dd4hep::mm;
- 
-  // map to store the pixel integrals in the x and y directions
-  std::map<int, float, std::less<int>> x, y;
 
-  // Assign signal per readout channel and store sorted by channel number (in modified local frame)
-  // Iterate over collection points on the collection plane
-  for (std::vector<SignalPoint>::const_iterator i = collectionPoints.begin(); i < collectionPoints.end(); i++) {
-    float CloudCenterX = i->x(); // Charge position in x in mm
-    float CloudCenterY = i->y(); // Charge position in y
-    float SigmaX = i->sigma_x(); // Charge spread in x in mm
-    float SigmaY = i->sigma_y(); // Charge spread in y
-    float Charge = i->amplitude(); // Charge amplitude in number of e-
+  for (const auto& point : collectionPoints) {
+    const float CloudCenterX = point.x();
+    const float CloudCenterY = point.y();
+    const float SigmaX = point.sigma_x();
+    const float SigmaY = point.sigma_y();
+    const float Charge = point.amplitude();
 
-    // Find the maximum cloud spread in 2D Plane, assume 3*sigma
-    float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
-    float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
-    float CloudMinY = CloudCenterY - m_ClusterWidth * SigmaY;
-    float CloudMaxY = CloudCenterY + m_ClusterWidth * SigmaY;
+    const float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
+    const float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
+    const float CloudMinY = CloudCenterY - m_ClusterWidth * SigmaY;
+    const float CloudMaxY = CloudCenterY + m_ClusterWidth * SigmaY;
 
-    // Convert the maximum cloud spread into pixel IDs
-    // Considers that the pixel of indice (0,0) is centered in position (0,0)
-    int IpxCloudMinX = int(floor((CloudMinX + 0.5 * PixSizeX) / PixSizeX));
-    int IpxCloudMaxX = int(floor((CloudMaxX + 0.5 * PixSizeX) / PixSizeX));
-    int IpxCloudMinY = int(floor((CloudMinY + 0.5 * PixSizeY) / PixSizeY));
-    int IpxCloudMaxY = int(floor((CloudMaxY + 0.5 * PixSizeY) / PixSizeY));
+    const int MinPixX = static_cast<int>(std::floor((CloudMinX + 0.5f * PixSizeX) / PixSizeX));
+    const int MaxPixX = static_cast<int>(std::floor((CloudMaxX + 0.5f * PixSizeX) / PixSizeX));
+    const int MinPixY = static_cast<int>(std::floor((CloudMinY + 0.5f * PixSizeY) / PixSizeY));
+    const int MaxPixY = static_cast<int>(std::floor((CloudMaxY + 0.5f * PixSizeY) / PixSizeY));
 
-    x.clear(); // clear temporary integration arrays
-    y.clear();
+    const int nX = MaxPixX - MinPixX + 1;
+    const int nY = MaxPixY - MinPixY + 1;
+    std::vector<float> xStripCharge(nX);
+    std::vector<float> yStripCharge(nY);
 
-    // Integrate charge strips in x
-    for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
+    const float sqrt2SigmaX = std::sqrt(2.f) * SigmaX;
+    const float sqrt2SigmaY = std::sqrt(2.f) * SigmaY;
 
-      float LowerBound = (float(IpxCloudMinX) - 0.5) * PixSizeX; // Lower bound of the strip
-      float UpperBound = (float(IpxCloudMaxX) + 0.5) * PixSizeX; // Uper bound of the strip
+    // Calcule la charge dans chaque bande (pixel) en X
+    for (int ix = 0; ix < nX; ++ix) {
+      // Position physique des bords du pixel en x
+      float LowerBound = (MinPixX + ix - 0.5f) * PixSizeX;
+      float UpperBound = (MinPixX + ix + 0.5f) * PixSizeX;
 
-      float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterX)/(sqrt(2)*SigmaX)) - erf((LowerBound-CloudCenterX)/(sqrt(2)*SigmaX))); // Charge proportion in the strip calculated from erf function
-      
-      x[ix] = TotalStripCharge;
+      xStripCharge[ix] = 0.5f * (std::erf((UpperBound - CloudCenterX) / sqrt2SigmaX) -
+                                std::erf((LowerBound - CloudCenterX) / sqrt2SigmaX));
+    }
 
-    } // End Integrate charge strips in x
+    // Calcule la charge dans chaque bande (pixel) en Y
+    for (int iy = 0; iy < nY; ++iy) {
+      float LowerBound = (MinPixY + iy - 0.5f) * PixSizeY;
+      float UpperBound = (MinPixY + iy + 0.5f) * PixSizeY;
 
-    // Integrate charge strips in y
-    for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
+      yStripCharge[iy] = 0.5f * (std::erf((UpperBound - CloudCenterY) / sqrt2SigmaY) -
+                                std::erf((LowerBound - CloudCenterY) / sqrt2SigmaY));
+    }
 
-      float LowerBound = (float(IpxCloudMinY) - 0.5) * PixSizeY; // Lower bound of the strip
-      float UpperBound = (float(IpxCloudMaxY) + 0.5) * PixSizeY; // Uper bound of the strip
 
-      float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterY)/(sqrt(2)*SigmaY)) - erf((LowerBound-CloudCenterY)/(sqrt(2)*SigmaY))); // Charge proportion in the strip calculated from erf function
-      
-      y[iy] = TotalStripCharge;
+    for (int ix = 0; ix < nX; ++ix) {
+      for (int iy = 0; iy < nY; ++iy) {
+        const float ChargeInPixel = Charge * xStripCharge[ix] * yStripCharge[iy];
+        
+        hit_map[MinPixX + ix][MinPixY + iy] += ChargeInPixel;
+      }
+    }
+  }
+}
 
-    } // End Integrate charge strips in y
-    
-    // Get the 2D charge integrals by folding x and y strips
-    // Should add at this point a check that the pixel lies inside material - Not implemented for now
-    for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
-      for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
 
-        // Show information about pixel pos and charge related to the Segment 
-        //debug() << "SignalPoint: " << i->x() << ":" << i->y() << ":" << i->sigma_x() << ":" << i->sigma_y() << ":" << i->amplitude() << endmsg;
-        // Calculate the charge associated to one signal point for a pixel par segment
-  	    float ChargeInPixel = Charge * x[ix] * y[iy];
 
-        hit_map[ix][iy] += ChargeInPixel; // Add the charge to the pixel map
-        }// end loop over y
-      } // end loop over x
-    } // End loop over charge collection
-      //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
-} // End get_charge_per_pixel
-     
+
+///// Trying to get cloud inside detector (2D plan)
+
+
+
+//bool VTXdigitizerDetailed::isPixelInsideMaterial(int ix, int iy, 
+////                      const dd4hep::DDSegmentation::CellID& baseCellID) const {
+  //debug() << "Checking pixel inside material at indices ix=" << ix << ", iy=" << iy << endmsg;
+
+  // Pixel Size
+//  const auto cellDims = segmentation.cellDimensions(baseCellID);
+  //const float PixSizeX = cellDims[0] / dd4hep::mm;
+  //const float PixSizeY = cellDims[1] / dd4hep::mm;
+  //debug() << "Pixel sizes: PixSizeX=" << PixSizeX << " mm, PixSizeY=" << PixSizeY << " mm" << endmsg;
+// Taille sensor
+ // Récupérer le volume du sensor associé au cellID
+ //auto detElement = m_volman.lookupDetElement(baseCellID);
+ //auto sensorVol = detElement.volume();
+  //if (!sensorVol.isValid()) {
+ //   debug() << "Volume for cellID is invalid" << endmsg;
+  //  return false;
+  //}
+
+//  auto bbox = sensorVol.solid().boundingBox();
+ // double sensorSizeX = bbox.xmax() - bbox.xmin();
+  //double sensorSizeY = bbox.ymax() - bbox.ymin();
+ // debug() << "Sensor bounding box X: [" << bbox.xmin() << ", " << bbox.xmax() << "] mm, size = " << sensorSizeX << " mm" << endmsg;
+  //debug() << "Sensor bounding box Y: [" << bbox.ymin() << ", " << bbox.ymax() << "] mm, size = " << sensorSizeY << " mm" << endmsg;
+
+  // Nombre max pixels
+//  int nPixX = static_cast<int>(sensorSizeX / PixSizeX);
+ // int nPixY = static_cast<int>(sensorSizeY / PixSizeY);
+  //debug() << "Max pixels in X: " << nPixX << ", Max pixels in Y: " << nPixY << endmsg;
+
+  // Vérification des indices pixels
+//  bool inside = (ix >= 0 && ix < nPixX) && (iy >= 0 && iy < nPixY);
+ // debug() << "Pixel indices inside sensor? " << (inside ? "YES" : "NO") << endmsg;
+
+//  return inside;
+//  const float x_pos = static_cast<float>(ix) * PixSizeX;
+// const float y_pos = static_cast<float>(iy) * PixSizeY;
+//  dd4hep::Position pos(x_pos, y_pos, 0);
+//  debug() << "Computed local pixel position: (" << x_pos << ", " << y_pos << ", 0)" << endmsg;
+
+//  try {
+//    auto pixelCellID = segmentation.cellID(pos, baseCellID);
+//    debug() << "Pixel cellID found: " << pixelCellID << endmsg;
+//    return true;
+//  } catch (const std::exception& e) {
+//    debug() << "Exception caught in cellID calculation: " << e.what() << endmsg;
+//    return false;
+//  } catch (...) {
+//    debug() << "Unknown exception caught in cellID calculation." << endmsg;
+//   return false;
+// }
+//}
+
+
+
+
+
+
+
+/////////////////////////// Handle Threshold, Noise .. ///////////////////// 
 bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
   /** Apply the threshold to the charge
    *  The threshold is defined in electrons
@@ -551,6 +599,8 @@ bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
 }
 
 
+/// Make digis()
+
 void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
 						  edm4hep::TrackerHitPlaneCollection* output_digi_hits,
 						  edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col,
@@ -569,14 +619,17 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   const float PixSizeX = cellDims[0] / dd4hep::mm;
   const float PixSizeY = cellDims[1] / dd4hep::mm;
 
-  //
+  debug() << "SimHit CellID: " << cellID << endmsg;
+  debug() << "Pixel size X: " << PixSizeX << " mm, Y: " << PixSizeY << " mm" << endmsg;
 
   double DigiLocalX = 0.; // Local position of the digitized hit
   double DigiLocalY = 0.;
 
 
-  // Unordored Map for efficiency 
+  // Count pixels outside boundaries 
+  int nPixelsOutside = 0;
 
+  // Unordored Map for efficiency 
   using ChargeMap = std::unordered_map<int, double>;
   ChargeMap Qix, Qiy;
 
@@ -584,6 +637,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   int CountBeforeThreshold = 0;
   int CountAfterThreshold = 0;
   int nPixels = 0;
+
   debug() << "------ Carte de charge (hit_map) ------" << endmsg;
   // Loop over hit map to apply threshold and accumulate weights
     // loop to load the weights per x and y layers
@@ -620,6 +674,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
     } // end loop over y
   debug() << "--------------------------------------" << endmsg;
   debug() << "Nombre total de pixels avec charge : " << nPixels << endmsg;
+  debug() << "Nombre de pixels en dehors du capteur : " << nPixelsOutside << endmsg;
   if (m_DebugHistos) {
     hActivePixelCountBeforeThreshold->Fill(CountBeforeThreshold);
   }
@@ -729,7 +784,8 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   // Set the link between sim and digi hit
   output_sim_digi_link.setFrom(output_digi_hit);
   output_sim_digi_link.setTo(hit);
-
+  debug() << "Digis Energy :" << output_digi_hit.getEDep() << " [GeV]" << endmsg;
+   
   // Fill the debug histograms if needed
   if (m_DebugHistos) {
   
