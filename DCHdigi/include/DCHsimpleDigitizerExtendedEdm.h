@@ -53,16 +53,16 @@ public:
 
 private:
   // Input sim tracker hit collection name
-  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader,
-                                                                        this};
+  mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits",
+                                                                                  Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
-  mutable DataHandle<extension::DriftChamberDigiCollection> m_output_digi_hits{"outputDigiHits",
-                                                                               Gaudi::DataHandle::Writer, this};
+  mutable k4FWCore::DataHandle<extension::DriftChamberDigiCollection> m_output_digi_hits{
+      "outputDigiHits", Gaudi::DataHandle::Writer, this};
   // Output association between digitized and simulated hit collections
-  mutable DataHandle<extension::MCRecoDriftChamberDigiAssociationCollection> m_output_sim_digi_association{
+  mutable k4FWCore::DataHandle<extension::MCRecoDriftChamberDigiAssociationCollection> m_output_sim_digi_association{
       "outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
   // Output digitized tracker hit in local coordinates collection name. Only filled in debug mode
-  mutable DataHandle<extension::DriftChamberDigiLocalCollection> m_output_digi_local_hits{
+  mutable k4FWCore::DataHandle<extension::DriftChamberDigiLocalCollection> m_output_digi_local_hits{
       "outputDigiLocalHits", Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
@@ -82,13 +82,13 @@ private:
   // Flag to produce debugging distributions
   Gaudi::Property<bool> m_debugMode{this, "debugMode", false, "Flag to produce debugging distributions"};
   // Declaration of debugging distributions
-  mutable DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaDistToWire{
+  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaDistToWire{
       "leftHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
-  mutable DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaLocalZ{
+  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_leftHitSimHitDeltaLocalZ{
       "leftHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
-  mutable DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaDistToWire{
+  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaDistToWire{
       "rightHitSimHitDeltaDistToWire", Gaudi::DataHandle::Writer, this}; // mm
-  mutable DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaLocalZ{
+  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_rightHitSimHitDeltaLocalZ{
       "rightHitSimHitDeltaLocalZ", Gaudi::DataHandle::Writer, this}; // mm
 
   // Random Number Service
