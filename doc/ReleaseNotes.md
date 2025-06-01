@@ -1,3 +1,45 @@
+# v00.05.00
+
+* 2025-05-27 jmcarcell ([PR#52](https://github.com/key4hep/k4RecTracker/pull/52))
+  - Limit scope of random distributions to the call operator to prevent race conditions
+
+* 2025-04-15 Andrea De Vita ([PR#58](https://github.com/key4hep/k4RecTracker/pull/58))
+  - Corrected the unit in the comment describing spatial resolution (`VTXdigi/include/VTXdigitizer.h`): previously stated as µm, but the correct unit is mm.
+
+* 2025-04-01 Giovanni Marchiori ([PR#57](https://github.com/key4hep/k4RecTracker/pull/57))
+  - Print out full particle details only in verbose mode, add succinct summary in debug mode
+
+* 2025-03-24 Giovanni Marchiori ([PR#56](https://github.com/key4hep/k4RecTracker/pull/56))
+  - add number of hits per tracking sub detector to tracks from gen-level particles
+  - ignore hits from secondaries, that screwed up the calculation of number of hits, of track state at last hit and extrapolation to calorimeter
+  - use last hit information for extrapolation to calorimeter
+  - remove duplicate algorithms
+
+* 2025-03-24 jmcarcell ([PR#54](https://github.com/key4hep/k4RecTracker/pull/54))
+  - Fix failing tests in CI by adding a test that creates an input file
+
+* 2025-03-17 jmcarcell ([PR#53](https://github.com/key4hep/k4RecTracker/pull/53))
+  - Use the properties `Input` and `Output` with `IOSvc` instead of the deprecated `input` and `output`
+
+* 2025-02-28 jmcarcell ([PR#51](https://github.com/key4hep/k4RecTracker/pull/51))
+  - Set test dependencies for tracking tests that need a simulated file
+
+* 2025-02-28 Alvaro Tolosa Delgado ([PR#50](https://github.com/key4hep/k4RecTracker/pull/50))
+  - DCH digi output now contains correct values for DistanceToWireError and PositionAlongWireError. Before it was zero. Fixes https://github.com/key4hep/k4RecTracker/issues/48
+
+* 2025-02-28 Mateusz Jakub Fila ([PR#49](https://github.com/key4hep/k4RecTracker/pull/49))
+  - Use `getUniqueID` directly with `EventHeaderCollection` to avoid truncating casts
+  - Add seeding of TRandom3 rng in DCHdigi_v01. Make TF1 draw random numbers from instad of global rng.
+
+* 2025-02-28 Giovanni Marchiori ([PR#45](https://github.com/key4hep/k4RecTracker/pull/45))
+  - add retrieval of B field and extrapolation to calorimeter to functional that produces tracks from gen particles
+
+* 2025-02-27 jmcarcell ([PR#47](https://github.com/key4hep/k4RecTracker/pull/47))
+  - Add a requirement on the version of podio needed to make building on top of
+    the latest release fail faster. https://github.com/AIDASoft/podio/pull/714 is
+    needed and is only avaliable in 1.2 onwards
+  - Add LANGUAGES CXX to CMakeLists.txt to disable checks for the C compiler
+
 # v00.04.00
 
 * 2025-01-31 Giovanni Marchiori ([PR#43](https://github.com/key4hep/k4RecTracker/pull/43))
