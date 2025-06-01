@@ -30,7 +30,6 @@
 #include "DDRec/Vector3D.h"
 #include "DDRec/Vector2D.h"
 #include "DDRec/SurfaceManager.h"
-#include "DDSegmentation/CartesianGridXY.h"
 
 #include "DDSegmentation/BitFieldCoder.h"
 
@@ -93,6 +92,14 @@ private:
   // List of sensor thickness per layer in millimeter
   std::vector<float> m_sensorThickness;
 
+  // 2D dim
+  std::vector<float> m_sensorWidth;
+  std::vector<float> m_sensorLength;
+
+  // Pour ZDiskPetalsData (endcap)
+  std::vector<float> m_sensorWidthInner;
+  std::vector<float> m_sensorWidthOuter;
+
   // t resolution in ns
   Gaudi::Property<std::vector<float>> m_t_resolution{this, "tResolution", {0.1}, "Time resolutions per layer [ns]"};
 
@@ -109,6 +116,14 @@ private:
 
   // Option to force hits onto sensitive surface
   BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"};
+
+  // Decephiring CellID / Surface Not Found for CellID Issue
+  Gaudi::Property<size_t> m_cellIDBits{this, "CellIDBits", 64, "Number of bits to use for the cellID of the hits"}; 
+  // Mask to use for the cellID of the hits
+  std::uint64_t m_mask{static_cast<std::uint64_t>(-1)}; 
+  // Map to store the surface for each cellID
+  const dd4hep::rec::SurfaceMap* surfaceMap = nullptr;
+
 
   // Tangent of sensor's Lorentz angle (default is 0.1)
   FloatProperty m_tanLorentzAnglePerTesla{this, "tanLorentzAnglePerTesla", {0.1}, "Tangent of sensor's Lorentz angle per Tesla (default is 0.1)"};
@@ -188,6 +203,7 @@ private:
   // Additional member functions
   // Private methods
   template<typename T> void getSensorThickness();
+  template<typename T> void getSensorSize();
   
   void primary_ionization(const edm4hep::SimTrackerHit& hit,
 			  std::vector<ChargeDepositUnit>& ionizationPoints) const;
@@ -201,6 +217,12 @@ private:
   void get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
 			    const std::vector<SignalPoint>& collectionPoints,
 			    hit_map_type& hit_map) const;
+
+  void clampCloudToSensorBounds(
+     float& CloudMinX, float& CloudMaxX,
+     float& CloudMinY, float& CloudMaxY,
+     float CloudCenterX, float CloudCenterY,
+     const edm4hep::SimTrackerHit& hit) const;
 
   void generate_output(const edm4hep::SimTrackerHit hit, edm4hep::TrackerHitPlaneCollection* output_digi_hits, edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col, const hit_map_type& hit_map) const;
 
