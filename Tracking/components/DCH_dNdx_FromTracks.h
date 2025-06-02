@@ -16,6 +16,9 @@
 #include "edm4hep/EventHeaderCollection.h"
 #include "edm4hep/RecDqdxCollection.h"
 
+// delphes
+#include "TrackCovariance/TrkUtil.h"
+
 // STL
 #include <random>
 
@@ -33,6 +36,8 @@ public:
 private:
     SmartIF<IUniqueIDGenSvc> m_uniqueIDSvc{nullptr};
     inline static thread_local std::mt19937_64 m_engine;
+
+    TrkUtil m_delphesTrkUtil;
 };
 
 #endif // DCH_DNDX_FROM_TRACKS_H
