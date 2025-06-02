@@ -527,30 +527,26 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
 
 
 void VTXdigitizerDetailed::clampCloudToSensorBounds(
-    float& CloudMinX, float& CloudMaxX,
-    float& CloudMinY, float& CloudMaxY,
-    float CloudCenterX, float CloudCenterY,
+    float& CloudCenterX, float& CloudCenterY,
+    float SigmaX, float SigmaY,
     const edm4hep::SimTrackerHit& hit) const
 {
-    // Extrait la couche du hit (supposons hit.layer() ou autre méthode)
     const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
     int layer = m_decoder->get(cellID, "layer");
 
-    // Récupère type detector
     dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag());
 
     float widthMin = 0.f, widthMax = 0.f;
     float lengthMin = 0.f, lengthMax = 0.f;
 
-    if(type.is(dd4hep::DetType::BARREL)) {
+    if (type.is(dd4hep::DetType::BARREL)) {
         float width = m_sensorWidth[layer];
         float length = m_sensorLength[layer];
         widthMin = -width / 2.f;
         widthMax = width / 2.f;
         lengthMin = -length / 2.f;
         lengthMax = length / 2.f;
-    } else if(type.is(dd4hep::DetType::ENDCAP)) {
-        // Pour Endcap, prendre largeur extérieure ou interpole si vertex petale trapezoidal
+    } else if (type.is(dd4hep::DetType::ENDCAP)) {
         float widthOuter = m_sensorWidthOuter[layer];
         float length = m_sensorLength[layer];
         widthMin = -widthOuter / 2.f;
@@ -558,46 +554,34 @@ void VTXdigitizerDetailed::clampCloudToSensorBounds(
         lengthMin = -length / 2.f;
         lengthMax = length / 2.f;
     } else {
-        // Erreur ou cas non géré
         std::cerr << "Detector type unknown in clampCloudToSensorBounds\n";
         return;
     }
-    std::cout << "[INFO] CloudCenter = (" << CloudCenterX << ", " << CloudCenterY << ") ";
-     if (CloudCenterX >= widthMin && CloudCenterX <= widthMax &&
-      CloudCenterY >= lengthMin && CloudCenterY <= lengthMax) {
-    std::cout << "is INSIDE sensor bounds.\n";
-    } else {
-    std::cout << "is OUTSIDE sensor bounds!\n";
-    }
-    std::cout << "[TRACE clamp] Before clamp: CloudMinX=" << CloudMinX << ", CloudMaxX=" << CloudMaxX
-          << ", CloudMinY=" << CloudMinY << ", CloudMaxY=" << CloudMaxY << "\n";
-    std::cout << "[TRACE clamp] Sensor bounds: widthMin=" << widthMin << ", widthMax=" << widthMax
-          << ", lengthMin=" << lengthMin << ", lengthMax=" << lengthMax << "\n";
 
-    // Clamp X (width)
-    if(CloudMinX < widthMin) {
-        std::cout << "[DEBUG clamp] CloudMinX " << CloudMinX << " < " << widthMin << " -> clamp\n";
-        CloudMinX = widthMin;
-    }
-    if(CloudMaxX > widthMax) {
-        std::cout << "[DEBUG clamp] CloudMaxX " << CloudMaxX << " > " << widthMax << " -> clamp\n";
-        CloudMaxX = widthMax;
+    // Étendue du nuage à ± m_ClusterWidth * σ
+    float deltaX = m_ClusterWidth * SigmaX;
+    float deltaY = m_ClusterWidth * SigmaY;
+   // debug() << "Sensor width = (" << widthMin<< ", " << widthMax << ")\n";
+   // debug() << "Sensor length = ("<< lengthMin<<"," << lengthMax << ")\n";
+   // debug() << "[INFO] CloudCenter BEFORE clamp = (" << CloudCenterX << ", " << CloudCenterY << ")\n";
+
+    // Vérification et correction sur X
+    if (CloudCenterX < widthMin) {
+        CloudCenterX = widthMin + deltaX;
+    } else if (CloudCenterX > widthMax) {
+        CloudCenterX = widthMax - deltaX;
     }
 
-    // Clamp Y (length)
-    if(CloudMinY < lengthMin) {
-        std::cout << "[DEBUG clamp] CloudMinY " << CloudMinY << " < " << lengthMin << " -> clamp\n";
-        CloudMinY = lengthMin;
-    }
-    if(CloudMaxY > lengthMax) {
-        std::cout << "[DEBUG clamp] CloudMaxY " << CloudMaxY << " > " << lengthMax << " -> clamp\n";
-        CloudMaxY = lengthMax;
+    // Vérification et correction sur Y
+    if (CloudCenterY < lengthMin) {
+        CloudCenterY = lengthMin + deltaY;
+    } else if (CloudCenterY > lengthMax) {
+        CloudCenterY = lengthMax - deltaY;
     }
 
-    std::cout << "[DEBUG clamp] Cloud bounds after clamp: "
-              << "X: [" << CloudMinX << ", " << CloudMaxX << "], "
-              << "Y: [" << CloudMinY << ", " << CloudMaxY << "]\n";
+    //debug() << "[INFO] CloudCenter AFTER clamp = (" << CloudCenterX << ", " << CloudCenterY << ")\n";
 }
+
 
 
 
@@ -616,19 +600,20 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
   const float PixSizeY = cellDims[1] / dd4hep::mm;
 
   for (const auto& point : collectionPoints) {
-    const float CloudCenterX = point.x();
-    const float CloudCenterY = point.y();
+    float CloudCenterX = point.x();
+    float CloudCenterY = point.y();
     const float SigmaX = point.sigma_x();
     const float SigmaY = point.sigma_y();
     const float Charge = point.amplitude();
+    
+    // Check if cloud is inside boundaries and clamp to consider only charge in sensor
+
+    clampCloudToSensorBounds(CloudCenterX, CloudCenterY,SigmaX, SigmaY, hit);
 
     float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
     float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
     float CloudMinY = CloudCenterY - m_ClusterWidth * SigmaY;
     float CloudMaxY = CloudCenterY + m_ClusterWidth * SigmaY;
-
-
-    clampCloudToSensorBounds(CloudMinX, CloudMaxX, CloudMinY, CloudMaxY,CloudCenterX, CloudCenterY, hit);
 
     const int MinPixX = static_cast<int>(std::floor((CloudMinX + 0.5f * PixSizeX) / PixSizeX));
     const int MaxPixX = static_cast<int>(std::floor((CloudMaxX + 0.5f * PixSizeX) / PixSizeX));
