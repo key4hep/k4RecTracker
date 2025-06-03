@@ -7,6 +7,7 @@
 
 // k4Interface
 #include <k4Interface/IUniqueIDGenSvc.h>
+#include <k4Interface/IGeoSvc.h>
 
 // k4FWCore
 #include "k4FWCore/Transformer.h"
@@ -35,31 +36,32 @@ public:
 
 private:
     SmartIF<IUniqueIDGenSvc> m_uniqueIDSvc{nullptr};
+    SmartIF<IGeoSvc> m_geoSvc{nullptr};
     inline static thread_local std::mt19937_64 m_engine;
 
     TrkUtil* m_delphesTrkUtil;
 
     // Drift Chamber (geometry) parameters
-    Gaudi::Property<double> m_Zmin{
+    Gaudi::Property<std::string> m_Zmax_parameter_name{
         this,
-        "Zmin",
-        {-2250.0},
-        "smallest Z value inside drift chamber in mm.)"};
-    Gaudi::Property<double> m_Zmax{
+        "ZmaxParameterName",
+        {"DCH_gas_Lhalf"},
+        "Name of XML file parameter describing the z extent of the active volume (max value in +z direction)"};
+    Gaudi::Property<std::string> m_Zmin_parameter_name{
         this,
-        "Zmax",
-        {2250.0},
-        "largest Z value inside drift chamber in mm.)"};
-    Gaudi::Property<double> m_Rmin{
+        "ZminParameterName",
+        {"DCH_gas_Lhalf"},
+        "Name of XML file parameter describing the z extent of the active volume (min value in -z direction). For forward-backward symmetric detectors, use same name as for ZmaxParameterName. This value is then automatically converted into the negative value."};
+    Gaudi::Property<std::string> m_Rmin_parameter_name{
         this,
-        "Rmin",
-        {349.8},
-        "inner radius of the drift chamber in mm.)"};
-    Gaudi::Property<double> m_Rmax{
+        "RminParameterName",
+        {"DCH_gas_inner_cyl_R"},
+        "Name of XML file parameter describing the inner radius of the active volume."};
+    Gaudi::Property<std::string> m_Rmax_parameter_name{
         this,
-        "Rmax",
-        {2015.0},
-        "outer radius of the drift chamber in mm.)"};
+        "RmaxParameterName",
+        {"DCH_gas_outer_cyl_R"},
+        "Name of XML file parameter describing the outer radius of the active volume."};
     Gaudi::Property<int> m_GasSel{
         this,
         "GasSel",
