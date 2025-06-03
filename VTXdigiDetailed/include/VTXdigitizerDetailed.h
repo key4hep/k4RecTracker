@@ -218,7 +218,7 @@ private:
 			    const std::vector<SignalPoint>& collectionPoints,
 			    hit_map_type& hit_map) const;
 
-  void clampCloudToSensorBounds(
+  void ClampCloudToSensorBounds(
     float& CloudCenterX, float& CloudCenterY,
     float SigmaX, float SigmaY,
     const edm4hep::SimTrackerHit& hit) const;

@@ -264,11 +264,21 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
 
+  // Check if it is produced by Secondaries or Overlay 
+  int nSecondaryHits = 0;
+  int nOverlayHits = 0;
   // Digitize the sim hits
   edm4hep::TrackerHitPlaneCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col = m_output_sim_digi_link.createAndPut();
   
   for (const auto& input_sim_hit : *input_sim_hits) {
+
+    // Check if the hit is a secondary or an overlay
+    if (input_sim_hit.isProducedBySecondary()) {
+      nSecondaryHits++;
+    } else if (input_sim_hit.isOverlay()) {
+      nOverlayHits++;
+    }
     
     std::vector<ChargeDepositUnit> ionizationPoints;
     std::vector<SignalPoint> collectionPoints;
@@ -283,6 +293,10 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
     generate_output(input_sim_hit, output_digi_hits, output_sim_digi_link_col, hit_map);
     
   }
+
+  debug() << "SimHits stats: "
+        << nSecondaryHits << " produced by secondaries, "
+        << nOverlayHits << " marked as overlay." << endmsg;
 
   // Comptage des digis par layer uniquement si mode debug activé
   if (m_DebugHistos) {
@@ -526,7 +540,7 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
 
 
 
-void VTXdigitizerDetailed::clampCloudToSensorBounds(
+void VTXdigitizerDetailed::ClampCloudToSensorBounds(
     float& CloudCenterX, float& CloudCenterY,
     float SigmaX, float SigmaY,
     const edm4hep::SimTrackerHit& hit) const
@@ -536,8 +550,18 @@ void VTXdigitizerDetailed::clampCloudToSensorBounds(
 
     dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag());
 
+    // L'idée de cette fonction est de s'assurer que le centre du nuage de charge reste à l'intérieur des limites du capteur.
+    // On utilise les dimensions du capteur pour définir les limites.
+    // Si le centre du nuage est en dehors de ces limites, on le ramène à l'intérieur en tenant compte de la largeur du cluster.
+    // Pour que le nuage reste à l'intérieur, on ajoute ou soustrait une marge égale à la largeur du cluster multipliée par SigmaX et SigmaY.
+    // Par conséquent, les CloudMin définit après l'appel de la fonction ne sortiront pas des limites du capteur.
+
     float widthMin = 0.f, widthMax = 0.f;
     float lengthMin = 0.f, lengthMax = 0.f;
+
+    // TO DO : Pour le ENDCAP du vertex, dans le constructeur le senseur est construit comme un trapèze, il faut donc revoir le calcul pour ce cas. En l'était j'ai approximé par un rectangle lègerement plus grand.
+    // A revoir avec Jessy : Besoin de protection sur le PathLenght du hit ? Pour eviter la création de charge "virtuelle" ? 
+    // Comprendre pourquoi les outsides boundaries se situent presque exclusivement dans les Endcaps du Inner, PB dans k4geo ? Confusion entre x, y ? 
 
     if (type.is(dd4hep::DetType::BARREL)) {
         float width = m_sensorWidth[layer];
@@ -558,7 +582,7 @@ void VTXdigitizerDetailed::clampCloudToSensorBounds(
         return;
     }
 
-    // Étendue du nuage à ± m_ClusterWidth * σ
+    
     float deltaX = m_ClusterWidth * SigmaX;
     float deltaY = m_ClusterWidth * SigmaY;
    // debug() << "Sensor width = (" << widthMin<< ", " << widthMax << ")\n";
@@ -608,7 +632,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     
     // Check if cloud is inside boundaries and clamp to consider only charge in sensor
 
-    clampCloudToSensorBounds(CloudCenterX, CloudCenterY,SigmaX, SigmaY, hit);
+    ClampCloudToSensorBounds(CloudCenterX, CloudCenterY,SigmaX, SigmaY, hit);
 
     float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
     float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
@@ -709,14 +733,19 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   const float PixSizeY = cellDims[1] / dd4hep::mm;
 
   debug() << "SimHit CellID: " << cellID << endmsg;
+  // Décodage champ par champ
+  for (const auto& field : m_decoder->fields()) {
+    const std::string& name = field.name();
+    int value = m_decoder->get(cellID, name);
+    debug() << "  " << name << " = " << value << endmsg;
+  }
+  
+  debug() << "is Secondary ? : " << hit.isProducedBySecondary() << endmsg;
+  debug() << "is Overlay ? : " << hit.isOverlay() << endmsg;
   debug() << "Pixel size X: " << PixSizeX << " mm, Y: " << PixSizeY << " mm" << endmsg;
 
   double DigiLocalX = 0.; // Local position of the digitized hit
   double DigiLocalY = 0.;
-
-
-  // Count pixels outside boundaries 
-  int nPixelsOutside = 0;
 
   // Unordored Map for efficiency 
   using ChargeMap = std::unordered_map<int, double>;
@@ -763,7 +792,6 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
     } // end loop over y
   debug() << "--------------------------------------" << endmsg;
   debug() << "Nombre total de pixels avec charge : " << nPixels << endmsg;
-  debug() << "Nombre de pixels en dehors du capteur : " << nPixelsOutside << endmsg;
   if (m_DebugHistos) {
     hActivePixelCountBeforeThreshold->Fill(CountBeforeThreshold);
   }
