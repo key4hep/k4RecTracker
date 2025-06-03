@@ -739,9 +739,11 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
     int value = m_decoder->get(cellID, name);
     debug() << "  " << name << " = " << value << endmsg;
   }
-  
+
   debug() << "is Secondary ? : " << hit.isProducedBySecondary() << endmsg;
   debug() << "is Overlay ? : " << hit.isOverlay() << endmsg;
+
+  
   debug() << "Pixel size X: " << PixSizeX << " mm, Y: " << PixSizeY << " mm" << endmsg;
 
   double DigiLocalX = 0.; // Local position of the digitized hit
