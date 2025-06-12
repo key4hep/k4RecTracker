@@ -53,13 +53,13 @@ StatusCode DCH_dNdx_FromTracks::initialize() {
     }
 
     debug() << "Geometry parameters:" << endmsg;
-    debug() << "Rmin: " << Rmin << " cm" << endmsg;
-    debug() << "Rmax: " << Rmax << " cm" << endmsg;
-    debug() << "Zmin: " << Zmin << " cm" << endmsg;
-    debug() << "Zmax: " << Zmax << " cm" << endmsg;
+    debug() << "Rmin: " << Rmin/dd4hep::cm << " cm" << endmsg;
+    debug() << "Rmax: " << Rmax/dd4hep::cm << " cm" << endmsg;
+    debug() << "Zmin: " << Zmin/dd4hep::cm << " cm" << endmsg;
+    debug() << "Zmax: " << Zmax/dd4hep::cm << " cm" << endmsg;
 
     // dd4hep uses cm, while delphes (or more importantly the track parametrisation) uses mm, so we need to convert
-    m_delphesTrkUtil->SetDchBoundaries(Rmin*10, Rmax*10, Zmin*10, Zmax*10);
+    m_delphesTrkUtil->SetDchBoundaries(Rmin/dd4hep::mm, Rmax/dd4hep::mm, Zmin/dd4hep::mm, Zmax/dd4hep::mm);
     m_delphesTrkUtil->SetGasMix(m_GasSel.value());
 
     return StatusCode::SUCCESS;
@@ -93,14 +93,12 @@ edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackM
         //////////////////////////
         double momentum = edm4hep::utils::magnitude(mc_particle.getMomentum());
         double mass     = mc_particle.getMass();
-        debug() << "MCParticle momentum: " << momentum << endmsg;
-        debug() << "MCParticle mass: " << mass << endmsg;
 
         double betagamma = momentum/mass;
         debug() << "MCParticle betagamma: " << betagamma << endmsg;
         // Get number of clusters per length from delphes (output is in m^-1)
-        double nclusters_per_meter = m_delphesTrkUtil->Nclusters(betagamma, m_GasSel.value());
-        debug() << "Number of clusters per meter: " << nclusters_per_meter << endmsg;
+        double nclusters_per_meter = m_delphesTrkUtil->Nclusters(betagamma, m_GasSel.value()) * (1/dd4hep::m);
+        debug() << "Number of clusters per meter: " << nclusters_per_meter / (1/dd4hep::m) << endmsg;
 
         ///////////////////////
         // Track Information //
@@ -121,26 +119,23 @@ edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackM
         delphes_track[4] = track_state.tanLambda; // tanLambda and cot(theta) are the same thing (see DelphesEDM4HepConverter.cc)
 
         // Note: track length will be in mm, since this is what delphes and the track parametrisation use
-        double track_length = m_delphesTrkUtil->TrkLen(delphes_track);
-        debug() << "Track length inside chamber: " << track_length << " mm" << endmsg;
-
-        // Convert to meters for later calculations
-        double track_length_m = track_length / 1000.0; 
+        double track_length = m_delphesTrkUtil->TrkLen(delphes_track)*dd4hep::mm;
+        debug() << "Track length inside chamber: " << track_length/dd4hep::mm << " mm" << endmsg;
 
         /////////////////////////////////////////////
         // Draw Number of Clusters from Poissonian //
         /////////////////////////////////////////////
 
-        double nclusters_mean = nclusters_per_meter * track_length_m;
+        double nclusters_mean = nclusters_per_meter * track_length;
         std::poisson_distribution<int> poisson_dist(nclusters_mean);
 
         int n_cluster = poisson_dist(m_engine);
         debug() << "Track has " << n_cluster << " clusters." << endmsg;
-        debug() << "dNdx value: " << n_cluster / track_length_m << " (clusters/m)" << endmsg;
+        debug() << "dNdx value: " << n_cluster / (track_length/dd4hep::m) << " (clusters/m)" << endmsg;
 
         auto dqdx = outputCollection.create();
         edm4hep::Quantity q;
-        q.value = static_cast<float>(n_cluster/track_length_m);        
+        q.value = static_cast<float>(n_cluster/(track_length/dd4hep::m));       
 
         dqdx.setDQdx(q);
         dqdx.setTrack(track);
