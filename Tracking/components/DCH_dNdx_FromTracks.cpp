@@ -72,6 +72,9 @@ edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackM
     auto engine_seed = m_uniqueIDSvc->getUniqueID(header, this->name());
     m_engine.seed(engine_seed);
 
+    // Dummy value if dN/dx calculation somehow fails
+    const double dummy_value = -999 * (1/dd4hep::m);
+    bool success = true;
 
     debug() << "Processing new Event" << endmsg;
 
@@ -96,6 +99,13 @@ edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackM
 
         double betagamma = momentum/mass;
         debug() << "MCParticle betagamma: " << betagamma << endmsg;
+        // Check if betagamma is in "good" range of delphes parametrisation (status: 12 June 2025)
+        if (betagamma < 0.5 || betagamma > 1000.0) {
+            warning() << "beta*gamma value outside of \"good\" range of delphes parametrisation (0.5-1000), dN/dx will be set to dummy value: " 
+                      << dummy_value/(1/dd4hep::m) << " clusters/m" << endmsg;
+            success = false;
+        }
+
         // Get number of clusters per length from delphes (output is in m^-1)
         double nclusters_per_meter = m_delphesTrkUtil->Nclusters(betagamma, m_GasSel.value()) * (1/dd4hep::m);
         debug() << "Number of clusters per meter: " << nclusters_per_meter / (1/dd4hep::m) << endmsg;
@@ -120,6 +130,12 @@ edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackM
 
         // Note: track length will be in mm, since this is what delphes and the track parametrisation use
         double track_length = m_delphesTrkUtil->TrkLen(delphes_track)*dd4hep::mm;
+        // Check if track length calculation was successful
+        if (track_length == 0.0) {
+            warning() << "Delphes track length calculation returned 0.0, dN/dx will be set to dummy value: " 
+                      << dummy_value/(1/dd4hep::m) << " clusters/m" << endmsg;
+            success = false;
+        }
         debug() << "Track length inside chamber: " << track_length/dd4hep::mm << " mm" << endmsg;
 
         /////////////////////////////////////////////
@@ -131,11 +147,13 @@ edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackM
 
         int n_cluster = poisson_dist(m_engine);
         debug() << "Track has " << n_cluster << " clusters." << endmsg;
-        debug() << "dNdx value: " << n_cluster / (track_length/dd4hep::m) << " (clusters/m)" << endmsg;
+
+        double dNdx_value = (success)? (n_cluster/track_length) : dummy_value;
+        debug() << "dNdx value: " << dNdx_value / (1/dd4hep::m) << " (clusters/m)" << endmsg;
 
         auto dqdx = outputCollection.create();
         edm4hep::Quantity q;
-        q.value = static_cast<float>(n_cluster/(track_length/dd4hep::m));       
+        q.value = static_cast<float>(dNdx_value/(1/dd4hep::m));
 
         dqdx.setDQdx(q);
         dqdx.setTrack(track);
