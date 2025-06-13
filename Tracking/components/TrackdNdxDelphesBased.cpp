@@ -1,4 +1,4 @@
-#include "DCH_dNdx_FromTracks.h"
+#include "TrackdNdxDelphesBased.h"
 
 // Gaudi
 #include <GaudiKernel/MsgStream.h>
@@ -13,15 +13,15 @@
 // ROOT
 #include <TVectorD.h>
 
-DECLARE_COMPONENT(DCH_dNdx_FromTracks)
+DECLARE_COMPONENT(TrackdNdxDelphesBased)
 
-DCH_dNdx_FromTracks::DCH_dNdx_FromTracks(const std::string& name, ISvcLocator* svcLoc)
+TrackdNdxDelphesBased::TrackdNdxDelphesBased(const std::string& name, ISvcLocator* svcLoc)
     : Transformer(name, svcLoc,
         {KeyValues("InputLinkCollection", {"TrackMCParticleLinks"}),
          KeyValues("HeaderName", {"EventHeader"})},
         {KeyValues("OutputCollection", {"MCParticles"})}) {}
 
-StatusCode DCH_dNdx_FromTracks::initialize() {
+StatusCode TrackdNdxDelphesBased::initialize() {
     m_uniqueIDSvc = service("UniqueIDGenSvc");
     if (!m_uniqueIDSvc) {
         error() << "Unable to locate the UniqueIDGenSvc" << endmsg;
@@ -72,7 +72,7 @@ StatusCode DCH_dNdx_FromTracks::initialize() {
     return StatusCode::SUCCESS;
 }
 
-edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackMCParticleLinkCollection& input,
+edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::TrackMCParticleLinkCollection& input,
                                                             const edm4hep::EventHeaderCollection& header) const {
     edm4hep::RecDqdxCollection outputCollection;
 

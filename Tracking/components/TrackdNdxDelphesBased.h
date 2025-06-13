@@ -1,5 +1,4 @@
-#ifndef DCH_DNDX_FROM_TRACKS_H
-#define DCH_DNDX_FROM_TRACKS_H
+#pragma once
 
 // Gaudi
 #include <GaudiKernel/SmartIF.h>
@@ -23,11 +22,11 @@
 // STL
 #include <random>
 
-class DCH_dNdx_FromTracks final
+class TrackdNdxDelphesBased final
     : public k4FWCore::Transformer<edm4hep::RecDqdxCollection(const edm4hep::TrackMCParticleLinkCollection&, const edm4hep::EventHeaderCollection&)> {
 
 public:
-    DCH_dNdx_FromTracks(const std::string& name, ISvcLocator* svcLoc);
+    TrackdNdxDelphesBased(const std::string& name, ISvcLocator* svcLoc);
 
     edm4hep::RecDqdxCollection operator()(const edm4hep::TrackMCParticleLinkCollection& input,
                                           const edm4hep::EventHeaderCollection& header) const override;
@@ -73,5 +72,3 @@ private:
         {1.0},
         "Factor (between 0 and 1) describing the fraction of the detector volume that is active (eg. for Straw Tube Tracker the factor is significantly below 1 due to gaps between tubes). The factor is used to scale the calculated track length and thus the corresponding number of clusters."};
 };
-
-#endif // DCH_DNDX_FROM_TRACKS_H
