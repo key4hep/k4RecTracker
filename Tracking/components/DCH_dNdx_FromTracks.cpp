@@ -60,7 +60,14 @@ StatusCode DCH_dNdx_FromTracks::initialize() {
 
     // dd4hep uses cm, while delphes (or more importantly the track parametrisation) uses mm, so we need to convert
     m_delphesTrkUtil->SetDchBoundaries(Rmin/dd4hep::mm, Rmax/dd4hep::mm, Zmin/dd4hep::mm, Zmax/dd4hep::mm);
+
     m_delphesTrkUtil->SetGasMix(m_GasSel.value());
+
+    // Make sure fill factor is between 0 and 1
+    if (m_fill_factor.value() < 0.0 || m_fill_factor.value() > 1.0) {
+        warning() << "Fill factor is not between 0 and 1, setting to 1.0" << endmsg;
+        m_fill_factor.set(1.0);
+    }
 
     return StatusCode::SUCCESS;
 }
@@ -136,7 +143,10 @@ edm4hep::RecDqdxCollection DCH_dNdx_FromTracks::operator()(const edm4hep::TrackM
                       << dummy_value/(1/dd4hep::m) << " clusters/m" << endmsg;
             success = false;
         }
-        debug() << "Track length inside chamber: " << track_length/dd4hep::mm << " mm" << endmsg;
+        debug() << "Track length inside full chamber: " << track_length/dd4hep::mm << " mm" << endmsg;
+        // Apply fill factor to track length
+        track_length *= m_fill_factor.value();
+        debug() << "Track length after applying fill factor: " << track_length/dd4hep::mm << " mm" << endmsg;
 
         /////////////////////////////////////////////
         // Draw Number of Clusters from Poissonian //
