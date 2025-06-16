@@ -106,8 +106,8 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
 
         double betagamma = momentum/mass;
         debug() << "MCParticle betagamma: " << betagamma << endmsg;
-        // Check if betagamma is in "good" range of delphes parametrisation (status: 12 June 2025)
-        if (betagamma < 0.5 || betagamma > 1000.0) {
+        // Check if betagamma is in valid range of delphes parametrisation (status: 16 June 2025)
+        if (betagamma < 0.5 || betagamma > 20000.0) {
             warning() << "beta*gamma value outside of \"good\" range of delphes parametrisation (0.5-1000), dN/dx will be set to dummy value: " 
                       << dummy_value/(1/dd4hep::m) << " clusters/m" << endmsg;
             success = false;
