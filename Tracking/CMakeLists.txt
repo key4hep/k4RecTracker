@@ -6,7 +6,8 @@ project(${PackageName})
 find_package(MarlinUtil REQUIRED)
 list(APPEND CMAKE_MODULE_PATH $ENV{PANDORAPFA}/cmakemodules)
 find_package(PandoraSDK REQUIRED)
-FOREACH( pkg  MarlinUtil PandoraSDK )
+find_package(Delphes REQUIRED)
+FOREACH( pkg  MarlinUtil PandoraSDK Delphes )
   IF( ${pkg}_FOUND )
     INCLUDE_DIRECTORIES( ${${pkg}_INCLUDE_DIRS} )
     LINK_LIBRARIES( ${${pkg}_LIBRARIES} )
@@ -31,12 +32,14 @@ gaudi_add_module(${PackageName}
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
   #GenFit::genfit2
+  ${DELPHES_LIBRARIES}
 )
 
 target_include_directories(${PackageName} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
   ${MarlinUtil_INCLUDE_DIRS}
+  ${DELPHES_INCLUDE_DIRS}
 )
 
 set_target_properties(${PackageName} PROPERTIES PUBLIC_HEADER "${headers}")
