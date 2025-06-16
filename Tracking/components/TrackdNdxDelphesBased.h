@@ -57,9 +57,7 @@
  *  LIMITATIONS (Status 13.06.2025) :
  *      - Entirely dependent on the implementation of the delphes functions:
  *          - Cluster calculation only available for 4 gas mixtures
- *          - Cluster calculation only for beta*gamma values for a certain range
- *              - Additionally, there is currently a bug for the interpolation at high beta*gamma values (see https://github.com/delphes/delphes/issues/157)
- *                Pull request to fix this bug is under review.
+ *          - Cluster calculation only for beta*gamma values for a certain range.
  *              - This algorithm sets dN/dx to the dummy value for particles outside the good beta*gamma range (warning produced)
  *          - Track length calculation is not available for particles with a large tranvserse impact parameters
  *              - If the track length calculation fails, dN/dx set to dummy (with warning)
