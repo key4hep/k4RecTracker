@@ -75,6 +75,7 @@ private:
 
   // Threshold 
   bool Apply_Threshold(double& ChargeInPixel) const;
+  void GetSensorSize (const edm4hep::SimTrackerHit& hit, float& widthMin, float& widthMax, float& lengthMin, float& lengthMax) const;
   // Detector name
   Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
   // Detector readout names

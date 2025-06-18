@@ -538,7 +538,38 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
 } // End DriftDirection
 
 
+void VTXdigitizerDetailed::GetSensorSize (const edm4hep::SimTrackerHit& hit, float& widthMin, float& widthMax, float& lengthMin, float& lengthMax) const {
+  /** Get the pixel indices in the sensor for the given hit
+   *  The pixel size is defined by the readout segmentation
+   *  The positions are in mm
+   */
+  
+  const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
+  int layer = m_decoder->get(cellID, "layer");
+  dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag());
 
+  if (type.is(dd4hep::DetType::BARREL)) {
+        float width = m_sensorWidth[layer];
+        float length = m_sensorLength[layer];
+        widthMin = -width / 2.f;
+        widthMax = width / 2.f;
+        lengthMin = -length / 2.f;
+        lengthMax = length / 2.f;
+    } else if (type.is(dd4hep::DetType::ENDCAP)) {
+        float widthOuter = m_sensorWidthOuter[layer];
+        float length = m_sensorLength[layer];
+        widthMin = -widthOuter / 2.f;
+        widthMax = widthOuter / 2.f;
+        lengthMin = -length / 2.f;
+        lengthMax = length / 2.f;
+    } else {
+        std::cerr << "Detector type unknown in clampCloudToSensorBounds\n";
+        return;
+    }
+
+
+
+} // End SensorSizeInPixelIndice
 
 void VTXdigitizerDetailed::ClampCloudToSensorBounds(
     float& CloudCenterX, float& CloudCenterY,
@@ -555,9 +586,8 @@ void VTXdigitizerDetailed::ClampCloudToSensorBounds(
     // Si le centre du nuage est en dehors de ces limites, on le ramène à l'intérieur en tenant compte de la largeur du cluster.
     // Pour que le nuage reste à l'intérieur, on ajoute ou soustrait une marge égale à la largeur du cluster multipliée par SigmaX et SigmaY.
     // Par conséquent, les CloudMin définit après l'appel de la fonction ne sortiront pas des limites du capteur.
-
     float widthMin = 0.f, widthMax = 0.f;
-    float lengthMin = 0.f, lengthMax = 0.f;
+    float lengthMin = 0.f, lengthMax = 0.f; 
 
     // TO DO : Pour le ENDCAP du vertex, dans le constructeur le senseur est construit comme un trapèze, il faut donc revoir le calcul pour ce cas. En l'était j'ai approximé par un rectangle lègerement plus grand.
     // A revoir avec Jessy : Besoin de protection sur le PathLenght du hit ? Pour eviter la création de charge "virtuelle" ? 
@@ -632,7 +662,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     
     // Check if cloud is inside boundaries and clamp to consider only charge in sensor
 
-    ClampCloudToSensorBounds(CloudCenterX, CloudCenterY,SigmaX, SigmaY, hit);
+    //ClampCloudToSensorBounds(CloudCenterX, CloudCenterY,SigmaX, SigmaY, hit);
 
     float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
     float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
@@ -644,6 +674,16 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     const int MinPixY = static_cast<int>(std::floor((CloudMinY + 0.5f * PixSizeY) / PixSizeY));
     const int MaxPixY = static_cast<int>(std::floor((CloudMaxY + 0.5f * PixSizeY) / PixSizeY));
 
+    // get Sensor size in pixel indices
+    float widthMin = 0.f, widthMax = 0.f;
+    float lengthMin = 0.f, lengthMax = 0.f;
+    GetSensorSize(hit, widthMin, widthMax, lengthMin, lengthMax);
+    const int MinPixXSensor = static_cast<int>(std::floor((widthMin + 0.5f * PixSizeX) / PixSizeX));
+    const int MaxPixXSensor = static_cast<int>(std::floor((widthMax + 0.5f * PixSizeX) / PixSizeX));
+    const int MinPixYSensor = static_cast<int>(std::floor((lengthMin + 0.5f * PixSizeY) / PixSizeY));
+    const int MaxPixYSensor = static_cast<int>(std::floor((lengthMax + 0.5f * PixSizeY) / PixSizeY));
+
+    // Borne de calcul pour le nuage de charge complet 
     const int nX = MaxPixX - MinPixX + 1;
     const int nY = MaxPixY - MinPixY + 1;
     std::vector<float> xStripCharge(nX);
@@ -671,7 +711,18 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
                                 std::erf((LowerBound - CloudCenterY) / sqrt2SigmaY));
     }
 
-
+    // Check if the pixel is inside the sensor boundaries
+    if (MinPixX < MinPixXSensor || MaxPixX > MaxPixXSensor ||
+        MinPixY < MinPixYSensor || MaxPixY > MaxPixYSensor) {
+        debug() << "Pixel indices out of sensor bounds: "
+                << "MinPixX: " << MinPixX << ", MaxPixX: " << MaxPixX
+                << ", MinPixY: " << MinPixY << ", Max PixY: " << MaxPixY
+                << ", Sensor bounds: "
+                << "MinPixXSensor: " << MinPixXSensor << ", MaxPixXSensor: " << MaxPixXSensor
+                << ", MinPixYSensor: " << MinPixYSensor << ", MaxPixYSensor: " << MaxPixYSensor
+                << endmsg;
+      continue; // Skip this point if it is out of bounds
+    }
     for (int ix = 0; ix < nX; ++ix) {
       for (int iy = 0; iy < nY; ++iy) {
         const float ChargeInPixel = Charge * xStripCharge[ix] * yStripCharge[iy];
