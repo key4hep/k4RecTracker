@@ -19,7 +19,7 @@ TrackdNdxDelphesBased::TrackdNdxDelphesBased(const std::string& name, ISvcLocato
     : Transformer(name, svcLoc,
         {KeyValues("InputLinkCollection", {"TrackMCParticleLinks"}),
          KeyValues("HeaderName", {"EventHeader"})},
-        {KeyValues("OutputCollection", {"MCParticles"})}) {}
+        {KeyValues("OutputCollection", {"RecDqdxCollection"})}) {}
 
 StatusCode TrackdNdxDelphesBased::initialize() {
     m_uniqueIDSvc = service("UniqueIDGenSvc");
@@ -65,7 +65,7 @@ StatusCode TrackdNdxDelphesBased::initialize() {
 
     // Make sure fill factor is between 0 and 1
     if (m_fill_factor.value() < 0.0 || m_fill_factor.value() > 1.0) {
-        warning() << "Fill factor is not between 0 and 1, setting to 1.0" << endmsg;
+        warning() << "Fill factor of "<< m_fill_factor.value() << " is not between 0 and 1, setting to 1.0" << endmsg;
         m_fill_factor.set(1.0);
     }
 
@@ -76,8 +76,9 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
                                                             const edm4hep::EventHeaderCollection& header) const {
     edm4hep::RecDqdxCollection outputCollection;
 
+    std::mt19937_64 random_engine;
     auto engine_seed = m_uniqueIDSvc->getUniqueID(header, this->name());
-    m_engine.seed(engine_seed);
+    random_engine.seed(engine_seed);
 
     // Dummy value if dN/dx calculation somehow fails
     const double dummy_value = -999 * (1/dd4hep::m);
@@ -86,7 +87,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
     debug() << "Processing new Event" << endmsg;
 
     unsigned int i = 0;
-    for (auto link : input) {
+    for (const auto& link : input) {
         debug() << "Processing track " << i++ << endmsg;
 
         // Get the track and corresponding MCParticle
@@ -108,7 +109,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
         debug() << "MCParticle betagamma: " << betagamma << endmsg;
         // Check if betagamma is in valid range of delphes parametrisation (status: 16 June 2025)
         if (betagamma < 0.5 || betagamma > 20000.0) {
-            warning() << "beta*gamma value outside of \"good\" range of delphes parametrisation (0.5-1000), dN/dx will be set to dummy value: " 
+            warning() << "beta*gamma value outside of \"good\" range of delphes parametrisation (0.5-20000), dN/dx will be set to dummy value: " 
                       << dummy_value/(1/dd4hep::m) << " clusters/m" << endmsg;
             success = false;
         }
@@ -121,7 +122,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
         // Track Information //
         ///////////////////////
         // Use track state at IP, since this corresponds to delphes and energy loss in tracking system is negligible
-        const auto& track_state = track.getTrackStates(1);
+        const auto& track_state = track.getTrackStates(edm4hep::TrackState::AtIP);
 
         // Convert edm4hep::TrackState to delphes parameters
         // Inverse conversion from https://github.com/key4hep/k4SimDelphes/blob/main/converter/src/DelphesEDM4HepConverter.cc#L532
@@ -130,7 +131,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
         TVectorD delphes_track(5);
         delphes_track[0] = track_state.D0;
         delphes_track[1] = track_state.phi;
-        double scale = -2.0;            // delphes uses C instead of omega, scale is used to convert
+        const double scale = -2.0;            // delphes uses C instead of omega, scale is used to convert
         delphes_track[2] = track_state.omega / scale;
         delphes_track[3] = track_state.Z0;
         delphes_track[4] = track_state.tanLambda; // tanLambda and cot(theta) are the same thing (see DelphesEDM4HepConverter.cc)
@@ -155,7 +156,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
         double nclusters_mean = nclusters_per_meter * track_length;
         std::poisson_distribution<int> poisson_dist(nclusters_mean);
 
-        int n_cluster = poisson_dist(m_engine);
+        int n_cluster = poisson_dist(random_engine);
         debug() << "Track has " << n_cluster << " clusters." << endmsg;
 
         double dNdx_value = (success)? (n_cluster/track_length) : dummy_value;

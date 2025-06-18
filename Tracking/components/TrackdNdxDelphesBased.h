@@ -80,7 +80,6 @@ public:
 private:
     SmartIF<IUniqueIDGenSvc> m_uniqueIDSvc{nullptr};
     SmartIF<IGeoSvc> m_geoSvc{nullptr};
-    inline static thread_local std::mt19937_64 m_engine;
 
     TrkUtil* m_delphesTrkUtil;
 
@@ -113,5 +112,5 @@ private:
         this,
         "FillFactor",
         {1.0},
-        "Factor (between 0 and 1) describing the fraction of the detector volume that is active (eg. for Straw Tube Tracker the factor is significantly below 1 due to gaps between tubes). The factor is used to scale the calculated track length and thus the corresponding number of clusters."};
+        "Factor (between 0 and 1) describing the fraction of the detector volume that is active (e.g., for Straw Tube Tracker the factor is significantly below 1 due to gaps between tubes). The factor is used to scale the calculated track length and thus the corresponding number of clusters."};
 };
