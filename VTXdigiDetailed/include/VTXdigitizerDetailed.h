@@ -219,10 +219,6 @@ private:
 			    const std::vector<SignalPoint>& collectionPoints,
 			    hit_map_type& hit_map) const;
 
-  void ClampCloudToSensorBounds(
-    float& CloudCenterX, float& CloudCenterY,
-    float SigmaX, float SigmaY,
-    const edm4hep::SimTrackerHit& hit) const;
 
   void generate_output(const edm4hep::SimTrackerHit hit, edm4hep::TrackerHitPlaneCollection* output_digi_hits, edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col, const hit_map_type& hit_map) const;
 

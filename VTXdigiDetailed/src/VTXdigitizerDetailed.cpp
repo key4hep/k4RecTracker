@@ -4,7 +4,7 @@
 DECLARE_COMPONENT(VTXdigitizerDetailed)
 
 VTXdigitizerDetailed::VTXdigitizerDetailed(const std::string& aName, ISvcLocator* aSvcLoc)
-    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizerDetailed") {
+    : Gaudi::Algorithm (aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizerDetailed") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim vertex hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized vertex hit collection name");
   declareProperty("outputSimDigiAssociation", m_output_sim_digi_link, "Output link between sim hits and digitized hits");
@@ -539,7 +539,7 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
 
 
 void VTXdigitizerDetailed::GetSensorSize (const edm4hep::SimTrackerHit& hit, float& widthMin, float& widthMax, float& lengthMin, float& lengthMax) const {
-  /** Get the pixel indices in the sensor for the given hit
+  /** Define sensentive sensor  dimension (2D) per layer in mm and per hit (cellID) in order to define pixel indices
    *  The pixel size is defined by the readout segmentation
    *  The positions are in mm
    */
@@ -569,168 +569,111 @@ void VTXdigitizerDetailed::GetSensorSize (const edm4hep::SimTrackerHit& hit, flo
 
 
 
-} // End SensorSizeInPixelIndice
-
-void VTXdigitizerDetailed::ClampCloudToSensorBounds(
-    float& CloudCenterX, float& CloudCenterY,
-    float SigmaX, float SigmaY,
-    const edm4hep::SimTrackerHit& hit) const
-{
-    const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-    int layer = m_decoder->get(cellID, "layer");
-
-    dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag());
-
-    // L'idée de cette fonction est de s'assurer que le centre du nuage de charge reste à l'intérieur des limites du capteur.
-    // On utilise les dimensions du capteur pour définir les limites.
-    // Si le centre du nuage est en dehors de ces limites, on le ramène à l'intérieur en tenant compte de la largeur du cluster.
-    // Pour que le nuage reste à l'intérieur, on ajoute ou soustrait une marge égale à la largeur du cluster multipliée par SigmaX et SigmaY.
-    // Par conséquent, les CloudMin définit après l'appel de la fonction ne sortiront pas des limites du capteur.
-    float widthMin = 0.f, widthMax = 0.f;
-    float lengthMin = 0.f, lengthMax = 0.f; 
-
-    // TO DO : Pour le ENDCAP du vertex, dans le constructeur le senseur est construit comme un trapèze, il faut donc revoir le calcul pour ce cas. En l'était j'ai approximé par un rectangle lègerement plus grand.
-    // A revoir avec Jessy : Besoin de protection sur le PathLenght du hit ? Pour eviter la création de charge "virtuelle" ? 
-    // Comprendre pourquoi les outsides boundaries se situent presque exclusivement dans les Endcaps du Inner, PB dans k4geo ? Confusion entre x, y ? 
-
-    if (type.is(dd4hep::DetType::BARREL)) {
-        float width = m_sensorWidth[layer];
-        float length = m_sensorLength[layer];
-        widthMin = -width / 2.f;
-        widthMax = width / 2.f;
-        lengthMin = -length / 2.f;
-        lengthMax = length / 2.f;
-    } else if (type.is(dd4hep::DetType::ENDCAP)) {
-        float widthOuter = m_sensorWidthOuter[layer];
-        float length = m_sensorLength[layer];
-        widthMin = -widthOuter / 2.f;
-        widthMax = widthOuter / 2.f;
-        lengthMin = -length / 2.f;
-        lengthMax = length / 2.f;
-    } else {
-        std::cerr << "Detector type unknown in clampCloudToSensorBounds\n";
-        return;
-    }
-
-    
-    float deltaX = m_ClusterWidth * SigmaX;
-    float deltaY = m_ClusterWidth * SigmaY;
-   // debug() << "Sensor width = (" << widthMin<< ", " << widthMax << ")\n";
-   // debug() << "Sensor length = ("<< lengthMin<<"," << lengthMax << ")\n";
-   // debug() << "[INFO] CloudCenter BEFORE clamp = (" << CloudCenterX << ", " << CloudCenterY << ")\n";
-
-    // Vérification et correction sur X
-    if (CloudCenterX < widthMin) {
-        CloudCenterX = widthMin + deltaX;
-    } else if (CloudCenterX > widthMax) {
-        CloudCenterX = widthMax - deltaX;
-    }
-
-    // Vérification et correction sur Y
-    if (CloudCenterY < lengthMin) {
-        CloudCenterY = lengthMin + deltaY;
-    } else if (CloudCenterY > lengthMax) {
-        CloudCenterY = lengthMax - deltaY;
-    }
-
-    //debug() << "[INFO] CloudCenter AFTER clamp = (" << CloudCenterX << ", " << CloudCenterY << ")\n";
-}
-
-
-
-
-
-
+} // End GetSensorSize
 
 
 void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
                                                 const std::vector<SignalPoint>& collectionPoints,
                                                 hit_map_type& hit_map) const {
+
+
+  // information detecteurs                                     
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
   const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName).segmentation();
   const auto cellDims = segmentation.cellDimensions(cellID);
-  
+
   const float PixSizeX = cellDims[0] / dd4hep::mm;
   const float PixSizeY = cellDims[1] / dd4hep::mm;
 
+  // Récupérer la taille physique du capteur
+  float widthMin = 0.f, widthMax = 0.f;
+  float lengthMin = 0.f, lengthMax = 0.f;
+  GetSensorSize(hit, widthMin, widthMax, lengthMin, lengthMax);
+
+  //comptage pixels ignorés 
+  int nIgnoredPixels = 0;
+
+  // Conversion bornes physiques du capteur en indices pixels
+  const int MinPixXSensor = static_cast<int>(std::floor((widthMin + 0.5f * PixSizeX) / PixSizeX));
+  const int MaxPixXSensor = static_cast<int>(std::floor((widthMax + 0.5f * PixSizeX) / PixSizeX));
+  const int MinPixYSensor = static_cast<int>(std::floor((lengthMin + 0.5f * PixSizeY) / PixSizeY));
+  const int MaxPixYSensor = static_cast<int>(std::floor((lengthMax + 0.5f * PixSizeY) / PixSizeY));
+
   for (const auto& point : collectionPoints) {
-    float CloudCenterX = point.x();
-    float CloudCenterY = point.y();
+    const float CloudCenterX = point.x();
+    const float CloudCenterY = point.y();
     const float SigmaX = point.sigma_x();
     const float SigmaY = point.sigma_y();
     const float Charge = point.amplitude();
-    
-    // Check if cloud is inside boundaries and clamp to consider only charge in sensor
 
-    //ClampCloudToSensorBounds(CloudCenterX, CloudCenterY,SigmaX, SigmaY, hit);
+    // Bornes physiques du nuage
+    const float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
+    const float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
+    const float CloudMinY = CloudCenterY - m_ClusterWidth * SigmaY;
+    const float CloudMaxY = CloudCenterY + m_ClusterWidth * SigmaY;
 
-    float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
-    float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
-    float CloudMinY = CloudCenterY - m_ClusterWidth * SigmaY;
-    float CloudMaxY = CloudCenterY + m_ClusterWidth * SigmaY;
-
+    // Conversion bornes du nuage en indices pixels
     const int MinPixX = static_cast<int>(std::floor((CloudMinX + 0.5f * PixSizeX) / PixSizeX));
     const int MaxPixX = static_cast<int>(std::floor((CloudMaxX + 0.5f * PixSizeX) / PixSizeX));
     const int MinPixY = static_cast<int>(std::floor((CloudMinY + 0.5f * PixSizeY) / PixSizeY));
     const int MaxPixY = static_cast<int>(std::floor((CloudMaxY + 0.5f * PixSizeY) / PixSizeY));
 
-    // get Sensor size in pixel indices
-    float widthMin = 0.f, widthMax = 0.f;
-    float lengthMin = 0.f, lengthMax = 0.f;
-    GetSensorSize(hit, widthMin, widthMax, lengthMin, lengthMax);
-    const int MinPixXSensor = static_cast<int>(std::floor((widthMin + 0.5f * PixSizeX) / PixSizeX));
-    const int MaxPixXSensor = static_cast<int>(std::floor((widthMax + 0.5f * PixSizeX) / PixSizeX));
-    const int MinPixYSensor = static_cast<int>(std::floor((lengthMin + 0.5f * PixSizeY) / PixSizeY));
-    const int MaxPixYSensor = static_cast<int>(std::floor((lengthMax + 0.5f * PixSizeY) / PixSizeY));
-
-    // Borne de calcul pour le nuage de charge complet 
     const int nX = MaxPixX - MinPixX + 1;
     const int nY = MaxPixY - MinPixY + 1;
-    std::vector<float> xStripCharge(nX);
-    std::vector<float> yStripCharge(nY);
+
+    if (nX <= 0 || nY <= 0) {
+      // Pas de pixels à traiter, passer au point suivant
+      continue;
+    }
+
+    // Vecteurs pour stocker la charge fractionnée en X et Y
+    std::vector<float> xStripCharge(nX, 0.f);
+    std::vector<float> yStripCharge(nY, 0.f);
 
     const float sqrt2SigmaX = std::sqrt(2.f) * SigmaX;
     const float sqrt2SigmaY = std::sqrt(2.f) * SigmaY;
 
-    // Calcule la charge dans chaque bande (pixel) en X
+    // Calcul de la charge fractionnée en X
     for (int ix = 0; ix < nX; ++ix) {
-      // Position physique des bords du pixel en x
-      float LowerBound = (MinPixX + ix - 0.5f) * PixSizeX;
-      float UpperBound = (MinPixX + ix + 0.5f) * PixSizeX;
-
+      const float LowerBound = (MinPixX + ix - 0.5f) * PixSizeX;
+      const float UpperBound = (MinPixX + ix + 0.5f) * PixSizeX;
       xStripCharge[ix] = 0.5f * (std::erf((UpperBound - CloudCenterX) / sqrt2SigmaX) -
                                 std::erf((LowerBound - CloudCenterX) / sqrt2SigmaX));
     }
 
-    // Calcule la charge dans chaque bande (pixel) en Y
+    // Calcul de la charge fractionnée en Y
     for (int iy = 0; iy < nY; ++iy) {
-      float LowerBound = (MinPixY + iy - 0.5f) * PixSizeY;
-      float UpperBound = (MinPixY + iy + 0.5f) * PixSizeY;
-
+      const float LowerBound = (MinPixY + iy - 0.5f) * PixSizeY;
+      const float UpperBound = (MinPixY + iy + 0.5f) * PixSizeY;
       yStripCharge[iy] = 0.5f * (std::erf((UpperBound - CloudCenterY) / sqrt2SigmaY) -
                                 std::erf((LowerBound - CloudCenterY) / sqrt2SigmaY));
     }
 
-    // Check if the pixel is inside the sensor boundaries
-    if (MinPixX < MinPixXSensor || MaxPixX > MaxPixXSensor ||
-        MinPixY < MinPixYSensor || MaxPixY > MaxPixYSensor) {
-        debug() << "Pixel indices out of sensor bounds: "
-                << "MinPixX: " << MinPixX << ", MaxPixX: " << MaxPixX
-                << ", MinPixY: " << MinPixY << ", Max PixY: " << MaxPixY
-                << ", Sensor bounds: "
-                << "MinPixXSensor: " << MinPixXSensor << ", MaxPixXSensor: " << MaxPixXSensor
-                << ", MinPixYSensor: " << MinPixYSensor << ", MaxPixYSensor: " << MaxPixYSensor
-                << endmsg;
-      continue; // Skip this point if it is out of bounds
-    }
+    // Répartition de la charge dans les pixels, en vérifiant les limites capteur
     for (int ix = 0; ix < nX; ++ix) {
       for (int iy = 0; iy < nY; ++iy) {
+        int pixX = MinPixX + ix;
+        int pixY = MinPixY + iy;
+
+        if (pixX < MinPixXSensor || pixX > MaxPixXSensor ||
+            pixY < MinPixYSensor || pixY > MaxPixYSensor) {
+            ++nIgnoredPixels; 
+            debug() << "Pixel (" << pixX << "," << pixY << ") hors capteur — ignoré. "
+            << "Limites capteur X=[" << MinPixXSensor << "," << MaxPixXSensor << "], "
+            << "Y=[" << MinPixYSensor << "," << MaxPixYSensor << "]" << endmsg;
+          continue; // Ignorer les pixels hors limites
+        }
+
         const float ChargeInPixel = Charge * xStripCharge[ix] * yStripCharge[iy];
-        
-        hit_map[MinPixX + ix][MinPixY + iy] += ChargeInPixel;
+         debug() << "Ajout de charge dans pixel (" << pixX << "," << pixY << ") : "
+            << ChargeInPixel << " e-. "
+            << "Limites capteur X=[" << MinPixXSensor << "," << MaxPixXSensor << "], "
+            << "Y=[" << MinPixYSensor << "," << MaxPixYSensor << "]" << endmsg;
+        hit_map[pixX][pixY] += ChargeInPixel;
       }
     }
   }
+debug() << "Nombre total de pixels ignorés : " << nIgnoredPixels << endmsg;
 }
 
 
