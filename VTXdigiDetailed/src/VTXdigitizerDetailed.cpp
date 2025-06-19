@@ -129,19 +129,36 @@ StatusCode VTXdigitizerDetailed::initialize() {
   // retrieve the volume manager
   m_volman = m_geoSvc->getDetector()->volumeManager();
 
-  // Get the sensor thickness per layer in mm
+   // Get the sensor thickness and 2D size per layer in mm
   dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag()); // Get detector Type
   if (type.is(dd4hep::DetType::BARREL)) { // if this is a barrel detector
     getSensorThickness<dd4hep::rec::ZPlanarData>();
+    getSensorSize<dd4hep::rec::ZPlanarData>();
+    for (size_t i = 0; i < m_sensorWidth.size(); ++i) {
+    std::cout << "[DEBUG] Layer " << i 
+              << " Width: " << m_sensorWidth[i] 
+              << " mm, Length: " << m_sensorLength[i] 
+              << " mm, Thickness: " << m_sensorThickness[i] << " mm" 
+              << std::endl;
+  }
   }
   else if (type.is(dd4hep::DetType::ENDCAP)) { // If this is an Endcap Detector
     getSensorThickness<dd4hep::rec::ZDiskPetalsData>();
+    getSensorSize<dd4hep::rec::ZDiskPetalsData>();
+    for (size_t i = 0; i < m_sensorWidth.size(); ++i) {
+    std::cout << "[DEBUG] Layer " << i 
+              << " WidthInner: " << m_sensorWidthInner[i] 
+              << " mm, WidthOuter: " << m_sensorWidthOuter[i]
+              << ", Length: " << m_sensorLength[i] 
+              << " mm, Thickness: " << m_sensorThickness[i] << " mm" 
+              << std::endl;
+    }
   }
-  else {
+   else {
     error() << m_detectorName << " : Detector type should be BARREL or ENDCAP " << endmsg;
     return StatusCode::FAILURE;
-  }
-  
+   }
+
   // InitiAlize the diffusion parameters
   m_Dist50 = 0.050; // Define 50microns in mm
 
@@ -173,6 +190,36 @@ template<typename T> void VTXdigitizerDetailed::getSensorThickness() {
   }
   
 } // End getSensorThickness
+
+//Get Sensor Width & length 
+template<typename T> void VTXdigitizerDetailed::getSensorSize() {
+  auto detElement = m_geoSvc->getDetector()->detector(m_detectorName);
+  auto* theExtension = detElement.extension<T>();
+  const std::vector<typename T::LayerLayout>& layers = theExtension->layers;
+
+  m_sensorWidth.resize(layers.size());
+  m_sensorLength.resize(layers.size());
+
+  if constexpr (std::is_same_v<T, dd4hep::rec::ZDiskPetalsData>) {
+    // Seules les endcaps ont inner/outer width
+    m_sensorWidthInner.resize(layers.size());
+    m_sensorWidthOuter.resize(layers.size());
+  }
+
+  for (size_t i = 0; i < layers.size(); ++i) {
+    if constexpr (std::is_same_v<T, dd4hep::rec::ZPlanarData>) {
+      m_sensorWidth[i] = static_cast<float>(layers[i].widthSensitive / dd4hep::mm);
+      m_sensorLength[i] = static_cast<float>(layers[i].lengthSensor / dd4hep::mm);
+      // Pas d'inner/outer pour barrel
+    }
+    else if constexpr (std::is_same_v<T, dd4hep::rec::ZDiskPetalsData>) {
+      m_sensorWidthInner[i] = static_cast<float>(layers[i].widthInnerSensitive / dd4hep::mm);
+      m_sensorWidthOuter[i] = static_cast<float>(layers[i].widthOuterSensitive / dd4hep::mm);
+      m_sensorLength[i] = static_cast<float>(layers[i].lengthSensitive / dd4hep::mm);
+    }
+  }
+}
+
 
 StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
   // Get the input collection with Geant4 hits
@@ -440,6 +487,38 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   
 } // End DriftDirection
 
+void VTXdigitizerDetailed::GetSensorSize (const edm4hep::SimTrackerHit& hit, float& widthMin, float& widthMax, float& lengthMin, float& lengthMax) const {
+  /** Define sensentive sensor  dimension (2D) per layer in mm and per hit (cellID) in order to define pixel indices
+   *  The pixel size is defined by the readout segmentation
+   *  The positions are in mm
+   */
+  
+  const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
+  int layer = m_decoder->get(cellID, "layer");
+  dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag());
+
+  if (type.is(dd4hep::DetType::BARREL)) {
+        float width = m_sensorWidth[layer];
+        float length = m_sensorLength[layer];
+        widthMin = -width / 2.f;
+        widthMax = width / 2.f;
+        lengthMin = -length / 2.f;
+        lengthMax = length / 2.f;
+    } else if (type.is(dd4hep::DetType::ENDCAP)) {
+        float widthOuter = m_sensorWidthOuter[layer];
+        float length = m_sensorLength[layer];
+        widthMin = -widthOuter / 2.f;
+        widthMax = widthOuter / 2.f;
+        lengthMin = -length / 2.f;
+        lengthMax = length / 2.f;
+    } else {
+        std::cerr << "Detector type unknown in clampCloudToSensorBounds\n";
+        return;
+    }
+
+
+
+} // End GetSensorSize
 
 void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
 			  const std::vector<SignalPoint>& collectionPoints,
@@ -448,13 +527,26 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
   /** Get the map of recorded charges per pixel for a collection of drifted charges for a given hit
    */
 
+  // information detecteurs                                     
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
   const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName).segmentation();
-  auto cellDims = segmentation.cellDimensions(cellID);
-   
+  const auto cellDims = segmentation.cellDimensions(cellID);
+
   const float PixSizeX = cellDims[0] / dd4hep::mm;
   const float PixSizeY = cellDims[1] / dd4hep::mm;
- 
+
+ // Récupérer la taille physique du capteur
+  float widthMin = 0.f, widthMax = 0.f;
+  float lengthMin = 0.f, lengthMax = 0.f;
+  GetSensorSize(hit, widthMin, widthMax, lengthMin, lengthMax);
+  debug() << "Sensor size: width [" << widthMin << ", " << widthMax << "] mm, length [" << lengthMin << ", " << lengthMax << "] mm" << endmsg;
+  // Conversion bornes physiques du capteur en indices pixels
+  const int MinPixXSensor = static_cast<int>(std::floor((widthMin + 0.5f * PixSizeX) / PixSizeX));
+  const int MaxPixXSensor = static_cast<int>(std::floor((widthMax + 0.5f * PixSizeX) / PixSizeX));
+  const int MinPixYSensor = static_cast<int>(std::floor((lengthMin + 0.5f * PixSizeY) / PixSizeY));
+  const int MaxPixYSensor = static_cast<int>(std::floor((lengthMax + 0.5f * PixSizeY) / PixSizeY));
+  debug() << "Sensor bounds in Pixel Indices : X [" << MinPixXSensor << ", " << MaxPixXSensor << "], Y [" << MinPixYSensor << ", " << MaxPixYSensor << "]" << endmsg;
+  
   // map to store the pixel integrals in the x and y directions
   std::map<int, float, std::less<int>> x, y;
 
@@ -486,8 +578,8 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     // Integrate charge strips in x
     for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
 
-      float LowerBound = (float(IpxCloudMinX) - 0.5) * PixSizeX; // Lower bound of the strip
-      float UpperBound = (float(IpxCloudMaxX) + 0.5) * PixSizeX; // Uper bound of the strip
+      float LowerBound = (float(ix) - 0.5) * PixSizeX; // Lower bound of the strip
+      float UpperBound = (float(ix) + 0.5) * PixSizeX; // Uper bound of the strip
 
       float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterX)/(sqrt(2)*SigmaX)) - erf((LowerBound-CloudCenterX)/(sqrt(2)*SigmaX))); // Charge proportion in the strip calculated from erf function
       
@@ -498,8 +590,8 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     // Integrate charge strips in y
     for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
 
-      float LowerBound = (float(IpxCloudMinY) - 0.5) * PixSizeY; // Lower bound of the strip
-      float UpperBound = (float(IpxCloudMaxY) + 0.5) * PixSizeY; // Uper bound of the strip
+      float LowerBound = (float(iy) - 0.5) * PixSizeY; // Lower bound of the strip
+      float UpperBound = (float(iy) + 0.5) * PixSizeY; // Uper bound of the strip
 
       float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterY)/(sqrt(2)*SigmaY)) - erf((LowerBound-CloudCenterY)/(sqrt(2)*SigmaY))); // Charge proportion in the strip calculated from erf function
       
@@ -512,9 +604,14 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
     for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
       for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
 
-        // Show information about pixel pos and charge related to the Segment 
-        //debug() << "SignalPoint: " << i->x() << ":" << i->y() << ":" << i->sigma_x() << ":" << i->sigma_y() << ":" << i->amplitude() << endmsg;
-        // Calculate the charge associated to one signal point for a pixel par segment
+        // Check if the pixel is within the sensor bounds
+        if (ix < MinPixXSensor || ix > MaxPixXSensor || iy < MinPixYSensor || iy > MaxPixYSensor) {
+          continue; // Skip pixels outside the sensor bounds
+        }
+
+        // Calculate the charge in the pixel
+        // ChargeInPixel = Charge * x[ix] * y[iy]
+        // where x[ix] and y[iy] are the charge fractions in the x and y directions
   	    float ChargeInPixel = Charge * x[ix] * y[iy];
 
         hit_map[ix][iy] += ChargeInPixel; // Add the charge to the pixel map
