@@ -226,11 +226,22 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
   verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
 
+  // Check if it is produced by Secondaries or Overlay 
+  int nSecondaryHits = 0;
+  int nOverlayHits = 0;
+
   // Digitize the sim hits
   edm4hep::TrackerHitPlaneCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col = m_output_sim_digi_link.createAndPut();
   
   for (const auto& input_sim_hit : *input_sim_hits) {
+
+    // Check if the hit is a secondary or an overlay
+    if (input_sim_hit.isProducedBySecondary()) {
+      nSecondaryHits++;
+    } else if (input_sim_hit.isOverlay()) {
+      nOverlayHits++;
+    }
     
     std::vector<ChargeDepositUnit> ionizationPoints;
     std::vector<SignalPoint> collectionPoints;
@@ -245,6 +256,10 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
     generate_output(input_sim_hit, output_digi_hits, output_sim_digi_link_col, hit_map);
     
   }
+
+  debug() << "SimHits stats: "
+        << nSecondaryHits << " produced by secondaries, "
+        << nOverlayHits << " marked as overlay." << endmsg;
 
   // Comptage des digis par layer uniquement si mode debug activé
   if (m_DebugHistos) {
@@ -546,7 +561,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
   const int MinPixYSensor = static_cast<int>(std::floor((lengthMin + 0.5f * PixSizeY) / PixSizeY));
   const int MaxPixYSensor = static_cast<int>(std::floor((lengthMax + 0.5f * PixSizeY) / PixSizeY));
   debug() << "Sensor bounds in Pixel Indices : X [" << MinPixXSensor << ", " << MaxPixXSensor << "], Y [" << MinPixYSensor << ", " << MaxPixYSensor << "]" << endmsg;
-  
+
   // map to store the pixel integrals in the x and y directions
   std::map<int, float, std::less<int>> x, y;
 
@@ -666,7 +681,24 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   const float PixSizeX = cellDims[0] / dd4hep::mm;
   const float PixSizeY = cellDims[1] / dd4hep::mm;
 
-  //
+
+  debug() << "SimHit CellID: " << cellID << endmsg;
+  // Décodage champ par champ
+  for (const auto& field : m_decoder->fields()) {
+    const std::string& name = field.name();
+    int value = m_decoder->get(cellID, name);
+    debug() << "  " << name << " = " << value << endmsg;
+  }
+  debug() << "Hit position in mm: (" << hit.getPosition().x * dd4hep::mm << ", "
+          << hit.getPosition().y * dd4hep::mm << ", "
+          << hit.getPosition().z * dd4hep::mm << ")" << endmsg;
+  debug() << "is Secondary ? : " << hit.isProducedBySecondary() << endmsg;
+  debug() << "is Overlay ? : " << hit.isOverlay() << endmsg;
+
+ 
+  
+
+
 
   double DigiLocalX = 0.; // Local position of the digitized hit
   double DigiLocalY = 0.;
