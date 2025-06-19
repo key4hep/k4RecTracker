@@ -45,26 +45,25 @@ StatusCode TrackdNdxDelphesBased::initialize() {
     }
 
     // Load the geometry parameters from the XML file
-    double Rmin = m_geoSvc->getDetector()->constantAsDouble(m_Rmin_parameter_name.value());
-    double Rmax = m_geoSvc->getDetector()->constantAsDouble(m_Rmax_parameter_name.value());
-    double Zmax = m_geoSvc->getDetector()->constantAsDouble(m_Zmax_parameter_name.value());
+    // Cast to mm as this algorithm tries to use mm or 1/mm everywhere
+    double Rmin = m_geoSvc->getDetector()->constantAsDouble(m_Rmin_parameter_name.value())/dd4hep::mm;
+    double Rmax = m_geoSvc->getDetector()->constantAsDouble(m_Rmax_parameter_name.value())/dd4hep::mm;
+    double Zmax = m_geoSvc->getDetector()->constantAsDouble(m_Zmax_parameter_name.value())/dd4hep::mm;
     double Zmin;
     // For fwd-bwd symmetric detectors, use negative Zmax as Zmin
     if (m_Zmin_parameter_name.value() == m_Zmax_parameter_name.value()) {
         Zmin = -Zmax;
     } else {
-        Zmin = m_geoSvc->getDetector()->constantAsDouble(m_Zmin_parameter_name.value());
+        Zmin = m_geoSvc->getDetector()->constantAsDouble(m_Zmin_parameter_name.value())/dd4hep::mm;
     }
 
     debug() << "Geometry parameters:" << endmsg;
-    debug() << "Rmin: " << Rmin/dd4hep::cm << " cm" << endmsg;
-    debug() << "Rmax: " << Rmax/dd4hep::cm << " cm" << endmsg;
-    debug() << "Zmin: " << Zmin/dd4hep::cm << " cm" << endmsg;
-    debug() << "Zmax: " << Zmax/dd4hep::cm << " cm" << endmsg;
+    debug() << "Rmin: " << Rmin << " mm" << endmsg;
+    debug() << "Rmax: " << Rmax << " mm" << endmsg;
+    debug() << "Zmin: " << Zmin << " mm" << endmsg;
+    debug() << "Zmax: " << Zmax << " mm" << endmsg;
 
-    // dd4hep uses cm, while delphes (or more importantly the track parametrisation) uses mm, so we need to convert
-    m_delphesTrkUtil->SetDchBoundaries(Rmin/dd4hep::mm, Rmax/dd4hep::mm, Zmin/dd4hep::mm, Zmax/dd4hep::mm);
-
+    m_delphesTrkUtil->SetDchBoundaries(Rmin, Rmax, Zmin, Zmax);
     m_delphesTrkUtil->SetGasMix(m_GasSel.value());
 
     // Make sure fill factor is between 0 and 1
@@ -85,7 +84,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
     random_engine.seed(engine_seed);
 
     // Dummy value if dN/dx calculation somehow fails
-    const double dummy_value = -999 * (1/dd4hep::m);
+    const double dummy_value = -1.0;
     bool success = true;
 
     debug() << "Processing new Event" << endmsg;
@@ -114,13 +113,14 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
         // Check if betagamma is in valid range of delphes parametrisation (status: 16 June 2025)
         if (betagamma < 0.5 || betagamma > 20000.0) {
             warning() << "beta*gamma value outside of \"good\" range of delphes parametrisation (0.5-20000), dN/dx will be set to dummy value: " 
-                      << dummy_value/(1/dd4hep::m) << " clusters/m" << endmsg;
+                      << dummy_value << " clusters/mm" << endmsg;
             success = false;
         }
 
-        // Get number of clusters per length from delphes (output is in m^-1)
-        double nclusters_per_meter = m_delphesTrkUtil->Nclusters(betagamma, m_GasSel.value()) * (1/dd4hep::m);
-        debug() << "Number of clusters per meter: " << nclusters_per_meter / (1/dd4hep::m) << endmsg;
+        // Get number of clusters per length from delphes
+        // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
+        double nclusters_per_mm = m_delphesTrkUtil->Nclusters(betagamma, m_GasSel.value()) / 1000.0;
+        debug() << "Number of clusters per mm: " << nclusters_per_mm  << endmsg;
 
         ///////////////////////
         // Track Information //
@@ -140,35 +140,36 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
         delphes_track[3] = track_state.Z0;
         delphes_track[4] = track_state.tanLambda; // tanLambda and cot(theta) are the same thing (see DelphesEDM4HepConverter.cc)
 
-        // Note: track length will be in mm, since this is what delphes and the track parametrisation use
-        double track_length = m_delphesTrkUtil->TrkLen(delphes_track)*dd4hep::mm;
+        // Note: track length will already be in mm, since this is what delphes and the track parametrisation use
+        // so no need to cast it to dd4hep::mm
+        double track_length = m_delphesTrkUtil->TrkLen(delphes_track);
         // Check if track length calculation was successful
         if (track_length < std::numeric_limits<double>::epsilon()) {
             warning() << "Delphes track length calculation returned 0.0, dN/dx will be set to dummy value: " 
-                      << dummy_value/(1/dd4hep::m) << " clusters/m" << endmsg;
+                      << dummy_value << " clusters/mm" << endmsg;
             success = false;
         }
-        debug() << "Track length inside full chamber: " << track_length/dd4hep::mm << " mm" << endmsg;
+        debug() << "Track length inside full chamber: " << track_length << " mm" << endmsg;
         // Apply fill factor to track length
         track_length *= m_fill_factor.value();
-        debug() << "Track length after applying fill factor: " << track_length/dd4hep::mm << " mm" << endmsg;
+        debug() << "Track length after applying fill factor: " << track_length << " mm" << endmsg;
 
         /////////////////////////////////////////////
         // Draw Number of Clusters from Poissonian //
         /////////////////////////////////////////////
 
-        double nclusters_mean = nclusters_per_meter * track_length;
+        double nclusters_mean = nclusters_per_mm * track_length;
         std::poisson_distribution<int> poisson_dist(nclusters_mean);
 
         int n_cluster = poisson_dist(random_engine);
         debug() << "Track has " << n_cluster << " clusters." << endmsg;
 
         double dNdx_value = (success)? (n_cluster/track_length) : dummy_value;
-        debug() << "dNdx value: " << dNdx_value / (1/dd4hep::m) << " (clusters/m)" << endmsg;
+        debug() << "dNdx value: " << dNdx_value << " (clusters/mm)" << endmsg;
 
         auto dqdx = outputCollection.create();
         edm4hep::Quantity q;
-        q.value = static_cast<float>(dNdx_value/(1/dd4hep::m));
+        q.value = static_cast<float>(dNdx_value);
 
         dqdx.setDQdx(q);
         dqdx.setTrack(track);
