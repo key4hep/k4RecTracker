@@ -20,7 +20,7 @@ dd4hep_set_compiler_flags()
 find_package(ROOT COMPONENTS RIO Tree MathCore)
 find_package(podio 1.2 REQUIRED)
 find_package(EDM4HEP)
-find_package(k4FWCore)
+find_package(k4FWCore 1.3 REQUIRED)
 find_package(Gaudi)
 find_package(GSL)
 #---------------------------------------------------------------

@@ -48,11 +48,11 @@ public:
 
 private:
   // Input sim tracker hit collection name
-  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader,
-                                                                        this};
+  mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits",
+                                                                                  Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
-  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer,
-                                                                         this};
+  mutable k4FWCore::DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits",
+                                                                                   Gaudi::DataHandle::Writer, this};
 
   // Detector readout name
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "CDCHHits", "Name of the detector readout"};
