@@ -135,7 +135,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
         TVectorD delphes_track(5);
         delphes_track[0] = track_state.D0;
         delphes_track[1] = track_state.phi;
-        const double scale = -2.0;            // delphes uses C instead of omega, scale is used to convert
+        const double scale = -2.0;            // delphes uses C (half curvature) instead of omega, scale is used to convert
         delphes_track[2] = track_state.omega / scale;
         delphes_track[3] = track_state.Z0;
         delphes_track[4] = track_state.tanLambda; // tanLambda and cot(theta) are the same thing (see DelphesEDM4HepConverter.cc)

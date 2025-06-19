@@ -60,6 +60,7 @@
  *              - If the track length calculation fails, dN/dx set to dummy (with warning)
  *          - Track length calculation assumes a perfectly cylindrical drift volume
  *      - Since this parametrisation is based on full tracks, the energy loss in the tracking volume cannot be accounted for
+ *      - dN/dx quantity is only filled with a value, no error at the moment
  *  
  *  @author Andreas Loeschcke Centeno
  */
