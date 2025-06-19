@@ -13,6 +13,10 @@
 // ROOT
 #include <TVectorD.h>
 
+// STL
+#include <random>
+#include <limits>
+
 DECLARE_COMPONENT(TrackdNdxDelphesBased)
 
 TrackdNdxDelphesBased::TrackdNdxDelphesBased(const std::string& name, ISvcLocator* svcLoc)
@@ -139,7 +143,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
         // Note: track length will be in mm, since this is what delphes and the track parametrisation use
         double track_length = m_delphesTrkUtil->TrkLen(delphes_track)*dd4hep::mm;
         // Check if track length calculation was successful
-        if (track_length == 0.0) {
+        if (track_length < std::numeric_limits<double>::epsilon()) {
             warning() << "Delphes track length calculation returned 0.0, dN/dx will be set to dummy value: " 
                       << dummy_value/(1/dd4hep::m) << " clusters/m" << endmsg;
             success = false;
