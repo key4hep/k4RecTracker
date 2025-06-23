@@ -37,13 +37,6 @@ StatusCode TrackdNdxDelphesBased::initialize() {
         return StatusCode::FAILURE;
     }
 
-    // Initialise the delphes track util
-    m_delphesTrkUtil = new TrkUtil();
-    if (!m_delphesTrkUtil) {
-        error() << "Failed to create delphes TrkUtil instance" << endmsg;
-        return StatusCode::FAILURE;
-    }
-
     // Load the geometry parameters from the XML file
     // Cast to mm as this algorithm tries to use mm or 1/mm everywhere
     double Rmin = m_geoSvc->getDetector()->constantAsDouble(m_Rmin_parameter_name.value())/dd4hep::mm;
@@ -63,8 +56,8 @@ StatusCode TrackdNdxDelphesBased::initialize() {
     debug() << "Zmin: " << Zmin << " mm" << endmsg;
     debug() << "Zmax: " << Zmax << " mm" << endmsg;
 
-    m_delphesTrkUtil->SetDchBoundaries(Rmin, Rmax, Zmin, Zmax);
-    m_delphesTrkUtil->SetGasMix(m_GasSel.value());
+    m_delphesTrkUtil.SetDchBoundaries(Rmin, Rmax, Zmin, Zmax);
+    m_delphesTrkUtil.SetGasMix(m_GasSel.value());
 
     // Make sure fill factor is between 0 and 1
     if (m_fill_factor.value() < 0.0 || m_fill_factor.value() > 1.0) {
@@ -119,7 +112,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
 
         // Get number of clusters per length from delphes
         // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
-        double nclusters_per_mm = m_delphesTrkUtil->Nclusters(betagamma, m_GasSel.value()) / 1000.0;
+        double nclusters_per_mm = m_delphesTrkUtil.Nclusters(betagamma, m_GasSel.value()) / 1000.0;
         debug() << "Number of clusters per mm: " << nclusters_per_mm  << endmsg;
 
         ///////////////////////
@@ -142,7 +135,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
 
         // Note: track length will already be in mm, since this is what delphes and the track parametrisation use
         // so no need to cast it to dd4hep::mm
-        double track_length = m_delphesTrkUtil->TrkLen(delphes_track);
+        double track_length = m_delphesTrkUtil.TrkLen(delphes_track);
         // Check if track length calculation was successful
         if (track_length < std::numeric_limits<double>::epsilon()) {
             warning() << "Delphes track length calculation returned 0.0, dN/dx will be set to dummy value: " 

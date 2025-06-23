@@ -79,7 +79,7 @@ private:
     SmartIF<IUniqueIDGenSvc> m_uniqueIDSvc{nullptr};
     SmartIF<IGeoSvc> m_geoSvc{nullptr};
 
-    TrkUtil* m_delphesTrkUtil;
+    TrkUtil m_delphesTrkUtil;
 
     Gaudi::Property<std::string> m_Zmax_parameter_name{
         this,
