@@ -5,7 +5,9 @@
 #include "edm4hep/TrackState.h"
 #include "k4FWCore/Consumer.h"
 #include "podio/RelationRange.h"
+#include <fmt/core.h>
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <sstream>
@@ -59,16 +61,25 @@ private:
 
   float getSigmaPhi(const edm4hep::TrackState& ts) const { return std::sqrt(ts.getCovMatrix(TP::phi, TP::phi)); }
 
+  std::string printValueUnc(const std::string& strTrType, const std::string& vName, const int maxLabelWidth,
+                            const float varValue) const {
+    return fmt::format("{:<10}{:>{}}{:>10.5f}", strTrType, vName, maxLabelWidth, varValue);
+  }
+
   // Helper function to process each track (either SiTrack or CluTrack)
   void processTrack(const edm4hep::Track& track, const std::string& trackType) const {
     auto trackStates = track.getTrackStates(); // RelationRange<TrackState>
 
     // Check if there are enough track states (e.g., third track state)
     std::string varName = "phi";
+    std::string sigmaVarName = "sigma " + varName;
+    int maxVarWidth = std::max(varName.size(), sigmaVarName.size()) + 2;
+
+    // Check if there are enough track states (e.g., third track state)
     if (trackStates.size() > 2) {
-      const edm4hep::TrackState& state = trackStates[2];                                  // Get the third track state
-      info() << trackType << std::string(7, ' ') + varName + ": " << state.phi << endmsg; // Print phi value
-      info() << trackType << " sigma " + varName + ": " << getSigmaPhi(state) << endmsg;
+      const edm4hep::TrackState& state = trackStates[2]; // Get the third track state
+      info() << printValueUnc(trackType, varName, maxVarWidth, state.phi) << endmsg;
+      info() << printValueUnc(trackType, sigmaVarName, maxVarWidth, getSigmaPhi(state)) << endmsg;
     } else {
       warning() << trackType << " has less than 3 track states, skipping " + varName + " print" << endmsg;
     }
