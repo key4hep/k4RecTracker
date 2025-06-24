@@ -57,10 +57,10 @@ private:
 
     // Check if there are enough track states (e.g., third track state)
     if (trackStates.size() > 2) {
-      const edm4hep::TrackState& state = trackStates[2];          // Get the third track state
-      std::cout << trackType << " D0: " << state.D0 << std::endl; // Print D0 value
+      const edm4hep::TrackState& state = trackStates[2];            // Get the third track state
+      std::cout << trackType << " phi: " << state.phi << std::endl; // Print phi value
     } else {
-      warning() << trackType << " has less than 3 track states, skipping D0 print" << endmsg;
+      warning() << trackType << " has less than 3 track states, skipping phi print" << endmsg;
     }
   }
 };
