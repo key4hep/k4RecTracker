@@ -1,10 +1,12 @@
 #include "Gaudi/Property.h"
+#include "GaudiKernel/MsgStream.h"
 #include "edm4hep/Track.h"
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackState.h"
 #include "k4FWCore/Consumer.h"
 #include "podio/RelationRange.h"
 
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <stdexcept>
@@ -12,6 +14,7 @@
 
 // Type alias for TrackCollection to improve readability
 using TrackColl = edm4hep::TrackCollection;
+using TP = edm4hep::TrackParams;
 
 // Consumer that processes track collections and prints D0 values
 struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const TrackColl&)> {
@@ -25,6 +28,9 @@ struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const Tr
 
   // This function will be called to process the data
   void operator()(const TrackColl& inSiTracks, const TrackColl& inCluTracks) const override {
+    info() << std::string(25, '*') << endmsg;
+    info() << "New event" << endmsg;
+    info() << std::string(25, '*') << endmsg;
 
     debug() << "Received SiTracks collection with " << inSiTracks.size() << " tracks" << endmsg;
     debug() << "Received ClupatraTracks collection with " << inCluTracks.size() << " tracks" << endmsg;
@@ -51,16 +57,20 @@ private:
   // Optional: You can add a property to filter or adjust behavior if needed (e.g., track state index).
   Gaudi::Property<int> m_trackStateIndex{this, "TrackStateIndex", 2, "Index of track state to print (default 2)"};
 
+  float getSigmaPhi(const edm4hep::TrackState& ts) const { return std::sqrt(ts.getCovMatrix(TP::phi, TP::phi)); }
+
   // Helper function to process each track (either SiTrack or CluTrack)
   void processTrack(const edm4hep::Track& track, const std::string& trackType) const {
     auto trackStates = track.getTrackStates(); // RelationRange<TrackState>
 
     // Check if there are enough track states (e.g., third track state)
+    std::string varName = "phi";
     if (trackStates.size() > 2) {
-      const edm4hep::TrackState& state = trackStates[2];            // Get the third track state
-      std::cout << trackType << " phi: " << state.phi << std::endl; // Print phi value
+      const edm4hep::TrackState& state = trackStates[2];                                  // Get the third track state
+      info() << trackType << std::string(7, ' ') + varName + ": " << state.phi << endmsg; // Print phi value
+      info() << trackType << " sigma " + varName + ": " << getSigmaPhi(state) << endmsg;
     } else {
-      warning() << trackType << " has less than 3 track states, skipping phi print" << endmsg;
+      warning() << trackType << " has less than 3 track states, skipping " + varName + " print" << endmsg;
     }
   }
 };
