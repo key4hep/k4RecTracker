@@ -68,9 +68,9 @@ private:
 
   // Helper function to process each track (either SiTrack or CluTrack)
   void processTrack(const edm4hep::Track& track, const std::string& trackType) const {
-    auto trackStates = track.getTrackStates(); // RelationRange<TrackState>
 
-    // Check if there are enough track states (e.g., third track state)
+    podio::RelationRange<edm4hep::TrackState> trackStates = track.getTrackStates();
+
     std::string varName = "phi";
     std::string sigmaVarName = "sigma " + varName;
     int maxVarWidth = std::max(varName.size(), sigmaVarName.size()) + 2;
