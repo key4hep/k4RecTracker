@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from Configurables import TrackD0Printer
-from Gaudi.Configuration import INFO
+from Gaudi.Configuration import INFO, DEBUG
 from k4FWCore import ApplicationMgr, IOSvc
 
 iosvc = IOSvc()
@@ -13,6 +13,7 @@ iosvc.Input = str(
 iosvc.CollectionNames = ["SiTracks", "ClupatraTracks"]
 
 printer = TrackD0Printer("TrackD0Printer", nStars=40)
+printer.OutputLevel = DEBUG
 
 ApplicationMgr(
     TopAlg=[printer],
