@@ -45,11 +45,11 @@ public:
 
 private:
   // Input sim tracker hit collection name
-  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader,
-                                                                        this};
+  mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits",
+                                                                                  Gaudi::DataHandle::Reader, this};
   // Output digitized tracker hit collection name
-  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer,
-                                                                         this};
+  mutable k4FWCore::DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits",
+                                                                                   Gaudi::DataHandle::Writer, this};
   // Flat value for SiPM efficiency
   FloatProperty m_flat_SiPM_effi{this, "flatSiPMEfficiency", -1.0,
                                  "Flat value for SiPM quantum efficiency (<0 := disabled)"};

@@ -5,7 +5,7 @@ project(${PackageName} LANGUAGES CXX)
 
 # please keep this layout for version setting, used by the automatic tagging script
 set(${PackageName}_VERSION_MAJOR 0)
-set(${PackageName}_VERSION_MINOR 4)
+set(${PackageName}_VERSION_MINOR 5)
 set(${PackageName}_VERSION_PATCH 0)
 
 set(${PackageName}_VERSION "${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}.${PACKAGE_VERSION_PATCH}")
@@ -20,7 +20,7 @@ dd4hep_set_compiler_flags()
 find_package(ROOT COMPONENTS RIO Tree MathCore)
 find_package(podio 1.2 REQUIRED)
 find_package(EDM4HEP)
-find_package(k4FWCore)
+find_package(k4FWCore 1.3 REQUIRED)
 find_package(Gaudi)
 find_package(GSL)
 #---------------------------------------------------------------

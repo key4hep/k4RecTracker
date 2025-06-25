@@ -53,13 +53,13 @@ public:
 
 private:
   // Input sim vertex hit collection name
-  mutable DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader,
-                                                                        this};
+  mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits",
+                                                                                  Gaudi::DataHandle::Reader, this};
   // Output digitized vertex hit collection name
-  mutable DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer,
-                                                                         this};
+  mutable k4FWCore::DataHandle<edm4hep::TrackerHit3DCollection> m_output_digi_hits{"outputDigiHits",
+                                                                                   Gaudi::DataHandle::Writer, this};
   // Output link between sim hits and digitized hits
-  mutable DataHandle<edm4hep::TrackerHitSimTrackerHitLinkCollection> m_output_sim_digi_link{
+  mutable k4FWCore::DataHandle<edm4hep::TrackerHitSimTrackerHitLinkCollection> m_output_sim_digi_link{
       "outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
 
   // Detector name

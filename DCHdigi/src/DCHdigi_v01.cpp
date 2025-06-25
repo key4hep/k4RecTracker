@@ -32,11 +32,9 @@ StatusCode DCHdigi_v01::initialize() {
 
   if (0 > m_z_resolution.value())
     ThrowException("Z resolution input value can not be negative!");
-  m_gauss_z_cm = std::normal_distribution<double>(0., m_z_resolution.value() * MM_TO_CM);
 
   if (0 > m_xy_resolution.value())
     ThrowException("Radial (XY) resolution input value can not be negative!");
-  m_gauss_xy_cm = std::normal_distribution<double>(0., m_xy_resolution.value() * MM_TO_CM);
 
   //-----------------
   // Retrieve the subdetector
@@ -97,14 +95,31 @@ StatusCode DCHdigi_v01::initialize() {
   return StatusCode::SUCCESS;
 }
 
+std::tuple<std::mt19937_64, TRandom3> DCHdigi_v01::CreateRandomEngines(const edm4hep::EventHeaderCollection& headers) const {
+  auto engine_seed = m_uidSvc->getUniqueID(headers, this->name());
+  auto rng_engine = std::mt19937_64(engine_seed);
+  auto random_seed = m_uidSvc->getUniqueID(headers, this->name()+"_1");
+  auto myRandom = TRandom3(random_seed);
+  // advance internal state to minimize possibility of creating correlations
+  rng_engine.discard(10);
+  for (int i = 0; i < 10; ++i)
+    myRandom.Rndm();
+  return {rng_engine, myRandom};
+}
+
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       operator()       ////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
 std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection>
 DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
-                        const edm4hep::EventHeaderCollection& headers) const {
-  // initialize seed for random engine
-  this->PrepareRandomEngine(headers);
+                    const edm4hep::EventHeaderCollection&   headers) const {
+  /// initialize engines
+  auto [rng_engine, myRandom] = this->CreateRandomEngines(headers);
+    
+  // Gaussian random number generator used for the smearing of the z position, in cm!
+  std::normal_distribution<double> gauss_z_cm{0., m_z_resolution.value() * MM_TO_CM};
+  // Gaussian random number generator used for the smearing of the xy position, in cm!
+  std::normal_distribution<double> gauss_xy_cm{0., m_xy_resolution.value() * MM_TO_CM};
 
   debug() << "Input Sim Hit collection size: " << input_sim_hits.size() << endmsg;
 
@@ -133,7 +148,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     //       smear the position
 
     //       smear position along the wire
-    double smearing_z = m_gauss_z_cm(m_engine);
+    double smearing_z = gauss_z_cm(rng_engine);
     if (m_create_debug_histos.value())
       hSz->Fill(smearing_z);
 
@@ -145,7 +160,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     }
 
     //       smear position perpendicular to the wire
-    double smearing_xy = m_gauss_xy_cm(m_engine);
+    double smearing_xy = gauss_xy_cm(rng_engine);
     if (m_create_debug_histos.value())
       hSxy->Fill(smearing_xy);
     float distanceToWire_real = hit_to_wire_vector.Mag();
@@ -193,7 +208,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setDistanceToWireError(smearing_xy);
     // For the sake of speed, let the dNdx calculation be optional
     if (m_calculate_dndx.value()) {
-      auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit);
+      auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit, myRandom);
       // to return the total number of electrons within the step, do the following:
       //   int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
       //   oDCHdigihit.setNElectronsTotal(nElectronsTotal);
@@ -282,16 +297,6 @@ void DCHdigi_v01::PrintConfiguration(std::ostream& io) {
   return;
 }
 
-void DCHdigi_v01::PrepareRandomEngine(const edm4hep::EventHeaderCollection& headers) const {
-  auto engine_seed = m_uidSvc->getUniqueID(headers, this->name());
-  m_engine.seed(engine_seed);
-  auto random_seed = m_uidSvc->getUniqueID(headers, this->name() + "_1");
-  myRandom.SetSeed(random_seed);
-  // advance internal state to minimize possibility of creating correlations
-  m_engine.discard(10);
-  for (int i = 0; i < 10; ++i)
-    myRandom.Rndm();
-}
 
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       CalculateNClusters       ////////////////////////////////
@@ -307,8 +312,7 @@ bool DCHdigi_v01::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle&
   return (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
 }
 
-std::pair<uint32_t, std::vector<int>>
-DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) const {
+std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit, TRandom3 & myRandom) const {
 
   const edm4hep::MCParticle& thisParticle = input_sim_hit.getParticle();
   // if gamma, optical photon, or other particle with null mass, or hit with zero energy deposited, return zero clusters
@@ -437,7 +441,7 @@ DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) cons
     } else {
       ExSgmlen = ExSgmhad * TMath::Sqrt(LengthTrack);
     }
-    float maxExECl = (Eloss - maxEx0len + this->myRandom.Gaus(0, ExSgmlen)) / maxExSlp;
+    float maxExECl = (Eloss - maxEx0len + myRandom.Gaus(0, ExSgmlen)) / maxExSlp;
 
     if (maxExECl < EIzs) {
       maxExECl = 0.0;
@@ -464,7 +468,7 @@ DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) cons
         float tmpCorr = 0.0;
         for (int i = 0; i < nhEp; ++i) {
           if (ExECl >= (i == 0 ? 0 : hEpcut[i - 1]) && ExECl < hEpcut[i]) {
-            tmpCorr = this->myRandom.Gaus(CorrpMean[i], CorrpSgm[i]);
+            tmpCorr = myRandom.Gaus(CorrpMean[i], CorrpSgm[i]);
           }
         }
         int ClSz = TMath::Nint(ExECl * CorrSlp + CorrInt - tmpCorr);
@@ -508,14 +512,14 @@ DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit) cons
       if (tmphE >= nhE)
         tmphE = nhE - 1;
       if (tmphE == nhE - 1) {
-        rndCorr = this->myRandom.Uniform(0, 1);
+        rndCorr = myRandom.Uniform(0, 1);
         if (rndCorr < Corrdglfrac[tmphE]) {
-          tmpCl = this->myRandom.Gaus(Corrdglmeang[tmphE], Corrdglsgmg[tmphE]);
+          tmpCl = myRandom.Gaus(Corrdglmeang[tmphE], Corrdglsgmg[tmphE]);
         } else {
-          tmpCl = this->myRandom.Landau(Corrdglmpvl[tmphE], Corrdglsgml[tmphE]);
+          tmpCl = myRandom.Landau(Corrdglmpvl[tmphE], Corrdglsgml[tmphE]);
         }
       } else {
-        tmpCl = this->myRandom.Gaus(Corrdgmean[tmphE], Corrdgsgm[tmphE]);
+        tmpCl = myRandom.Gaus(Corrdgmean[tmphE], Corrdgsgm[tmphE]);
       }
 
       int ClSz = TMath::Nint(Ekdelta * CorrSlp + CorrInt - tmpCl);
