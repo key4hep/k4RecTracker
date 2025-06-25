@@ -5,6 +5,7 @@
 #include "edm4hep/TrackState.h"
 #include "k4FWCore/Consumer.h"
 #include "podio/RelationRange.h"
+#include "printStars.h"
 #include <fmt/core.h>
 
 #include <algorithm>
@@ -32,7 +33,7 @@ struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const Tr
   // This function will be called to process the data
   void operator()(const TrackColl& inSiTracks, const TrackColl& inCluTracks) const override {
 
-    printInStars("New Event", n_stars);
+    printInStars(this, "New Event", n_stars);
 
     debug() << "Received SiTracks collection with " << inSiTracks.size() << " tracks" << endmsg;
     debug() << "Received ClupatraTracks collection with " << inCluTracks.size() << " tracks" << endmsg;
@@ -57,12 +58,6 @@ struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const Tr
 
 private:
   Gaudi::Property<size_t> n_stars{this, "nStars", 20, "line-width of message in star box"};
-
-  void printInStars(const std::string& msg, const int lineWidth) const {
-    info() << fmt::format("{:*^{}}", "", lineWidth) << endmsg;
-    info() << fmt::format("{:*^{}}", msg, lineWidth) << endmsg;
-    info() << fmt::format("{:*^{}}", "", lineWidth) << endmsg;
-  }
 
   float getSigmaPhi(const edm4hep::TrackState& ts) const { return std::sqrt(ts.getCovMatrix(TP::phi, TP::phi)); }
 
