@@ -621,6 +621,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
 
         // Check if the pixel is within the sensor bounds
         if (ix < MinPixXSensor || ix > MaxPixXSensor || iy < MinPixYSensor || iy > MaxPixYSensor) {
+          debug() << "Pixel out of bounds (skipped) : " << ix << ":" << iy << endmsg;
           continue; // Skip pixels outside the sensor bounds
         }
 
