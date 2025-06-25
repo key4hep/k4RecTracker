@@ -14,11 +14,11 @@
 #include <stdexcept>
 #include <string>
 
-// Type alias for TrackCollection to improve readability
+// Type aliases for improved readability
 using TrackColl = edm4hep::TrackCollection;
 using TP = edm4hep::TrackParams;
 
-// Consumer that processes track collections and prints D0 values
+// Consumer that processes track collections and prints phi values
 struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const TrackColl&)> {
   // Constructor: define the input collections (ClupatraTracks and SiTracks)
   TrackD0Printer(const std::string& name, ISvcLocator* svcLoc)
