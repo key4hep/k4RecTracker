@@ -31,7 +31,7 @@ struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const Tr
   // This function will be called to process the data
   void operator()(const TrackColl& inSiTracks, const TrackColl& inCluTracks) const override {
 
-    printInStars("New Event", 25);
+    printInStars("New Event", n_stars);
 
     debug() << "Received SiTracks collection with " << inSiTracks.size() << " tracks" << endmsg;
     debug() << "Received ClupatraTracks collection with " << inCluTracks.size() << " tracks" << endmsg;
@@ -55,8 +55,7 @@ struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const Tr
   }
 
 private:
-  // Optional: You can add a property to filter or adjust behavior if needed (e.g., track state index).
-  Gaudi::Property<int> m_trackStateIndex{this, "TrackStateIndex", 2, "Index of track state to print (default 2)"};
+  Gaudi::Property<size_t> n_stars{this, "nStars", 20, "line-width of message in star box"};
 
   void printInStars(const std::string& msg, const int lineWidth) const {
     info() << fmt::format("{:*^{}}", "", lineWidth) << endmsg;
@@ -81,8 +80,9 @@ private:
     int maxVarWidth = std::max(varName.size(), sigmaVarName.size()) + 2;
 
     // Check if there are enough track states (e.g., third track state)
-    if (trackStates.size() > 2) {
-      const edm4hep::TrackState& state = trackStates[2]; // Get the third track state
+    const size_t trackStateIndex = 2;
+    if (trackStates.size() > trackStateIndex) {
+      const edm4hep::TrackState& state = trackStates[trackStateIndex]; // Get the third track state
       info() << printValueUnc(trackType, varName, maxVarWidth, state.phi) << endmsg;
       info() << printValueUnc(trackType, sigmaVarName, maxVarWidth, getSigmaPhi(state)) << endmsg;
     } else {

@@ -12,7 +12,7 @@ iosvc.Input = str(
 
 iosvc.CollectionNames = ["SiTracks", "ClupatraTracks"]
 
-printer = TrackD0Printer("TrackD0Printer")
+printer = TrackD0Printer("TrackD0Printer", nStars=40)
 
 ApplicationMgr(
     TopAlg=[printer],
