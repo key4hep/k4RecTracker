@@ -17,6 +17,7 @@
 // Type aliases for improved readability
 using TrackColl = edm4hep::TrackCollection;
 using TP = edm4hep::TrackParams;
+using TS = edm4hep::TrackState;
 
 // Consumer that processes track collections and prints phi values
 struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const TrackColl&)> {
@@ -73,20 +74,17 @@ private:
   // Helper function to process each track (either SiTrack or CluTrack)
   void processTrack(const edm4hep::Track& track, const std::string& trackType) const {
 
-    podio::RelationRange<edm4hep::TrackState> trackStates = track.getTrackStates();
-
     std::string varName = "phi";
     std::string sigmaVarName = "sigma " + varName;
     int maxVarWidth = std::max(varName.size(), sigmaVarName.size()) + 2;
 
-    // Check if there are enough track states (e.g., third track state)
-    const size_t trackStateIndex = 2;
-    if (trackStates.size() > trackStateIndex) {
-      const edm4hep::TrackState& state = trackStates[trackStateIndex]; // Get the third track state
-      info() << printValueUnc(trackType, varName, maxVarWidth, state.phi) << endmsg;
-      info() << printValueUnc(trackType, sigmaVarName, maxVarWidth, getSigmaPhi(state)) << endmsg;
+    // assuming there is only one Track State at IP
+    if (auto trackAtIP = std::ranges::find(track.getTrackStates(), TS::AtIP, &TS::location);
+        trackAtIP != track.getTrackStates().end()) {
+      info() << printValueUnc(trackType, varName, maxVarWidth, trackAtIP->phi) << endmsg;
+      info() << printValueUnc(trackType, sigmaVarName, maxVarWidth, getSigmaPhi(*trackAtIP)) << endmsg;
     } else {
-      warning() << trackType << " has less than 3 track states, skipping " + varName + " print" << endmsg;
+      fatal() << fmt::format("No track at IP found for {}!", trackType) << endmsg;
     }
   }
 };
