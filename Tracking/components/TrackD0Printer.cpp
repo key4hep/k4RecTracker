@@ -30,9 +30,8 @@ struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const Tr
 
   // This function will be called to process the data
   void operator()(const TrackColl& inSiTracks, const TrackColl& inCluTracks) const override {
-    info() << std::string(25, '*') << endmsg;
-    info() << "New event" << endmsg;
-    info() << std::string(25, '*') << endmsg;
+
+    printInStars("New Event", 25);
 
     debug() << "Received SiTracks collection with " << inSiTracks.size() << " tracks" << endmsg;
     debug() << "Received ClupatraTracks collection with " << inCluTracks.size() << " tracks" << endmsg;
@@ -58,6 +57,12 @@ struct TrackD0Printer final : k4FWCore::Consumer<void(const TrackColl&, const Tr
 private:
   // Optional: You can add a property to filter or adjust behavior if needed (e.g., track state index).
   Gaudi::Property<int> m_trackStateIndex{this, "TrackStateIndex", 2, "Index of track state to print (default 2)"};
+
+  void printInStars(const std::string& msg, const int lineWidth) const {
+    info() << fmt::format("{:*^{}}", "", lineWidth) << endmsg;
+    info() << fmt::format("{:*^{}}", msg, lineWidth) << endmsg;
+    info() << fmt::format("{:*^{}}", "", lineWidth) << endmsg;
+  }
 
   float getSigmaPhi(const edm4hep::TrackState& ts) const { return std::sqrt(ts.getCovMatrix(TP::phi, TP::phi)); }
 
