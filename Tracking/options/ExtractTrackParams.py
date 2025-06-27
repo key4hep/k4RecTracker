@@ -4,20 +4,43 @@ from pathlib import Path
 from Configurables import TrackParamExtractor
 from Gaudi.Configuration import INFO, VERBOSE
 from k4FWCore import ApplicationMgr, IOSvc
+from k4FWCore.parseArgs import parser
+
+detModOpts = ["v02", "if1", "if2"]
+class CaseInsensitiveDict(dict):
+    def __getitem__(self, key):
+        return super().__getitem__(key.lower())
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key.lower(), value)
+detModNames = CaseInsensitiveDict({el: el for el in detModOpts})
+parser.add_argument(
+    "--detectorModel",
+    "-m",
+    help="Which detector model to run reconstruction for",
+    choices=detModOpts + [el.upper() for el in detModOpts],
+    type=str,
+    default="V02",
+)
+parser.add_argument(
+    "--version", type=str, help="str to identify a run through the pipeline"
+)
+args = parser.parse_known_args()[0]
+
+
 
 fileSuffix = ".edm4hep.root"
-versionName = "v0"
 procName = "TrackParamExtractor"
 basePath = Path(getenv("prmDir", Path.home() / "promotion"))
+corePath = f"{args.version}_{detModNames[args.detectorModel]}"
 
 iosvc = IOSvc()
 iosvc.Input = str(
     (
-        basePath
-        / "code/ILDConfig/StandardConfig/production/data/test_tracking_3_detmods_V02_REC"
+        basePath / "code/ILDConfig/StandardConfig/production/data" / f"{corePath}_REC"
     ).with_suffix(fileSuffix)
 )
-iosvc.Output = str((basePath / "data" / procName / versionName).with_suffix(fileSuffix))
+iosvc.Output = str((basePath / "data" / procName / corePath).with_suffix(fileSuffix))
 iosvc.CollectionNames = ["SiTracks", "ClupatraTracks"]
 # iosvc.outputCommands = ["drop *", "keep SiTrackPhi"]
 
