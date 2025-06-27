@@ -1,17 +1,18 @@
+from argparse import ArgumentParser
 from itertools import product
 from os import getenv
 from pathlib import Path
-from argparse import ArgumentParser
 
+import awkward as ak
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import uproot
 
 # general plotting options
-labelsize = 20
+labelsize = 22
 linewidth = 1.5
 majorTickSize = 10
-plot_grid_alpha = .7
+plot_grid_alpha = 0.7
 params = {
     "xtick.direction": "in",
     "ytick.direction": "in",
@@ -61,7 +62,9 @@ basePath = Path(getenv("dtDir", str(Path.home() / "promotion" / "data")))
 
 # Lists to build branch names to be analyzed
 trackNames = ["SiTrack", "CluTrack"]
-varNames = ["D0", "Omega", "Phi", "TanL", "Z0"]
+varSimilar = ["Phi", "Omega", "TanL"]
+varSpread = ["D0", "Z0"]
+varNames = varSimilar + varSpread
 
 # build vars based on above vars
 keys = [f"{trackName}{varName}" for trackName, varName in product(trackNames, varNames)]
@@ -74,11 +77,28 @@ with uproot.open(str(in_file) + ":events") as events:
     for var in varNames:
         data[f"d_{var}"] = data[f"{trackNames[0]}{var}"] - data[f"{trackNames[1]}{var}"]
 
-for varName in varNames:
+# for varName in varNames:
+#    plt.figure()
+#    plt.grid(True, which="both", linestyle="--", linewidth=linewidth, alpha=plot_grid_alpha)
+#    plt.hist(data[f"d_{varName}"], bins=30)
+#    plt.xlabel(rf"$\Delta$ {varName}")
+#    plt.ylabel("Frequency")
+#    plt.title(args.detectorModel)
+#    plt.show()
+
+for group, xlim in zip([varSpread, varSimilar], [1.5, 0.0015]):
     plt.figure()
-    plt.grid(True, which="both", linestyle="--", linewidth=linewidth, alpha=plot_grid_alpha)
-    plt.hist(data[f"d_{varName}"], bins=30)
-    plt.xlabel(rf"$\Delta$ {varName}")
+    plt.grid(
+        True, which="both", linestyle="--", linewidth=linewidth, alpha=plot_grid_alpha
+    )
+    plt.hist(
+        x=[ak.to_numpy(ak.flatten(data[f"d_{varName}"])) for varName in group],
+        bins=30,
+        label=group,
+        range=(-xlim, xlim)
+    )
+    plt.xlabel(rf"$\Delta$")
     plt.ylabel("Frequency")
-    plt.title(args.detectorModel)
+    plt.title(f"{args.detectorModel}: {','.join(group)}")
+    plt.legend()
     plt.show()
