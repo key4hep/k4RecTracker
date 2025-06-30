@@ -63,8 +63,7 @@ public:
 
   typedef std::map<int, std::map<int, float, std::less<int>>, std::less<int>> hit_map_type; // Déplacé dans public
   bool Apply_Threshold(double& ChargeInPixel) const;
-  void GetSensorSize (const edm4hep::SimTrackerHit& hit, float& widthMin, float& widthMax, float& lengthMin, float& lengthMax) const;
-
+  
 private:
   // Input sim vertex hit collection name
   mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits",
@@ -92,13 +91,6 @@ private:
 
   // List of sensor thickness per layer in millimeter
   std::vector<float> m_sensorThickness;
-  // 2D dim
-  std::vector<float> m_sensorWidth;
-  std::vector<float> m_sensorLength;
-
-  // Pour ZDiskPetalsData (endcap)
-  std::vector<float> m_sensorWidthInner;
-  std::vector<float> m_sensorWidthOuter;
 
   // t resolution in ns
   Gaudi::Property<std::vector<float>> m_t_resolution{this, "tResolution", {0.1}, "Time resolutions per layer [ns]"};
@@ -195,7 +187,6 @@ private:
   // Additional member functions
   // Private methods
   template<typename T> void getSensorThickness();
-  template<typename T> void getSensorSize();
   
   void primary_ionization(const edm4hep::SimTrackerHit& hit,
 			  std::vector<ChargeDepositUnit>& ionizationPoints) const;
@@ -213,6 +204,8 @@ private:
   void generate_output(const edm4hep::SimTrackerHit hit, edm4hep::TrackerHitPlaneCollection* output_digi_hits, edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col, const hit_map_type& hit_map) const;
 
   void SetProperDirectFrame(TGeoHMatrix& sensorTransformMatrix) const;
+
+  void SetLocalPos_In_ProperDirectFrame(float& x, float& y, float& z) const;
 
 private:
   // Additional Debug information

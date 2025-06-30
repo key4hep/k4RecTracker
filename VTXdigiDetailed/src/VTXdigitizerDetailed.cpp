@@ -19,7 +19,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
     error() << "LocalNormalVectorDir property should be declared as a string with the direction (x,y or z) of the normal vector to sensitive surface in the sensor local frame (may differ according to the geometry definition within k4geo). Add a - sign before the direction in case of indirect frame." << endmsg;
     return StatusCode::FAILURE;
   }
-
+  
   // Initialise the debugging histograms
   if (m_DebugHistos) {
     if (m_DebugFileName=="") {
@@ -129,30 +129,21 @@ StatusCode VTXdigitizerDetailed::initialize() {
   // retrieve the volume manager
   m_volman = m_geoSvc->getDetector()->volumeManager();
 
+  // Initialize the surface map
+  dd4hep::Detector& theDetector = dd4hep::Detector::getInstance();
+  dd4hep::rec::SurfaceManager& surfMan = *theDetector.extension<dd4hep::rec::SurfaceManager>();
+  dd4hep::DetElement det = m_geoSvc->getDetector()->detector(m_detectorName);
+  _map = surfMan.map(det.name());
+  if (!_map)
+        error() << " Could not find surface map for detector " << det.name() << " in SurfaceManager " << endmsg;
+
    // Get the sensor thickness and 2D size per layer in mm
   dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag()); // Get detector Type
   if (type.is(dd4hep::DetType::BARREL)) { // if this is a barrel detector
     getSensorThickness<dd4hep::rec::ZPlanarData>();
-    getSensorSize<dd4hep::rec::ZPlanarData>();
-    for (size_t i = 0; i < m_sensorWidth.size(); ++i) {
-    std::cout << "[DEBUG] Layer " << i 
-              << " Width: " << m_sensorWidth[i] 
-              << " mm, Length: " << m_sensorLength[i] 
-              << " mm, Thickness: " << m_sensorThickness[i] << " mm" 
-              << std::endl;
-  }
   }
   else if (type.is(dd4hep::DetType::ENDCAP)) { // If this is an Endcap Detector
     getSensorThickness<dd4hep::rec::ZDiskPetalsData>();
-    getSensorSize<dd4hep::rec::ZDiskPetalsData>();
-    for (size_t i = 0; i < m_sensorWidth.size(); ++i) {
-    std::cout << "[DEBUG] Layer " << i 
-              << " WidthInner: " << m_sensorWidthInner[i] 
-              << " mm, WidthOuter: " << m_sensorWidthOuter[i]
-              << ", Length: " << m_sensorLength[i] 
-              << " mm, Thickness: " << m_sensorThickness[i] << " mm" 
-              << std::endl;
-    }
   }
    else {
     error() << m_detectorName << " : Detector type should be BARREL or ENDCAP " << endmsg;
@@ -190,36 +181,6 @@ template<typename T> void VTXdigitizerDetailed::getSensorThickness() {
   }
   
 } // End getSensorThickness
-
-//Get Sensor Width & length 
-template<typename T> void VTXdigitizerDetailed::getSensorSize() {
-  auto detElement = m_geoSvc->getDetector()->detector(m_detectorName);
-  auto* theExtension = detElement.extension<T>();
-  const std::vector<typename T::LayerLayout>& layers = theExtension->layers;
-
-  m_sensorWidth.resize(layers.size());
-  m_sensorLength.resize(layers.size());
-
-  if constexpr (std::is_same_v<T, dd4hep::rec::ZDiskPetalsData>) {
-    // Seules les endcaps ont inner/outer width
-    m_sensorWidthInner.resize(layers.size());
-    m_sensorWidthOuter.resize(layers.size());
-  }
-
-  for (size_t i = 0; i < layers.size(); ++i) {
-    if constexpr (std::is_same_v<T, dd4hep::rec::ZPlanarData>) {
-      m_sensorWidth[i] = static_cast<float>(layers[i].widthSensitive / dd4hep::mm);
-      m_sensorLength[i] = static_cast<float>(layers[i].lengthSensor / dd4hep::mm);
-      // Pas d'inner/outer pour barrel
-    }
-    else if constexpr (std::is_same_v<T, dd4hep::rec::ZDiskPetalsData>) {
-      m_sensorWidthInner[i] = static_cast<float>(layers[i].widthInnerSensitive / dd4hep::mm);
-      m_sensorWidthOuter[i] = static_cast<float>(layers[i].widthOuterSensitive / dd4hep::mm);
-      m_sensorLength[i] = static_cast<float>(layers[i].lengthSensitive / dd4hep::mm);
-    }
-  }
-}
-
 
 StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
   // Get the input collection with Geant4 hits
@@ -502,39 +463,6 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   
 } // End DriftDirection
 
-void VTXdigitizerDetailed::GetSensorSize (const edm4hep::SimTrackerHit& hit, float& widthMin, float& widthMax, float& lengthMin, float& lengthMax) const {
-  /** Define sensentive sensor  dimension (2D) per layer in mm and per hit (cellID) in order to define pixel indices
-   *  The pixel size is defined by the readout segmentation
-   *  The positions are in mm
-   */
-  
-  const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-  int layer = m_decoder->get(cellID, "layer");
-  dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag());
-
-  if (type.is(dd4hep::DetType::BARREL)) {
-        float width = m_sensorWidth[layer];
-        float length = m_sensorLength[layer];
-        widthMin = -width / 2.f;
-        widthMax = width / 2.f;
-        lengthMin = -length / 2.f;
-        lengthMax = length / 2.f;
-    } else if (type.is(dd4hep::DetType::ENDCAP)) {
-        float widthOuter = m_sensorWidthOuter[layer];
-        float length = m_sensorLength[layer];
-        widthMin = -widthOuter / 2.f;
-        widthMax = widthOuter / 2.f;
-        lengthMin = -length / 2.f;
-        lengthMax = length / 2.f;
-    } else {
-        std::cerr << "Detector type unknown in clampCloudToSensorBounds\n";
-        return;
-    }
-
-
-
-} // End GetSensorSize
-
 void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
 			  const std::vector<SignalPoint>& collectionPoints,
 			  hit_map_type& hit_map) const {
@@ -550,10 +478,47 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
   const float PixSizeX = cellDims[0] / dd4hep::mm;
   const float PixSizeY = cellDims[1] / dd4hep::mm;
 
- // Récupérer la taille physique du capteur
-  float widthMin = 0.f, widthMax = 0.f;
-  float lengthMin = 0.f, lengthMax = 0.f;
-  GetSensorSize(hit, widthMin, widthMax, lengthMin, lengthMax);
+  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
+  const std::uint64_t reduced_cellID = cellID & m_mask;
+
+  // In comment : Another way to get the physical dimensions but limited to rectangles surfaces
+  // dd4hep::rec::SurfaceMap::const_iterator sI = _map->find(reduced_cellID);
+  // if (sI == _map->end())
+  //   error() << " VTXdigitizer: no surface found for cellID " << m_decoder->valueString(cellID) << std::endl << endmsg;
+
+  // const dd4hep::rec::ISurface* surf = sI->second;
+  // std::cout << "TEST : " << surf->length_along_u() << "    :    " << surf->length_along_v() << std::endl;
+
+  // Récupérer la taille physique du capteur
+  
+  const auto solid = m_volman.lookupDetElement(reduced_cellID).volume().solid();
+  
+  float dimX, dimY, dimZ; // Dimensions of the solid in cm
+  if (std::string(solid.type()) == "TGeoBBox") {
+    dd4hep::Box box(solid);
+    dimX = 2 * box.x(); // Get the dimensions in cm
+    dimY = 2 * box.y();
+    dimZ = 2 * box.z();
+    SetLocalPos_In_ProperDirectFrame(dimX,dimY,dimZ); // Set the local position in the proper direct frame
+    dimX = fabs(dimX); dimY = fabs(dimY); dimZ = fabs(dimZ); // Ensure positive dimensions
+  }
+  else if (std::string(solid.type()) == "TGeoTrd2") {
+    // We consider only the largest width and length (trapezoid considered as largest rectangle)
+    dd4hep::Trapezoid trap(solid);
+    dimX = 2 * std::max(trap.dX1(),trap.dX2()); // Get the dimensions in cm
+    dimY = 2 * std::max(trap.dY1(),trap.dY2()); // Get the dimensions in cm
+    dimZ = 2 * trap.dZ();
+    SetLocalPos_In_ProperDirectFrame(dimX,dimY,dimZ); // Set the local position in the proper direct frame
+    dimX = fabs(dimX); dimY = fabs(dimY); dimZ = fabs(dimZ); // Ensure positive dimensions
+  }
+  else 
+  {
+    warning() << "Solid type not recognized: " << solid.type() << endmsg;
+  }
+
+  float widthMin = -dimX / 2. / dd4hep::mm, widthMax = dimX / 2. / dd4hep::mm;
+  float lengthMin = -dimY / 2. / dd4hep::mm, lengthMax = dimY / 2. / dd4hep::mm;
+
   debug() << "Sensor size: width [" << widthMin << ", " << widthMax << "] mm, length [" << lengthMin << ", " << lengthMax << "] mm" << endmsg;
   // Conversion bornes physiques du capteur en indices pixels
   const int MinPixXSensor = static_cast<int>(std::floor((widthMin + 0.5f * PixSizeX) / PixSizeX));
@@ -621,7 +586,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
 
         // Check if the pixel is within the sensor bounds
         if (ix < MinPixXSensor || ix > MaxPixXSensor || iy < MinPixYSensor || iy > MaxPixYSensor) {
-          debug() << "Pixel out of bounds (skipped) : " << ix << ":" << iy << endmsg;
+          warning() << "Pixel out of bounds (skipped) : " << ix << ":" << iy << endmsg;
           continue; // Skip pixels outside the sensor bounds
         }
 
@@ -912,6 +877,49 @@ void VTXdigitizerDetailed::SetProperDirectFrame(TGeoHMatrix& sensorTransformMatr
   }
 } // End SetProperDirectFrame
 
+void VTXdigitizerDetailed::SetLocalPos_In_ProperDirectFrame(float& x, float& y, float& z) const {
+  /** Change the sensorTransformMatrix to have a direct frame with z orthogonal to sensor surface
+   */
+
+  std::string LocalNormalVectorDir = m_LocalNormalVectorDir;
+  bool IsDirect = true; // Is the origin frame direct ?
+  if (LocalNormalVectorDir[0]=='-') {
+    IsDirect = false;
+    LocalNormalVectorDir = LocalNormalVectorDir[1];
+  }  
+
+  float x_tmp, y_tmp, z_tmp;
+
+  // If the orthogonal direction is along X or Y in local frame, rotate the frame to have Z orthogonal to sensors instead
+  if (LocalNormalVectorDir=='x') {
+    // X->Z / Y->X / Z->Y
+    z_tmp = x;
+    x_tmp = y;
+    y_tmp = z;
+  }
+  else if (LocalNormalVectorDir=='y') {
+    // X->X / Y->Z / Z->-Y
+    z_tmp = -y;
+    x_tmp = x;
+    y_tmp = z;
+  }
+  else {
+    // X->X / Y->Y / Z->Z
+    z_tmp = z;
+    x_tmp = x;
+    y_tmp = y;
+  }
+
+  // If the frame isn't direct, make it direct by reflecting the x axis. This is necessary to correctly calculte the drift in X-Y due to B-field
+  if (!IsDirect) {
+    x_tmp = -x_tmp;
+  }
+
+  x = x_tmp;
+  y = y_tmp;
+  z = z_tmp;
+
+} // SetLocalPos_In_ProperDirectFrame
 
 void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
   /** This is an internal function to save the debug histograms in the corresponding rootfile
