@@ -7,13 +7,18 @@ from k4FWCore import ApplicationMgr, IOSvc
 from k4FWCore.parseArgs import parser
 
 detModOpts = ["v02", "if1", "if2"]
+
+
 class CaseInsensitiveDict(dict):
     def __getitem__(self, key):
         return super().__getitem__(key.lower())
 
     def __setitem__(self, key, value):
         super().__setitem__(key.lower(), value)
+
+
 detModNames = CaseInsensitiveDict({el: el for el in detModOpts})
+
 parser.add_argument(
     "--detectorModel",
     "-m",
@@ -28,7 +33,6 @@ parser.add_argument(
 args = parser.parse_known_args()[0]
 
 
-
 fileSuffix = ".edm4hep.root"
 procName = "TrackParamExtractor"
 basePath = Path(getenv("prmDir", Path.home() / "promotion"))
@@ -41,11 +45,19 @@ iosvc.Input = str(
     ).with_suffix(fileSuffix)
 )
 iosvc.Output = str((basePath / "data" / procName / corePath).with_suffix(fileSuffix))
-iosvc.CollectionNames = ["SiTracks", "ClupatraTracks"]
 # iosvc.outputCommands = ["drop *", "keep SiTrackPhi"]
 
 printer = TrackParamExtractor(procName, nStars=40)
 printer.OutputLevel = VERBOSE
+
+# the collection name with the SiTracks differs between ILC and FCC models
+if "IF" in args.detectorModel:
+    printer.InputSiTracks = ["SiTracksCT"]
+    siTrackCollName = "SiTracksCT"
+else:
+    siTrackCollName = "SiTracks"
+iosvc.CollectionNames = ["ClupatraTracks", siTrackCollName]
+
 
 ApplicationMgr(
     TopAlg=[printer],
