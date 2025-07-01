@@ -3,7 +3,9 @@
 #include "k4FWCore/Transformer.h"
 #include "podio/UserDataCollection.h"
 #include "printStars.h"
+#include <edm4hep/Constants.h>
 
+#include <optional>
 #include <string>
 #include <tuple>
 
@@ -22,16 +24,16 @@ struct TrackParamExtractor final
                              KeyValues("InputCluTracks", {"ClupatraTracks"}),
                          },
                          {
+                             KeyValues("OutCollSiD0", {"SiTrackD0"}),
                              KeyValues("OutCollSiPhi", {"SiTrackPhi"}),
                              KeyValues("OutCollSiOmega", {"SiTrackOmega"}),
-                             KeyValues("OutCollSiD0", {"SiTrackD0"}),
-                             KeyValues("OutCollSiTanL", {"SiTrackTanL"}),
                              KeyValues("OutCollSiZ0", {"SiTrackZ0"}),
+                             KeyValues("OutCollSiTanL", {"SiTrackTanL"}),
+                             KeyValues("OutCollCluD0", {"CluTrackD0"}),
                              KeyValues("OutCollCluPhi", {"CluTrackPhi"}),
                              KeyValues("OutCollCluOmega", {"CluTrackOmega"}),
-                             KeyValues("OutCollCluD0", {"CluTrackD0"}),
-                             KeyValues("OutCollCluTanL", {"CluTrackTanL"}),
                              KeyValues("OutCollCluZ0", {"CluTrackZ0"}),
+                             KeyValues("OutCollCluTanL", {"CluTrackTanL"}),
 
                          }) {}
 
@@ -59,10 +61,26 @@ struct TrackParamExtractor final
     for (size_t i = 0; i < inSiTracks.size(); ++i) {
 
       // Process SiTrack
-      siColls = processTrack(inSiTracks[i], "SiTrack");
+      const auto oSiTrackStateIP = getOTrackAtIP(inSiTracks[i], "SiTrack");
+      if (oSiTrackStateIP.has_value()) {
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::d0)>(siColls).push_back(oSiTrackStateIP->D0);
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::phi)>(siColls).push_back(oSiTrackStateIP->phi);
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::omega)>(siColls).push_back(oSiTrackStateIP->omega);
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::z0)>(siColls).push_back(oSiTrackStateIP->Z0);
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::tanLambda)>(siColls).push_back(
+            oSiTrackStateIP->tanLambda);
+      }
 
       // Process CluTrack
-      cluColls = processTrack(inCluTracks[i], "CluTrack");
+      const auto oCluTrackStateIP = getOTrackAtIP(inCluTracks[i], "CluTrack");
+      if (oCluTrackStateIP.has_value()) {
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::d0)>(cluColls).push_back(oCluTrackStateIP->D0);
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::phi)>(cluColls).push_back(oCluTrackStateIP->phi);
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::omega)>(cluColls).push_back(oCluTrackStateIP->omega);
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::z0)>(cluColls).push_back(oCluTrackStateIP->Z0);
+        std::get<static_cast<std::size_t>(edm4hep::TrackParams::tanLambda)>(cluColls).push_back(
+            oCluTrackStateIP->tanLambda);
+      }
     }
 
     return std::tuple_cat(std::move(siColls), std::move(cluColls));
@@ -71,29 +89,17 @@ struct TrackParamExtractor final
 private:
   Gaudi::Property<size_t> n_stars{this, "nStars", 20, "line-width of message in star box"};
 
-  std::tuple<FloatColl, FloatColl, FloatColl, FloatColl, FloatColl> processTrack(const edm4hep::Track& track,
-                                                                                 const std::string& trackType) const {
+  std::optional<edm4hep::TrackState> getOTrackAtIP(const edm4hep::Track& track, const std::string& trackType) const {
 
     // assuming there is only one Track State at IP
     auto trackAtIP = std::ranges::find(track.getTrackStates(), TS::AtIP, &TS::location);
     if (trackAtIP != track.getTrackStates().end()) {
       verbose() << fmt::format("Track at IP found for {}.", trackType) << endmsg;
+      return *trackAtIP;
     } else {
       fatal() << fmt::format("No track at IP found for {}!", trackType) << endmsg;
+      return std::nullopt;
     }
-    FloatColl trackPhi;
-    FloatColl trackOmega;
-    FloatColl trackD0;
-    FloatColl trackTanL;
-    FloatColl trackZ0;
-    trackPhi.push_back(trackAtIP->phi);
-    trackOmega.push_back(trackAtIP->omega);
-    trackD0.push_back(trackAtIP->D0);
-    trackTanL.push_back(trackAtIP->tanLambda);
-    trackZ0.push_back(trackAtIP->Z0);
-
-    return std::make_tuple(std::move(trackPhi), std::move(trackOmega), std::move(trackD0), std::move(trackTanL),
-                           std::move(trackZ0));
   }
 };
 DECLARE_COMPONENT(TrackParamExtractor)
