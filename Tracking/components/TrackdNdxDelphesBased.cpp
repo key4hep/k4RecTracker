@@ -77,13 +77,13 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
     random_engine.seed(engine_seed);
 
     // Dummy value if dN/dx calculation somehow fails
-    const double dummy_value = -1.0;
+    const double dummy_value = -999.0;
 
     debug() << "Processing new Event" << endmsg;
 
-    unsigned int i = 0;
+    unsigned int track_count = 0;
     for (const auto& link : input) {
-        debug() << "Processing track " << i++ << endmsg;
+        debug() << "Processing track " << track_count++ << endmsg;
 
         // Initialise dN/dx value to dummy value
         double dNdx_value = dummy_value;
