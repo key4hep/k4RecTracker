@@ -8,9 +8,9 @@ from k4FWCore import ApplicationMgr, IOSvc
 from k4FWCore.parseArgs import parser
 
 sys.path.append(os.getenv("trckOptDir"))
-from commonArgParsing import addCommonArgs, detModNames
+from commonArgParsing import add_common_args, detModNames
 
-args = addCommonArgs(parser).parse_known_args()[0]
+args = add_common_args(parser).parse_known_args()[0]
 assert len(args.detectorModels) == 1, (
     f"Only provide one detector model! You provided {args.detectorModels}"
 )
