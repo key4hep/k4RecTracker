@@ -1,4 +1,5 @@
-from os import getenv
+import os
+import sys
 from pathlib import Path
 
 from Configurables import TrackParamExtractor
@@ -6,44 +7,28 @@ from Gaudi.Configuration import INFO, VERBOSE
 from k4FWCore import ApplicationMgr, IOSvc
 from k4FWCore.parseArgs import parser
 
-detModOpts = ["v02", "if1", "if2"]
+sys.path.append(os.getenv("trckOptDir"))
+from commonArgParsing import addCommonArgs, detModNames
 
-
-class CaseInsensitiveDict(dict):
-    def __getitem__(self, key):
-        return super().__getitem__(key.lower())
-
-    def __setitem__(self, key, value):
-        super().__setitem__(key.lower(), value)
-
-
-detModNames = CaseInsensitiveDict({el: el for el in detModOpts})
-
-parser.add_argument(
-    "--detectorModel",
-    "-m",
-    help="Which detector model to run reconstruction for",
-    choices=detModOpts + [el.upper() for el in detModOpts],
-    type=str,
-    default="V02",
+args = addCommonArgs(parser).parse_known_args()[0]
+assert len(args.detectorModels) == 1, (
+    f"Only provide one detector model! You provided {args.detectorModels}"
 )
-parser.add_argument(
-    "--version", type=str, help="str to identify a run through the pipeline"
-)
-args = parser.parse_known_args()[0]
-
+args.detectorModels = args.detectorModels[0]
 
 fileSuffix = ".edm4hep.root"
 procName = "TrackParamExtractor"
-basePath = Path(getenv("prmDir", Path.home() / "promotion"))
-corePath = f"{args.version}_{detModNames[args.detectorModel]}"
+basePath = Path(os.getenv("prmDir", Path.home() / "promotion"))
+corePath = f"{args.version}_{detModNames[args.detectorModels]}"
+
+# assert that the input path exists
+inputPath = (
+    basePath / "code/ILDConfig/StandardConfig/production/data" / f"{corePath}_REC"
+).with_suffix(fileSuffix)
+assert inputPath.exists(), f"ERROR: The input path ({inputPath}) does not exist!"
 
 iosvc = IOSvc()
-iosvc.Input = str(
-    (
-        basePath / "code/ILDConfig/StandardConfig/production/data" / f"{corePath}_REC"
-    ).with_suffix(fileSuffix)
-)
+iosvc.Input = str(inputPath)
 iosvc.Output = str((basePath / "data" / procName / corePath).with_suffix(fileSuffix))
 # iosvc.outputCommands = ["drop *", "keep SiTrackPhi"]
 
@@ -51,7 +36,7 @@ printer = TrackParamExtractor(procName, nStars=40)
 printer.OutputLevel = VERBOSE
 
 # the collection name with the SiTracks differs between ILC and FCC models
-if "IF" in args.detectorModel:
+if "IF" in args.detectorModels:
     printer.InputSiTracks = ["SiTracksCT"]
     siTrackCollName = "SiTracksCT"
 else:

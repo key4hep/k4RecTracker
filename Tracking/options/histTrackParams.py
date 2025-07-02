@@ -8,11 +8,13 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 import uproot
 
+from commonArgParsing import addCommonArgs, detModNames
+
 # general plotting options
 labelsize = 22
 linewidth = 1.5
 majorTickSize = 10
-plot_grid_alpha = 0.7
+plotGridAlpha = 0.7
 params = {
     "xtick.direction": "in",
     "ytick.direction": "in",
@@ -32,33 +34,15 @@ params = {
 }  #'figure.figsize': (15, 5),
 mpl.rcParams.update(params)
 
-# argparse
-detModOpts = ["v02", "if1", "if2"]
-class CaseInsensitiveDict(dict):
-    def __getitem__(self, key):
-        return super().__getitem__(key.lower())
+args = addCommonArgs(ArgumentParser()).parse_known_args()[0]
 
-    def __setitem__(self, key, value):
-        super().__setitem__(key.lower(), value)
-detModNames = CaseInsensitiveDict({el: el for el in detModOpts})
-parser = ArgumentParser()
-parser.add_argument(
-    "--detectorModel",
-    "-m",
-    help="Which detector model to run reconstruction for",
-    choices=detModOpts + [el.upper() for el in detModOpts],
-    type=str,
-    default="V02",
-)
-parser.add_argument(
-    "--version", type=str, help="str to identify a run through the pipeline"
-)
-args = parser.parse_known_args()[0]
-corePath = Path(f"{args.version}_{detModNames[args.detectorModel]}")
-
-# strings to build path
-processor = "TrackParamExtractor"
-basePath = Path(getenv("dtDir", str(Path.home() / "promotion" / "data")))
+#################################
+# commands to access cov Matrix
+#################################
+# import ROOT
+# ROOT.gInterpreter.LoadFile("edm4hep/utils/cov_matrix_utils.h")
+# # ...
+# edm4hep.utils.get_cov_value(cov_m, edm4hep.TrackParams.d0, edm4hep.TrackParams.d0)
 
 # Lists to build branch names to be analyzed
 trackNames = ["SiTrack", "CluTrack"]
@@ -66,39 +50,68 @@ varSimilar = ["Phi", "Omega", "TanL"]
 varSpread = ["D0", "Z0"]
 varNames = varSimilar + varSpread
 
-# build vars based on above vars
-keys = [f"{trackName}{varName}" for trackName, varName in product(trackNames, varNames)]
-in_file = basePath / processor / corePath.with_suffix(".edm4hep.root")
+data = {}
 
-print(in_file)
-with uproot.open(str(in_file) + ":events") as events:
-    regex = f"/^({'|'.join(trackNames)})({'|'.join(varNames)})$/"
-    data = events.arrays(filter_name=regex, library="pd")
-    for var in varNames:
-        data[f"d_{var}"] = data[f"{trackNames[0]}{var}"] - data[f"{trackNames[1]}{var}"]
+# extract data
+for detMod in args.detectorModels:
+    corePath = Path(f"{args.version}_{detModNames[detMod]}")
 
-# for varName in varNames:
-#    plt.figure()
-#    plt.grid(True, which="both", linestyle="--", linewidth=linewidth, alpha=plot_grid_alpha)
-#    plt.hist(data[f"d_{varName}"], bins=30)
-#    plt.xlabel(rf"$\Delta$ {varName}")
-#    plt.ylabel("Frequency")
-#    plt.title(args.detectorModel)
-#    plt.show()
+    # strings to build path
+    processor = "TrackParamExtractor"
+    basePath = Path(getenv("dtDir", str(Path.home() / "promotion" / "data")))
 
-for group, xlim in zip([varSpread, varSimilar], [1.5, 0.0015]):
+    # build vars based on above vars
+    keys = [
+        f"{trackName}{varName}" for trackName, varName in product(trackNames, varNames)
+    ]
+    in_file = basePath / processor / corePath.with_suffix(".edm4hep.root")
+
+    with uproot.open(str(in_file) + ":events") as events:
+        regex = f"/^({'|'.join(trackNames)})({'|'.join(varNames)})$/"
+        data[detMod] = events.arrays(filter_name=regex, library="pd")
+        for var in varNames:
+            data[detMod][f"d_{var}"] = (
+                data[detMod][f"{trackNames[0]}{var}"]
+                - data[detMod][f"{trackNames[1]}{var}"]
+            )
+
+# # plot data
+# for detMod in args.detectorModels:
+#     for group, xlim in zip([varSpread, varSimilar], [1.5, 0.0015]):
+#         plt.figure()
+#         plt.grid(
+#             True, which="both", linestyle="--", linewidth=linewidth, alpha=plotGridAlpha
+#         )
+#         plt.hist(
+#             x=[
+#                 ak.to_numpy(ak.flatten(data[detMod][f"d_{varName}"]))
+#                 for varName in group
+#             ],
+#             bins=30,
+#             label=group,
+#             range=(-xlim, xlim),
+#         )
+#         plt.xlabel(rf"$\Delta$ Si-Clu")
+#         plt.ylabel("Frequency")
+#         plt.title(f"{detMod}: {','.join(group)}")
+#         plt.legend()
+#         plt.show()
+
+for var in ["D0"]:
     plt.figure()
     plt.grid(
-        True, which="both", linestyle="--", linewidth=linewidth, alpha=plot_grid_alpha
+        True, which="both", linestyle="--", linewidth=linewidth, alpha=plotGridAlpha
     )
     plt.hist(
-        x=[ak.to_numpy(ak.flatten(data[f"d_{varName}"])) for varName in group],
+        x=[
+            ak.to_numpy(ak.flatten(data[detMod][f"{trackNames[0]}{var}"]))
+            for detMod in args.detectorModels
+        ],
         bins=30,
-        label=group,
-        range=(-xlim, xlim)
+        label=args.detectorModels,
+        range=(-0.03, 0.03),
     )
-    plt.xlabel(rf"$\Delta$")
     plt.ylabel("Frequency")
-    plt.title(f"{args.detectorModel}: {','.join(group)}")
+    plt.title(f"{var}")
     plt.legend()
     plt.show()
