@@ -1,7 +1,14 @@
 #pragma once
 
+// Gaudi
+#include <GaudiKernel/SmartIF.h>
+#include <GaudiKernel/ISvcLocator.h>
+
 // k4FWCore
 #include "k4FWCore/Transformer.h"
+
+// k4Interface
+#include <k4Interface/IUniqueIDGenSvc.h>
 
 // edm4hep
 #include "edm4hep/SimTrackerHitCollection.h"
@@ -28,6 +35,9 @@ public:
     StatusCode initialize() override final;
 
 private:
+    SmartIF<IUniqueIDGenSvc> m_uniqueIDSvc{nullptr};
+    Gaudi::Property<std::string> m_uidSvcName{this, "uidSvcName", "UniqueIDGenSvc", "The name of the UniqueIDGenSvc instance"};
+
     mutable unsigned int m_event_counter;
 
     dd4hep::DDSegmentation::BitFieldCoder* m_decoder;
@@ -35,9 +45,29 @@ private:
     // Drift chamber info extension for geometry calculations
     dd4hep::rec::DCH_info* m_dch_info{nullptr};
 
+    // z resolution in mm
+    Gaudi::Property<double> m_z_resolution{
+        this, 
+        "zResolution_mm", 
+        1.0,
+        "Spatial resolution in the z direction (along the wire) in mm."};
+    // xy resolution in mm
+    Gaudi::Property<double> m_xy_resolution{
+        this, 
+        "xyResolution_mm", 
+        0.1,
+        "Spatial resolution in the xy direction in mm."};
+
+
+
+
     /// Convert EDM4hep Vector3d to TVector3
     TVector3 Convert_EDM4hepVector_to_TVector3(const edm4hep::Vector3d& v, double scale) const {
         return {v[0] * scale, v[1] * scale, v[2] * scale};
+    };
+    /// Convert TVector3 to EDM4hep Vector3d
+    edm4hep::Vector3d Convert_TVector3_to_EDM4hepVector(const TVector3& v, double scale) const {
+        return {v.x() * scale, v.y() * scale, v.z() * scale};
     };
 
 };
