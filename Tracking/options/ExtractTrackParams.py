@@ -8,7 +8,7 @@ from k4FWCore import ApplicationMgr, IOSvc
 from k4FWCore.parseArgs import parser
 
 sys.path.append(os.getenv("trckOptDir"))
-from commonArgParsing import add_common_args, detModNames
+from commonArgParsing import add_common_args, detModNames, registry
 
 args = add_common_args(parser).parse_known_args()[0]
 assert len(args.detectorModels) == 1, (
@@ -36,7 +36,7 @@ printer = TrackParamExtractor(procName, nStars=40)
 printer.OutputLevel = VERBOSE
 
 # the collection name with the SiTracks differs between ILC and FCC models
-if "IF" in args.detectorModels:
+if registry.get(args.detectorModels).at_fcc:
     printer.InputSiTracks = ["SiTracksCT"]
     siTrackCollName = "SiTracksCT"
 else:
