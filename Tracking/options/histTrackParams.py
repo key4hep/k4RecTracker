@@ -93,7 +93,7 @@ for detMod in args.detectorModels:
 #         )
 #         plt.xlabel(rf"$\Delta$ Si-Clu")
 #         plt.ylabel("Frequency")
-#         plt.title(f"{detMod}: {','.join(group)}")
+#         plt.title(rf"Diff Si-Clu in $\mathtt{{{registry.get(detMod).get_name(args)}}}$: {','.join(group)}")
 #         plt.legend()
 #         plt.show()
 
@@ -118,6 +118,6 @@ for type in trackType:
             range=(-xlims[type][var], xlims[type][var]) if var in xlims[type] else None,
         )
         plt.ylabel("Frequency")
-        plt.title(f"{type}: {var}")
+        plt.title(f"Diff DetMods $\mathtt{{{type}}}$: {var}")
         plt.legend()
         plt.show()
