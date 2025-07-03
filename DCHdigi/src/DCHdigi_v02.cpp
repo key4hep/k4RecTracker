@@ -1,7 +1,13 @@
 #include "DCHdigi_v02.h"
 
+// Gaudi
+#include <GaudiKernel/MsgStream.h>
+
 // edm4hep
 #include "edm4hep/utils/vector_utils.h"
+
+// STL
+#include <random>
 
 DCHdigi_v02::DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc)
     : Transformer(
@@ -17,6 +23,13 @@ DCHdigi_v02::DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc)
     ) {}
 
 StatusCode DCHdigi_v02::initialize() {
+
+    m_uniqueIDSvc = serviceLocator()->service(m_uidSvcName);
+    if (!m_uniqueIDSvc) {
+        error() << "Unable to locate UniqueIDGenSvc with name: " << m_uidSvcName << endmsg;
+        return StatusCode::FAILURE;
+    }
+
     m_event_counter = 0;
     return StatusCode::SUCCESS;
 }
@@ -25,6 +38,15 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
                                                         const edm4hep::EventHeaderCollection& header) const {
 
     extension::SenseWireHitCollection output;
+
+    std::mt19937_64 random_engine;
+    auto engine_seed = m_uniqueIDSvc->getUniqueID(header, this->name());
+    random_engine.seed(engine_seed);
+
+    // Create the random distributions for smearing the coordinates in dd4hep default units
+    std::normal_distribution<double> gauss_z{0., m_z_resolution.value() * dd4hep::mm};
+    std::normal_distribution<double> gauss_xy{0., m_xy_resolution.value() * dd4hep::mm};
+
     
     debug() << "Processing event " << ++m_event_counter << endmsg;
     debug() << "Processing SimTrackerHitCollection with " << input.size() << " hits." << endmsg;
@@ -54,15 +76,16 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
         double edep_sum = 0.0;
         double path_length_sum = 0.0;
 
-        for (const auto& simhit : simhits) {
-            // Need to find hit closest to the wire
-            // Requires layer number, nphi, and hit position
+        // Finding hit closest to the wire requires layer number, nphi
+        int layer = m_dch_info->CalculateILayerFromCellIDFields(
+            m_decoder->get(cellID, "layer"),
+            m_decoder->get(cellID, "superlayer")
+        );
+        int nphi = m_decoder->get(cellID, "nphi");
 
-            int layer = m_dch_info->CalculateILayerFromCellIDFields(
-                m_decoder->get(cellID, "layer"),
-                m_decoder->get(cellID, "superlayer")
-            );
-            int nphi = m_decoder->get(cellID, "nphi");
+        for (const auto& simhit : simhits) {
+            
+            // Get hit position to calculate distance to wire
             // use dd4hep:mm as scale to convert into the dd4hep default unit system
             auto simhit_position = this->Convert_EDM4hepVector_to_TVector3(simhit.getPosition(), dd4hep::mm);
 
@@ -95,13 +118,29 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
                << ", Path Length Sum: " << path_length_sum
                << endmsg;
 
-        double time;
+        double digihit_time;
+        double digihit_distance_to_wire;
+        edm4hep::Vector3d digihit_position;
 
         if (closest_simhit) {
             // Do the digitisation based on the closest hit and the integrated edep and path length
-            time = closest_simhit->getTime();
 
+            // TODO: update time with realisitc value
+            digihit_time = closest_simhit->getTime();
+
+            // xy smearing
+            double smearing_xy = gauss_xy(random_engine);
+            digihit_distance_to_wire = std::max(0.0, *closest_distance_to_wire + smearing_xy);
+
+            // z smearing
+            double smearing_z = gauss_z(random_engine);
             auto hit_projection_on_the_wire = (*closest_simhit_position) + (*closest_hit_to_wire_vector);
+            TVector3 wire_direction_ez = (this->m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
+            hit_projection_on_the_wire += smearing_z * wire_direction_ez;
+
+            // Convert to edm4hep vector and cast to mm
+            digihit_position = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1.0 / dd4hep::mm);
+
 
 
         } else {
@@ -112,15 +151,15 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
         sense_wire_hit.setCellID(cellID);
         sense_wire_hit.setType(0);
         sense_wire_hit.setQuality(0);
-        sense_wire_hit.setTime(time);
+        sense_wire_hit.setTime(digihit_time);
         sense_wire_hit.setEDep(edep_sum);
         sense_wire_hit.setEDepError(path_length_sum);
-        sense_wire_hit.setPosition(edm4hep::Vector3d(0.0, 0.0, 0.0));
-        sense_wire_hit.setPositionAlongWireError(0.0);
+        sense_wire_hit.setPosition(digihit_position);
+        sense_wire_hit.setPositionAlongWireError(m_z_resolution.value());
         sense_wire_hit.setWireAzimuthalAngle(0.0);
         sense_wire_hit.setWireStereoAngle(0.0);
         sense_wire_hit.setDistanceToWire(min_distance);
-        sense_wire_hit.setDistanceToWireError(0.0);
+        sense_wire_hit.setDistanceToWireError(m_xy_resolution.value());
         
 
 
