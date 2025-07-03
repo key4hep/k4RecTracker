@@ -97,8 +97,11 @@ for detMod in args.detectorModels:
 #         plt.legend()
 #         plt.show()
 
-for type, xlim in zip(trackType, [.03,1]):
-    for var in ["D0"]:
+xlims = {type: None for type in trackType}
+xlims["SiTrack"] = {"D0": 0.03, "Omega": 0.0002}
+xlims["CluTrack"] = {"D0": .8, "Omega": 0.00025}
+for type in trackType:
+    for var in ["D0", "Omega"]:
         plt.figure()
         plt.grid(
             True, which="both", linestyle="--", linewidth=linewidth, alpha=plotGridAlpha
@@ -109,8 +112,10 @@ for type, xlim in zip(trackType, [.03,1]):
                 for detMod in args.detectorModels
             ],
             bins=30,
-            label=[registry.get(detMod).get_name(args) for detMod in args.detectorModels],
-            range=(-xlim, xlim),
+            label=[
+                registry.get(detMod).get_name(args) for detMod in args.detectorModels
+            ],
+            range=(-xlims[type][var], xlims[type][var]) if var in xlims[type] else None,
         )
         plt.ylabel("Frequency")
         plt.title(f"{type}: {var}")
