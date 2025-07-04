@@ -83,7 +83,7 @@ for detMod in args.detectorModels:
 if args.track:
     # plot data
     for detMod in args.detectorModels:
-        for group, xlim in zip([varSpread, varSimilar], [1.5, 0.0015]):
+        for group, xlim in zip([varSpread, varSimilar], [1.5, .0015]):
             plt.figure()
             plt.grid(
                 True, which="both", linestyle="--", linewidth=linewidth, alpha=plotGridAlpha
@@ -105,8 +105,8 @@ if args.track:
 
 if args.detmods:
     xlims = {type: None for type in trackType}
-    xlims["SiTrack"] = {"D0": 0.03, "Omega": 0.0002}
-    xlims["CluTrack"] = {"D0": .8, "Omega": 0.00025}
+    xlims["SiTrack"] = {"D0": .03, "Omega": .0002}
+    xlims["CluTrack"] = {"D0": .8, "Omega": .00025}
     for type in trackType:
         for var in ["D0", "Omega"]:
             plt.figure()
