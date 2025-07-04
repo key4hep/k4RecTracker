@@ -15,7 +15,15 @@ plt.style.use("seaborn-v0_8-colorblind")
 
 mpl.rcParams.update(params)
 
+
+#############################################
+# arg parsing
+#############################################
+
+# import common args
 parser = add_common_args(ArgumentParser())
+
+# add plotting options
 plot_opts = parser.add_argument_group("Plotting opts", "which plots should be shown")
 plot_opts.add_argument(
     "--track",
@@ -25,17 +33,23 @@ plot_opts.add_argument(
 plot_opts.add_argument(
     "--detmods", action="store_true", help="Show difference between detector models"
 )
+
+# parse args
 args = parser.parse_known_args()[0]
 
-#################################
+#############################################
 # commands to access cov Matrix
-#################################
+#############################################
 # import ROOT
 # ROOT.gInterpreter.LoadFile("edm4hep/utils/cov_matrix_utils.h")
 # # ...
 # edm4hep.utils.get_cov_value(cov_m, edm4hep.TrackParams.d0, edm4hep.TrackParams.d0)
 
+
+#############################################
 # Lists to build branch names to be analyzed
+#############################################
+
 trackType = ["SiTrack", "CluTrack"]
 varSimilar = ["Phi", "Omega", "TanL"]
 varSpread = ["D0", "Z0"]
@@ -65,6 +79,10 @@ for detMod in args.detectorModels:
                 data[detMod][f"{trackType[0]}{var}"]
                 - data[detMod][f"{trackType[1]}{var}"]
             )
+
+#############################################
+# plotting
+#############################################
 
 if args.track:
     # plot data
