@@ -2,7 +2,7 @@
 labelsize = 24
 linewidth = 1.5
 majorTickSize = 10
-plotGridAlpha = .7
+plotGridAlpha = 0.7
 params = {
     "xtick.direction": "in",
     "ytick.direction": "in",
