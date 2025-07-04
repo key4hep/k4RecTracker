@@ -9,12 +9,13 @@ import matplotlib.pyplot as plt
 import uproot
 
 from commonArgParsing import add_common_args, detModNames, registry
+plt.style.use("seaborn-v0_8-colorblind")
 
 # general plotting options
-labelsize = 22
+labelsize = 24
 linewidth = 1.5
 majorTickSize = 10
-plotGridAlpha = 0.7
+plotGridAlpha = .7
 params = {
     "xtick.direction": "in",
     "ytick.direction": "in",
