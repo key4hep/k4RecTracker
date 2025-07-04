@@ -13,6 +13,7 @@
 using FloatColl = podio::UserDataCollection<float>;
 using TrackColl = edm4hep::TrackCollection;
 using TS = edm4hep::TrackState;
+using TP = edm4hep::TrackParams;
 
 struct TrackParamExtractor final
     : k4FWCore::MultiTransformer<std::tuple<FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl,
@@ -63,23 +64,21 @@ struct TrackParamExtractor final
       // Process SiTrack
       const auto oSiTrackStateIP = getOTrackAtIP(inSiTracks[i], "SiTrack");
       if (oSiTrackStateIP.has_value()) {
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::d0)>(siColls).push_back(oSiTrackStateIP->D0);
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::phi)>(siColls).push_back(oSiTrackStateIP->phi);
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::omega)>(siColls).push_back(oSiTrackStateIP->omega);
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::z0)>(siColls).push_back(oSiTrackStateIP->Z0);
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::tanLambda)>(siColls).push_back(
-            oSiTrackStateIP->tanLambda);
+        std::get<static_cast<std::size_t>(TP::d0)>(siColls).push_back(oSiTrackStateIP->D0);
+        std::get<static_cast<std::size_t>(TP::phi)>(siColls).push_back(oSiTrackStateIP->phi);
+        std::get<static_cast<std::size_t>(TP::omega)>(siColls).push_back(oSiTrackStateIP->omega);
+        std::get<static_cast<std::size_t>(TP::z0)>(siColls).push_back(oSiTrackStateIP->Z0);
+        std::get<static_cast<std::size_t>(TP::tanLambda)>(siColls).push_back(oSiTrackStateIP->tanLambda);
       }
 
       // Process CluTrack
       const auto oCluTrackStateIP = getOTrackAtIP(inCluTracks[i], "CluTrack");
       if (oCluTrackStateIP.has_value()) {
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::d0)>(cluColls).push_back(oCluTrackStateIP->D0);
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::phi)>(cluColls).push_back(oCluTrackStateIP->phi);
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::omega)>(cluColls).push_back(oCluTrackStateIP->omega);
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::z0)>(cluColls).push_back(oCluTrackStateIP->Z0);
-        std::get<static_cast<std::size_t>(edm4hep::TrackParams::tanLambda)>(cluColls).push_back(
-            oCluTrackStateIP->tanLambda);
+        std::get<static_cast<std::size_t>(TP::d0)>(cluColls).push_back(oCluTrackStateIP->D0);
+        std::get<static_cast<std::size_t>(TP::phi)>(cluColls).push_back(oCluTrackStateIP->phi);
+        std::get<static_cast<std::size_t>(TP::omega)>(cluColls).push_back(oCluTrackStateIP->omega);
+        std::get<static_cast<std::size_t>(TP::z0)>(cluColls).push_back(oCluTrackStateIP->Z0);
+        std::get<static_cast<std::size_t>(TP::tanLambda)>(cluColls).push_back(oCluTrackStateIP->tanLambda);
       }
     }
 
