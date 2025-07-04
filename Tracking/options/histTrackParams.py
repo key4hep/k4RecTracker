@@ -34,7 +34,11 @@ params = {
 }  #'figure.figsize': (15, 5),
 mpl.rcParams.update(params)
 
-args = add_common_args(ArgumentParser()).parse_known_args()[0]
+parser = add_common_args(ArgumentParser())
+plot_opts = parser.add_argument_group("Plotting opts", "which plots should be shown")
+plot_opts.add_argument("--track", action="store_true", help="Show difference between Silicon and Clupatra tracks")
+plot_opts.add_argument("--detmods", action="store_true", help="Show difference between detector models")
+args = parser.parse_known_args()[0]
 
 #################################
 # commands to access cov Matrix
@@ -75,49 +79,51 @@ for detMod in args.detectorModels:
                 - data[detMod][f"{trackType[1]}{var}"]
             )
 
-# # plot data
-# for detMod in args.detectorModels:
-#     for group, xlim in zip([varSpread, varSimilar], [1.5, 0.0015]):
-#         plt.figure()
-#         plt.grid(
-#             True, which="both", linestyle="--", linewidth=linewidth, alpha=plotGridAlpha
-#         )
-#         plt.hist(
-#             x=[
-#                 ak.to_numpy(ak.flatten(data[detMod][f"d_{varName}"]))
-#                 for varName in group
-#             ],
-#             bins=30,
-#             label=group,
-#             range=(-xlim, xlim),
-#         )
-#         plt.xlabel(rf"$\Delta$ Si-Clu")
-#         plt.ylabel("Frequency")
-#         plt.title(rf"Diff Si-Clu in $\mathtt{{{registry.get(detMod).get_name(args)}}}$: {','.join(group)}")
-#         plt.legend()
-#         plt.show()
+if args.track:
+    # plot data
+    for detMod in args.detectorModels:
+        for group, xlim in zip([varSpread, varSimilar], [1.5, 0.0015]):
+            plt.figure()
+            plt.grid(
+                True, which="both", linestyle="--", linewidth=linewidth, alpha=plotGridAlpha
+            )
+            plt.hist(
+                x=[
+                    ak.to_numpy(ak.flatten(data[detMod][f"d_{varName}"]))
+                    for varName in group
+                ],
+                bins=30,
+                label=group,
+                range=(-xlim, xlim),
+            )
+            plt.xlabel(rf"$\Delta$ Si-Clu")
+            plt.ylabel("Frequency")
+            plt.title(rf"Diff Si-Clu in $\mathtt{{{registry.get(detMod).get_name(args)}}}$: {','.join(group)}")
+            plt.legend()
+            plt.show()
 
-xlims = {type: None for type in trackType}
-xlims["SiTrack"] = {"D0": 0.03, "Omega": 0.0002}
-xlims["CluTrack"] = {"D0": .8, "Omega": 0.00025}
-for type in trackType:
-    for var in ["D0", "Omega"]:
-        plt.figure()
-        plt.grid(
-            True, which="both", linestyle="--", linewidth=linewidth, alpha=plotGridAlpha
-        )
-        plt.hist(
-            x=[
-                ak.to_numpy(ak.flatten(data[detMod][f"{type}{var}"]))
-                for detMod in args.detectorModels
-            ],
-            bins=30,
-            label=[
-                registry.get(detMod).get_name(args) for detMod in args.detectorModels
-            ],
-            range=(-xlims[type][var], xlims[type][var]) if var in xlims[type] else None,
-        )
-        plt.ylabel("Frequency")
-        plt.title(f"Diff DetMods $\mathtt{{{type}}}$: {var}")
-        plt.legend()
-        plt.show()
+if args.detmods:
+    xlims = {type: None for type in trackType}
+    xlims["SiTrack"] = {"D0": 0.03, "Omega": 0.0002}
+    xlims["CluTrack"] = {"D0": .8, "Omega": 0.00025}
+    for type in trackType:
+        for var in ["D0", "Omega"]:
+            plt.figure()
+            plt.grid(
+                True, which="both", linestyle="--", linewidth=linewidth, alpha=plotGridAlpha
+            )
+            plt.hist(
+                x=[
+                    ak.to_numpy(ak.flatten(data[detMod][f"{type}{var}"]))
+                    for detMod in args.detectorModels
+                ],
+                bins=30,
+                label=[
+                    rf"$\mathtt{{{registry.get(detMod).get_name(args)}}}$" for detMod in args.detectorModels
+                ],
+                range=(-xlims[type][var], xlims[type][var]) if var in xlims[type] else None,
+            )
+            plt.ylabel("Frequency")
+            plt.title(f"Diff DetMods $\mathtt{{{type}}}$: {var}")
+            plt.legend()
+            plt.show()
