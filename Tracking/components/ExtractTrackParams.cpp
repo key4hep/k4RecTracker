@@ -14,10 +14,13 @@ using FloatColl = podio::UserDataCollection<float>;
 using TrackColl = edm4hep::TrackCollection;
 using TS = edm4hep::TrackState;
 using TP = edm4hep::TrackParams;
+using edm4hep::utils::detail::to_index;
 
 struct TrackParamExtractor final
     : k4FWCore::MultiTransformer<std::tuple<FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl,
-                                            FloatColl, FloatColl, FloatColl>(const TrackColl&, const TrackColl&)> {
+                                            FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl,
+                                            FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl>(
+          const TrackColl&, const TrackColl&)> {
   TrackParamExtractor(const std::string& name, ISvcLocator* svcLoc)
       : MultiTransformer(name, svcLoc,
                          {
@@ -35,14 +38,25 @@ struct TrackParamExtractor final
                              KeyValues("OutCollCluOmega", {"CluTrackOmega"}),
                              KeyValues("OutCollCluZ0", {"CluTrackZ0"}),
                              KeyValues("OutCollCluTanL", {"CluTrackTanL"}),
-
+                             // uncertainties
+                             KeyValues("OutCollSiUncD0", {"SiTrackUncD0"}),
+                             KeyValues("OutCollSiUncPhi", {"SiTrackUncPhi"}),
+                             KeyValues("OutCollSiUncOmega", {"SiTrackUncOmega"}),
+                             KeyValues("OutCollSiUncZ0", {"SiTrackUncZ0"}),
+                             KeyValues("OutCollSiUncTanL", {"SiTrackUncTanL"}),
+                             KeyValues("OutCollCluUncD0", {"CluTrackUncD0"}),
+                             KeyValues("OutCollCluUncPhi", {"CluTrackUncPhi"}),
+                             KeyValues("OutCollCluUncOmega", {"CluTrackUncOmega"}),
+                             KeyValues("OutCollCluUncZ0", {"CluTrackUncZ0"}),
+                             KeyValues("OutCollCluUncTanL", {"CluTrackUncTanL"}),
                          }) {}
 
   // This is the function that will be called to transform the data
   // Note that the function has to be const, as well as the collections
   // we get from the input
   std::tuple<FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl,
-             FloatColl>
+             FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl, FloatColl,
+             FloatColl, FloatColl>
   operator()(const TrackColl& inSiTracks, const TrackColl& inCluTracks) const override {
 
     printInStars(this, "New Event", n_stars);
@@ -59,30 +73,46 @@ struct TrackParamExtractor final
     // Process both collections (SiTracks and ClupatraTracks) at the same time
     std::tuple<FloatColl, FloatColl, FloatColl, FloatColl, FloatColl> siColls;
     std::tuple<FloatColl, FloatColl, FloatColl, FloatColl, FloatColl> cluColls;
+    std::tuple<FloatColl, FloatColl, FloatColl, FloatColl, FloatColl> siUncColls;
+    std::tuple<FloatColl, FloatColl, FloatColl, FloatColl, FloatColl> cluUncColls;
+
     for (size_t i = 0; i < inSiTracks.size(); ++i) {
 
       // Process SiTrack
       const auto oSiTrackStateIP = getOTrackAtIP(inSiTracks[i], "SiTrack");
       if (oSiTrackStateIP.has_value()) {
-        std::get<static_cast<std::size_t>(TP::d0)>(siColls).push_back(oSiTrackStateIP->D0);
-        std::get<static_cast<std::size_t>(TP::phi)>(siColls).push_back(oSiTrackStateIP->phi);
-        std::get<static_cast<std::size_t>(TP::omega)>(siColls).push_back(oSiTrackStateIP->omega);
-        std::get<static_cast<std::size_t>(TP::z0)>(siColls).push_back(oSiTrackStateIP->Z0);
-        std::get<static_cast<std::size_t>(TP::tanLambda)>(siColls).push_back(oSiTrackStateIP->tanLambda);
+        // values
+        std::get<to_index(TP::d0)>(siColls).push_back(oSiTrackStateIP->D0);
+        std::get<to_index(TP::phi)>(siColls).push_back(oSiTrackStateIP->phi);
+        std::get<to_index(TP::omega)>(siColls).push_back(oSiTrackStateIP->omega);
+        std::get<to_index(TP::z0)>(siColls).push_back(oSiTrackStateIP->Z0);
+        std::get<to_index(TP::tanLambda)>(siColls).push_back(oSiTrackStateIP->tanLambda);
+        // uncertainties
+        std::get<to_index(TP::d0)>(siUncColls).push_back(getSigmaVar(*oSiTrackStateIP, TP::d0));
+        std::get<to_index(TP::phi)>(siUncColls).push_back(getSigmaVar(*oSiTrackStateIP, TP::phi));
+        std::get<to_index(TP::omega)>(siUncColls).push_back(getSigmaVar(*oSiTrackStateIP, TP::omega));
+        std::get<to_index(TP::z0)>(siUncColls).push_back(getSigmaVar(*oSiTrackStateIP, TP::z0));
+        std::get<to_index(TP::tanLambda)>(siUncColls).push_back(getSigmaVar(*oSiTrackStateIP, TP::tanLambda));
       }
 
       // Process CluTrack
       const auto oCluTrackStateIP = getOTrackAtIP(inCluTracks[i], "CluTrack");
       if (oCluTrackStateIP.has_value()) {
-        std::get<static_cast<std::size_t>(TP::d0)>(cluColls).push_back(oCluTrackStateIP->D0);
-        std::get<static_cast<std::size_t>(TP::phi)>(cluColls).push_back(oCluTrackStateIP->phi);
-        std::get<static_cast<std::size_t>(TP::omega)>(cluColls).push_back(oCluTrackStateIP->omega);
-        std::get<static_cast<std::size_t>(TP::z0)>(cluColls).push_back(oCluTrackStateIP->Z0);
-        std::get<static_cast<std::size_t>(TP::tanLambda)>(cluColls).push_back(oCluTrackStateIP->tanLambda);
+        std::get<to_index(TP::d0)>(cluColls).push_back(oCluTrackStateIP->D0);
+        std::get<to_index(TP::phi)>(cluColls).push_back(oCluTrackStateIP->phi);
+        std::get<to_index(TP::omega)>(cluColls).push_back(oCluTrackStateIP->omega);
+        std::get<to_index(TP::z0)>(cluColls).push_back(oCluTrackStateIP->Z0);
+        std::get<to_index(TP::tanLambda)>(cluColls).push_back(oCluTrackStateIP->tanLambda);
+        // uncertainties
+        std::get<to_index(TP::d0)>(cluUncColls).push_back(getSigmaVar(*oCluTrackStateIP, TP::d0));
+        std::get<to_index(TP::phi)>(cluUncColls).push_back(getSigmaVar(*oCluTrackStateIP, TP::phi));
+        std::get<to_index(TP::omega)>(cluUncColls).push_back(getSigmaVar(*oCluTrackStateIP, TP::omega));
+        std::get<to_index(TP::z0)>(cluUncColls).push_back(getSigmaVar(*oCluTrackStateIP, TP::z0));
+        std::get<to_index(TP::tanLambda)>(cluUncColls).push_back(getSigmaVar(*oCluTrackStateIP, TP::tanLambda));
       }
     }
 
-    return std::tuple_cat(std::move(siColls), std::move(cluColls));
+    return std::tuple_cat(std::move(siColls), std::move(cluColls), std::move(siUncColls), std::move(cluUncColls));
   };
 
 private:
@@ -100,5 +130,7 @@ private:
       return std::nullopt;
     }
   }
+
+  float getSigmaVar(const edm4hep::TrackState& ts, const TP var) const { return std::sqrt(ts.getCovMatrix(var, var)); }
 };
 DECLARE_COMPONENT(TrackParamExtractor)
