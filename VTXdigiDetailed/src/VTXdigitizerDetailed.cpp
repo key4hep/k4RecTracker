@@ -4,7 +4,7 @@
 DECLARE_COMPONENT(VTXdigitizerDetailed)
 
 VTXdigitizerDetailed::VTXdigitizerDetailed(const std::string& aName, ISvcLocator* aSvcLoc)
-    : Gaudi::Algorithm (aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizerDetailed") {
+    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizerDetailed") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input sim vertex hit collection name");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized vertex hit collection name");
   declareProperty("outputSimDigiAssociation", m_output_sim_digi_link, "Output link between sim hits and digitized hits");
@@ -14,122 +14,13 @@ VTXdigitizerDetailed::~VTXdigitizerDetailed() {}
 
 StatusCode VTXdigitizerDetailed::initialize() {
 
-  // A Detector Initialization :
-
-
-  const auto detector = m_geoSvc->getDetector();
-
-  const auto surfMan = detector->extension<dd4hep::rec::SurfaceManager>();
-  dd4hep::DetElement det = detector->detector(m_detectorName);
-  surfaceMap = surfMan->map(m_detectorName);
-
-  if (!surfaceMap) {
-    throw std::runtime_error(fmt::format("Could not find surface map for detector: {} in SurfaceManager", det.name()));
-  }
-   
- // set the cellID decoder
-  m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder(); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
-
- // Trying Mask for cell ID
- if (m_cellIDBits != 64) {
-    m_mask = (static_cast<std::uint64_t>(1) << m_cellIDBits) - 1;
-    debug() << "Using cellID mask with " << m_cellIDBits
-           << " bits: 0x" << std::hex << m_mask << std::dec << endmsg;
-  }
-
-  
-  if (m_decoder->fieldDescription().find("layer") == std::string::npos){
-    error() 
-      << " Readout " << m_readoutName << " does not contain layer id!"
-      << endmsg;
-    return StatusCode::FAILURE;
-  }
-  
-  // retrieve the volume manager
-  m_volman = m_geoSvc->getDetector()->volumeManager();
-
-  // Get the sensor thickness and 2D size per layer in mm
-  dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag()); // Get detector Type
-  if (type.is(dd4hep::DetType::BARREL)) { // if this is a barrel detector
-    getSensorThickness<dd4hep::rec::ZPlanarData>();
-    getSensorSize<dd4hep::rec::ZPlanarData>();
-    for (size_t i = 0; i < m_sensorWidth.size(); ++i) {
-    std::cout << "[DEBUG] Layer " << i 
-              << " Width: " << m_sensorWidth[i] 
-              << " mm, Length: " << m_sensorLength[i] 
-              << " mm, Thickness: " << m_sensorThickness[i] << " mm" 
-              << std::endl;
-  }
-  }
-  else if (type.is(dd4hep::DetType::ENDCAP)) { // If this is an Endcap Detector
-    getSensorThickness<dd4hep::rec::ZDiskPetalsData>();
-    getSensorSize<dd4hep::rec::ZDiskPetalsData>();
-    for (size_t i = 0; i < m_sensorWidth.size(); ++i) {
-    std::cout << "[DEBUG] Layer " << i 
-              << " WidthInner: " << m_sensorWidthInner[i] 
-              << " mm, WidthOuter: " << m_sensorWidthOuter[i]
-              << ", Length: " << m_sensorLength[i] 
-              << " mm, Thickness: " << m_sensorThickness[i] << " mm" 
-              << std::endl;
-  }
-}
-  else {
-    error() << m_detectorName << " : Detector type should be BARREL or ENDCAP " << endmsg;
-    return StatusCode::FAILURE;
-  }
-
-
-
-  // check if readout exists
-  if (m_geoSvc->getDetector()->readouts().find(m_readoutName) == m_geoSvc->getDetector()->readouts().end()) {
-    error() << "Readout <<" << m_readoutName << ">> does not exist." << endmsg;
-    return StatusCode::FAILURE;
-  }
-  
-  
-  ////////
   // Initialise LocalNormalVectorDir with forcing the user to declare a value
   if ( !(m_LocalNormalVectorDir=="x" || m_LocalNormalVectorDir=="y" || m_LocalNormalVectorDir=="z") ) {
     error() << "LocalNormalVectorDir property should be declared as a string with the direction (x,y or z) of the normal vector to sensitive surface in the sensor local frame (may differ according to the geometry definition within k4geo). Add a - sign before the direction in case of indirect frame." << endmsg;
     return StatusCode::FAILURE;
   }
-
-  ///// B. Random services (Time + Threshold)
   
-  m_randSvc = service("RndmGenSvc", false);
-  if (!m_randSvc) {
-    error() << "Couldn't get RndmGenSvc!" << endmsg;
-    return StatusCode::FAILURE;
-  }
-
-  m_gauss_t_vec.resize(m_t_resolution.size());
-  for (size_t i = 0; i < m_t_resolution.size(); ++i) {  
-    if (m_gauss_t_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_t_resolution[i])).isFailure()) {
-      error() << "Couldn't initialize RndmGenSvc!" << endmsg;
-      return StatusCode::FAILURE;
-    }
-  }
-
-  // Initialize Gaussian random generator for threshold smearing
-  if (m_gauss_threshold.initialize(m_randSvc, Rndm::Gauss(m_Threshold, m_ThresholdSmearing)).isFailure()) {
-    error() << "Couldn't initialize Gaussian generator for threshold smearing!" << endmsg;
-    return StatusCode::FAILURE;
-  }
-
-
-  //// Initialize Parameters :
-
-  // InitiAlize the diffusion parameters
-  m_Dist50 = 0.050; // Define 50microns in mm
-
-  // initialise the cluster width
-  m_ClusterWidth = 3.0; 
-
-
-  /////////
-
-  //////
-  ////////////////////////// the debugging histograms
+  // Initialise the debugging histograms
   if (m_DebugHistos) {
     if (m_DebugFileName=="") {
       error() << "Please provide a name for the file containing the debug histograms with option DebugFileName." << endmsg;
@@ -197,9 +88,73 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hActivePixelPerlayer->SetDirectory(0);
 
   }
-  ///////////////// End debug Histo
+  
+  // Initialize random services
+  m_randSvc = service("RndmGenSvc", false);
+  if (!m_randSvc) {
+    error() << "Couldn't get RndmGenSvc!" << endmsg;
+    return StatusCode::FAILURE;
+  }
 
-  //////////// add debug info
+  m_gauss_t_vec.resize(m_t_resolution.size());
+  for (size_t i = 0; i < m_t_resolution.size(); ++i) {  
+    if (m_gauss_t_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_t_resolution[i])).isFailure()) {
+      error() << "Couldn't initialize RndmGenSvc!" << endmsg;
+      return StatusCode::FAILURE;
+    }
+  }
+
+// Initialize Gaussian random generator for threshold smearing
+  if (m_gauss_threshold.initialize(m_randSvc, Rndm::Gauss(m_Threshold, m_ThresholdSmearing)).isFailure()) {
+    error() << "Couldn't initialize Gaussian generator for threshold smearing!" << endmsg;
+    return StatusCode::FAILURE;
+  }
+
+  // check if readout exists
+  if (m_geoSvc->getDetector()->readouts().find(m_readoutName) == m_geoSvc->getDetector()->readouts().end()) {
+    error() << "Readout <<" << m_readoutName << ">> does not exist." << endmsg;
+    return StatusCode::FAILURE;
+  }
+
+  // set the cellID decoder
+  m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder(); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
+  
+  if (m_decoder->fieldDescription().find("layer") == std::string::npos){
+    error() 
+      << " Readout " << m_readoutName << " does not contain layer id!"
+      << endmsg;
+    return StatusCode::FAILURE;
+  }
+  
+  // retrieve the volume manager
+  m_volman = m_geoSvc->getDetector()->volumeManager();
+
+  // Initialize the surface map
+  dd4hep::Detector& theDetector = dd4hep::Detector::getInstance();
+  dd4hep::rec::SurfaceManager& surfMan = *theDetector.extension<dd4hep::rec::SurfaceManager>();
+  dd4hep::DetElement det = m_geoSvc->getDetector()->detector(m_detectorName);
+  _map = surfMan.map(det.name());
+  if (!_map)
+        error() << " Could not find surface map for detector " << det.name() << " in SurfaceManager " << endmsg;
+
+   // Get the sensor thickness and 2D size per layer in mm
+  dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag()); // Get detector Type
+  if (type.is(dd4hep::DetType::BARREL)) { // if this is a barrel detector
+    getSensorThickness<dd4hep::rec::ZPlanarData>();
+  }
+  else if (type.is(dd4hep::DetType::ENDCAP)) { // If this is an Endcap Detector
+    getSensorThickness<dd4hep::rec::ZDiskPetalsData>();
+  }
+   else {
+    error() << m_detectorName << " : Detector type should be BARREL or ENDCAP " << endmsg;
+    return StatusCode::FAILURE;
+   }
+
+  // InitiAlize the diffusion parameters
+  m_Dist50 = 0.050; // Define 50microns in mm
+
+  // initialise the cluster width
+  m_ClusterWidth = 3.0;
 
   debug() << "Initializing VTXdigitizerDetailed with the following parameters:" << endmsg;
   debug() << "Detector Name: " << m_detectorName << endmsg;
@@ -207,10 +162,9 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   debug() << "Threshold: " << m_Threshold << endmsg; 
   debug() << "Threshold Smearing : " << m_ThresholdSmearing << endmsg;
-  /////////////////
+
   return StatusCode::SUCCESS;
 }
-
  
 template<typename T> void VTXdigitizerDetailed::getSensorThickness() {
   /** Retrieve the sensor thickness per layer in millimeter
@@ -228,37 +182,6 @@ template<typename T> void VTXdigitizerDetailed::getSensorThickness() {
   
 } // End getSensorThickness
 
-//Get Sensor Width & length 
-template<typename T> void VTXdigitizerDetailed::getSensorSize() {
-  auto detElement = m_geoSvc->getDetector()->detector(m_detectorName);
-  auto* theExtension = detElement.extension<T>();
-  const std::vector<typename T::LayerLayout>& layers = theExtension->layers;
-
-  m_sensorWidth.resize(layers.size());
-  m_sensorLength.resize(layers.size());
-
-  if constexpr (std::is_same_v<T, dd4hep::rec::ZDiskPetalsData>) {
-    // Seules les endcaps ont inner/outer width
-    m_sensorWidthInner.resize(layers.size());
-    m_sensorWidthOuter.resize(layers.size());
-  }
-
-  for (size_t i = 0; i < layers.size(); ++i) {
-    if constexpr (std::is_same_v<T, dd4hep::rec::ZPlanarData>) {
-      m_sensorWidth[i] = static_cast<float>(layers[i].widthSensitive / dd4hep::mm);
-      m_sensorLength[i] = static_cast<float>(layers[i].lengthSensor / dd4hep::mm);
-      // Pas d'inner/outer pour barrel
-    }
-    else if constexpr (std::is_same_v<T, dd4hep::rec::ZDiskPetalsData>) {
-      m_sensorWidthInner[i] = static_cast<float>(layers[i].widthInnerSensitive / dd4hep::mm);
-      m_sensorWidthOuter[i] = static_cast<float>(layers[i].widthOuterSensitive / dd4hep::mm);
-      m_sensorLength[i] = static_cast<float>(layers[i].lengthSensitive / dd4hep::mm);
-    }
-  }
-}
-
-
-
 StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
   // Get the input collection with Geant4 hits
   const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
@@ -267,6 +190,7 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
   // Check if it is produced by Secondaries or Overlay 
   int nSecondaryHits = 0;
   int nOverlayHits = 0;
+
   // Digitize the sim hits
   edm4hep::TrackerHitPlaneCollection* output_digi_hits = m_output_digi_hits.createAndPut();
   edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col = m_output_sim_digi_link.createAndPut();
@@ -305,6 +229,7 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
     for (const auto& digi_hit : *output_digi_hits) {
       uint64_t cellID = digi_hit.getCellID();
       int layer = m_decoder->get(cellID, "layer");
+     // int side = m_decoder->get(cellID, "side");
       hDigisPerLayer->Fill(layer);
     }
   }
@@ -331,6 +256,7 @@ void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit,
   const float segmentLength = 0.005; //5microns in mm
   float pathLength = hit.getPathLength(); // Path Length of the particle in the active material in mm
   int numberOfSegments = int(pathLength / segmentLength); // Number of segments
+  //std::cout << pathLength << ":" << numberOfSegments << std::endl; // TEST
   if (numberOfSegments <1) { numberOfSegments = 1; }
 
   float GeVperElectron = 3.61E-09; // Mean ionization energy in silicon [GeV]
@@ -537,45 +463,12 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   
 } // End DriftDirection
 
-
-void VTXdigitizerDetailed::GetSensorSize (const edm4hep::SimTrackerHit& hit, float& widthMin, float& widthMax, float& lengthMin, float& lengthMax) const {
-  /** Define sensentive sensor  dimension (2D) per layer in mm and per hit (cellID) in order to define pixel indices
-   *  The pixel size is defined by the readout segmentation
-   *  The positions are in mm
-   */
-  
-  const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-  int layer = m_decoder->get(cellID, "layer");
-  dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag());
-
-  if (type.is(dd4hep::DetType::BARREL)) {
-        float width = m_sensorWidth[layer];
-        float length = m_sensorLength[layer];
-        widthMin = -width / 2.f;
-        widthMax = width / 2.f;
-        lengthMin = -length / 2.f;
-        lengthMax = length / 2.f;
-    } else if (type.is(dd4hep::DetType::ENDCAP)) {
-        float widthOuter = m_sensorWidthOuter[layer];
-        float length = m_sensorLength[layer];
-        widthMin = -widthOuter / 2.f;
-        widthMax = widthOuter / 2.f;
-        lengthMin = -length / 2.f;
-        lengthMax = length / 2.f;
-    } else {
-        std::cerr << "Detector type unknown in clampCloudToSensorBounds\n";
-        return;
-    }
-
-
-
-} // End GetSensorSize
-
-
 void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
-                                                const std::vector<SignalPoint>& collectionPoints,
-                                                hit_map_type& hit_map) const {
-
+			  const std::vector<SignalPoint>& collectionPoints,
+			  hit_map_type& hit_map) const {
+  
+  /** Get the map of recorded charges per pixel for a collection of drifted charges for a given hit
+   */
 
   // information detecteurs                                     
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
@@ -585,100 +478,130 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
   const float PixSizeX = cellDims[0] / dd4hep::mm;
   const float PixSizeY = cellDims[1] / dd4hep::mm;
 
+  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
+  const std::uint64_t reduced_cellID = cellID & m_mask;
+
+  // In comment : Another way to get the physical dimensions but limited to rectangles surfaces
+  // dd4hep::rec::SurfaceMap::const_iterator sI = _map->find(reduced_cellID);
+  // if (sI == _map->end())
+  //   error() << " VTXdigitizer: no surface found for cellID " << m_decoder->valueString(cellID) << std::endl << endmsg;
+
+  // const dd4hep::rec::ISurface* surf = sI->second;
+  // std::cout << "TEST : " << surf->length_along_u() << "    :    " << surf->length_along_v() << std::endl;
+
   // Récupérer la taille physique du capteur
-  float widthMin = 0.f, widthMax = 0.f;
-  float lengthMin = 0.f, lengthMax = 0.f;
-  GetSensorSize(hit, widthMin, widthMax, lengthMin, lengthMax);
+  
+  const auto solid = m_volman.lookupDetElement(reduced_cellID).volume().solid();
+  
+  float dimX, dimY, dimZ; // Dimensions of the solid in cm
+  if (std::string(solid.type()) == "TGeoBBox") {
+    dd4hep::Box box(solid);
+    dimX = 2 * box.x(); // Get the dimensions in cm
+    dimY = 2 * box.y();
+    dimZ = 2 * box.z();
+    SetLocalPos_In_ProperDirectFrame(dimX,dimY,dimZ); // Set the local position in the proper direct frame
+    dimX = fabs(dimX); dimY = fabs(dimY); dimZ = fabs(dimZ); // Ensure positive dimensions
+  }
+  else if (std::string(solid.type()) == "TGeoTrd2") {
+    // We consider only the largest width and length (trapezoid considered as largest rectangle)
+    dd4hep::Trapezoid trap(solid);
+    dimX = 2 * std::max(trap.dX1(),trap.dX2()); // Get the dimensions in cm
+    dimY = 2 * std::max(trap.dY1(),trap.dY2()); // Get the dimensions in cm
+    dimZ = 2 * trap.dZ();
+    SetLocalPos_In_ProperDirectFrame(dimX,dimY,dimZ); // Set the local position in the proper direct frame
+    dimX = fabs(dimX); dimY = fabs(dimY); dimZ = fabs(dimZ); // Ensure positive dimensions
+  }
+  else 
+  {
+    warning() << "Solid type not recognized: " << solid.type() << endmsg;
+  }
 
-  //comptage pixels ignorés 
-  int nIgnoredPixels = 0;
+  float widthMin = -dimX / 2. / dd4hep::mm, widthMax = dimX / 2. / dd4hep::mm;
+  float lengthMin = -dimY / 2. / dd4hep::mm, lengthMax = dimY / 2. / dd4hep::mm;
 
+  debug() << "Sensor size: width [" << widthMin << ", " << widthMax << "] mm, length [" << lengthMin << ", " << lengthMax << "] mm" << endmsg;
   // Conversion bornes physiques du capteur en indices pixels
   const int MinPixXSensor = static_cast<int>(std::floor((widthMin + 0.5f * PixSizeX) / PixSizeX));
   const int MaxPixXSensor = static_cast<int>(std::floor((widthMax + 0.5f * PixSizeX) / PixSizeX));
   const int MinPixYSensor = static_cast<int>(std::floor((lengthMin + 0.5f * PixSizeY) / PixSizeY));
   const int MaxPixYSensor = static_cast<int>(std::floor((lengthMax + 0.5f * PixSizeY) / PixSizeY));
+  debug() << "Sensor bounds in Pixel Indices : X [" << MinPixXSensor << ", " << MaxPixXSensor << "], Y [" << MinPixYSensor << ", " << MaxPixYSensor << "]" << endmsg;
 
-  for (const auto& point : collectionPoints) {
-    const float CloudCenterX = point.x();
-    const float CloudCenterY = point.y();
-    const float SigmaX = point.sigma_x();
-    const float SigmaY = point.sigma_y();
-    const float Charge = point.amplitude();
+  // map to store the pixel integrals in the x and y directions
+  std::map<int, float, std::less<int>> x, y;
 
-    // Bornes physiques du nuage
-    const float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
-    const float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
-    const float CloudMinY = CloudCenterY - m_ClusterWidth * SigmaY;
-    const float CloudMaxY = CloudCenterY + m_ClusterWidth * SigmaY;
+  // Assign signal per readout channel and store sorted by channel number (in modified local frame)
+  // Iterate over collection points on the collection plane
+  for (std::vector<SignalPoint>::const_iterator i = collectionPoints.begin(); i < collectionPoints.end(); i++) {
+    float CloudCenterX = i->x(); // Charge position in x in mm
+    float CloudCenterY = i->y(); // Charge position in y
+    float SigmaX = i->sigma_x(); // Charge spread in x in mm
+    float SigmaY = i->sigma_y(); // Charge spread in y
+    float Charge = i->amplitude(); // Charge amplitude in number of e-
 
-    // Conversion bornes du nuage en indices pixels
-    const int MinPixX = static_cast<int>(std::floor((CloudMinX + 0.5f * PixSizeX) / PixSizeX));
-    const int MaxPixX = static_cast<int>(std::floor((CloudMaxX + 0.5f * PixSizeX) / PixSizeX));
-    const int MinPixY = static_cast<int>(std::floor((CloudMinY + 0.5f * PixSizeY) / PixSizeY));
-    const int MaxPixY = static_cast<int>(std::floor((CloudMaxY + 0.5f * PixSizeY) / PixSizeY));
+    // Find the maximum cloud spread in 2D Plane, assume 3*sigma
+    float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
+    float CloudMaxX = CloudCenterX + m_ClusterWidth * SigmaX;
+    float CloudMinY = CloudCenterY - m_ClusterWidth * SigmaY;
+    float CloudMaxY = CloudCenterY + m_ClusterWidth * SigmaY;
 
-    const int nX = MaxPixX - MinPixX + 1;
-    const int nY = MaxPixY - MinPixY + 1;
+    // Convert the maximum cloud spread into pixel IDs
+    // Considers that the pixel of indice (0,0) is centered in position (0,0)
+    int IpxCloudMinX = int(floor((CloudMinX + 0.5 * PixSizeX) / PixSizeX));
+    int IpxCloudMaxX = int(floor((CloudMaxX + 0.5 * PixSizeX) / PixSizeX));
+    int IpxCloudMinY = int(floor((CloudMinY + 0.5 * PixSizeY) / PixSizeY));
+    int IpxCloudMaxY = int(floor((CloudMaxY + 0.5 * PixSizeY) / PixSizeY));
 
-    if (nX <= 0 || nY <= 0) {
-      // Pas de pixels à traiter, passer au point suivant
-      continue;
-    }
+    x.clear(); // clear temporary integration arrays
+    y.clear();
 
-    // Vecteurs pour stocker la charge fractionnée en X et Y
-    std::vector<float> xStripCharge(nX, 0.f);
-    std::vector<float> yStripCharge(nY, 0.f);
+    // Integrate charge strips in x
+    for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
 
-    const float sqrt2SigmaX = std::sqrt(2.f) * SigmaX;
-    const float sqrt2SigmaY = std::sqrt(2.f) * SigmaY;
+      float LowerBound = (float(ix) - 0.5) * PixSizeX; // Lower bound of the strip
+      float UpperBound = (float(ix) + 0.5) * PixSizeX; // Uper bound of the strip
 
-    // Calcul de la charge fractionnée en X
-    for (int ix = 0; ix < nX; ++ix) {
-      const float LowerBound = (MinPixX + ix - 0.5f) * PixSizeX;
-      const float UpperBound = (MinPixX + ix + 0.5f) * PixSizeX;
-      xStripCharge[ix] = 0.5f * (std::erf((UpperBound - CloudCenterX) / sqrt2SigmaX) -
-                                std::erf((LowerBound - CloudCenterX) / sqrt2SigmaX));
-    }
+      float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterX)/(sqrt(2)*SigmaX)) - erf((LowerBound-CloudCenterX)/(sqrt(2)*SigmaX))); // Charge proportion in the strip calculated from erf function
+      
+      x[ix] = TotalStripCharge;
 
-    // Calcul de la charge fractionnée en Y
-    for (int iy = 0; iy < nY; ++iy) {
-      const float LowerBound = (MinPixY + iy - 0.5f) * PixSizeY;
-      const float UpperBound = (MinPixY + iy + 0.5f) * PixSizeY;
-      yStripCharge[iy] = 0.5f * (std::erf((UpperBound - CloudCenterY) / sqrt2SigmaY) -
-                                std::erf((LowerBound - CloudCenterY) / sqrt2SigmaY));
-    }
+    } // End Integrate charge strips in x
 
-    // Répartition de la charge dans les pixels, en vérifiant les limites capteur
-    for (int ix = 0; ix < nX; ++ix) {
-      for (int iy = 0; iy < nY; ++iy) {
-        int pixX = MinPixX + ix;
-        int pixY = MinPixY + iy;
+    // Integrate charge strips in y
+    for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
 
-        if (pixX < MinPixXSensor || pixX > MaxPixXSensor ||
-            pixY < MinPixYSensor || pixY > MaxPixYSensor) {
-            ++nIgnoredPixels; 
-            debug() << "Pixel (" << pixX << "," << pixY << ") hors capteur — ignoré. "
-            << "Limites capteur X=[" << MinPixXSensor << "," << MaxPixXSensor << "], "
-            << "Y=[" << MinPixYSensor << "," << MaxPixYSensor << "]" << endmsg;
-          continue; // Ignorer les pixels hors limites
+      float LowerBound = (float(iy) - 0.5) * PixSizeY; // Lower bound of the strip
+      float UpperBound = (float(iy) + 0.5) * PixSizeY; // Uper bound of the strip
+
+      float TotalStripCharge = 0.5 * (erf((UpperBound-CloudCenterY)/(sqrt(2)*SigmaY)) - erf((LowerBound-CloudCenterY)/(sqrt(2)*SigmaY))); // Charge proportion in the strip calculated from erf function
+      
+      y[iy] = TotalStripCharge;
+
+    } // End Integrate charge strips in y
+    
+    // Get the 2D charge integrals by folding x and y strips
+    // Should add at this point a check that the pixel lies inside material - Not implemented for now
+    for (int ix = IpxCloudMinX; ix <= IpxCloudMaxX; ix++) {
+      for (int iy = IpxCloudMinY; iy <= IpxCloudMaxY; iy++) {
+
+        // Check if the pixel is within the sensor bounds
+        if (ix < MinPixXSensor || ix > MaxPixXSensor || iy < MinPixYSensor || iy > MaxPixYSensor) {
+          warning() << "Pixel out of bounds (skipped) : " << ix << ":" << iy << endmsg;
+          continue; // Skip pixels outside the sensor bounds
         }
 
-        const float ChargeInPixel = Charge * xStripCharge[ix] * yStripCharge[iy];
-         debug() << "Ajout de charge dans pixel (" << pixX << "," << pixY << ") : "
-            << ChargeInPixel << " e-. "
-            << "Limites capteur X=[" << MinPixXSensor << "," << MaxPixXSensor << "], "
-            << "Y=[" << MinPixYSensor << "," << MaxPixYSensor << "]" << endmsg;
-        hit_map[pixX][pixY] += ChargeInPixel;
-      }
-    }
-  }
-debug() << "Nombre total de pixels ignorés : " << nIgnoredPixels << endmsg;
-}
+        // Calculate the charge in the pixel
+        // ChargeInPixel = Charge * x[ix] * y[iy]
+        // where x[ix] and y[iy] are the charge fractions in the x and y directions
+  	    float ChargeInPixel = Charge * x[ix] * y[iy];
 
-
-
-/////////////////////////// Handle Threshold, Noise .. ///////////////////// 
+        hit_map[ix][iy] += ChargeInPixel; // Add the charge to the pixel map
+        }// end loop over y
+      } // end loop over x
+    } // End loop over charge collection
+      //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
+} // End get_charge_per_pixel
+     
 bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
   /** Apply the threshold to the charge
    *  The threshold is defined in electrons
@@ -706,8 +629,6 @@ bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
 }
 
 
-/// Make digis()
-
 void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
 						  edm4hep::TrackerHitPlaneCollection* output_digi_hits,
 						  edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col,
@@ -726,6 +647,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   const float PixSizeX = cellDims[0] / dd4hep::mm;
   const float PixSizeY = cellDims[1] / dd4hep::mm;
 
+
   debug() << "SimHit CellID: " << cellID << endmsg;
   // Décodage champ par champ
   for (const auto& field : m_decoder->fields()) {
@@ -733,17 +655,23 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
     int value = m_decoder->get(cellID, name);
     debug() << "  " << name << " = " << value << endmsg;
   }
-
+  debug() << "Hit position in mm: (" << hit.getPosition().x * dd4hep::mm << ", "
+          << hit.getPosition().y * dd4hep::mm << ", "
+          << hit.getPosition().z * dd4hep::mm << ")" << endmsg;
   debug() << "is Secondary ? : " << hit.isProducedBySecondary() << endmsg;
   debug() << "is Overlay ? : " << hit.isOverlay() << endmsg;
 
+ 
   
-  debug() << "Pixel size X: " << PixSizeX << " mm, Y: " << PixSizeY << " mm" << endmsg;
+
+
 
   double DigiLocalX = 0.; // Local position of the digitized hit
   double DigiLocalY = 0.;
 
+
   // Unordored Map for efficiency 
+
   using ChargeMap = std::unordered_map<int, double>;
   ChargeMap Qix, Qiy;
 
@@ -751,7 +679,6 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   int CountBeforeThreshold = 0;
   int CountAfterThreshold = 0;
   int nPixels = 0;
-
   debug() << "------ Carte de charge (hit_map) ------" << endmsg;
   // Loop over hit map to apply threshold and accumulate weights
     // loop to load the weights per x and y layers
@@ -883,8 +810,6 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   // Apply time smearing
   int iLayer = m_decoder->get(cellID, "layer");
   output_digi_hit.setTime(hit.getTime() + m_gauss_t_vec[iLayer].shoot());
-  double smear_value = m_gauss_t_vec[iLayer].shoot();
-  debug() << "Time smear value: " << smear_value << endmsg;
   
   output_digi_hit.setCellID(cellID);
 
@@ -899,8 +824,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   // Set the link between sim and digi hit
   output_sim_digi_link.setFrom(output_digi_hit);
   output_sim_digi_link.setTo(hit);
-  debug() << "Digis Energy :" << output_digi_hit.getEDep() << " [GeV]" << endmsg;
-   
+
   // Fill the debug histograms if needed
   if (m_DebugHistos) {
   
@@ -953,6 +877,49 @@ void VTXdigitizerDetailed::SetProperDirectFrame(TGeoHMatrix& sensorTransformMatr
   }
 } // End SetProperDirectFrame
 
+void VTXdigitizerDetailed::SetLocalPos_In_ProperDirectFrame(float& x, float& y, float& z) const {
+  /** Change the sensorTransformMatrix to have a direct frame with z orthogonal to sensor surface
+   */
+
+  std::string LocalNormalVectorDir = m_LocalNormalVectorDir;
+  bool IsDirect = true; // Is the origin frame direct ?
+  if (LocalNormalVectorDir[0]=='-') {
+    IsDirect = false;
+    LocalNormalVectorDir = LocalNormalVectorDir[1];
+  }  
+
+  float x_tmp, y_tmp, z_tmp;
+
+  // If the orthogonal direction is along X or Y in local frame, rotate the frame to have Z orthogonal to sensors instead
+  if (LocalNormalVectorDir=='x') {
+    // X->Z / Y->X / Z->Y
+    z_tmp = x;
+    x_tmp = y;
+    y_tmp = z;
+  }
+  else if (LocalNormalVectorDir=='y') {
+    // X->X / Y->Z / Z->-Y
+    z_tmp = -y;
+    x_tmp = x;
+    y_tmp = z;
+  }
+  else {
+    // X->X / Y->Y / Z->Z
+    z_tmp = z;
+    x_tmp = x;
+    y_tmp = y;
+  }
+
+  // If the frame isn't direct, make it direct by reflecting the x axis. This is necessary to correctly calculte the drift in X-Y due to B-field
+  if (!IsDirect) {
+    x_tmp = -x_tmp;
+  }
+
+  x = x_tmp;
+  y = y_tmp;
+  z = z_tmp;
+
+} // SetLocalPos_In_ProperDirectFrame
 
 void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
   /** This is an internal function to save the debug histograms in the corresponding rootfile

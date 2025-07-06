@@ -201,11 +201,11 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     oDCHdigihit.setEDep(input_sim_hit.getEDep());
     oDCHdigihit.setEDepError(eDepError);
     oDCHdigihit.setPosition(positionSW);
-    oDCHdigihit.setPositionAlongWireError(smearing_z);
+    oDCHdigihit.setPositionAlongWireError(m_z_resolution);
     oDCHdigihit.setWireAzimuthalAngle(WireAzimuthalAngle);
     oDCHdigihit.setWireStereoAngle(WireStereoAngle);
     oDCHdigihit.setDistanceToWire(distanceToWire);
-    oDCHdigihit.setDistanceToWireError(smearing_xy);
+    oDCHdigihit.setDistanceToWireError(m_xy_resolution);
     // For the sake of speed, let the dNdx calculation be optional
     if (m_calculate_dndx.value()) {
       auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit, myRandom);

@@ -25,7 +25,6 @@
 // DD4HEP
 #include "DD4hep/Detector.h"  // for dd4hep::VolumeManager
 #include "DD4hep/DetType.h"
-#include "DD4hep/Shapes.h"
 #include "DDRec/DetectorData.h" // for detector extensions
 #include "DDRec/Vector3D.h"
 #include "DDRec/Vector2D.h"
@@ -62,20 +61,20 @@ public:
    */
   virtual StatusCode finalize() final;
 
-  // Typedef public si besoin
-  typedef std::map<int, std::map<int, float>> hit_map_type;
+  typedef std::map<int, std::map<int, float, std::less<int>>, std::less<int>> hit_map_type; // Déplacé dans public
+  bool Apply_Threshold(double& ChargeInPixel) const;
   
 private:
   // Input sim vertex hit collection name
-  mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits", Gaudi::DataHandle::Reader, this};
+  mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits",
+     Gaudi::DataHandle::Reader, this};
   // Output digitized vertex hit collection name
-  mutable k4FWCore::DataHandle<edm4hep::TrackerHitPlaneCollection> m_output_digi_hits{"outputDigiHits", Gaudi::DataHandle::Writer, this};
+  mutable k4FWCore::DataHandle<edm4hep::TrackerHitPlaneCollection> m_output_digi_hits{"outputDigiHits",
+     Gaudi::DataHandle::Writer, this};
   // Output link between sim hits and digitized hits
-  mutable k4FWCore::DataHandle<edm4hep::TrackerHitSimTrackerHitLinkCollection> m_output_sim_digi_link{ "outputSimDigiAssociation", Gaudi::DataHandle::Writer, this};
+  mutable k4FWCore::DataHandle<edm4hep::TrackerHitSimTrackerHitLinkCollection> m_output_sim_digi_link{"outputSimDigiAssociation", 
+    Gaudi::DataHandle::Writer, this};
 
-  // Threshold 
-  bool Apply_Threshold(double& ChargeInPixel) const;
-  void GetSensorSize (const edm4hep::SimTrackerHit& hit, float& widthMin, float& widthMax, float& lengthMin, float& lengthMax) const;
   // Detector name
   Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
   // Detector readout names
@@ -93,14 +92,6 @@ private:
   // List of sensor thickness per layer in millimeter
   std::vector<float> m_sensorThickness;
 
-  // 2D dim
-  std::vector<float> m_sensorWidth;
-  std::vector<float> m_sensorLength;
-
-  // Pour ZDiskPetalsData (endcap)
-  std::vector<float> m_sensorWidthInner;
-  std::vector<float> m_sensorWidthOuter;
-
   // t resolution in ns
   Gaudi::Property<std::vector<float>> m_t_resolution{this, "tResolution", {0.1}, "Time resolutions per layer [ns]"};
 
@@ -117,14 +108,6 @@ private:
 
   // Option to force hits onto sensitive surface
   BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"};
-
-  // Decephiring CellID / Surface Not Found for CellID Issue
-  Gaudi::Property<size_t> m_cellIDBits{this, "CellIDBits", 64, "Number of bits to use for the cellID of the hits"}; 
-  // Mask to use for the cellID of the hits
-  std::uint64_t m_mask{static_cast<std::uint64_t>(-1)}; 
-  // Map to store the surface for each cellID
-  const dd4hep::rec::SurfaceMap* surfaceMap = nullptr;
-
 
   // Tangent of sensor's Lorentz angle (default is 0.1)
   FloatProperty m_tanLorentzAnglePerTesla{this, "tanLorentzAnglePerTesla", {0.1}, "Tangent of sensor's Lorentz angle per Tesla (default is 0.1)"};
@@ -204,7 +187,6 @@ private:
   // Additional member functions
   // Private methods
   template<typename T> void getSensorThickness();
-  template<typename T> void getSensorSize();
   
   void primary_ionization(const edm4hep::SimTrackerHit& hit,
 			  std::vector<ChargeDepositUnit>& ionizationPoints) const;
@@ -219,10 +201,11 @@ private:
 			    const std::vector<SignalPoint>& collectionPoints,
 			    hit_map_type& hit_map) const;
 
-
   void generate_output(const edm4hep::SimTrackerHit hit, edm4hep::TrackerHitPlaneCollection* output_digi_hits, edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col, const hit_map_type& hit_map) const;
 
   void SetProperDirectFrame(TGeoHMatrix& sensorTransformMatrix) const;
+
+  void SetLocalPos_In_ProperDirectFrame(float& x, float& y, float& z) const;
 
 private:
   // Additional Debug information
