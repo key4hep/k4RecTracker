@@ -6,6 +6,9 @@
 // edm4hep
 #include "edm4hep/utils/vector_utils.h"
 
+// DD4hep
+#include "DD4hep/Detector.h"
+
 // STL
 #include <random>
 
@@ -29,6 +32,37 @@ StatusCode DCHdigi_v02::initialize() {
         error() << "Unable to locate UniqueIDGenSvc with name: " << m_uidSvcName << endmsg;
         return StatusCode::FAILURE;
     }
+
+    m_geoSvc = serviceLocator()->service(m_geoSvcName);
+    if (!m_geoSvc) {
+        error() << "Unable to locate GeoSvc with name: " << m_geoSvcName << endmsg;
+        return StatusCode::FAILURE;
+    }
+
+    // Retrieve the subdetector
+    std::string dch_name(m_dch_name.value());
+    if (m_geoSvc->getDetector()->detectors().count(dch_name) == 0) {
+        error() << "Detector <<" << dch_name << ">> does not exist." << endmsg;
+        return StatusCode::FAILURE;
+    }
+
+    // Retrieve the detector element
+    dd4hep::DetElement dch_detelem = m_geoSvc->getDetector()->detectors().at(dch_name);
+    // Retrieve the DCH_info data extension for the drift chamber
+    m_dch_info = dch_detelem.extension<dd4hep::rec::DCH_info>();
+    if (not m_dch_info->IsValid()) {
+        error() << "No valid data extension was found for detector <<" << dch_name << ">>." << endmsg;
+        return StatusCode::FAILURE;
+    }
+
+    // Retrieve the readout associated with the detector element (subdetector)
+    dd4hep::SensitiveDetector dch_sd = m_geoSvc->getDetector()->sensitiveDetector(dch_name);
+    if (not dch_sd.isValid()) {
+        error() << "No valid Sensitive Detector was found for detector <<" << dch_name << ">>." << endmsg;
+        return StatusCode::FAILURE;
+    }
+    // set the cellID decoder
+    m_decoder = dch_sd.readout().idSpec().decoder();
 
     m_event_counter = 0;
     return StatusCode::SUCCESS;
@@ -68,9 +102,9 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
         const edm4hep::SimTrackerHit* closest_simhit = nullptr;
         // Save also the vectors that were calculated anyway to find the closest hit
         // They will be reused for digitisation of the hit
-        const TVector3* closest_simhit_position = nullptr;
-        const TVector3* closest_hit_to_wire_vector = nullptr;
-        const double* closest_distance_to_wire = nullptr;
+        TVector3 closest_simhit_position;
+        TVector3 closest_hit_to_wire_vector;
+        double closest_distance_to_wire;
 
         double min_distance = std::numeric_limits<double>::max();
         double edep_sum = 0.0;
@@ -95,10 +129,12 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             // Update the smallest distance to wire of all hits in the cell
             if (distance_to_wire < min_distance) {
                 min_distance = distance_to_wire;
+
+                // Save the closest hit and related values
                 closest_simhit = &simhit;
-                closest_simhit_position = &simhit_position;
-                closest_hit_to_wire_vector = &hit_to_wire_vector;
-                closest_distance_to_wire = &distance_to_wire;
+                closest_simhit_position = simhit_position;
+                closest_hit_to_wire_vector = hit_to_wire_vector;
+                closest_distance_to_wire = distance_to_wire;
             }
             
             // Integrate the energy deposited and path length
@@ -113,33 +149,33 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
         }
 
         debug() << "CellID: " << cellID 
-               << ", Min Time: " << min_distance 
+               << ", Dist: " << min_distance 
                << ", EDep Sum: " << edep_sum 
                << ", Path Length Sum: " << path_length_sum
                << endmsg;
 
-        double digihit_time;
-        double digihit_distance_to_wire;
-        edm4hep::Vector3d digihit_position;
+        double dighit_time;
+        double dighit_distance_to_wire;
+        edm4hep::Vector3d dighit_position;
 
         if (closest_simhit) {
             // Do the digitisation based on the closest hit and the integrated edep and path length
 
             // TODO: update time with realisitc value
-            digihit_time = closest_simhit->getTime();
+            dighit_time = closest_simhit->getTime();
 
             // xy smearing
             double smearing_xy = gauss_xy(random_engine);
-            digihit_distance_to_wire = std::max(0.0, *closest_distance_to_wire + smearing_xy);
+            dighit_distance_to_wire = std::max(0.0, closest_distance_to_wire + smearing_xy);
 
             // z smearing
             double smearing_z = gauss_z(random_engine);
-            auto hit_projection_on_the_wire = (*closest_simhit_position) + (*closest_hit_to_wire_vector);
+            auto hit_projection_on_the_wire = closest_simhit_position + closest_hit_to_wire_vector;
             TVector3 wire_direction_ez = (this->m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
             hit_projection_on_the_wire += smearing_z * wire_direction_ez;
 
             // Convert to edm4hep vector and cast to mm
-            digihit_position = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1.0 / dd4hep::mm);
+            dighit_position = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1.0 / dd4hep::mm);
 
 
 
@@ -148,18 +184,39 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             continue;
         }
 
+/* THE FOLLOWING CALCULATION OF WIRE ANGLES HAS BEEN COPIED AS IS FROM DCHdigi_v01! */
+        // The direction of the sense wires can be calculated as:
+        //   RotationZ(WireAzimuthalAngle) * RotationX(stereoangle)
+        // One point of the wire is for example the following:
+        //   RotationZ(WireAzimuthalAngle) * Position(cell_rave_z0, 0 , 0)
+        // variables aredefined below
+        auto WireAzimuthalAngle = this->m_dch_info->Get_cell_phi_angle(layer, nphi);
+        float WireStereoAngle = 0;
+        {
+            auto l = this->m_dch_info->database.at(layer);
+            // radial middle point of the cell at Z=0
+            auto cell_rave_z0 = 0.5 * (l.radius_fdw_z0 + l.radius_fuw_z0);
+            // when building the twisted tube, the twist angle is defined as:
+            //     cell_twistangle    = l.StereoSign() * DCH_i->twist_angle
+            // which forces the stereoangle of the wire to have the oposite sign
+            WireStereoAngle = (-1.) * l.StereoSign() * m_dch_info->stereoangle_z0(cell_rave_z0);
+        }
+/* END OF COPYING WIRE ANGLE CALCULATION FROM DCHdigi_v02 */
+
         sense_wire_hit.setCellID(cellID);
         sense_wire_hit.setType(0);
         sense_wire_hit.setQuality(0);
-        sense_wire_hit.setTime(digihit_time);
+        sense_wire_hit.setTime(dighit_time);
         sense_wire_hit.setEDep(edep_sum);
+        // For debugging, save the integrated path length as EDepError for now, to be updated for PR
+        // IF YOU ARE DOING A CODE REVIEW AND EdepError IS STILL PATH LENGTH, PLEASE MAKE A COMMENT IN THE PR!
         sense_wire_hit.setEDepError(path_length_sum);
-        sense_wire_hit.setPosition(digihit_position);
-        sense_wire_hit.setPositionAlongWireError(m_z_resolution.value());
-        sense_wire_hit.setWireAzimuthalAngle(0.0);
-        sense_wire_hit.setWireStereoAngle(0.0);
+        sense_wire_hit.setPosition(dighit_position);
+        sense_wire_hit.setPositionAlongWireError(m_z_resolution);
+        sense_wire_hit.setWireAzimuthalAngle(WireAzimuthalAngle);
+        sense_wire_hit.setWireStereoAngle(WireStereoAngle);
         sense_wire_hit.setDistanceToWire(min_distance);
-        sense_wire_hit.setDistanceToWireError(m_xy_resolution.value());
+        sense_wire_hit.setDistanceToWireError(m_xy_resolution);
         
 
 

@@ -9,6 +9,7 @@
 
 // k4Interface
 #include <k4Interface/IUniqueIDGenSvc.h>
+#include <k4Interface/IGeoSvc.h>
 
 // edm4hep
 #include "edm4hep/SimTrackerHitCollection.h"
@@ -38,9 +39,15 @@ private:
     SmartIF<IUniqueIDGenSvc> m_uniqueIDSvc{nullptr};
     Gaudi::Property<std::string> m_uidSvcName{this, "uidSvcName", "UniqueIDGenSvc", "The name of the UniqueIDGenSvc instance"};
 
+    SmartIF<IGeoSvc> m_geoSvc{nullptr};
+    Gaudi::Property<std::string> m_geoSvcName{this, "GeoSvcName", "GeoSvc", "The name of the GeoSvc instance"};
+
     mutable unsigned int m_event_counter;
 
     dd4hep::DDSegmentation::BitFieldCoder* m_decoder;
+
+    // Detector name
+    Gaudi::Property<std::string> m_dch_name{this, "DCH_name", "DCH_v2", "Name of the Drift Chamber detector"};
 
     // Drift chamber info extension for geometry calculations
     dd4hep::rec::DCH_info* m_dch_info{nullptr};
