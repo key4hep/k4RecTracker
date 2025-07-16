@@ -80,7 +80,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
     // Cluster and fired pixels per layer
 
-    hClusterPerLayer  = new TH1D("hClusterPerLayer", "Cluster per Layer", 10, 0, 10); // 100 bins max par exemple
+    hClusterPerLayer  = new TH1D("hClusterPerLayer", "Cluster per Layer", 10, 0, 10); 
     hClusterPerLayer->SetDirectory(0);
 
     hActivePixelPerlayer = new TH1D("hActivePixelPerlayer", "Active Pixels per Layer", 10, 0, 10);
