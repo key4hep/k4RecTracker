@@ -220,7 +220,7 @@ private:
 
   TH1D* hChargeAboveThreshold; // Histogram to store the pixel charge after Threshold 
   TH1D* hChargeBeforeThreshold; // Histogram to store the pixel charge before Threshold
-  TH1D* hChargePerClusterOrDigis; // Histogram to store charge per Digis ie Cluster 
+  TH1D* hChargePerCluster; // Histogram to store charge per Digis ie Cluster 
 
   TH1D* hActivePixelCountBeforeThreshold;  // Histogram to store the number of active pixels per Cluster before Threshold
   TH1D* hActivePixelCountAfterThreshold; // Histogram to store the number of active pixels per Cluster after Threshold
@@ -229,7 +229,7 @@ private:
   TH1D* hXDriftDueToMagField; // Histogram to store the X drift due to magnetic field in mm 
   TH1D* hYDriftDueToMagField; // Histogram to store the Y drift due to magnetic field in mm
   
-  TH1D* hDigisPerLayer; // Histo to get hits per layer for occupancy studies via cellID
+  TH1D* hClusterPerLayer; // Histo to get hits per layer for occupancy studies via cellID
   TH1D* hActivePixelPerlayer; // histo occupancy
   
 
