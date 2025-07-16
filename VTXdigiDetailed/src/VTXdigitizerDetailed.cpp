@@ -36,9 +36,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hError = new TH1D("hError","Distance between the true hit and digitized one in mm", 1000, 0., 0.1);
     hError->SetDirectory(0);
 
-    //////Threshold Studies 
-
-    //Before Threshold 
+    // Before Threshold 
 
     hChargeBeforeThreshold = new TH1D("hChargeBeforeThreshold", "Pixel Charge before threshold", 100, 0., 100.);
     hChargeBeforeThreshold->SetXTitle("Pixel Charge Without Threshold (ke)");
@@ -80,7 +78,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
     hYDriftDueToMagField->SetXTitle("Y Drift due to magnetic field (mm)");
     hYDriftDueToMagField->SetDirectory(0);
 
-    //Occupancy studies 
+    // Cluster and fired pixels per layer
 
     hClusterPerLayer  = new TH1D("hClusterPerLayer", "Cluster per Layer", 10, 0, 10); // 100 bins max par exemple
     hClusterPerLayer->SetDirectory(0);
