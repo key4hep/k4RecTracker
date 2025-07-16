@@ -682,7 +682,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   int CountBeforeThreshold = 0;
   int CountAfterThreshold = 0;
   int nPixels = 0;
-  debug() << "------ Carte de charge (hit_map) ------" << endmsg;
+  debug() << "------ Pixel map per cluster (hit_map) ------" << endmsg;
   // Loop over hit map to apply threshold and accumulate weights
     // loop to load the weights per x and y layers
     for (auto const& ix : hit_map) {
