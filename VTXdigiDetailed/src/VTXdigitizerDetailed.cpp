@@ -224,7 +224,6 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
         << nOverlayHits << " marked as overlay." << endmsg;
 
   // Cluster count per layer performed only when debug mode is enabled
-  // Here : Digi = Cluster of fired pixels
   if (m_DebugHistos) {
     std::map<int, int> digisPerLayer;
 
@@ -471,8 +470,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
   
   /** Get the map of recorded charges per pixel for a collection of drifted charges for a given hit
    */
-
-  // Detector specifications                                  
+                                 
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
   const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName).segmentation();
   const auto cellDims = segmentation.cellDimensions(cellID);
@@ -650,7 +648,6 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
 
 
   debug() << "SimHit CellID: " << cellID << endmsg;
-  // Décodage champ par champ
   for (const auto& field : m_decoder->fields()) {
     const std::string& name = field.name();
     int value = m_decoder->get(cellID, name);
@@ -662,16 +659,9 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   debug() << "is Secondary ? : " << hit.isProducedBySecondary() << endmsg;
   debug() << "is Overlay ? : " << hit.isOverlay() << endmsg;
 
- 
-  
-
-
-
-  double DigiLocalX = 0.; // Local position of the digitized hit
+  // Local position of the digitized hit
+  double DigiLocalX = 0.; 
   double DigiLocalY = 0.;
-
-
-  // Unordored Map for efficiency 
 
   using ChargeMap = std::unordered_map<int, double>;
   ChargeMap Qix, Qiy;
@@ -680,6 +670,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   int CountBeforeThreshold = 0;
   int CountAfterThreshold = 0;
   int nPixels = 0;
+
   debug() << "------ Pixel map per cluster (hit_map) ------" << endmsg;
   // Loop over hit map to apply threshold and accumulate weights
     // loop to load the weights per x and y layers
@@ -830,7 +821,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   if (m_DebugHistos) {
   
     // Get the global position of the hit (defined by default in Geant4 as the mean between the entry and exit point in the active material)
-    // and apply unit transformation (translation matrix is stored in cm
+    // and apply unit transformation (translation matrix is stored in cm)
     double hitGlobalCentralPosition[3] = {hit.getPosition().x * dd4hep::mm,
       hit.getPosition().y * dd4hep::mm,
       hit.getPosition().z * dd4hep::mm};
