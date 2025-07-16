@@ -229,7 +229,7 @@ private:
   TH1D* hXDriftDueToMagField; // Histogram to store the X drift due to magnetic field in mm 
   TH1D* hYDriftDueToMagField; // Histogram to store the Y drift due to magnetic field in mm
   
-  TH1D* hClusterPerLayer; // Histo to get hits per layer for occupancy studies via cellID
+  TH1D* hClusterPerLayer; // Histo to get fired pixels (cluster) per layer for occupancy studies
   TH1D* hActivePixelPerlayer; // histo occupancy
   
 
