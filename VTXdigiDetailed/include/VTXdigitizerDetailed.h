@@ -107,7 +107,7 @@ private:
   mutable const dd4hep::rec::SurfaceMap* _map;
 
   // Option to force hits onto sensitive surface
-  BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"};
+  // BooleanProperty m_forceHitsOntoSurface{this, "forceHitsOntoSurface", false, "Project hits onto the surface in case they are not yet on the surface (default: false"}; // This is not used yet, but can be useful in the future
 
   // Tangent of sensor's Lorentz angle (default is 0.1)
   FloatProperty m_tanLorentzAnglePerTesla{this, "tanLorentzAnglePerTesla", {0.1}, "Tangent of sensor's Lorentz angle per Tesla (default is 0.1)"};
