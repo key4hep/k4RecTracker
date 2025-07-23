@@ -29,6 +29,53 @@ find_package(GSL)
 find_package(Delphes)
 #---------------------------------------------------------------
 
+# make sure the onnx find script is found:
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+find_package(OnnxRuntime)
+if(OnnxRuntime_FOUND)
+  message("ONNX Runtime inference library found.")
+else()
+  message("ONNX Runtime not found!")
+endif()
+
+find_package(Torch)
+if(Torch_FOUND)
+  message("Torch inference library found.")
+else()
+  message("Torch not found!")
+endif()
+
+#---------------------------------------------------------------
+
+# Set up C++ Standard
+# ``-DCMAKE_CXX_STANDARD=<standard>`` when invoking CMake
+set(CMAKE_CXX_STANDARD 20 CACHE STRING "")
+
+if(NOT CMAKE_CXX_STANDARD MATCHES "14|17|20")
+  message(FATAL_ERROR "Unsupported C++ standard: ${CMAKE_CXX_STANDARD}")
+endif()
+
+# use, i.e. don't skip the full RPATH for the build tree
+set(CMAKE_SKIP_BUILD_RPATH FALSE)
+
+# when building, don't use the install RPATH already
+# (but later on when installing)
+set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+
+set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+
+# add the automatically determined parts of the RPATH
+# which point to directories outside the build tree to the install RPATH
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
+# the RPATH to be used when installing, but only if it's not a system directory
+list(FIND CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES "${CMAKE_INSTALL_PREFIX}/lib" isSystemDir)
+if("${isSystemDir}" STREQUAL "-1")
+    set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
+endif("${isSystemDir}" STREQUAL "-1")
+
+#---------------------------------------------------------------
+
 include(cmake/Key4hepConfig.cmake)
 include(GNUInstallDirs)
 

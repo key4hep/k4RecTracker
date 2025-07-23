@@ -31,8 +31,13 @@ gaudi_add_module(${PackageName}
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
-  #GenFit::genfit2
+  extensionDict
+  OnnxRuntime
+  torch
+  DD4hep::DDRec
+  DD4hep::DDCore
   ${DELPHES_LIBRARIES}
+  #GenFit::genfit2
 )
 
 target_include_directories(${PackageName} PUBLIC
@@ -59,14 +64,14 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 
-
-SET(test_name "test_CreateInputForTrackTests")
-ADD_TEST(NAME ${test_name} COMMAND bash -c "ddsim --enableGun --gun.distribution uniform --gun.energy '10*GeV' --gun.particle e- --numberOfEvents 100 --outputFile ddsim_output_edm4hep.root --random.enableEventSeed --random.seed 42 --compactFile $K4GEO/FCCee/ALLEGRO/compact/ALLEGRO_o1_v03/ALLEGRO_o1_v03.xml")
-set_test_env(${test_name})
-
 SET(test_name "test_TracksFromGenParticles")
-ADD_TEST(NAME ${test_name} COMMAND k4run test/runTracksFromGenParticles.py)
+ADD_TEST(NAME ${test_name} COMMAND sh +x test_TracksFromGenParticles.sh)
 set_test_env(${test_name})
-set_tests_properties(${test_name} PROPERTIES DEPENDS test_CreateInputForTrackTests)
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTracksFromGenParticles")
+
+SET(test_name "test_TrackFinder")
+ADD_TEST(NAME ${test_name} COMMAND sh +x test_trackFinder.sh)
+set_test_env(${test_name})
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackFinder")
 
 #endif()
