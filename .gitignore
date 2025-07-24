@@ -4,6 +4,7 @@
 *.png
 *.pdf
 *.swp
+*.hepmc
 
 *.dat
 *.gdml
