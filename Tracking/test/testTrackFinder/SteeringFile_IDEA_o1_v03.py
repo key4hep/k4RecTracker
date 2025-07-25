@@ -1,11 +1,10 @@
 from DDSim.DD4hepSimulation import DD4hepSimulation
 from g4units import mm, GeV, MeV
-import os
 
 SIM = DD4hepSimulation()
 
 ## The compact XML file, or multiple compact files, if the last one is the closer.
-SIM.compactFile = [os.path.join(os.environ.get("K4GEO", ""), 'FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml')]
+SIM.compactFile = ["../FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml"]
 ## Lorentz boost for the crossing angle, in radian!
 SIM.crossingAngleBoost = 0.0
 SIM.enableDetailedShowerMode = False
@@ -99,10 +98,10 @@ SIM.vertexSigma = [0.0, 0.0, 0.0, 0.0]
 ################################################################################
 
 ##  set the default calorimeter action
-SIM.action.calo = "Geant4VoidSensitiveAction"
+SIM.action.calo = "Geant4ScintillatorCalorimeterAction"
 
 ## List of patterns matching sensitive detectors of type Calorimeter.
-#SIM.action.calorimeterSDTypes = ["calorimeter", "DRcaloSiPMSD"]
+SIM.action.calorimeterSDTypes = ["calorimeter", "DRcaloSiPMSD"]
 
 ##  set the default event action
 SIM.action.event = []
@@ -113,10 +112,7 @@ SIM.action.event = []
 ##
 ##       SIM.action.mapActions['tpc'] = "TPCSDAction"
 ##
-SIM.action.mapActions["DRcalo"] = "Geant4VoidSensitiveAction"
-
-## Set the drift chamber action
-SIM.action.mapActions['DCH_v2'] = "Geant4TrackerAction"
+SIM.action.mapActions["DRcalo"] = "DRCaloSDAction"
 
 ##  set the default run action
 SIM.action.run = []
@@ -192,8 +188,7 @@ SIM.filter.filters = {
 }
 
 ##  a map between patterns and filter objects, using patterns to attach filters to sensitive detector
-# SIM.filter.mapDetFilter["DCH_v2"] = "edep0"
-SIM.filter.mapDetFilter["Muon-System"] = "edep0"
+SIM.filter.mapDetFilter = {}
 
 ##  default filter for tracking sensitive detectors; this is applied if no other filter is used for a tracker
 SIM.filter.tracker = "edep1kev"
@@ -236,7 +231,7 @@ SIM.geometry.enablePrintPlacements = False
 SIM.geometry.enablePrintSensitives = False
 
 ## configure regex SD
-#SIM.geometry.regexSensitiveDetector["DRcalo"] = {"Match": ["(core|clad)"], "OutputLevel": 3}
+SIM.geometry.regexSensitiveDetector["DRcalo"] = {"Match": ["(core|clad)"], "OutputLevel": 3}
 
 ################################################################################
 ## Configuration for the GuineaPig InputFiles
@@ -249,66 +244,66 @@ SIM.geometry.enablePrintSensitives = False
 SIM.guineapig.particlesPerEvent = "-1"
 
 
-# ################################################################################
-# ## Configuration for the DDG4 ParticleGun
-# ################################################################################
+################################################################################
+## Configuration for the DDG4 ParticleGun
+################################################################################
 
-# ##  direction of the particle gun, 3 vector
-# SIM.gun.direction = (1.0, 0.1, 0.1)
+##  direction of the particle gun, 3 vector
+SIM.gun.direction = (1.0, 0.1, 0.1)
 
-# ## choose the distribution of the random direction for theta
-# ##
-# ##     Options for random distributions:
-# ##
-# ##     'uniform' is the default distribution, flat in theta
-# ##     'cos(theta)' is flat in cos(theta)
-# ##     'eta', or 'pseudorapidity' is flat in pseudorapity
-# ##     'ffbar' is distributed according to 1+cos^2(theta)
-# ##
-# ##     Setting a distribution will set isotrop = True
-# ##
-# SIM.gun.distribution = None
+## choose the distribution of the random direction for theta
+##
+##     Options for random distributions:
+##
+##     'uniform' is the default distribution, flat in theta
+##     'cos(theta)' is flat in cos(theta)
+##     'eta', or 'pseudorapidity' is flat in pseudorapity
+##     'ffbar' is distributed according to 1+cos^2(theta)
+##
+##     Setting a distribution will set isotrop = True
+##
+SIM.gun.distribution = None
 
-# ## Total energy (including mass) for the particle gun.
-# ##
-# ## If not None, it will overwrite the setting of momentumMin and momentumMax
-# SIM.gun.energy = 10.0 * GeV
+## Total energy (including mass) for the particle gun.
+##
+## If not None, it will overwrite the setting of momentumMin and momentumMax
+SIM.gun.energy = 10.0 * GeV
 
-# ## Maximal pseudorapidity for random distibution (overrides thetaMin)
-# SIM.gun.etaMax = None
+## Maximal pseudorapidity for random distibution (overrides thetaMin)
+SIM.gun.etaMax = None
 
-# ## Minimal pseudorapidity for random distibution (overrides thetaMax)
-# SIM.gun.etaMin = None
+## Minimal pseudorapidity for random distibution (overrides thetaMax)
+SIM.gun.etaMin = None
 
-# ##  isotropic distribution for the particle gun
-# ##
-# ##     use the options phiMin, phiMax, thetaMin, and thetaMax to limit the range of randomly distributed directions
-# ##     if one of these options is not None the random distribution will be set to True and cannot be turned off!
-# ##
-# SIM.gun.isotrop = False
+##  isotropic distribution for the particle gun
+##
+##     use the options phiMin, phiMax, thetaMin, and thetaMax to limit the range of randomly distributed directions
+##     if one of these options is not None the random distribution will be set to True and cannot be turned off!
+##
+SIM.gun.isotrop = False
 
-# ## Maximal momentum when using distribution (default = 0.0)
-# # SIM.gun.momentumMax = 10000.0
+## Maximal momentum when using distribution (default = 0.0)
+# SIM.gun.momentumMax = 10000.0
 
-# ## Minimal momentum when using distribution (default = 0.0)
-# # SIM.gun.momentumMin = 0.0
-# SIM.gun.multiplicity = 1
-# SIM.gun.particle = "e-"
+## Minimal momentum when using distribution (default = 0.0)
+# SIM.gun.momentumMin = 0.0
+SIM.gun.multiplicity = 1
+SIM.gun.particle = "e-"
 
-# ## Maximal azimuthal angle for random distribution
-# SIM.gun.phiMax = None
+## Maximal azimuthal angle for random distribution
+SIM.gun.phiMax = None
 
-# ## Minimal azimuthal angle for random distribution
-# SIM.gun.phiMin = None
+## Minimal azimuthal angle for random distribution
+SIM.gun.phiMin = None
 
-# ##  position of the particle gun, 3 vector
-# SIM.gun.position = (0.0, 0.0, 0.0)
+##  position of the particle gun, 3 vector
+SIM.gun.position = (0.0, 0.0, 0.0)
 
-# ## Maximal polar angle for random distribution
-# SIM.gun.thetaMax = None
+## Maximal polar angle for random distribution
+SIM.gun.thetaMax = None
 
-# ## Minimal polar angle for random distribution
-# SIM.gun.thetaMin = None
+## Minimal polar angle for random distribution
+SIM.gun.thetaMin = None
 
 
 ################################################################################
@@ -632,7 +627,7 @@ def setupOpticalPhysics(kernel):
     return None
 
 
-#SIM.physics.setupUserPhysics(setupOpticalPhysics)
+SIM.physics.setupUserPhysics(setupOpticalPhysics)
 
 
 def setupDRCFastSim(kernel):
