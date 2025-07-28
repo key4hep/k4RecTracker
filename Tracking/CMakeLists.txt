@@ -37,7 +37,7 @@ gaudi_add_module(${PackageName}
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
   extensionDict
-  OnnxRuntime
+  onnxruntime::onnxruntime
   torch
   DD4hep::DDRec
   DD4hep::DDCore

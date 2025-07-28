@@ -29,16 +29,15 @@ find_package(GSL)
 find_package(Delphes)
 #---------------------------------------------------------------
 
-# make sure the onnx find script is found:
-set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
-find_package(OnnxRuntime)
-if(OnnxRuntime_FOUND)
+find_package(onnxruntime REQUIRED)
+if(onnxruntime_FOUND)
   message("ONNX Runtime inference library found.")
 else()
   message("ONNX Runtime not found!")
 endif()
 
-find_package(Torch)
+
+find_package(Torch REQUIRED)
 if(Torch_FOUND)
   message("Torch inference library found.")
 else()
