@@ -9,6 +9,7 @@
 
 // dd4hep
 #include "DD4hep/Detector.h"
+#include "DD4hep/DD4hepUnits.h"
 
 // ROOT
 #include <TVectorD.h>

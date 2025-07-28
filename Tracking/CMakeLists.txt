@@ -10,8 +10,6 @@ list(APPEND ExternalData_URL_TEMPLATES
 #find_package(GenFit)
 find_package(MarlinUtil REQUIRED)
 list(APPEND CMAKE_MODULE_PATH $ENV{PANDORAPFA}/cmakemodules)
-find_package(PandoraSDK REQUIRED)
-find_package(Delphes REQUIRED)
 FOREACH( pkg  MarlinUtil PandoraSDK )
   IF( ${pkg}_FOUND )
     INCLUDE_DIRECTORIES( ${${pkg}_INCLUDE_DIRS} )
@@ -36,13 +34,14 @@ gaudi_add_module(${PackageName}
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
+  k4FWCore::k4Interface
   extensionDict
   onnxruntime::onnxruntime
   torch
   DD4hep::DDRec
   DD4hep::DDCore
-  ${DELPHES_LIBRARIES}
   #GenFit::genfit2
+  ${DELPHES_LIBRARIES}
 )
 
 target_include_directories(${PackageName} PUBLIC
