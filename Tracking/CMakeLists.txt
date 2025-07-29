@@ -77,7 +77,8 @@ ExternalData_Add_Test(test_TrackFinder
         NAME test_TrackFinder
         COMMAND COMMAND sh +x Tracking/test/testTrackFinder/test_trackFinder.sh DATA{${CMAKE_SOURCE_DIR}/Tracking/test/inputFiles/SimpleGatrIDEAv3o1.onnx})
 set_test_env(test_TrackFinder)
-set_tests_properties( test_TrackFinder PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+set_tests_properties(test_TrackFinder PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+set_tests_properties(test_TrackFinder PROPERTIES DEPENDS test_runDCHdigiV2)
 ExternalData_Add_Target(test_TrackFinder)
 
 #endif()
