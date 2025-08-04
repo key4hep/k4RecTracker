@@ -7,6 +7,8 @@ STEERING_FILE=Tracking/test/testTrackFinder/SteeringFile_IDEA_o1_v03.py
 TBETA=0.6
 TD=0.3
 
+curl -o $STEERING_FILE https://raw.githubusercontent.com/key4hep/k4geo/master/example/SteeringFile_IDEA_o1_v03.py
+
 ddsim --steeringFile $STEERING_FILE \
       --compactFile  $XML_FILE \
       -G --gun.distribution uniform --gun.particle e- \

@@ -1,11 +1,10 @@
 from DDSim.DD4hepSimulation import DD4hepSimulation
 from g4units import mm, GeV, MeV
-import os
 
 SIM = DD4hepSimulation()
 
 ## The compact XML file, or multiple compact files, if the last one is the closer.
-SIM.compactFile = [os.environ["K4GEO"]+"/FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml"]
+SIM.compactFile = ["../FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml"]
 ## Lorentz boost for the crossing angle, in radian!
 SIM.crossingAngleBoost = 0.0
 SIM.enableDetailedShowerMode = False
