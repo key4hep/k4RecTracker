@@ -2,6 +2,11 @@ set(PackageName Tracking)
 
 project(${PackageName})
 
+include(ExternalData)
+list(APPEND ExternalData_URL_TEMPLATES
+  "https://key4hep.web.cern.ch:443/testFiles/k4RecTracker/%(hash)"
+)
+
 #find_package(GenFit)
 find_package(MarlinUtil REQUIRED)
 list(APPEND CMAKE_MODULE_PATH $ENV{PANDORAPFA}/cmakemodules)
@@ -30,7 +35,11 @@ gaudi_add_module(${PackageName}
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
   k4FWCore::k4Interface
+  extensionDict
+  onnxruntime::onnxruntime
+  torch
   DD4hep::DDRec
+  DD4hep::DDCore
   #GenFit::genfit2
   ${DELPHES_LIBRARIES}
 )
@@ -59,14 +68,17 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 
-
-SET(test_name "test_CreateInputForTrackTests")
-ADD_TEST(NAME ${test_name} COMMAND bash -c "ddsim --enableGun --gun.distribution uniform --gun.energy '10*GeV' --gun.particle e- --numberOfEvents 100 --outputFile ddsim_output_edm4hep.root --random.enableEventSeed --random.seed 42 --compactFile $K4GEO/FCCee/ALLEGRO/compact/ALLEGRO_o1_v03/ALLEGRO_o1_v03.xml")
-set_test_env(${test_name})
-
 SET(test_name "test_TracksFromGenParticles")
-ADD_TEST(NAME ${test_name} COMMAND k4run test/runTracksFromGenParticles.py)
+ADD_TEST(NAME ${test_name} COMMAND sh +x test_TracksFromGenParticles.sh)
 set_test_env(${test_name})
-set_tests_properties(${test_name} PROPERTIES DEPENDS test_CreateInputForTrackTests)
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTracksFromGenParticles")
+
+SET(test_name "test_TrackFinder")
+ExternalData_Add_Test(test_TrackFinder
+        NAME ${test_name}
+        COMMAND sh +x Tracking/test/testTrackFinder/test_trackFinder.sh DATA{${CMAKE_SOURCE_DIR}/Tracking/test/inputFiles/SimpleGatrIDEAv3o1.onnx})
+set_test_env(${test_name})
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+ExternalData_Add_Target(${test_name})
 
 #endif()

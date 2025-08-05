@@ -33,6 +33,9 @@ datatypes:
       - float eDep                    // energy deposited on the hit [GeV].
       - float eDepError               // error measured on eDep [GeV].
       - uint32_t clusterCount         // number of clusters associated to this hit
+      - int32_t type // type of the raw data hit
+      - int32_t quality // quality bit flag of the hit
+      - edm4hep::Vector3d position [mm] // hit position
 
   extension::MCRecoDriftChamberDigiAssociation:
     Description: "Association between a DriftChamberDigi and the corresponding simulated hit"
@@ -87,62 +90,6 @@ datatypes:
       - extension::TrackerHit trackerHits  // hits that have been used to create this track
       - extension::Track tracks            // tracks (segments) that have been combined to create this track
 
-# the following is just because interface looks for e.g. extension/TrackerHit3DCollection.h
-  extension::TrackerHit3D:
-    Description: "Tracker hit"
-    Author: "EDM4hep authors"
-    Members:
-      - uint64_t cellID      // ID of the sensor that created this hit
-      - int32_t type                       // type of raw data hit
-      - int32_t quality                    // quality bit flag of the hit
-      - float time [ns]                    // time of the hit
-      - float eDep [GeV]                   // energy deposited on the hit
-      - float eDepError [GeV]              // error measured on EDep
-      - edm4hep::Vector3d position [mm]    // hit position
-      - edm4hep::CovMatrix3f covMatrix // covariance matrix of the position (x,y,z)
-    ExtraCode:
-      includes: "#include <edm4hep/Constants.h>"
-      declaration: "
-      /// Get the position covariance matrix value for the two passed dimensions\n
-      float getCovMatrix(edm4hep::Cartesian dimI, edm4hep::Cartesian dimJ) const { return getCovMatrix().getValue(dimI, dimJ); }\n
-      "
-    MutableExtraCode:
-      includes: "#include <edm4hep/Constants.h>"
-      declaration: "
-      /// Set the position covariance matrix value for the two passed dimensions\n
-      void setCovMatrix(float value, edm4hep::Cartesian dimI, edm4hep::Cartesian dimJ) { getCovMatrix().setValue(value, dimI, dimJ); }\n
-      "
-  extension::TrackerHitPlane:
-    Description: "Tracker hit plane"
-    Author: "EDM4hep authors"
-    Members:
-      - uint64_t cellID      // ID of the sensor that created this hit
-      - int32_t type                       // type of raw data hit
-      - int32_t quality                    // quality bit flag of the hit
-      - float time [ns]                    // time of the hit
-      - float eDep [GeV]                   // energy deposited on the hit
-      - float eDepError [GeV]              // error measured on EDep
-      - edm4hep::Vector2f u            // measurement direction vector, u lies in the x-y plane
-      - edm4hep::Vector2f v            // measurement direction vector, v is along z
-      - float du                       // measurement error along the direction
-      - float dv                       // measurement error along the direction
-      - edm4hep::Vector3d position [mm]   // hit position
-      - edm4hep::CovMatrix3f covMatrix // covariance of the position (x,y,z)
-    ExtraCode:
-      includes: "#include <edm4hep/Constants.h>"
-      declaration: "
-      /// Get the position covariance matrix value for the two passed dimensions\n
-      float getCovMatrix(edm4hep::Cartesian dimI, edm4hep::Cartesian dimJ) const { return getCovMatrix().getValue(dimI, dimJ); }\n
-      "
-    MutableExtraCode:
-      includes: "#include <edm4hep/Constants.h>"
-      declaration: "
-      /// Set the position covariance matrix value for the two passed dimensions\n
-      void setCovMatrix(float value, edm4hep::Cartesian dimI, edm4hep::Cartesian dimJ) { getCovMatrix().setValue(value, dimI, dimJ); }\n
-      "
-
-# end of "the following is just because interface looks for e.g. extension/TrackerHit3DCollection.h"
-
 # new version of digitized drift chamber digi, resulting from https://github.com/key4hep/EDM4hep/pull/385 discussion
 # defined here for validation before to merge in central edm4hep
   extension::SenseWireHit:
@@ -191,9 +138,10 @@ interfaces:
       - float eDepError [GeV] // error measured on eDep
       - edm4hep::Vector3d position [mm] // hit position
     Types:
-      - extension::TrackerHitPlane
-      - extension::TrackerHit3D
-      - extension::DriftChamberDigiV2
+      - edm4hep::TrackerHitPlane
+      - edm4hep::TrackerHit3D
+      - extension::SenseWireHit
+      - extension::DriftChamberDigi
 
   extension::TrackerHit_dev:
     Description: "Tracker hit interface class to test the mixing of extension and edm4hep data types"
