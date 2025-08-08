@@ -88,10 +88,10 @@ private:
     };
 
     // /// Function to calculate the drift time from the distance to the wire
-    // double get_drift_time(double distance_to_wire_mm) const;
+    double get_drift_time(double distance_to_wire_mm) const;
 
     // /// Function to calculate the time it takes for the signal to travel from the wire to the readout electronics
-    // double get_signal_travel_time(double distance_to_readout_mm) const;
+    double get_signal_travel_time(double distance_to_readout_mm) const;
 
 };
 

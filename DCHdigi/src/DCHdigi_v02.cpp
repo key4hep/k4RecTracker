@@ -193,41 +193,6 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
         }
 
 
-
-        ////////////////////////////////
-        // POSITION AND TIME SMEARING //
-        ////////////////////////////////
-
-        double digihit_time;
-        double digihit_distance_to_wire_mm;
-        edm4hep::Vector3d digihit_position;
-
-        if (closest_simhit) {
-            // Do the digitisation based on the closest hit and the integrated edep and path length
-
-            // TODO: update time with realisitc value
-            digihit_time = closest_simhit->getTime();
-
-            // xy smearing
-            double smearing_xy = gauss_xy(random_engine);
-            digihit_distance_to_wire_mm = std::max(0.0, closest_distance_to_wire_mm + smearing_xy);
-
-            // z smearing
-            double smearing_z = gauss_z(random_engine);
-            auto hit_projection_on_the_wire = closest_simhit_position + closest_hit_to_wire_vector;
-            TVector3 wire_direction_ez = (m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
-            hit_projection_on_the_wire += smearing_z * wire_direction_ez;
-
-            // Convert to edm4hep vector and cast to mm
-            digihit_position = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1.0 / dd4hep::mm);
-
-
-
-        } else {
-            error() << "Could not find a closest hit for CellID: " << cellID << endmsg;
-            continue;
-        }
-
 /* THE FOLLOWING CALCULATION OF WIRE ANGLES HAS BEEN COPIED AS IS FROM DCHdigi_v01! */
         // The direction of the sense wires can be calculated as:
         //   RotationZ(WireAzimuthalAngle) * RotationX(stereoangle)
@@ -247,13 +212,50 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
         }
 /* END OF COPYING WIRE ANGLE CALCULATION FROM DCHdigi_v01 */
 
+
+        ////////////////////////////////
+        // POSITION AND TIME SMEARING //
+        ////////////////////////////////
+
+        double digihit_time_ns;
+        double digihit_distance_to_wire_mm;
+        edm4hep::Vector3d digihit_position_mm;
+
+        if (closest_simhit) {
+            // Do the digitisation based on the closest hit and the integrated edep and path length
+
+            // xy smearing
+            double smearing_xy = gauss_xy(random_engine);
+            digihit_distance_to_wire_mm = std::max(0.0, closest_distance_to_wire_mm + smearing_xy);
+
+            // z smearing
+            double smearing_z = gauss_z(random_engine);
+            auto hit_projection_on_the_wire = closest_simhit_position + closest_hit_to_wire_vector;
+            TVector3 wire_direction_ez = (m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
+            hit_projection_on_the_wire += smearing_z * wire_direction_ez;
+
+            // Convert to edm4hep vector and cast to mm
+            digihit_position_mm = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1.0 / dd4hep::mm);
+
+
+            // TODO: update time with realisitc value
+            digihit_time_ns = closest_simhit->getTime();
+            digihit_time_ns += this->get_drift_time(closest_distance_to_wire_mm);
+            double distance_to_readout_mm = (this->m_dch_info->Lhalf - std::abs(digihit_position_mm.z))/std::cos(std::abs(WireAzimuthalAngle));
+            digihit_time_ns += this->get_signal_travel_time(distance_to_readout_mm);
+
+        } else {
+            error() << "Could not find a closest hit for CellID: " << cellID << endmsg;
+            continue;
+        }
+
         sense_wire_hit.setCellID(cellID);
         sense_wire_hit.setType(0);
         sense_wire_hit.setQuality(0);
-        sense_wire_hit.setTime(digihit_time);
+        sense_wire_hit.setTime(digihit_time_ns);
         sense_wire_hit.setEDep(edep_sum);
         sense_wire_hit.setEDepError(0.0);
-        sense_wire_hit.setPosition(digihit_position);
+        sense_wire_hit.setPosition(digihit_position_mm);
         sense_wire_hit.setPositionAlongWireError(m_z_resolution);
         sense_wire_hit.setWireAzimuthalAngle(WireAzimuthalAngle);
         sense_wire_hit.setWireStereoAngle(WireStereoAngle);
@@ -274,30 +276,30 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
 }
 
 
-// DCHdigi_v02::get_drift_time(double distance_to_wire_mm) const {
-//     // Calculate the drift time based on the distance to the wire
-//     // This is a preliminary implementation that needs to be updated with a realistic model
-//     // For now, we use a simple linear model with a constant drift velocity
+double DCHdigi_v02::get_drift_time(double distance_to_wire_mm) const {
+    // Calculate the drift time based on the distance to the wire
+    // This is a preliminary implementation that needs to be updated with a realistic model
+    // For now, we use a simple linear model with a constant drift velocity
 
-//     double drift_velocity_um_per_ns = 30.0;
+    double drift_velocity_um_per_ns = 15.0;
 
-//     // Convert distance to wire from mm to um
-//     double distance_to_wire_um = distance_to_wire_mm * 1000.0;
+    // Convert distance to wire from mm to um
+    double distance_to_wire_um = distance_to_wire_mm * 1000.0;
 
-//     // Calculate the drift time in ns
-//     double drift_time_ns = distance_to_wire_um / drift_velocity_um_per_ns;
-//     return drift_time_ns;
-// }
+    // Calculate the drift time in ns
+    double drift_time_ns = distance_to_wire_um / drift_velocity_um_per_ns;
+    return drift_time_ns;
+}
 
 
-// DCHdigi_v02::get_signal_travel_time(double distance_to_readout_mm) const {
-//     // Calculate the time it takes for the signal to travel along the wire to the readout electronics
-//     // Assume 2/3 of the speed of light for the signal propagation speed
+double DCHdigi_v02::get_signal_travel_time(double distance_to_readout_mm) const {
+    // Calculate the time it takes for the signal to travel along the wire to the readout electronics
+    // Assume 2/3 of the speed of light for the signal propagation speed
 
-//     double speed_of_light_mm_per_ns = 299.792458;
-//     double signal_speed_mm_per_ns = speed_of_light_mm_per_ns * (2.0 / 3.0);
+    double speed_of_light_mm_per_ns = 299.792458;
+    double signal_speed_mm_per_ns = speed_of_light_mm_per_ns * 2.0 / 3.0;
 
-//     // Calculate the signal travel time in ns
-//     double signal_travel_time_ns = distance_to_readout_mm / signal_speed_mm_per_ns;
-//     return signal_travel_time_ns;
-// }
+    // Calculate the signal travel time in ns
+    double signal_travel_time_ns = distance_to_readout_mm / signal_speed_mm_per_ns;
+    return signal_travel_time_ns;
+}
