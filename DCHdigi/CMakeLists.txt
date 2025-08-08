@@ -2,6 +2,9 @@ set(PackageName DCHdigi)
 
 project(${PackageName})
 
+# Find Delphes for DCHdigi_v02
+find_package(Delphes REQUIRED)
+
 # Build the extension data model and link it against the upstream model
 PODIO_GENERATE_DATAMODEL(extension dataFormatExtension/driftChamberHit.yaml ext_headers ext_sources
   UPSTREAM_EDM edm4hep:${EDM4HEP_DATA_DIR}/edm4hep.yaml
@@ -65,12 +68,14 @@ gaudi_add_module(${PackageName}
   ROOT::MathCore
   ROOT::MathMore
   GSL::gsl
+  ${DELPHES_LIBRARY}
 )
 
 target_include_directories(${PackageName} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
   ${CMAKE_INSTALL_PREFIX}/extension
+  ${DELPHES_INCLUDE_DIRS}
 )
 
 set_target_properties(${PackageName} PROPERTIES PUBLIC_HEADER "${headers}")

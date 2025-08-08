@@ -24,6 +24,9 @@
 // DDRec
 #include "DDRec/DCH_info.h"
 
+// delphes
+#include "TrackCovariance/TrkUtil.h"
+
 class DCHdigi_v02 final
     : public k4FWCore::Transformer<extension::SenseWireHitCollection(const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
 
@@ -43,6 +46,8 @@ private:
     Gaudi::Property<std::string> m_geoSvcName{this, "GeoSvcName", "GeoSvc", "The name of the GeoSvc instance"};
 
     mutable unsigned int m_event_counter;
+
+    TrkUtil m_delphesTrkUtil;
 
     dd4hep::DDSegmentation::BitFieldCoder* m_decoder;
 
@@ -65,7 +70,12 @@ private:
         0.1,
         "Spatial resolution in the xy direction in mm."};
 
-
+    // Gas mixture in the chamber
+    Gaudi::Property<int> m_GasSel{
+        this,
+        "GasSel",
+        {0},
+        "Gas selection: 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar."};
 
 
     /// Convert EDM4hep Vector3d to TVector3
@@ -76,6 +86,12 @@ private:
     edm4hep::Vector3d Convert_TVector3_to_EDM4hepVector(const TVector3& v, double scale) const {
         return {v.x() * scale, v.y() * scale, v.z() * scale};
     };
+
+    // /// Function to calculate the drift time from the distance to the wire
+    // double get_drift_time(double distance_to_wire_mm) const;
+
+    // /// Function to calculate the time it takes for the signal to travel from the wire to the readout electronics
+    // double get_signal_travel_time(double distance_to_readout_mm) const;
 
 };
 
