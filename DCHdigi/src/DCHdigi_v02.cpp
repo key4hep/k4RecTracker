@@ -11,6 +11,17 @@
 
 // STL
 #include <random>
+// #include <bitset>
+
+
+// A struct for saving the information required for calculating the number of clusters for each 
+// individual particle in one cell, acconting for different particle types producing different number of clusters
+namespace {
+    struct ParticleClusterInfo {
+        double beta_gamma = 0.0;
+        double path_length = 0.0;
+    };
+}
 
 DCHdigi_v02::DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc)
     : Transformer(
@@ -93,7 +104,6 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
 
     debug() << "Map contains " << cell_map.size() << " unique cellIDs." << endmsg;
 
-    unsigned int counter = 0;
     for (const auto& [cellID, simhits] : cell_map) {
         auto sense_wire_hit = output.create();
 
@@ -104,78 +114,112 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
         // They will be reused for digitisation of the hit
         TVector3 closest_simhit_position;
         TVector3 closest_hit_to_wire_vector;
-        double closest_distance_to_wire;
-
-        double min_distance = std::numeric_limits<double>::max();
+        double closest_distance_to_wire_mm = std::numeric_limits<double>::max();
         double edep_sum = 0.0;
-        double path_length_sum = 0.0;
 
-        // Finding hit closest to the wire requires layer number, nphi
+        // Finding hit closest to the wire requires global layer number, nphi
         int layer = m_dch_info->CalculateILayerFromCellIDFields(
             m_decoder->get(cellID, "layer"),
             m_decoder->get(cellID, "superlayer")
         );
         int nphi = m_decoder->get(cellID, "nphi");
 
+        // Map to store the information for cluster calculation
+        std::unordered_map<podio::ObjectID, ParticleClusterInfo> cluster_info_map;
+
+        // Loop over the simhits in the cell
         for (const auto& simhit : simhits) {
             
+            //////////////////////////
+            // POSITION INFORMATION //
+            //////////////////////////
+
             // Get hit position to calculate distance to wire
-            // use dd4hep:mm as scale to convert into the dd4hep default unit system
+            // Need to convert to TVector3 to use the DCH_info methods
+            // Use dd4hep:mm as scale to convert into the dd4hep default unit system
             auto simhit_position = this->Convert_EDM4hepVector_to_TVector3(simhit.getPosition(), dd4hep::mm);
 
             auto hit_to_wire_vector = m_dch_info->Calculate_hitpos_to_wire_vector(layer, nphi, simhit_position);
-            double distance_to_wire = hit_to_wire_vector.Mag();
+            double distance_to_wire_mm = hit_to_wire_vector.Mag() / dd4hep::mm; // Explicitly cast to mm, no matter what the default unit is
 
             // Update the smallest distance to wire of all hits in the cell
-            if (distance_to_wire < min_distance) {
-                min_distance = distance_to_wire;
-
+            if (distance_to_wire_mm < closest_distance_to_wire_mm) {
                 // Save the closest hit and related values
                 closest_simhit = &simhit;
                 closest_simhit_position = simhit_position;
                 closest_hit_to_wire_vector = hit_to_wire_vector;
-                closest_distance_to_wire = distance_to_wire;
+                closest_distance_to_wire_mm = distance_to_wire_mm;
             }
             
-            // Integrate the energy deposited and path length
+            // Integrate the energy deposited
             edep_sum += simhit.getEDep();
-            path_length_sum += simhit.getPathLength();
 
-            debug() << "Processing hit with CellID: " << cellID 
-                    << ", Dist: " << distance_to_wire
-                    << ", EDep: " << simhit.getEDep() 
-                    << ", PathLength: " << simhit.getPathLength()
-                    << endmsg;
+            /////////////////////////
+            // CLUSTER INFORMATION //
+            /////////////////////////
+
+            auto mcparticle = simhit.getParticle();
+            auto object_id = mcparticle.getObjectID();
+            
+            // Check if the particle is already in the map
+            if (cluster_info_map.find(object_id) == cluster_info_map.end()) {
+                // If not, create a new entry
+                cluster_info_map[object_id] = ParticleClusterInfo();
+                double mass = mcparticle.getMass();
+                double momentum = edm4hep::utils::magnitude(mcparticle.getMomentum());
+                // As simplfication: just take the betagamma value from the first hit we encounter
+                double beta_gamma = momentum / mass;
+                cluster_info_map[object_id].beta_gamma = beta_gamma;
+                cluster_info_map[object_id].path_length = simhit.getPathLength();
+            } else {
+                // If the particle is already present, update the existing entry
+                cluster_info_map[object_id].path_length += simhit.getPathLength();
+            }
+
         }
 
-        debug() << "CellID: " << cellID 
-               << ", Dist: " << min_distance 
-               << ", EDep Sum: " << edep_sum 
-               << ", Path Length Sum: " << path_length_sum
-               << endmsg;
+        // Total number of clusters in cell built from each particle's contribution
+        unsigned int total_nclusters = 0;
 
-        double dighit_time;
-        double dighit_distance_to_wire;
-        edm4hep::Vector3d dighit_position;
+        // Calculate the number of clusters for each particle in the cell
+        for (const auto& [object_id, particle_info] : cluster_info_map) {
+            // Get number of clusters per length from delphes
+            // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
+            double nclusters_per_mm = m_delphesTrkUtil.Nclusters(particle_info.beta_gamma, m_GasSel.value()) / 1000.0;
+            double nclusters_mean = nclusters_per_mm * particle_info.path_length;
+
+            std::poisson_distribution<int> poisson_dist(nclusters_mean);
+            total_nclusters += poisson_dist(random_engine);
+        }
+
+
+
+        ////////////////////////////////
+        // POSITION AND TIME SMEARING //
+        ////////////////////////////////
+
+        double digihit_time;
+        double digihit_distance_to_wire_mm;
+        edm4hep::Vector3d digihit_position;
 
         if (closest_simhit) {
             // Do the digitisation based on the closest hit and the integrated edep and path length
 
             // TODO: update time with realisitc value
-            dighit_time = closest_simhit->getTime();
+            digihit_time = closest_simhit->getTime();
 
             // xy smearing
             double smearing_xy = gauss_xy(random_engine);
-            dighit_distance_to_wire = std::max(0.0, closest_distance_to_wire + smearing_xy);
+            digihit_distance_to_wire_mm = std::max(0.0, closest_distance_to_wire_mm + smearing_xy);
 
             // z smearing
             double smearing_z = gauss_z(random_engine);
             auto hit_projection_on_the_wire = closest_simhit_position + closest_hit_to_wire_vector;
-            TVector3 wire_direction_ez = (this->m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
+            TVector3 wire_direction_ez = (m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
             hit_projection_on_the_wire += smearing_z * wire_direction_ez;
 
             // Convert to edm4hep vector and cast to mm
-            dighit_position = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1.0 / dd4hep::mm);
+            digihit_position = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1.0 / dd4hep::mm);
 
 
 
@@ -201,59 +245,59 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             // which forces the stereoangle of the wire to have the oposite sign
             WireStereoAngle = (-1.) * l.StereoSign() * m_dch_info->stereoangle_z0(cell_rave_z0);
         }
-/* END OF COPYING WIRE ANGLE CALCULATION FROM DCHdigi_v02 */
+/* END OF COPYING WIRE ANGLE CALCULATION FROM DCHdigi_v01 */
 
         sense_wire_hit.setCellID(cellID);
         sense_wire_hit.setType(0);
         sense_wire_hit.setQuality(0);
-        sense_wire_hit.setTime(dighit_time);
+        sense_wire_hit.setTime(digihit_time);
         sense_wire_hit.setEDep(edep_sum);
-        // For debugging, save the integrated path length as EDepError for now, to be updated for PR
-        // IF YOU ARE DOING A CODE REVIEW AND EdepError IS STILL PATH LENGTH, PLEASE MAKE A COMMENT IN THE PR!
-        sense_wire_hit.setEDepError(path_length_sum);
-        sense_wire_hit.setPosition(dighit_position);
+        sense_wire_hit.setEDepError(0.0);
+        sense_wire_hit.setPosition(digihit_position);
         sense_wire_hit.setPositionAlongWireError(m_z_resolution);
         sense_wire_hit.setWireAzimuthalAngle(WireAzimuthalAngle);
         sense_wire_hit.setWireStereoAngle(WireStereoAngle);
-        sense_wire_hit.setDistanceToWire(min_distance);
+        sense_wire_hit.setDistanceToWire(digihit_distance_to_wire_mm);
         sense_wire_hit.setDistanceToWireError(m_xy_resolution);
-        
 
+        // Clusters are added to the SenseWireHit as vector member containing the number of electrons in each cluster
+        // The length of this vector is the total number of clusters in the cell
+        // For now, we do not calculate the size of each cluster, so we just fill it with a dummy value
+        for (unsigned int i = 0; i < total_nclusters; ++i) {
+            sense_wire_hit.addToNElectrons(-1);
+        }
 
-        // Process each cellID and its corresponding hits
-        // Here you would implement the logic to create SenseWireHits from the hits
-        // For now, we just print the cellID and number of hits
-        // debug() << "CellID: " << cellID << ", Number of Hits: " << hits.size() << endmsg;
-        counter++;
     }
-    debug() << "Processed " << counter << " unique cellIDs." << endmsg;
-
-
-    /* Alvaro's code for reference 
-    extension::MutableSenseWireHit oDCHdigihit;
-    oDCHdigihit.setCellID(input_sim_hit.getCellID());
-    oDCHdigihit.setType(type);
-    oDCHdigihit.setQuality(quality);
-    oDCHdigihit.setTime(input_sim_hit.getTime());
-    oDCHdigihit.setEDep(input_sim_hit.getEDep());
-    oDCHdigihit.setEDepError(eDepError);
-    oDCHdigihit.setPosition(positionSW);
-    oDCHdigihit.setPositionAlongWireError(m_z_resolution);
-    oDCHdigihit.setWireAzimuthalAngle(WireAzimuthalAngle);
-    oDCHdigihit.setWireStereoAngle(WireStereoAngle);
-    oDCHdigihit.setDistanceToWire(distanceToWire);
-    oDCHdigihit.setDistanceToWireError(m_xy_resolution);
-    // For the sake of speed, let the dNdx calculation be optional
-    if (m_calculate_dndx.value()) {
-      auto [nCluster, nElectrons_v] = CalculateClusters(input_sim_hit, myRandom);
-      // to return the total number of electrons within the step, do the following:
-      //   int nElectronsTotal = std::accumulate( nElectrons_v.begin(), nElectrons_v.end(), 0);
-      //   oDCHdigihit.setNElectronsTotal(nElectronsTotal);
-      // to copy the vector of each cluster size to the EDM4hep data extension, do the following:
-      for (auto ne : nElectrons_v)
-        oDCHdigihit.addToNElectrons(ne);
-    } */
 
     return output;
 
 }
+
+
+// DCHdigi_v02::get_drift_time(double distance_to_wire_mm) const {
+//     // Calculate the drift time based on the distance to the wire
+//     // This is a preliminary implementation that needs to be updated with a realistic model
+//     // For now, we use a simple linear model with a constant drift velocity
+
+//     double drift_velocity_um_per_ns = 30.0;
+
+//     // Convert distance to wire from mm to um
+//     double distance_to_wire_um = distance_to_wire_mm * 1000.0;
+
+//     // Calculate the drift time in ns
+//     double drift_time_ns = distance_to_wire_um / drift_velocity_um_per_ns;
+//     return drift_time_ns;
+// }
+
+
+// DCHdigi_v02::get_signal_travel_time(double distance_to_readout_mm) const {
+//     // Calculate the time it takes for the signal to travel along the wire to the readout electronics
+//     // Assume 2/3 of the speed of light for the signal propagation speed
+
+//     double speed_of_light_mm_per_ns = 299.792458;
+//     double signal_speed_mm_per_ns = speed_of_light_mm_per_ns * (2.0 / 3.0);
+
+//     // Calculate the signal travel time in ns
+//     double signal_travel_time_ns = distance_to_readout_mm / signal_speed_mm_per_ns;
+//     return signal_travel_time_ns;
+// }
