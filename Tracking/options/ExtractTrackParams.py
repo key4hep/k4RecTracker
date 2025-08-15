@@ -16,17 +16,22 @@ args.detectorModels = args.detectorModels[0]
 fileSuffix = ".edm4hep.root"
 procName = "TrackParamExtractor"
 basePath = Path(os.getenv("prmDir", Path.home() / "promotion"))
+in_out_base_path = basePath / "data" / procName
 corePath = f"{args.version}_{detModNames[args.detectorModels]}"
 
 # assert that the input path exists
-inputPath = (
-    basePath / "code/ILDConfig/StandardConfig/production/data" / f"{corePath}_REC"
-).with_suffix(fileSuffix)
+inputPath = (in_out_base_path / "input_data" / f"{corePath}_REC").with_suffix(
+    fileSuffix
+)
 assert inputPath.exists(), f"ERROR: The input path ({inputPath}) does not exist!"
 
 iosvc = IOSvc()
 iosvc.Input = str(inputPath)
-iosvc.Output = str((basePath / "data" / procName / corePath).with_suffix(fileSuffix))
+iosvc.Output = str(
+    (in_out_base_path / "out_track_params" / f"{corePath}_track_params").with_suffix(
+        fileSuffix
+    )
+)
 # iosvc.outputCommands = ["drop *", "keep SiTrackPhi"]
 
 printer = TrackParamExtractor(procName, nStars=40)
