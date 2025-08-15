@@ -1,14 +1,11 @@
 import os
-import sys
 from pathlib import Path
 
+from commonArgParsing import add_common_args, detModNames, registry
 from Configurables import TrackParamExtractor
 from Gaudi.Configuration import INFO, VERBOSE
 from k4FWCore import ApplicationMgr, IOSvc
 from k4FWCore.parseArgs import parser
-
-sys.path.append(os.environ["pytrkDir"])
-from commonArgParsing import add_common_args, detModNames, registry
 
 args = add_common_args(parser).parse_known_args()[0]
 assert len(args.detectorModels) == 1, (
