@@ -104,8 +104,8 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
 
     debug() << "Map contains " << cell_map.size() << " unique cellIDs." << endmsg;
 
+    // Loop over the cells and do the digitisation of the simhits in each cell
     for (const auto& [cellID, simhits] : cell_map) {
-        auto sense_wire_hit = output.create();
 
         // Save the closest hit to the wire
         // Digitised hit time and position will be based on closest hit
@@ -174,9 +174,9 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             } else {
                 // If the particle is already present, update the existing entry
                 cluster_info_map[object_id].path_length += simhit.getPathLength();
-            }
+            } // end of if-else block for checking if the particle is already in the map
 
-        }
+        } // end of looping over the simhits in the cell
 
         // Total number of clusters in cell built from each particle's contribution
         unsigned int total_nclusters = 0;
@@ -217,7 +217,7 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
         // POSITION AND TIME SMEARING //
         ////////////////////////////////
 
-        double digihit_time_ns;
+        double digihit_time_ns=0.0;
         double digihit_distance_to_wire_mm;
         edm4hep::Vector3d digihit_position_mm;
 
@@ -234,21 +234,42 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             TVector3 wire_direction_ez = (m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
             hit_projection_on_the_wire += smearing_z * wire_direction_ez;
 
+            // Limit z to values inside the drift chamber.
+            // NB: can lead to a peak at z=Lhalf and z=-Lhalf
+            hit_projection_on_the_wire.SetZ(
+                std::clamp(hit_projection_on_the_wire.Z(), -(this->m_dch_info->Lhalf), this->m_dch_info->Lhalf)
+            );
+
             // Convert to edm4hep vector and cast to mm
             digihit_position_mm = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1.0 / dd4hep::mm);
 
 
             // TODO: update time with realisitc value
-            digihit_time_ns = closest_simhit->getTime();
-            digihit_time_ns += this->get_drift_time(closest_distance_to_wire_mm);
-            double distance_to_readout_mm = (this->m_dch_info->Lhalf - std::abs(digihit_position_mm.z))/std::cos(std::abs(WireAzimuthalAngle));
-            digihit_time_ns += this->get_signal_travel_time(distance_to_readout_mm);
+            digihit_time_ns += closest_simhit->getTime();
+            double drift_time_ns = this->get_drift_time(closest_distance_to_wire_mm);
+            digihit_time_ns += drift_time_ns;
+            double distance_to_readout_mm = (this->m_dch_info->Lhalf/dd4hep::mm - std::abs(digihit_position_mm.z))/std::cos(std::abs(WireStereoAngle));
+            double travel_time_ns = this->get_signal_travel_time(distance_to_readout_mm);
+            digihit_time_ns += travel_time_ns;
+
+            if (travel_time_ns < 0) {
+                warning() << " Negative travel time: " << travel_time_ns << " ns with distance to readout: " << distance_to_readout_mm << " mm";
+            }
+            if (drift_time_ns < 0) {
+                warning() << " Negative drift time: " << drift_time_ns << " ns with distance to wire: " << closest_distance_to_wire_mm << " mm";
+            }
 
         } else {
             error() << "Could not find a closest hit for CellID: " << cellID << endmsg;
             continue;
         }
 
+
+        /////////////////////////////
+        // SAVING THE SENSEWIREHIT //
+        /////////////////////////////
+
+        auto sense_wire_hit = output.create();
         sense_wire_hit.setCellID(cellID);
         sense_wire_hit.setType(0);
         sense_wire_hit.setQuality(0);
@@ -269,7 +290,7 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             sense_wire_hit.addToNElectrons(-1);
         }
 
-    }
+    } // end of loop over the cells
 
     return output;
 
@@ -281,7 +302,7 @@ double DCHdigi_v02::get_drift_time(double distance_to_wire_mm) const {
     // This is a preliminary implementation that needs to be updated with a realistic model
     // For now, we use a simple linear model with a constant drift velocity
 
-    double drift_velocity_um_per_ns = 15.0;
+    double drift_velocity_um_per_ns = 20.0;
 
     // Convert distance to wire from mm to um
     double distance_to_wire_um = distance_to_wire_mm * 1000.0;
