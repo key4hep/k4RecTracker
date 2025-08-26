@@ -14,12 +14,20 @@
 // #include <bitset>
 
 
-// A struct for saving the information required for calculating the number of clusters for each 
-// individual particle in one cell, acconting for different particle types producing different number of clusters
+
 namespace {
+    // A struct for saving the information required for calculating the number of clusters for each 
+    // individual particle in one cell, acconting for different particle types producing different number of clusters
     struct ParticleClusterInfo {
         double beta_gamma = 0.0;
         double path_length = 0.0;
+    };
+
+    struct HitInfo {
+        const edm4hep::SimTrackerHit* simhit;
+        double arrival_time_ns = 0.0;
+        edm4hep::Vector3d position_mm;
+        double distance_to_wire_mm = 0.0;
     };
 }
 
@@ -89,17 +97,19 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
     random_engine.seed(engine_seed);
 
     // Create the random distributions for smearing the coordinates in dd4hep default units
-    std::normal_distribution<double> gauss_z{0., m_z_resolution.value() * dd4hep::mm};
-    std::normal_distribution<double> gauss_xy{0., m_xy_resolution.value() * dd4hep::mm};
+    std::normal_distribution<double> gauss_z_ddu{0., m_z_resolution.value() * dd4hep::mm};
+    std::normal_distribution<double> gauss_xy_ddu{0., m_xy_resolution.value() * dd4hep::mm};
 
     
     debug() << "Processing event " << ++m_event_counter << endmsg;
     debug() << "Processing SimTrackerHitCollection with " << input.size() << " hits." << endmsg;
-    std::unordered_map<uint64_t, std::vector<edm4hep::SimTrackerHit>> cell_map;
+
+    std::unordered_map<uint64_t, std::vector<const edm4hep::SimTrackerHit*>> cell_map;
+    cell_map.reserve(input.size());
     // Loop over the inputs and save the cellIDs and corresponding hits to a map
     for (const auto& simhit: input){
         uint64_t cellID = simhit.getCellID();
-        cell_map[cellID].push_back(simhit);
+        cell_map[cellID].push_back(&simhit);
     }
 
     debug() << "Map contains " << cell_map.size() << " unique cellIDs." << endmsg;
@@ -107,91 +117,12 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
     // Loop over the cells and do the digitisation of the simhits in each cell
     for (const auto& [cellID, simhits] : cell_map) {
 
-        // Save the closest hit to the wire
-        // Digitised hit time and position will be based on closest hit
-        const edm4hep::SimTrackerHit* closest_simhit = nullptr;
-        // Save also the vectors that were calculated anyway to find the closest hit
-        // They will be reused for digitisation of the hit
-        TVector3 closest_simhit_position;
-        TVector3 closest_hit_to_wire_vector;
-        double closest_distance_to_wire_mm = std::numeric_limits<double>::max();
-        double edep_sum = 0.0;
-
-        // Finding hit closest to the wire requires global layer number, nphi
+        // Some geometry values needed for the calculations below
         int layer = m_dch_info->CalculateILayerFromCellIDFields(
             m_decoder->get(cellID, "layer"),
             m_decoder->get(cellID, "superlayer")
         );
         int nphi = m_decoder->get(cellID, "nphi");
-
-        // Map to store the information for cluster calculation
-        std::unordered_map<podio::ObjectID, ParticleClusterInfo> cluster_info_map;
-
-        // Loop over the simhits in the cell
-        for (const auto& simhit : simhits) {
-            
-            //////////////////////////
-            // POSITION INFORMATION //
-            //////////////////////////
-
-            // Get hit position to calculate distance to wire
-            // Need to convert to TVector3 to use the DCH_info methods
-            // Use dd4hep:mm as scale to convert into the dd4hep default unit system
-            auto simhit_position = this->Convert_EDM4hepVector_to_TVector3(simhit.getPosition(), dd4hep::mm);
-
-            auto hit_to_wire_vector = m_dch_info->Calculate_hitpos_to_wire_vector(layer, nphi, simhit_position);
-            double distance_to_wire_mm = hit_to_wire_vector.Mag() / dd4hep::mm; // Explicitly cast to mm, no matter what the default unit is
-
-            // Update the smallest distance to wire of all hits in the cell
-            if (distance_to_wire_mm < closest_distance_to_wire_mm) {
-                // Save the closest hit and related values
-                closest_simhit = &simhit;
-                closest_simhit_position = simhit_position;
-                closest_hit_to_wire_vector = hit_to_wire_vector;
-                closest_distance_to_wire_mm = distance_to_wire_mm;
-            }
-            
-            // Integrate the energy deposited
-            edep_sum += simhit.getEDep();
-
-            /////////////////////////
-            // CLUSTER INFORMATION //
-            /////////////////////////
-
-            auto mcparticle = simhit.getParticle();
-            auto object_id = mcparticle.getObjectID();
-            
-            // Check if the particle is already in the map
-            if (cluster_info_map.find(object_id) == cluster_info_map.end()) {
-                // If not, create a new entry
-                cluster_info_map[object_id] = ParticleClusterInfo();
-                double mass = mcparticle.getMass();
-                double momentum = edm4hep::utils::magnitude(mcparticle.getMomentum());
-                // As simplfication: just take the betagamma value from the first hit we encounter
-                double beta_gamma = momentum / mass;
-                cluster_info_map[object_id].beta_gamma = beta_gamma;
-                cluster_info_map[object_id].path_length = simhit.getPathLength();
-            } else {
-                // If the particle is already present, update the existing entry
-                cluster_info_map[object_id].path_length += simhit.getPathLength();
-            } // end of if-else block for checking if the particle is already in the map
-
-        } // end of looping over the simhits in the cell
-
-        // Total number of clusters in cell built from each particle's contribution
-        unsigned int total_nclusters = 0;
-
-        // Calculate the number of clusters for each particle in the cell
-        for (const auto& [object_id, particle_info] : cluster_info_map) {
-            // Get number of clusters per length from delphes
-            // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
-            double nclusters_per_mm = m_delphesTrkUtil.Nclusters(particle_info.beta_gamma, m_GasSel.value()) / 1000.0;
-            double nclusters_mean = nclusters_per_mm * particle_info.path_length;
-
-            std::poisson_distribution<int> poisson_dist(nclusters_mean);
-            total_nclusters += poisson_dist(random_engine);
-        }
-
 
 /* THE FOLLOWING CALCULATION OF WIRE ANGLES HAS BEEN COPIED AS IS FROM DCHdigi_v01! */
         // The direction of the sense wires can be calculated as:
@@ -212,84 +143,189 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
         }
 /* END OF COPYING WIRE ANGLE CALCULATION FROM DCHdigi_v01 */
 
+        // Hits will be grouped by time into batches separated by 400 ns (dead time of a cell)
+        // Need an additional loop over the simhits to create these groups
+        // Store relevant information for the hits in this cell in a vector
+        std::vector<HitInfo> hit_info_vector;
+        hit_info_vector.reserve(simhits.size());
 
-        ////////////////////////////////
-        // POSITION AND TIME SMEARING //
-        ////////////////////////////////
+        for (const auto& simhit : simhits) {
+            //////////////////////////
+            // POSITION INFORMATION //
+            //////////////////////////
 
-        double digihit_time_ns=0.0;
-        double digihit_distance_to_wire_mm;
-        edm4hep::Vector3d digihit_position_mm;
+            // Get hit position to calculate distance to wire
+            // Need to convert to TVector3 to use the DCH_info methods
+            // Use dd4hep:mm as scale to convert into the dd4hep default units (_ddu)
+            auto simhit_position_ddu = this->Convert_EDM4hepVector_to_TVector3(simhit->getPosition(), dd4hep::mm);
 
-        if (closest_simhit) {
-            // Do the digitisation based on the closest hit and the integrated edep and path length
+            auto hit_to_wire_vector_ddu = m_dch_info->Calculate_hitpos_to_wire_vector(layer, nphi, simhit_position_ddu);
+            auto hit_projection_on_the_wire_ddu = simhit_position_ddu + hit_to_wire_vector_ddu;
+            double distance_to_wire_mm = hit_to_wire_vector_ddu.Mag() / dd4hep::mm; // Explicitly cast to mm, no matter what the default unit is
 
+            ////////////////////////////////
+            // POSITION AND TIME SMEARING //
+            ////////////////////////////////
             // xy smearing
-            double smearing_xy = gauss_xy(random_engine);
-            digihit_distance_to_wire_mm = std::max(0.0, closest_distance_to_wire_mm + smearing_xy);
+            double smearing_xy_mm = gauss_xy_ddu(random_engine) / dd4hep::mm; 
+            double digihit_distance_to_wire_mm = std::max(0.0, distance_to_wire_mm + smearing_xy_mm);
+            double drift_time_ns = this->get_drift_time(digihit_distance_to_wire_mm);
 
             // z smearing
-            double smearing_z = gauss_z(random_engine);
-            auto hit_projection_on_the_wire = closest_simhit_position + closest_hit_to_wire_vector;
-            TVector3 wire_direction_ez = (m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
-            hit_projection_on_the_wire += smearing_z * wire_direction_ez;
+            double smearing_z_ddu = gauss_z_ddu(random_engine);
+            TVector3 wire_direction_ez_ddu = (m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
+            hit_projection_on_the_wire_ddu += smearing_z_ddu * wire_direction_ez_ddu; // Need to multiply smearing_z_ddu with dd4hep::mm to cast into default units
 
             // Limit z to values inside the drift chamber.
             // NB: can lead to a peak at z=Lhalf and z=-Lhalf
-            hit_projection_on_the_wire.SetZ(
-                std::clamp(hit_projection_on_the_wire.Z(), -(this->m_dch_info->Lhalf), this->m_dch_info->Lhalf)
+            hit_projection_on_the_wire_ddu.SetZ(
+                std::clamp(hit_projection_on_the_wire_ddu.Z(), -(this->m_dch_info->Lhalf), this->m_dch_info->Lhalf)
             );
 
             // Convert to edm4hep vector and cast to mm
-            digihit_position_mm = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1.0 / dd4hep::mm);
+            edm4hep::Vector3d digihit_position_mm = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire_ddu, 1.0 / dd4hep::mm);
 
-
-            // TODO: update time with realisitc value
-            digihit_time_ns += closest_simhit->getTime();
-            double drift_time_ns = this->get_drift_time(closest_distance_to_wire_mm);
-            digihit_time_ns += drift_time_ns;
-            double distance_to_readout_mm = (this->m_dch_info->Lhalf/dd4hep::mm - std::abs(digihit_position_mm.z))/std::cos(std::abs(WireStereoAngle));
+            double distance_to_readout_mm = (this->m_dch_info->Lhalf/dd4hep::mm - std::abs(digihit_position_mm.z))/std::cos(WireStereoAngle);
             double travel_time_ns = this->get_signal_travel_time(distance_to_readout_mm);
-            digihit_time_ns += travel_time_ns;
 
-            if (travel_time_ns < 0) {
-                warning() << " Negative travel time: " << travel_time_ns << " ns with distance to readout: " << distance_to_readout_mm << " mm";
-            }
-            if (drift_time_ns < 0) {
-                warning() << " Negative drift time: " << drift_time_ns << " ns with distance to wire: " << closest_distance_to_wire_mm << " mm";
-            }
+            double arrival_time_ns = simhit->getTime() + drift_time_ns + travel_time_ns;
 
-        } else {
-            error() << "Could not find a closest hit for CellID: " << cellID << endmsg;
-            continue;
+            // Create a HitInfo object and add it to the vector
+            HitInfo hit_info;
+            hit_info.simhit = simhit;
+            hit_info.arrival_time_ns = arrival_time_ns;
+            hit_info.position_mm = digihit_position_mm;
+            hit_info.distance_to_wire_mm = distance_to_wire_mm;
+            hit_info_vector.push_back(hit_info);
         }
 
+        // Sort the hit_info vector by time so that we can determine the groups
+        std::sort(hit_info_vector.begin(), hit_info_vector.end(), [](const HitInfo& a, const HitInfo& b){
+            return a.arrival_time_ns < b.arrival_time_ns;
+        });
 
-        /////////////////////////////
-        // SAVING THE SENSEWIREHIT //
-        /////////////////////////////
+        constexpr double DEADTIME_NS = 99999999999999400.0;
+        std::vector<std::vector<HitInfo>> hit_group_vector;
+        hit_group_vector.reserve(hit_info_vector.size());
+        if (!hit_info_vector.empty()){
+            // Start the first group with the very first hit
+            hit_group_vector.push_back({ hit_info_vector.front() });
 
-        auto sense_wire_hit = output.create();
-        sense_wire_hit.setCellID(cellID);
-        sense_wire_hit.setType(0);
-        sense_wire_hit.setQuality(0);
-        sense_wire_hit.setTime(digihit_time_ns);
-        sense_wire_hit.setEDep(edep_sum);
-        sense_wire_hit.setEDepError(0.0);
-        sense_wire_hit.setPosition(digihit_position_mm);
-        sense_wire_hit.setPositionAlongWireError(m_z_resolution);
-        sense_wire_hit.setWireAzimuthalAngle(WireAzimuthalAngle);
-        sense_wire_hit.setWireStereoAngle(WireStereoAngle);
-        sense_wire_hit.setDistanceToWire(digihit_distance_to_wire_mm);
-        sense_wire_hit.setDistanceToWireError(m_xy_resolution);
+            for (size_t i = 1; i < hit_info_vector.size(); ++i) {
+                const auto& current_hit = hit_info_vector[i];
+                const auto& last_hit_in_group = hit_group_vector.back().back();
 
-        // Clusters are added to the SenseWireHit as vector member containing the number of electrons in each cluster
-        // The length of this vector is the total number of clusters in the cell
-        // For now, we do not calculate the size of each cluster, so we just fill it with a dummy value
-        for (unsigned int i = 0; i < total_nclusters; ++i) {
-            sense_wire_hit.addToNElectrons(-1);
+                // Check if the current hit is within the dead time of the last hit in the group
+                if (current_hit.arrival_time_ns - last_hit_in_group.arrival_time_ns < DEADTIME_NS) {
+                    // If yes, add it to the current group
+                    hit_group_vector.back().push_back(current_hit);
+                } else {
+                    // If no, start a new group
+                    hit_group_vector.emplace_back(1, current_hit);
+                }
+            }
         }
 
+        if (hit_group_vector.size() > 1)
+            std::cout << "Number of time groups in this event: " << hit_group_vector.size() << std::endl;
+
+        // Now loop over the time groups and create a digihit for each group
+        // Each group is a collection of hits where there is no time gap between hits larger than the dead time
+        int test_counter = 0;
+        for (const auto& hit_group : hit_group_vector) {
+            if (hit_group.empty()) continue; // Shouldn't really occur, but just to be safe
+
+            // Sum of all energy deposits in the group
+            double edep_sum = 0.0;
+
+            // Map to store the information for cluster calculation
+            std::unordered_map<podio::ObjectID, ParticleClusterInfo> cluster_info_map;
+            cluster_info_map.reserve(hit_group.size());
+
+            // Loop over the hits in the group
+            for (const auto& hit_info: hit_group) {
+                const auto& simhit = hit_info.simhit;
+
+                // Integrate the deposited energy
+                edep_sum += simhit->getEDep();
+
+                /////////////////////////
+                // CLUSTER INFORMATION //
+                /////////////////////////
+
+                // Each particle will create a different number of clusters (different beta*gamma values)
+                // So store the MCparticles in a map for later cluster calculations
+                auto mcparticle = simhit->getParticle();
+                auto object_id = mcparticle.getObjectID();
+
+                // Check if the particle is already in the map
+                auto [it, new_entry] = cluster_info_map.try_emplace(object_id, ParticleClusterInfo{});
+                auto& cluster_info = it->second;
+
+                if (new_entry) {
+                    // As simplfication: just take the betagamma value from the first hit we encounter (unlikely to change much over the course of one cell)
+                    double mass_GeV = mcparticle.getMass();
+                    double momentum_GeV = edm4hep::utils::magnitude(mcparticle.getMomentum());
+                    cluster_info.beta_gamma = momentum_GeV / mass_GeV;
+                    cluster_info.path_length = simhit->getPathLength();
+                } else {
+                    // If the particle is already present, update the existing entry
+                    cluster_info.path_length += simhit->getPathLength();
+                }
+
+            } // end of loop over hit_info vector in this entry of the hit_group
+
+            /////////////////////////
+            // CLUSTER CALCULATION //
+            /////////////////////////
+
+            // Total number of clusters in cell built from each particle's contribution
+            unsigned int total_nclusters = 0;
+
+            // Calculate the number of clusters for each particle in the cell
+            for (const auto& [object_id, particle_info] : cluster_info_map) {
+                // Get number of clusters per length from delphes
+                // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
+                double nclusters_per_mm = m_delphesTrkUtil.Nclusters(particle_info.beta_gamma, m_GasSel.value()) / 1000.0;
+                double nclusters_mean = nclusters_per_mm * particle_info.path_length; // TODO: Verify that path_length is in mm
+
+                std::poisson_distribution<int> poisson_dist(nclusters_mean);
+                total_nclusters += poisson_dist(random_engine);
+            }
+
+
+            /////////////////////////////
+            // SAVING THE SENSEWIREHIT //
+            /////////////////////////////
+            
+            // Use the first hit in the group for the time, position, and distance to wire
+            const auto& first_hit = hit_group.front();
+            auto sense_wire_hit = output.create();
+            sense_wire_hit.setCellID(cellID);
+            sense_wire_hit.setType(0);
+            sense_wire_hit.setQuality(0);
+            sense_wire_hit.setTime(first_hit.arrival_time_ns);
+            sense_wire_hit.setEDep(edep_sum);
+            sense_wire_hit.setEDepError(0.0);
+            sense_wire_hit.setPosition(first_hit.position_mm);
+            sense_wire_hit.setPositionAlongWireError(m_z_resolution);
+            sense_wire_hit.setWireAzimuthalAngle(WireAzimuthalAngle);
+            sense_wire_hit.setWireStereoAngle(WireStereoAngle);
+            sense_wire_hit.setDistanceToWire(first_hit.distance_to_wire_mm);
+            sense_wire_hit.setDistanceToWireError(m_xy_resolution);
+
+            // Clusters are added to the SenseWireHit as vector member containing the number of electrons in each cluster
+            // The length of this vector is the total number of clusters in the cell
+            // For now, we do not calculate the size of each cluster, so we just fill it with a dummy value
+            for (unsigned int i = 0; i < total_nclusters; ++i) {
+                sense_wire_hit.addToNElectrons(-1);
+            }
+
+            if (test_counter > 0) std::cout << "Created second hit" << std::endl;
+            test_counter++;
+
+        } // end of loop over hit_group_vector
+        
     } // end of loop over the cells
 
     return output;
