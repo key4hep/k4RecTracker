@@ -104,12 +104,12 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
     debug() << "Processing event " << ++m_event_counter << endmsg;
     debug() << "Processing SimTrackerHitCollection with " << input.size() << " hits." << endmsg;
 
-    std::unordered_map<uint64_t, std::vector<const edm4hep::SimTrackerHit*>> cell_map;
+    std::unordered_map<uint64_t, std::vector<edm4hep::SimTrackerHit>> cell_map;
     cell_map.reserve(input.size());
     // Loop over the inputs and save the cellIDs and corresponding hits to a map
     for (const auto& simhit: input){
         uint64_t cellID = simhit.getCellID();
-        cell_map[cellID].push_back(&simhit);
+        cell_map[cellID].push_back(simhit);
     }
 
     debug() << "Map contains " << cell_map.size() << " unique cellIDs." << endmsg;
@@ -157,7 +157,7 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             // Get hit position to calculate distance to wire
             // Need to convert to TVector3 to use the DCH_info methods
             // Use dd4hep:mm as scale to convert into the dd4hep default units (_ddu)
-            auto simhit_position_ddu = this->Convert_EDM4hepVector_to_TVector3(simhit->getPosition(), dd4hep::mm);
+            auto simhit_position_ddu = this->Convert_EDM4hepVector_to_TVector3(simhit.getPosition(), dd4hep::mm);
 
             auto hit_to_wire_vector_ddu = m_dch_info->Calculate_hitpos_to_wire_vector(layer, nphi, simhit_position_ddu);
             auto hit_projection_on_the_wire_ddu = simhit_position_ddu + hit_to_wire_vector_ddu;
@@ -188,14 +188,14 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             double distance_to_readout_mm = (this->m_dch_info->Lhalf/dd4hep::mm - std::abs(digihit_position_mm.z))/std::cos(WireStereoAngle);
             double travel_time_ns = this->get_signal_travel_time(distance_to_readout_mm);
 
-            double arrival_time_ns = simhit->getTime() + drift_time_ns + travel_time_ns;
+            double arrival_time_ns = simhit.getTime() + drift_time_ns + travel_time_ns;
 
             // Create a HitInfo object and add it to the vector
             HitInfo hit_info;
-            hit_info.simhit = simhit;
+            hit_info.simhit = &simhit;
             hit_info.arrival_time_ns = arrival_time_ns;
             hit_info.position_mm = digihit_position_mm;
-            hit_info.distance_to_wire_mm = distance_to_wire_mm;
+            hit_info.distance_to_wire_mm = digihit_distance_to_wire_mm;
             hit_info_vector.push_back(hit_info);
         }
 
@@ -204,7 +204,7 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             return a.arrival_time_ns < b.arrival_time_ns;
         });
 
-        constexpr double DEADTIME_NS = 99999999999999400.0;
+        constexpr double DEADTIME_NS = 400.0;
         std::vector<std::vector<HitInfo>> hit_group_vector;
         hit_group_vector.reserve(hit_info_vector.size());
         if (!hit_info_vector.empty()){
@@ -226,12 +226,8 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             }
         }
 
-        if (hit_group_vector.size() > 1)
-            std::cout << "Number of time groups in this event: " << hit_group_vector.size() << std::endl;
-
         // Now loop over the time groups and create a digihit for each group
         // Each group is a collection of hits where there is no time gap between hits larger than the dead time
-        int test_counter = 0;
         for (const auto& hit_group : hit_group_vector) {
             if (hit_group.empty()) continue; // Shouldn't really occur, but just to be safe
 
@@ -321,9 +317,6 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
                 sense_wire_hit.addToNElectrons(-1);
             }
 
-            if (test_counter > 0) std::cout << "Created second hit" << std::endl;
-            test_counter++;
-
         } // end of loop over hit_group_vector
         
     } // end of loop over the cells
@@ -338,7 +331,7 @@ double DCHdigi_v02::get_drift_time(double distance_to_wire_mm) const {
     // This is a preliminary implementation that needs to be updated with a realistic model
     // For now, we use a simple linear model with a constant drift velocity
 
-    double drift_velocity_um_per_ns = 20.0;
+    double drift_velocity_um_per_ns = 25.0;
 
     // Convert distance to wire from mm to um
     double distance_to_wire_um = distance_to_wire_mm * 1000.0;
