@@ -61,7 +61,7 @@ public:
    */
   virtual StatusCode finalize() final;
 
-  typedef std::map<int, std::map<int, float, std::less<int>>, std::less<int>> hit_map_type; // Déplacé dans public
+  typedef std::map<int, std::map<int, float, std::less<int>>, std::less<int>> hit_map_type; 
   bool Apply_Threshold(double& ChargeInPixel) const;
   
 private:

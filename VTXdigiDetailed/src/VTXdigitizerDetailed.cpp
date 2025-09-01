@@ -130,14 +130,6 @@ StatusCode VTXdigitizerDetailed::initialize() {
   // retrieve the volume manager
   m_volman = m_geoSvc->getDetector()->volumeManager();
 
-  // Initialize the surface map
-  dd4hep::Detector& theDetector = dd4hep::Detector::getInstance();
-  dd4hep::rec::SurfaceManager& surfMan = *theDetector.extension<dd4hep::rec::SurfaceManager>();
-  dd4hep::DetElement det = m_geoSvc->getDetector()->detector(m_detectorName);
-  _map = surfMan.map(det.name());
-  if (!_map)
-        error() << " Could not find surface map for detector " << det.name() << " in SurfaceManager " << endmsg;
-
    // Get the sensor thickness and 2D size per layer in mm
   dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag()); // Get detector Type
   if (type.is(dd4hep::DetType::BARREL)) { // if this is a barrel detector
@@ -257,7 +249,6 @@ void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit,
   const float segmentLength = 0.005; //5microns in mm
   float pathLength = hit.getPathLength(); // Path Length of the particle in the active material in mm
   int numberOfSegments = int(pathLength / segmentLength); // Number of segments
-  //std::cout << pathLength << ":" << numberOfSegments << std::endl; // TEST
   if (numberOfSegments <1) { numberOfSegments = 1; }
 
   float GeVperElectron = 3.61E-09; // Mean ionization energy in silicon [GeV]
@@ -404,11 +395,6 @@ void VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::v
     // Load the charge distribution parameters
     collectionPoints[i] = sp;
 
-    // TEST
-    //std::cout << i << std::endl;
-    //std::cout << "Ion pos : " << SegX << ":" << SegY << ":" << SegZ  << std::endl;
-    //std::cout << "Drifted Pos: " << CloudCenterX << ":" << CloudCenterY << std::endl;
-    // END TEST
   } // End loop over ionization points
   
 } // End drift
@@ -480,14 +466,6 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
 
   std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
   const std::uint64_t reduced_cellID = cellID & m_mask;
-
-  // In comment : Another way to get the physical dimensions but limited to rectangles surfaces
-  // dd4hep::rec::SurfaceMap::const_iterator sI = _map->find(reduced_cellID);
-  // if (sI == _map->end())
-  //   error() << " VTXdigitizer: no surface found for cellID " << m_decoder->valueString(cellID) << std::endl << endmsg;
-
-  // const dd4hep::rec::ISurface* surf = sI->second;
-  // std::cout << "TEST : " << surf->length_along_u() << "    :    " << surf->length_along_v() << std::endl;
 
   const auto solid = m_volman.lookupDetElement(reduced_cellID).volume().solid();
   
@@ -687,8 +665,6 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
             ++CountBeforeThreshold;
             hChargeBeforeThreshold->Fill(weight / 1e3 ); // Fill the histogram with the charge before threshold in (ke)
           }
-
-          //debug()<< "Charge Before Threshold " << weight << std::endl;
           
           if (weight > 0 && Apply_Threshold(weight)) // Check if the charge is above the threshold
             {
