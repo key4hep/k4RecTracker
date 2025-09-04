@@ -1,6 +1,7 @@
 #pragma once
 
 // ROOT headers
+#include <memory> // for std::unique_ptr
 #include "TFile.h"
 #include "TH1D.h"
 #include "TH2D.h"
@@ -14,6 +15,7 @@
 
 // K4FWCORE
 #include "k4FWCore/DataHandle.h"
+#include "k4FWCore/MetaDataHandle.h"
 #include "k4Interface/IGeoSvc.h"
 
 // EDM4HEP
@@ -74,15 +76,19 @@ private:
   // Output link between sim hits and digitized hits
   mutable k4FWCore::DataHandle<edm4hep::TrackerHitSimTrackerHitLinkCollection> m_output_sim_digi_link{"outputSimDigiAssociation", 
     Gaudi::DataHandle::Writer, this};
+  k4FWCore::MetaDataHandle<std::string> cellIDHandle{m_input_sim_hits, edm4hep::labels::CellIDEncoding,
+    Gaudi::DataHandle::Reader};
 
   // Detector name
   Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
   // Detector readout names
-  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "VertexBarrelCollection", "Name of the detector readout"};
+  // If the readout name is not set by the user, it will be initialised as "inputSimHits" in inititialised function
+  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "", "Name of the detector readout"};
+
   // Pointer to the geometry service
   ServiceHandle<IGeoSvc> m_geoSvc;
   // Decoder for the cellID
-  dd4hep::DDSegmentation::BitFieldCoder* m_decoder;
+  std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_decoder;
   // Volume manager to get the physical cell sensitive volume
   dd4hep::VolumeManager m_volman;
 

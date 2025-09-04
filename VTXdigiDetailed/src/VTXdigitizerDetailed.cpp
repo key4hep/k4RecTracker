@@ -111,22 +111,28 @@ StatusCode VTXdigitizerDetailed::initialize() {
     return StatusCode::FAILURE;
   }
 
-  // check if readout exists
-  if (m_geoSvc->getDetector()->readouts().find(m_readoutName) == m_geoSvc->getDetector()->readouts().end()) {
-    error() << "Readout <<" << m_readoutName << ">> does not exist." << endmsg;
-    return StatusCode::FAILURE;
+  // Get the readout name from "inputSimHits" if "readoutName" not set by the user
+  if (m_readoutName.value().empty()) { m_readoutName = m_input_sim_hits.fullKey().key(); }
+
+  // Check if the readout exists
+  if (m_geoSvc->getDetector()->readouts().find(m_readoutName.value()) == m_geoSvc->getDetector()->readouts().end()) {
+    error() << "Readout '" << m_readoutName.value() << "' does not exist in the geometry! Please Provide a readout name through 'readoutName' property" << endmsg;
+    return StatusCode::FAILURE;  // Or handle it gracefully
   }
 
+  // Get the encoding string description from the meta data for the input collection
+  const auto cellIDstr = cellIDHandle.get();
+
   // set the cellID decoder
-  m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder(); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
-  
+  m_decoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(cellIDstr); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
+
   if (m_decoder->fieldDescription().find("layer") == std::string::npos){
     error() 
-      << " Readout " << m_readoutName << " does not contain layer id!"
+      << " Readout " << cellIDstr << " does not contain layer id!"
       << endmsg;
     return StatusCode::FAILURE;
   }
-  
+
   // retrieve the volume manager
   m_volman = m_geoSvc->getDetector()->volumeManager();
 
@@ -151,7 +157,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   debug() << "Initializing VTXdigitizerDetailed with the following parameters:" << endmsg;
   debug() << "Detector Name: " << m_detectorName << endmsg;
-  debug() << "Readout Name: " << m_readoutName << endmsg;
+  debug() << "Readout Name: " << m_readoutName.value() << endmsg;
 
   debug() << "Threshold: " << m_Threshold << endmsg; 
   debug() << "Threshold Smearing : " << m_ThresholdSmearing << endmsg;
@@ -458,7 +464,7 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
    */
                                  
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-  const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName).segmentation();
+  const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName.value()).segmentation();
   const auto cellDims = segmentation.cellDimensions(cellID);
 
   const float PixSizeX = cellDims[0] / dd4hep::mm;
@@ -618,7 +624,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   // Get the pixel dimensions in mm along x and y in the (modified) local frame with z orthogonal (see SetProperDirectFrame function)
 
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-  const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName).segmentation();
+  const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName.value()).segmentation();
   auto cellDims = segmentation.cellDimensions(cellID);
   
   const float PixSizeX = cellDims[0] / dd4hep::mm;
