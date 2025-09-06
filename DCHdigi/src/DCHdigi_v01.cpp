@@ -330,7 +330,6 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
   float ExECl1 = 0;
   float cut = 1000; // controlla
   float EIzs = 25.6;
-  float ExECl1totRec = 0;
   float rndCorr(0);
   const int nhEp = 10;
   float hEpcut[10] = {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000};
@@ -488,7 +487,6 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
       if (ExECl1 > Eloss) {
         ExECl1 = Eloss;
       }
-      ExECl1totRec += ExECl1;
       NCl1++;
       Eloss -= ExECl1;
       // cluster size is 1
