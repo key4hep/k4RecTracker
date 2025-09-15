@@ -31,19 +31,8 @@ find_package(PandoraSDK REQUIRED)
 #---------------------------------------------------------------
 
 find_package(onnxruntime REQUIRED)
-if(onnxruntime_FOUND)
-  message("ONNX Runtime inference library found.")
-else()
-  message("ONNX Runtime not found!")
-endif()
-
-
 find_package(Torch REQUIRED)
-if(Torch_FOUND)
-  message("Torch inference library found.")
-else()
-  message("Torch not found!")
-endif()
+
 
 #---------------------------------------------------------------
 
