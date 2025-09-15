@@ -4,7 +4,6 @@
 *.png
 *.pdf
 *.swp
-*.hepmc
 
 *.dat
 *.gdml
@@ -58,5 +57,3 @@ CTestTestfile.cmake
 CPackSourceConfig.cmake
 CPackConfig.cmake
 cmake_install.cmake
-
-setup.sh
