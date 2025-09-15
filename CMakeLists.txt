@@ -75,8 +75,6 @@ if("${isSystemDir}" STREQUAL "-1")
 endif("${isSystemDir}" STREQUAL "-1")
 
 #---------------------------------------------------------------
-
-include(cmake/Key4hepConfig.cmake)
 include(GNUInstallDirs)
 
 include(CTest)

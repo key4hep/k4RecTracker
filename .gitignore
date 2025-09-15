@@ -59,5 +59,4 @@ CPackSourceConfig.cmake
 CPackConfig.cmake
 cmake_install.cmake
 
-SteeringFile*
 setup.sh

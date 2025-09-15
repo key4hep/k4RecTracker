@@ -11,7 +11,7 @@ curl -o $STEERING_FILE https://raw.githubusercontent.com/key4hep/k4geo/master/ex
 
 ddsim --steeringFile $STEERING_FILE \
       --compactFile  $XML_FILE \
-      -G --gun.distribution uniform --gun.particle e- \
+      -G --gun.distribution uniform --gun.particle mu- \
       --random.seed 42 \
       --numberOfEvents 1 \
       --outputFile Tracking/test/testTrackFinder/out_sim_edm4hep.root 
