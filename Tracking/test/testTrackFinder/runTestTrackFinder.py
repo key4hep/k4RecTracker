@@ -11,11 +11,11 @@ from k4FWCore.parseArgs import parser
 
 
 ################## Parser
-parser.add_argument("--inputFile", default="ddsim_output_edm4hep.root", help="InputFile")
-parser.add_argument("--outputFile", default="output_digi.root", help="OutputFile")
-parser.add_argument("--modelPath", default="", help="model path for the track finder")
-parser.add_argument("--tbeta", default=0.6, help="tbeta clustering parameter")
-parser.add_argument("--td", default=0.3, help="td clustering parameter")
+parser.add_argument("--inputFile", default = "ddsim_output_edm4hep.root", help = "InputFile")
+parser.add_argument("--outputFile", default = "output_digi.root", help = "OutputFile")
+parser.add_argument("--modelPath", default = "", help = "model path for the track finder")
+parser.add_argument("--tbeta", default = 0.6, help = "tbeta clustering parameter")
+parser.add_argument("--td", default = 0.3, help = "td clustering parameter")
 args = parser.parse_args()
 
 # ################## InputOutput
@@ -26,7 +26,7 @@ svc.Output = args.outputFile
 ################ Detector geometry
 geoservice = GeoSvc("GeoSvc")
 path_to_detector = os.environ.get("K4GEO", "")
-detectors_to_use=['FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml']
+detectors_to_use = ['FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml']
 geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
 geoservice.OutputLevel = INFO
 
@@ -109,14 +109,14 @@ from Configurables import GGTF_tracking
 
 GGTF = GGTF_tracking(
     "GGTF_tracking",
-    inputWireHits=["DCH_DigiCollection"],
-    inputPlanarHits=["VTXBDigis", "VTXDDigis", "SiWrBDigis", "SiWrDDigis"],
-    outputTracks=["CDCHTracks"],
-    OutputLevel=INFO,
+    InputPlanarHitCollections = ["VTXBDigis", "VTXDDigis", "SiWrBDigis", "SiWrDDigis"],
+    InputWireHitCollections = ["DCH_DigiCollection"],
+    OutputTracksGGTF = ["CDCHTracks"],
+    ModelPath = args.modelPath,
+    Tbeta = args.tbeta,
+    Td = args.td,
+    OutputLevel = INFO,
 )
-GGTF.modelPath = args.modelPath
-GGTF.tbeta = args.tbeta
-GGTF.td = args.td
 
 ############### Application Manager
 import subprocess
@@ -124,9 +124,9 @@ import subprocess
 ifilename = "https://fccsw.web.cern.ch/fccsw/filesForSimDigiReco/IDEA/DataAlgFORGEANT.root"
 subprocess.run(["wget", "--no-clobber", ifilename])
 
-mgr = ApplicationMgr(TopAlg=[dch_digitizer, vtxb_digitizer, vtxd_digitizer, siwrb_digitizer, siwrd_digitizer,GGTF],
-    EvtSel="NONE",
-    EvtMax=-1,
-    ExtSvc=[geoservice,EventDataSvc("EventDataSvc"),UniqueIDGenSvc("uidSvc"),RndmGenSvc()],
-    OutputLevel=INFO,
+mgr = ApplicationMgr(TopAlg = [dch_digitizer, vtxb_digitizer, vtxd_digitizer, siwrb_digitizer, siwrd_digitizer, GGTF],
+    EvtSel = "NONE",
+    EvtMax = -1,
+    ExtSvc = [geoservice,EventDataSvc("EventDataSvc"),UniqueIDGenSvc("uidSvc"),RndmGenSvc()],
+    OutputLevel = INFO,
     )
