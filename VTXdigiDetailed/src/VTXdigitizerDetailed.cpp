@@ -1,18 +1,33 @@
 #include "VTXdigitizerDetailed.h"
+#include "DD4hep/DetFactoryHelper.h"
+#include "DD4hep/Readout.h"
 
 
 DECLARE_COMPONENT(VTXdigitizerDetailed)
 
-VTXdigitizerDetailed::VTXdigitizerDetailed(const std::string& aName, ISvcLocator* aSvcLoc)
-    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "VTXdigitizerDetailed") {
-  declareProperty("inputSimHits", m_input_sim_hits, "Input sim vertex hit collection name");
-  declareProperty("outputDigiHits", m_output_digi_hits, "Output digitized vertex hit collection name");
-  declareProperty("outputSimDigiAssociation", m_output_sim_digi_link, "Output link between sim hits and digitized hits");
-}
-
-VTXdigitizerDetailed::~VTXdigitizerDetailed() {}
+VTXdigitizerDetailed::VTXdigitizerDetailed(const std::string& aname, ISvcLocator* asvcLoc)
+      : MultiTransformer(aname, asvcLoc,
+      {KeyValues("inputSimHits", {""})},
+      {KeyValues("outputDigiHits", {""}),
+       KeyValues("outputSimDigiAssociation", {""})})
+      {}
 
 StatusCode VTXdigitizerDetailed::initialize() {
+
+  // Check that input and output collections names are declared by the user
+
+  if ( inputLocations("inputSimHits")[0].empty() ) {
+    error() << "You must specify the inputSimHits collection name!" << endmsg;
+    return StatusCode::FAILURE;
+  }
+  if ( outputLocations("outputDigiHits")[0].empty() ) {
+    error() << "You must specify the outputDigiHits collection name!" << endmsg;
+    return StatusCode::FAILURE;
+  }
+  if ( outputLocations("outputSimDigiAssociation")[0].empty() ) {
+    error() << "You must specify the outputSimDigiAssociation collection name!" << endmsg;
+    return StatusCode::FAILURE;
+  }
 
   // Initialise LocalNormalVectorDir with forcing the user to declare a value
   if ( !(m_LocalNormalVectorDir=="x" || m_LocalNormalVectorDir=="y" || m_LocalNormalVectorDir=="z") ) {
@@ -97,6 +112,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
     return StatusCode::FAILURE;
   }
 
+  // Initialize Gaussian random generator for time smearing
   m_gauss_t_vec.resize(m_t_resolution.size());
   for (size_t i = 0; i < m_t_resolution.size(); ++i) {  
     if (m_gauss_t_vec[i].initialize(m_randSvc, Rndm::Gauss(0., m_t_resolution[i])).isFailure()) {
@@ -105,14 +121,22 @@ StatusCode VTXdigitizerDetailed::initialize() {
     }
   }
 
-// Initialize Gaussian random generator for threshold smearing
+  // Initialize Gaussian random generator for threshold smearing
   if (m_gauss_threshold.initialize(m_randSvc, Rndm::Gauss(m_Threshold, m_ThresholdSmearing)).isFailure()) {
     error() << "Couldn't initialize Gaussian generator for threshold smearing!" << endmsg;
     return StatusCode::FAILURE;
   }
 
+  // Initialize and check if GeoSvc is valid
+  m_geoSvc = serviceLocator()->service("GeoSvc");
+  if (!m_geoSvc) {
+    error() << "Failed to retrieve GeoSvc" << endmsg;
+    return StatusCode::FAILURE;
+  }
+  info() << "GeoSvc successfully retrieved" << endmsg;
+
   // Get the readout name from "inputSimHits" if "readoutName" not set by the user
-  if (m_readoutName.value().empty()) { m_readoutName = m_input_sim_hits.fullKey().key(); }
+  if (m_readoutName.value().empty()) { m_readoutName = inputLocations("inputSimHits")[0]; }
 
   // Check if the readout exists
   if (m_geoSvc->getDetector()->readouts().find(m_readoutName.value()) == m_geoSvc->getDetector()->readouts().end()) {
@@ -120,15 +144,21 @@ StatusCode VTXdigitizerDetailed::initialize() {
     return StatusCode::FAILURE;  // Or handle it gracefully
   }
 
-  // Get the encoding string description from the meta data for the input collection
-  const auto cellIDstr = cellIDHandle.get();
+  //Set the cellID decoder
+  try {
+    m_decoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(
+        m_geoSvc->getDetector()->readout(m_readoutName.value()).idSpec().fieldDescription()
+    );
+  } catch (const std::runtime_error& e) {
+    error() << "Failed to create BitFieldCoder for readout "
+            << m_readoutName.value() << ": " << e.what() << endmsg;
+    return StatusCode::FAILURE;
+  }
 
-  // set the cellID decoder
-  m_decoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(cellIDstr); // Can be used to access e.g. layer index: m_decoder->get(cellID, "layer"),
 
   if (m_decoder->fieldDescription().find("layer") == std::string::npos){
     error() 
-      << " Readout " << cellIDstr << " does not contain layer id!"
+      << " Readout " << m_readoutName.value() << " does not contain layer id!"
       << endmsg;
     return StatusCode::FAILURE;
   }
@@ -181,20 +211,20 @@ template<typename T> void VTXdigitizerDetailed::getSensorThickness() {
   
 } // End getSensorThickness
 
-StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
+std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> VTXdigitizerDetailed::operator()(const edm4hep::SimTrackerHitCollection& inputSimHits) const 
+  {
   // Get the input collection with Geant4 hits
-  const edm4hep::SimTrackerHitCollection* input_sim_hits = m_input_sim_hits.get();
-  verbose() << "Input Sim Hit collection size: " << input_sim_hits->size() << endmsg;
+  verbose() << "Input Sim Hit collection size: " << inputSimHits.size() << endmsg;
 
   // Check if it is produced by Secondaries or Overlay 
   int nSecondaryHits = 0;
   int nOverlayHits = 0;
 
   // Digitize the sim hits
-  edm4hep::TrackerHitPlaneCollection* output_digi_hits = m_output_digi_hits.createAndPut();
-  edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col = m_output_sim_digi_link.createAndPut();
+  auto output_digi_hits = edm4hep::TrackerHitPlaneCollection();
+  auto output_sim_digi_link_col = edm4hep::TrackerHitSimTrackerHitLinkCollection();
   
-  for (const auto& input_sim_hit : *input_sim_hits) {
+  for (const auto& input_sim_hit : inputSimHits) {
 
     // Check if the hit is a secondary or an overlay
     if (input_sim_hit.isProducedBySecondary()) {
@@ -225,7 +255,7 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
   if (m_DebugHistos) {
     std::map<int, int> digisPerLayer;
 
-    for (const auto& digi_hit : *output_digi_hits) {
+    for (const auto& digi_hit : output_digi_hits) {
       uint64_t cellID = digi_hit.getCellID();
       int layer = m_decoder->get(cellID, "layer");
      // int side = m_decoder->get(cellID, "side");
@@ -233,7 +263,8 @@ StatusCode VTXdigitizerDetailed::execute(const EventContext&) const {
     }
   }
   info() << "Execution of VTXdigitizerDetailed completed." << endmsg;  
-  return StatusCode::SUCCESS;
+
+  return std::make_tuple(std::move(output_digi_hits), std::move(output_sim_digi_link_col));
 }
 
 StatusCode VTXdigitizerDetailed::finalize() {
@@ -252,7 +283,7 @@ void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit,
    *  The positions are given in mm
    */
   
-  const float segmentLength = 0.005; //5microns in mm
+  const float segmentLength = 0.005; //5microns in mm //Something to put as a property?
   float pathLength = hit.getPathLength(); // Path Length of the particle in the active material in mm
   int numberOfSegments = int(pathLength / segmentLength); // Number of segments
   if (numberOfSegments <1) { numberOfSegments = 1; }
@@ -612,9 +643,9 @@ bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
 }
 
 
-void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
-						  edm4hep::TrackerHitPlaneCollection* output_digi_hits,
-						  edm4hep::TrackerHitSimTrackerHitLinkCollection* output_sim_digi_link_col,
+void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
+						  edm4hep::TrackerHitPlaneCollection& output_digi_hits,
+						  edm4hep::TrackerHitSimTrackerHitLinkCollection& output_sim_digi_link_col,
 						  const hit_map_type& hit_map) const {
   /** Get a single point from the hit_map by getting the average position and time
    *  Return the position and uncertainty in global coordinates with recorded energy and time as a TrackerhitplaneCollection
@@ -770,10 +801,10 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit hit,
   float v_direction[2];
   v_direction[0] = dirGlobalVVec.theta();
   v_direction[1] = dirGlobalVVec.phi();
-  
+
   // Create and fill the output collection of digitized hits
-  auto output_digi_hit = output_digi_hits->create();
-  auto output_sim_digi_link = output_sim_digi_link_col->create();
+  auto output_digi_hit = output_digi_hits.create();
+  auto output_sim_digi_link = output_sim_digi_link_col.create();
 
   float GeVperElectron = 3.61E-09; // Mean ionization energy in silicon [GeV]
   output_digi_hit.setEDep(sumWeights * GeVperElectron / dd4hep::GeV); // Energy in GeV from number of charges
