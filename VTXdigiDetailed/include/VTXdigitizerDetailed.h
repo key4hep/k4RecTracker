@@ -73,12 +73,6 @@ class VTXdigitizerDetailed final  //Gaudi::Functional::
     StatusCode finalize() override;
 
   private:
-    // Input sim vertex hit collection name
-    //Gaudi::Property<std::string> m_inputSimHitsName{this, "inputSimHits", "", "Name of input SimTrackerHit collection (mandatory)"};
-    // Output digitized vertex hit collection name
-    //Gaudi::Property<std::string>  m_outputDigiHitsName{this, "outputDigiHits", "", "Name of output TrackerHitPlane (digitized hits) collection (mandatory)"};
-    // Output link between sim hits and digitized hits
-    //Gaudi::Property<std::string>  m_outputSimDigiLinkName{this, "outputSimDigiAssociation", "", "Name of output SimTrackerHit-TrackerHitPlane link collection (mandatory)"};
     // Detector name
     Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
     // Detector readout names
@@ -181,19 +175,16 @@ class VTXdigitizerDetailed final  //Gaudi::Functional::
     // Additional member functions
     // Private methods
     template<typename T> void getSensorThickness();
-    
-    void primary_ionization(const edm4hep::SimTrackerHit& hit,
-          std::vector<ChargeDepositUnit>& ionizationPoints) const;
 
-    void drift(const edm4hep::SimTrackerHit& hit,
-        const std::vector<ChargeDepositUnit>& ionizationPoints,
-        std::vector<SignalPoint>& collectionPoints) const;
+    std::vector<ChargeDepositUnit> primary_ionization(const edm4hep::SimTrackerHit& hit) const;
+
+    std::vector<SignalPoint> drift(const edm4hep::SimTrackerHit& hit,
+        const std::vector<ChargeDepositUnit>& ionizationPoints) const;
 
     dd4hep::rec::Vector3D DriftDirection(const edm4hep::SimTrackerHit& hit) const;
     
-    void get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
-            const std::vector<SignalPoint>& collectionPoints,
-            hit_map_type& hit_map) const;
+    hit_map_type get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
+            const std::vector<SignalPoint>& collectionPoints) const;
     
     bool Apply_Threshold(double& ChargeInPixel) const;
 

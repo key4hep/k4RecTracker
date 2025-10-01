@@ -233,15 +233,11 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
       nOverlayHits++;
     }
     
-    std::vector<ChargeDepositUnit> ionizationPoints;
-    std::vector<SignalPoint> collectionPoints;
-    hit_map_type hit_map;
-    
-    primary_ionization(input_sim_hit, ionizationPoints);
+    auto ionizationPoints = primary_ionization(input_sim_hit);
 
-    drift(input_sim_hit, ionizationPoints, collectionPoints);
+    auto collectionPoints = drift(input_sim_hit, ionizationPoints);
 
-    get_charge_per_pixel(input_sim_hit, collectionPoints, hit_map);
+    auto hit_map = get_charge_per_pixel(input_sim_hit, collectionPoints);
 
     generate_output(input_sim_hit, output_digi_hits, output_sim_digi_link_col, hit_map);
     
@@ -276,7 +272,7 @@ StatusCode VTXdigitizerDetailed::finalize() {
   return StatusCode::SUCCESS;
 }
 
-void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit, std::vector<ChargeDepositUnit>& ionizationPoints) const {
+std::vector<VTXdigitizerDetailed::ChargeDepositUnit> VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit) const {
   /** Generate primary ionization along the track segment.
    *  Divide the track into small sub-segments of 5 microns
    *  Straight line approximation for trajectory of the incoming particle inside the active media
@@ -337,7 +333,9 @@ void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit,
   // Maybe add a test that the point is inside the material or go to the closest material and do the same for exit point and then redefine the length
   
   // Calulate the charge deposited per segment
+  std::vector<ChargeDepositUnit> ionizationPoints;
   ionizationPoints.resize(numberOfSegments);
+
   for (int i = 0; i != numberOfSegments; i++) {
     // Divide the segment into equal length sub-segments in mm
     dd4hep::rec::Vector3D point = entryPoint + float((i + 0.5) / numberOfSegments) * direction;
@@ -348,9 +346,11 @@ void VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit,
     ionizationPoints[i] = cdu; // save
     
   }// end loop over segments
+
+  return ionizationPoints;
 } // End primary_ionization
 
-void VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::vector<ChargeDepositUnit>& ionizationPoints, std::vector<SignalPoint>& collectionPoints) const{
+std::vector<VTXdigitizerDetailed::SignalPoint> VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::vector<ChargeDepositUnit>& ionizationPoints) const{
   /** Drift the charge segments to the sensor surface (collection plane)
    *  Include the effect of E-field and B-field
    *  Even for strips, consider a uniform E-field
@@ -361,12 +361,13 @@ void VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::v
   
   debug() << "Enter drift " << endmsg;
 
+  std::vector<SignalPoint> collectionPoints;
   collectionPoints.resize(ionizationPoints.size()); //set size
 
   dd4hep::rec::Vector3D driftDir = DriftDirection(hit); // Get the charge (electrons) drift direction
   if (driftDir.z() == 0.) {
     warning() << "Charge drift in z is 0" << endmsg;
-    return;
+    return collectionPoints;
   }
 
   float tanLorentzAngleX = driftDir.x(); // tan of Lorentz angle
@@ -433,6 +434,8 @@ void VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit, const std::v
     collectionPoints[i] = sp;
 
   } // End loop over ionization points
+
+  return collectionPoints;
   
 } // End drift
 
@@ -487,13 +490,15 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   
 } // End DriftDirection
 
-void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
-			  const std::vector<SignalPoint>& collectionPoints,
-			  hit_map_type& hit_map) const {
+VTXdigitizerDetailed::hit_map_type VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
+			  const std::vector<SignalPoint>& collectionPoints) const {
   
   /** Get the map of recorded charges per pixel for a collection of drifted charges for a given hit
    */
-                                 
+  
+  // Initialize the map
+  hit_map_type hit_map;
+
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
   const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName.value()).segmentation();
   const auto cellDims = segmentation.cellDimensions(cellID);
@@ -543,16 +548,16 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
   debug() << "Sensor bounds in Pixel Indices : X [" << MinPixXSensor << ", " << MaxPixXSensor << "], Y [" << MinPixYSensor << ", " << MaxPixYSensor << "]" << endmsg;
 
   // map to store the pixel integrals in the x and y directions
-  std::map<int, float, std::less<int>> x, y;
+  std::map<int, float> x, y;
 
   // Assign signal per readout channel and store sorted by channel number (in modified local frame)
   // Iterate over collection points on the collection plane
-  for (std::vector<SignalPoint>::const_iterator i = collectionPoints.begin(); i < collectionPoints.end(); i++) {
-    float CloudCenterX = i->x(); // Charge position in x in mm
-    float CloudCenterY = i->y(); // Charge position in y
-    float SigmaX = i->sigma_x(); // Charge spread in x in mm
-    float SigmaY = i->sigma_y(); // Charge spread in y
-    float Charge = i->amplitude(); // Charge amplitude in number of e-
+  for (const auto& point : collectionPoints) {
+    float CloudCenterX = point.x(); // Charge position in x in mm
+    float CloudCenterY = point.y(); // Charge position in y
+    float SigmaX = point.sigma_x(); // Charge spread in x in mm
+    float SigmaY = point.sigma_y(); // Charge spread in y
+    float Charge = point.amplitude(); // Charge amplitude in number of e-
 
     // Find the maximum cloud spread in 2D Plane, assume 3*sigma
     float CloudMinX = CloudCenterX - m_ClusterWidth * SigmaX;
@@ -613,7 +618,8 @@ void VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hi
         }// end loop over y
       } // end loop over x
     } // End loop over charge collection
-      //std::cout << hit_map.size() << ":" << (hit_map.begin()->second).size() << std::endl; // TEST
+
+  return hit_map;
 } // End get_charge_per_pixel
      
 bool VTXdigitizerDetailed::Apply_Threshold(double& ChargeInE) const {
