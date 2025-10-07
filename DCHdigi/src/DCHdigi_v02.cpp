@@ -32,7 +32,7 @@ namespace {
 }
 
 DCHdigi_v02::DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc)
-    : Transformer(
+    : MultiTransformer(
         name, 
         svcLoc,
         {
@@ -40,7 +40,8 @@ DCHdigi_v02::DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc)
             KeyValues("HeaderName", {"EventHeader"})
         },
         {
-            KeyValues("OutputCollection", {"DCHDigi2Collection"})
+            KeyValues("OutputDigihitCollection", {"DCHDigi2Collection"}),
+            KeyValues("OutputLinkCollection", {"DCHDigi2SimLinkCollection"})
         }
     ) {}
 
@@ -87,10 +88,12 @@ StatusCode DCHdigi_v02::initialize() {
     return StatusCode::SUCCESS;
 }
 
-extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
-                                                        const edm4hep::EventHeaderCollection& header) const {
+std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection> 
+DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
+                        const edm4hep::EventHeaderCollection& header) const {
 
     extension::SenseWireHitCollection output;
+    extension::SenseWireHitSimTrackerHitLinkCollection links;
 
     std::mt19937_64 random_engine;
     auto engine_seed = m_uniqueIDSvc->getUniqueID(header, this->name());
@@ -238,7 +241,9 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
             std::unordered_map<podio::ObjectID, ParticleClusterInfo> cluster_info_map;
             cluster_info_map.reserve(hit_group.size());
 
-            // Loop over the hits in the group
+            // Loop over the hits in the group to do:
+            // 1) Sum the energy deposits
+            // 2) Collect information for cluster calculation
             for (const auto& hit_info: hit_group) {
                 const auto& simhit = hit_info.simhit;
 
@@ -251,7 +256,7 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
 
                 // Each particle will create a different number of clusters (different beta*gamma values)
                 // So store the MCparticles in a map for later cluster calculations
-                auto mcparticle = simhit->getParticle();
+                auto mcparticle = simhit->getParticle();                
                 auto object_id = mcparticle.getObjectID();
 
                 // Check if the particle is already in the map
@@ -317,11 +322,19 @@ extension::SenseWireHitCollection DCHdigi_v02::operator()(const edm4hep::SimTrac
                 sense_wire_hit.addToNElectrons(-1);
             }
 
+            /////////////////////
+            // SAVING THE LINK //
+            /////////////////////
+
+            auto link = links.create();
+            link.setFrom(sense_wire_hit);
+            link.setTo(*(first_hit.simhit));
+
         } // end of loop over hit_group_vector
         
     } // end of loop over the cells
 
-    return output;
+    return std::make_tuple(std::move(output), std::move(links));
 
 }
 
