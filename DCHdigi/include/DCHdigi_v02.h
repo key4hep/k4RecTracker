@@ -17,6 +17,7 @@
 
 // edm4hep extension
 #include "extension/SenseWireHitCollection.h"
+#include "extension/SenseWireHitSimTrackerHitLinkCollection.h"
 
 // DD4hep
 #include "DDSegmentation/BitFieldCoder.h"
@@ -28,13 +29,16 @@
 #include "TrackCovariance/TrkUtil.h"
 
 class DCHdigi_v02 final
-    : public k4FWCore::Transformer<extension::SenseWireHitCollection(const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
+    : public k4FWCore::MultiTransformer<std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection>
+                                       (const edm4hep::SimTrackerHitCollection&, 
+                                        const edm4hep::EventHeaderCollection&)> {
 
 public:
     DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc);
 
-    extension::SenseWireHitCollection operator()(const edm4hep::SimTrackerHitCollection& input,
-                                          const edm4hep::EventHeaderCollection& header) const override;
+    std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection> 
+        operator()(const edm4hep::SimTrackerHitCollection& input,
+                   const edm4hep::EventHeaderCollection& header) const override;
 
     StatusCode initialize() override final;
 
