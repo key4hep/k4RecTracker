@@ -1,3 +1,50 @@
+/** @class DCHdigi_v02
+ * Gaudi Algorithm for DCH digitization
+ *
+ * @author Andreas Loeschcke Centeno
+ * @date   2025-10-09
+ *
+ * Gaudi MultiTransformer that digitises SimTrackerHits from a Drift Chamber to edm4hep::SenseWireHits (currently a custom hit type defined in DCHdigi/dataFormatExtension)
+ * 
+ * In comparison to DCHdigi_v01, this version will produce only one DigiHit per cell, combining all SimHits in the same cell (unless there is siginificant time difference between the SimHits, larger than the m_deadtime_ns parameter).
+ * To do this, the hits in the cells are sorted by time, after adding a (simplified, to be updated in the future) drift time and time to reach the readout.
+ * They are further separated in hit 'trains' if the time difference between two hits is larger than the deadtime of a cell.
+ * Each hit train creates one DigiHit, with the time and the position coming from the first hit (sorted by time) in the train.
+ * The energy deposit will be the sum of all hits in the train.
+ * 
+ * The functional also does a dN/dx calculation for the cell, based on the parametrisation in delphes.
+ * This is done by summing all the step lengths in the cell and getting the beta*gamma of the particle and passing it to the delphes parametrisation.
+ * In case of multiple particles in the same cell, the number of clusters is calculated for each particle and summed up.
+ * Since this uses delphes functions directly (via delphes::TrkUtil class member), this functional has a dependency on delphes.
+ * The number of electrons within one cluster is not calculated at the moment, and filled with a dummy value (-1).
+ *
+ * Note: Variables for quantities with units attached to them, have either the units stated explicitly in the name as suffix (e.g. _mm, _ns) or by giving the unit system in which they are in (e.g. dd4hep default units: _ddu)
+ *
+ * Inputs:
+ *     - SimTrackerHitCollection (SimTrackerHits in the DCH)
+ *     - EventHeaderCollection (for consistently seeding the random engine)
+ * 
+ * Properties:
+ *     - @param m_dch_name The name of the drift chamber geometry, needed to get the decoder for the cellID
+ *     - @param m_z_resolution_mm Spatial resolution in the z direction (along the wire) in mm
+ *     - @param m_xy_resolution_mm Spatial resolution in the xy direction (perpendicular to the wire) in mm
+ *     - @param m_deadtime_ns Deadtime of a cell in ns, hit trains in the same cell separated by more than this time will create separate DigiHits
+ *     - @param m_GasSel Gas selection for the delphes dN/dx calculation: 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
+ *     - @param m_uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring reproducibility.
+ *     - @param m_geoSvcName The name of the GeoSvc instance, needed to intialise the DCH_info class for geometry calculations
+ *
+ * Outputs:
+ *     - SenseWireHitCollection: Digitised hits
+ *     - SenseWireHitSimTrackerHitLinkCollection: Links between SenseWireHits and the first SimTrackerHit in the train 
+ * 
+ * LIMITATIONS: (status 09/10/2025)
+ *     - The drift time calculation is preliminary and needs to be updated with a realistic model
+ *     - Potentially also the time to reach the readout could be updated
+ *     - Hits with the isProducedBySecondary flag are not treated accurately for the dNdx calculation
+ *     - The number of electrons in each cluster is not calculated
+ * 
+ */
+
 #pragma once
 
 // Gaudi
