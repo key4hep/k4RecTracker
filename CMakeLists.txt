@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.12 FATAL_ERROR)
 
-set( PackageName k4RecTracker )
+set(PackageName k4RecTracker)
 project(${PackageName} LANGUAGES CXX)
 
 # please keep this layout for version setting, used by the automatic tagging script
@@ -28,21 +28,9 @@ find_package(Gaudi REQUIRED)
 find_package(Delphes REQUIRED)
 find_package(GSL REQUIRED)
 find_package(PandoraSDK REQUIRED)
-#---------------------------------------------------------------
 
 find_package(onnxruntime REQUIRED)
 find_package(Torch REQUIRED)
-
-
-#---------------------------------------------------------------
-
-# Set up C++ Standard
-# ``-DCMAKE_CXX_STANDARD=<standard>`` when invoking CMake
-set(CMAKE_CXX_STANDARD 20 CACHE STRING "")
-
-if(NOT CMAKE_CXX_STANDARD MATCHES "14|17|20")
-  message(FATAL_ERROR "Unsupported C++ standard: ${CMAKE_CXX_STANDARD}")
-endif()
 
 # use, i.e. don't skip the full RPATH for the build tree
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
@@ -63,10 +51,9 @@ if("${isSystemDir}" STREQUAL "-1")
     set(CMAKE_INSTALL_RPATH "${CMAKE_INSTALL_PREFIX}/lib")
 endif("${isSystemDir}" STREQUAL "-1")
 
-#---------------------------------------------------------------
 include(GNUInstallDirs)
-
 include(CTest)
+
 function(set_test_env _testname)
   set_property(TEST ${_testname} APPEND PROPERTY ENVIRONMENT
     "ROOT_INCLUDE_PATH=$<$<TARGET_EXISTS:podio::podio>:$<TARGET_FILE_DIR:podio::podio>/../include>:$<$<TARGET_EXISTS:EDM4HEP::edm4hep>:$<TARGET_FILE_DIR:EDM4HEP::edm4hep>/../include>:$ENV{ROOT_INCLUDE_PATH}"
@@ -84,7 +71,6 @@ function(set_test_env _testname)
     "GAUDI_PLUGIN_PATH=${CMAKE_BINARY_DIR}/.plugins:${CMAKE_BINARY_DIR}/DCHdigi:${CMAKE_INSTALL_PREFIX}/lib64:$ENV{GAUDI_PLUGIN_PATH}"
   )
 endfunction()
-
 
 add_subdirectory(DCHdigi)
 add_subdirectory(ARCdigi)
