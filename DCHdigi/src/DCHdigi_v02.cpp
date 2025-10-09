@@ -100,8 +100,8 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
     random_engine.seed(engine_seed);
 
     // Create the random distributions for smearing the coordinates in dd4hep default units
-    std::normal_distribution<double> gauss_z_ddu{0., m_z_resolution.value() * dd4hep::mm};
-    std::normal_distribution<double> gauss_xy_ddu{0., m_xy_resolution.value() * dd4hep::mm};
+    std::normal_distribution<double> gauss_z_ddu{0., m_z_resolution_mm.value() * dd4hep::mm};
+    std::normal_distribution<double> gauss_xy_ddu{0., m_xy_resolution_mm.value() * dd4hep::mm};
 
     
     debug() << "Processing event " << ++m_event_counter << endmsg;
@@ -207,7 +207,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             return a.arrival_time_ns < b.arrival_time_ns;
         });
 
-        constexpr double DEADTIME_NS = 400.0;
+        
         std::vector<std::vector<HitInfo>> hit_group_vector;
         hit_group_vector.reserve(hit_info_vector.size());
         if (!hit_info_vector.empty()){
@@ -219,7 +219,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
                 const auto& last_hit_in_group = hit_group_vector.back().back();
 
                 // Check if the current hit is within the dead time of the last hit in the group
-                if (current_hit.arrival_time_ns - last_hit_in_group.arrival_time_ns < DEADTIME_NS) {
+                if (current_hit.arrival_time_ns - last_hit_in_group.arrival_time_ns < m_deadtime_ns.value()) {
                     // If yes, add it to the current group
                     hit_group_vector.back().push_back(current_hit);
                 } else {
@@ -309,11 +309,11 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             sense_wire_hit.setEDep(edep_sum);
             sense_wire_hit.setEDepError(0.0);
             sense_wire_hit.setPosition(first_hit.position_mm);
-            sense_wire_hit.setPositionAlongWireError(m_z_resolution);
+            sense_wire_hit.setPositionAlongWireError(m_z_resolution_mm);
             sense_wire_hit.setWireAzimuthalAngle(WireAzimuthalAngle);
             sense_wire_hit.setWireStereoAngle(WireStereoAngle);
             sense_wire_hit.setDistanceToWire(first_hit.distance_to_wire_mm);
-            sense_wire_hit.setDistanceToWireError(m_xy_resolution);
+            sense_wire_hit.setDistanceToWireError(m_xy_resolution_mm);
 
             // Clusters are added to the SenseWireHit as vector member containing the number of electrons in each cluster
             // The length of this vector is the total number of clusters in the cell

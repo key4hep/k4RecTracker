@@ -62,17 +62,24 @@ private:
     dd4hep::rec::DCH_info* m_dch_info{nullptr};
 
     // z resolution in mm
-    Gaudi::Property<double> m_z_resolution{
+    Gaudi::Property<double> m_z_resolution_mm{
         this, 
         "zResolution_mm", 
         1.0,
         "Spatial resolution in the z direction (along the wire) in mm."};
     // xy resolution in mm
-    Gaudi::Property<double> m_xy_resolution{
+    Gaudi::Property<double> m_xy_resolution_mm{
         this, 
         "xyResolution_mm", 
         0.1,
         "Spatial resolution in the xy direction in mm."};
+
+    Gaudi::Property<double> m_deadtime_ns{
+        this,
+        "Deadtime_ns",
+        400.0,
+        "Deadtime of a cell in ns."
+    };
 
     // Gas mixture in the chamber
     Gaudi::Property<int> m_GasSel{

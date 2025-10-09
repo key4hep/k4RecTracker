@@ -22,6 +22,7 @@ DCHdigi = DCHdigi_v02("DCHdigi2",
                       DCH_name = "DCH_v2",
                       zResolution_mm = 1., # in mm 
                       xyResolution_mm = 0.1, # in mm
+                      Deadtime_ns = 400., # in ns
                       GasSel = 0, 
                       OutputLevel = INFO)
 
