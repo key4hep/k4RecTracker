@@ -20,7 +20,7 @@ namespace {
     // individual particle in one cell, acconting for different particle types producing different number of clusters
     struct ParticleClusterInfo {
         double beta_gamma = 0.0;
-        double path_length = 0.0;
+        double path_length_mm = 0.0;
     };
 
     struct HitInfo {
@@ -147,7 +147,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
 /* END OF COPYING WIRE ANGLE CALCULATION FROM DCHdigi_v01 */
 
         // Hits will be grouped by time into batches separated by 400 ns (dead time of a cell)
-        // Need an additional loop over the simhits to create these groups
+        // Need an additional loop over the simhits to create these hit trains
         // Store relevant information for the hits in this cell in a vector
         std::vector<HitInfo> hit_info_vector;
         hit_info_vector.reserve(simhits.size());
@@ -202,53 +202,53 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             hit_info_vector.push_back(hit_info);
         }
 
-        // Sort the hit_info vector by time so that we can determine the groups
+        // Sort the hit_info vector by time so that we can determine the trains
         std::sort(hit_info_vector.begin(), hit_info_vector.end(), [](const HitInfo& a, const HitInfo& b){
             return a.arrival_time_ns < b.arrival_time_ns;
         });
 
         
-        std::vector<std::vector<HitInfo>> hit_group_vector;
-        hit_group_vector.reserve(hit_info_vector.size());
+        std::vector<std::vector<HitInfo>> hit_train_vector;
+        hit_train_vector.reserve(hit_info_vector.size());
         if (!hit_info_vector.empty()){
-            // Start the first group with the very first hit
-            hit_group_vector.push_back({ hit_info_vector.front() });
+            // Start the first train with the very first hit
+            hit_train_vector.push_back({ hit_info_vector.front() });
 
             for (size_t i = 1; i < hit_info_vector.size(); ++i) {
                 const auto& current_hit = hit_info_vector[i];
-                const auto& last_hit_in_group = hit_group_vector.back().back();
+                const auto& last_hit_in_train = hit_train_vector.back().back();
 
-                // Check if the current hit is within the dead time of the last hit in the group
-                if (current_hit.arrival_time_ns - last_hit_in_group.arrival_time_ns < m_deadtime_ns.value()) {
-                    // If yes, add it to the current group
-                    hit_group_vector.back().push_back(current_hit);
+                // Check if the current hit is within the dead time of the last hit in the train
+                if (current_hit.arrival_time_ns - last_hit_in_train.arrival_time_ns < m_deadtime_ns.value()) {
+                    // If yes, add it to the current train
+                    hit_train_vector.back().push_back(current_hit);
                 } else {
-                    // If no, start a new group
-                    hit_group_vector.emplace_back(1, current_hit);
+                    // If no, start a new train
+                    hit_train_vector.emplace_back(1, current_hit);
                 }
             }
         }
 
-        // Now loop over the time groups and create a digihit for each group
-        // Each group is a collection of hits where there is no time gap between hits larger than the dead time
-        for (const auto& hit_group : hit_group_vector) {
-            if (hit_group.empty()) continue; // Shouldn't really occur, but just to be safe
+        // Now loop over the time trains and create a digihit for each train
+        // Each train is a collection of hits where there is no time gap between hits larger than the dead time
+        for (const auto& hit_train : hit_train_vector) {
+            if (hit_train.empty()) continue; // Shouldn't really occur, but just to be safe
 
-            // Sum of all energy deposits in the group
-            double edep_sum = 0.0;
+            // Sum of all energy deposits in the train
+            double edep_sum_GeV = 0.0;
 
             // Map to store the information for cluster calculation
             std::unordered_map<podio::ObjectID, ParticleClusterInfo> cluster_info_map;
-            cluster_info_map.reserve(hit_group.size());
+            cluster_info_map.reserve(hit_train.size());
 
-            // Loop over the hits in the group to do:
+            // Loop over the hits in the train to do:
             // 1) Sum the energy deposits
             // 2) Collect information for cluster calculation
-            for (const auto& hit_info: hit_group) {
+            for (const auto& hit_info: hit_train) {
                 const auto& simhit = hit_info.simhit;
 
                 // Integrate the deposited energy
-                edep_sum += simhit->getEDep();
+                edep_sum_GeV += simhit->getEDep();
 
                 /////////////////////////
                 // CLUSTER INFORMATION //
@@ -263,18 +263,22 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
                 auto [it, new_entry] = cluster_info_map.try_emplace(object_id, ParticleClusterInfo{});
                 auto& cluster_info = it->second;
 
+                // NB: at the moment, hits from secondary particles (isProducedBySecondary() flag) cannot be treated perfectly accurate,
+                // because the beta*gamma of that secondary particle cannot be retrieved
+                // This will need to be fixed in DCHdigi_v03, with the full waveform digitisation
+
                 if (new_entry) {
                     // As simplfication: just take the betagamma value from the first hit we encounter (unlikely to change much over the course of one cell)
                     double mass_GeV = mcparticle.getMass();
                     double momentum_GeV = edm4hep::utils::magnitude(mcparticle.getMomentum());
                     cluster_info.beta_gamma = momentum_GeV / mass_GeV;
-                    cluster_info.path_length = simhit->getPathLength();
+                    cluster_info.path_length_mm = simhit->getPathLength();
                 } else {
                     // If the particle is already present, update the existing entry
-                    cluster_info.path_length += simhit->getPathLength();
+                    cluster_info.path_length_mm += simhit->getPathLength();
                 }
 
-            } // end of loop over hit_info vector in this entry of the hit_group
+            } // end of loop over hit_info vector in this entry of the hit_train
 
             /////////////////////////
             // CLUSTER CALCULATION //
@@ -288,7 +292,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
                 // Get number of clusters per length from delphes
                 // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
                 double nclusters_per_mm = m_delphesTrkUtil.Nclusters(particle_info.beta_gamma, m_GasSel.value()) / 1000.0;
-                double nclusters_mean = nclusters_per_mm * particle_info.path_length; // TODO: Verify that path_length is in mm
+                double nclusters_mean = nclusters_per_mm * particle_info.path_length_mm;
 
                 std::poisson_distribution<int> poisson_dist(nclusters_mean);
                 total_nclusters += poisson_dist(random_engine);
@@ -299,14 +303,14 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             // SAVING THE SENSEWIREHIT //
             /////////////////////////////
             
-            // Use the first hit in the group for the time, position, and distance to wire
-            const auto& first_hit = hit_group.front();
+            // Use the first hit in the train for the time, position, and distance to wire
+            const auto& first_hit = hit_train.front();
             auto sense_wire_hit = output.create();
             sense_wire_hit.setCellID(cellID);
             sense_wire_hit.setType(0);
             sense_wire_hit.setQuality(0);
             sense_wire_hit.setTime(first_hit.arrival_time_ns);
-            sense_wire_hit.setEDep(edep_sum);
+            sense_wire_hit.setEDep(edep_sum_GeV);
             sense_wire_hit.setEDepError(0.0);
             sense_wire_hit.setPosition(first_hit.position_mm);
             sense_wire_hit.setPositionAlongWireError(m_z_resolution_mm);
@@ -330,7 +334,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             link.setFrom(sense_wire_hit);
             link.setTo(*(first_hit.simhit));
 
-        } // end of loop over hit_group_vector
+        } // end of loop over hit_train_vector
         
     } // end of loop over the cells
 
