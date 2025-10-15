@@ -3,6 +3,9 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.12 FATAL_ERROR)
 set( PackageName k4RecTracker )
 project(${PackageName} LANGUAGES CXX)
 
+cmake_policy(SET CMP0144 NEW)
+cmake_policy(SET CMP0167 NEW)
+
 # please keep this layout for version setting, used by the automatic tagging script
 set(${PackageName}_VERSION_MAJOR 0)
 set(${PackageName}_VERSION_MINOR 5)
