@@ -87,7 +87,8 @@ StatusCode VTXdigitizer::execute(const EventContext&) const {
     debug() << "Digitisation of " << m_readoutName << ", cellID: " << cellID << endmsg;
 
     // Get transformation matrix of sensor
-    const auto& sensorTransformMatrix = m_volman.lookupVolumePlacement(cellID).matrix();
+    dd4hep::PlacedVolume pvol = m_volman.lookupVolumePlacement(cellID);
+    const auto& sensorTransformMatrix = pvol.matrix();
 
     // Retrieve global position in mm and apply unit transformation (translation matrix is stored in cm)
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
