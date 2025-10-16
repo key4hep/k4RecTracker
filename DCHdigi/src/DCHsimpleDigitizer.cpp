@@ -66,7 +66,7 @@ StatusCode DCHsimpleDigitizer::execute(const EventContext&) const {
              m_decoder->get(cellID, "layer"), m_decoder->get(cellID, "phi"));
     dd4hep::DetElement wireDetElement = cellDetElement.child(wireDetElementName);
     // get the transformation matrix used to place the wire
-    const auto& wireTransformMatrix = wireDetElement.nominal().worldTransformation();
+    const auto wireTransformMatrix = wireDetElement.nominal().worldTransformation();
     // Retrieve global position in mm and apply unit transformation (translation matrix is tored in cm)
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,
