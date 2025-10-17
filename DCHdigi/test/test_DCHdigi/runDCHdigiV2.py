@@ -23,7 +23,7 @@ DCHdigi = DCHdigi_v02("DCHdigi2",
                       zResolution_mm = 1., # in mm 
                       xyResolution_mm = 0.1, # in mm
                       Deadtime_ns = 400., # in ns
-                      GasSel = 0, 
+                      GasType = 0, 
                       OutputLevel = INFO)
 
 mgr = ApplicationMgr(

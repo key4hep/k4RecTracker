@@ -26,10 +26,10 @@
  * 
  * Properties:
  *     - @param m_dch_name The name of the drift chamber geometry, needed to get the decoder for the cellID
- *     - @param m_z_resolution_mm Spatial resolution in the z direction (along the wire) in mm
- *     - @param m_xy_resolution_mm Spatial resolution in the xy direction (perpendicular to the wire) in mm
+ *     - @param m_z_resolution_mm Spatial resolution in the direction along the wire, in mm
+ *     - @param m_xy_resolution_mm Spatial resolution in the direction perpendicular to the wire, in mm
  *     - @param m_deadtime_ns Deadtime of a cell in ns, hit trains in the same cell separated by more than this time will create separate DigiHits
- *     - @param m_GasSel Gas selection for the delphes dN/dx calculation: 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
+ *     - @param m_GasType Gas type for the delphes dN/dx calculation: 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
  *     - @param m_uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring reproducibility.
  *     - @param m_geoSvcName The name of the GeoSvc instance, needed to intialise the DCH_info class for geometry calculations
  *
@@ -113,13 +113,13 @@ private:
         this, 
         "zResolution_mm", 
         1.0,
-        "Spatial resolution in the z direction (along the wire) in mm."};
+        "Spatial resolution in the direction along the wire, in mm."};
     // xy resolution in mm
     Gaudi::Property<double> m_xy_resolution_mm{
         this, 
         "xyResolution_mm", 
         0.1,
-        "Spatial resolution in the xy direction in mm."};
+        "Spatial resolution in the direction perpendicular to the wire, in mm."};
 
     Gaudi::Property<double> m_deadtime_ns{
         this,
@@ -129,11 +129,11 @@ private:
     };
 
     // Gas mixture in the chamber
-    Gaudi::Property<int> m_GasSel{
+    Gaudi::Property<int> m_GasType{
         this,
-        "GasSel",
+        "GasType",
         {0},
-        "Gas selection: 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar."};
+        "Gas type: 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar."};
 
 
     /// Convert EDM4hep Vector3d to TVector3
