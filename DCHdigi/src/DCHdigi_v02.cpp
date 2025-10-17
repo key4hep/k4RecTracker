@@ -16,8 +16,8 @@
 
 
 namespace {
-    // A struct for saving the information required for calculating the number of clusters for each 
-    // individual particle in one cell, acconting for different particle types producing different number of clusters
+    // A struct for saving the information required for calculating the number of clusters for each
+    // individual particle in one cell, accounting for different particle types producing different number of clusters
     struct ParticleClusterInfo {
         double beta_gamma = 0.0;
         double path_length_mm = 0.0;
@@ -132,7 +132,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
         //   RotationZ(WireAzimuthalAngle) * RotationX(stereoangle)
         // One point of the wire is for example the following:
         //   RotationZ(WireAzimuthalAngle) * Position(cell_rave_z0, 0 , 0)
-        // variables aredefined below
+        // variables are defined below
         auto WireAzimuthalAngle = this->m_dch_info->Get_cell_phi_angle(layer, nphi);
         float WireStereoAngle = 0;
         {
@@ -166,9 +166,9 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             auto hit_projection_on_the_wire_ddu = simhit_position_ddu + hit_to_wire_vector_ddu;
             double distance_to_wire_mm = hit_to_wire_vector_ddu.Mag() / dd4hep::mm; // Explicitly cast to mm, no matter what the default unit is
 
-            ////////////////////////////////
-            // POSITION AND TIME SMEARING //
-            ////////////////////////////////
+            ////////////////////////////////////////////
+            // POSITION SMEARING AND TIME COMPUTATION //
+            ////////////////////////////////////////////
             // xy smearing
             double smearing_xy_mm = gauss_xy_ddu(random_engine) / dd4hep::mm; 
             double digihit_distance_to_wire_mm = std::max(0.0, distance_to_wire_mm + smearing_xy_mm);
@@ -289,7 +289,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             for (const auto& [object_id, particle_info] : cluster_info_map) {
                 // Get number of clusters per length from delphes
                 // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
-                double nclusters_per_mm = m_delphesTrkUtil.Nclusters(particle_info.beta_gamma, m_GasSel.value()) / 1000.0;
+                double nclusters_per_mm = m_delphesTrkUtil.Nclusters(particle_info.beta_gamma, m_GasType.value()) / 1000.0;
                 double nclusters_mean = nclusters_per_mm * particle_info.path_length_mm;
 
                 std::poisson_distribution<int> poisson_dist(nclusters_mean);
