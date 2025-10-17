@@ -11,7 +11,7 @@
 
 // STL
 #include <random>
-// #include <bitset>
+#include <ranges>
 
 
 
@@ -203,9 +203,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
         }
 
         // Sort the hit_info vector by time so that we can determine the trains
-        std::sort(hit_info_vector.begin(), hit_info_vector.end(), [](const HitInfo& a, const HitInfo& b){
-            return a.arrival_time_ns < b.arrival_time_ns;
-        });
+        std::ranges::sort(hit_info_vector, {}, &HitInfo::arrival_time_ns);
 
         
         std::vector<std::vector<HitInfo>> hit_train_vector;
