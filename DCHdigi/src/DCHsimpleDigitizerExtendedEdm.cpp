@@ -81,7 +81,7 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute(const EventContext&) const {
              m_decoder->get(cellID, "layer"), m_decoder->get(cellID, "phi"));
     dd4hep::DetElement wireDetElement = cellDetElement.child(wireDetElementName);
     // get the transformation matrix used to place the wire (DD4hep works with cm)
-    const auto& wireTransformMatrix = wireDetElement.nominal().worldTransformation();
+    const auto wireTransformMatrix = wireDetElement.nominal().worldTransformation();
     // Retrieve global position in mm and transform it to cm because the DD4hep translation matrix is stored in cm
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,

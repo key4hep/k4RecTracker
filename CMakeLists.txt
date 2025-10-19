@@ -1,6 +1,6 @@
 CMAKE_MINIMUM_REQUIRED(VERSION 3.12 FATAL_ERROR)
 
-set( PackageName k4RecTracker )
+set(PackageName k4RecTracker)
 project(${PackageName} LANGUAGES CXX)
 
 cmake_policy(SET CMP0144 NEW)
@@ -31,16 +31,24 @@ find_package(Gaudi REQUIRED)
 find_package(Delphes REQUIRED)
 find_package(GSL REQUIRED)
 find_package(PandoraSDK REQUIRED)
-#---------------------------------------------------------------
+
+find_package(onnxruntime REQUIRED)
+find_package(Torch REQUIRED)
 
 include(cmake/Key4hepConfig.cmake)
-include(GNUInstallDirs)
 
+include(GNUInstallDirs)
 include(CTest)
+
 function(set_test_env _testname)
-	set_property(TEST ${test_name} APPEND PROPERTY ENVIRONMENT "ROOT_INCLUDE_PATH=$<$<TARGET_EXISTS:podio::podio>:$<TARGET_FILE_DIR:podio::podio>/../include>:$<$<TARGET_EXISTS:EDM4HEP::edm4hep>:$<TARGET_FILE_DIR:EDM4HEP::edm4hep>/../include>:$ENV{ROOT_INCLUDE_PATH}")
-	set_property(TEST ${test_name} APPEND PROPERTY ENVIRONMENT "LD_LIBRARY_PATH=${PROJECT_BINARY_DIR}:${PROJECT_BINARY_DIR}/${CMAKE_PROJECT_NAME}:${PROJECT_BINARY_DIR}/genConfDir/${PackageName}:$<$<TARGET_EXISTS:ROOT::Core>:$<TARGET_FILE_DIR:ROOT::Core>>:$<$<TARGET_EXISTS:EDM4HEP::edm4hep>:$<TARGET_FILE_DIR:EDM4HEP::edm4hep>>:$<$<TARGET_EXISTS:podio::podio>:$<TARGET_FILE_DIR:podio::podio>>:$ENV{LD_LIBRARY_PATH}")
-	set_property(TEST ${test_name} APPEND PROPERTY ENVIRONMENT "PYTHONPATH=${CMAKE_BINARY_DIR}:${PROJECT_BINARY_DIR}/genConfDir:$ENV{PYTHONPATH}")
+
+  set_property(TEST ${_testname} APPEND PROPERTY ENVIRONMENT
+    ROOT_INCLUDE_PATH=$<$<TARGET_EXISTS:podio::podio>:$<TARGET_FILE_DIR:podio::podio>/../include>:$<$<TARGET_EXISTS:EDM4HEP::edm4hep>:$<TARGET_FILE_DIR:EDM4HEP::edm4hep>/../include>:$ENV{ROOT_INCLUDE_PATH}
+    LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/.plugins:${CMAKE_BINARY_DIR}/DCHdigi:${CMAKE_INSTALL_PREFIX}/lib64:${PROJECT_BINARY_DIR}:${PROJECT_BINARY_DIR}/${CMAKE_PROJECT_NAME}:${PROJECT_BINARY_DIR}/genConfDir/${PackageName}:${CMAKE_BINARY_DIR}/DCHdigi/genConfDir/DCHdigi:$<$<TARGET_EXISTS:ROOT::Core>:$<TARGET_FILE_DIR:ROOT::Core>>:$<$<TARGET_EXISTS:EDM4HEP::edm4hep>:$<TARGET_FILE_DIR:EDM4HEP::edm4hep>>:$<$<TARGET_EXISTS:podio::podio>:$<TARGET_FILE_DIR:podio::podio>>:$ENV{LD_LIBRARY_PATH}
+    PYTHONPATH=${CMAKE_BINARY_DIR}:${PROJECT_BINARY_DIR}/genConfDir:${CMAKE_BINARY_DIR}/DCHdigi/genConfDir:$ENV{PYTHONPATH}
+    GAUDI_PLUGIN_PATH=${CMAKE_BINARY_DIR}/.plugins:${CMAKE_BINARY_DIR}/DCHdigi:${CMAKE_INSTALL_PREFIX}/lib64:$ENV{GAUDI_PLUGIN_PATH}
+  )
+  
 endfunction()
 
 add_subdirectory(DCHdigi)
