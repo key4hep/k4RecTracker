@@ -232,6 +232,12 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
         for (const auto& hit_train : hit_train_vector) {
             if (hit_train.empty()) continue; // Shouldn't really occur, but just to be safe
 
+            // If the DigiHit time would fall outside the readout window, do not create a DigiHit and continue to the next train
+            if (hit_train.front().arrival_time_ns < m_ReadoutWindowStartTime_ns.value() ||
+                hit_train.front().arrival_time_ns > m_ReadoutWindowEndTime_ns.value()) {
+                continue;
+            }
+
             // Sum of all energy deposits in the train
             double edep_sum_GeV = 0.0;
 

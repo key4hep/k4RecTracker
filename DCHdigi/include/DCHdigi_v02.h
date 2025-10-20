@@ -135,6 +135,22 @@ private:
         {0},
         "Gas type: 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar."};
 
+    // Readout window start time in ns
+    Gaudi::Property<double> m_ReadoutWindowStartTime_ns{
+        this,
+        "ReadoutWindowStartTime_ns",
+        0.0,
+        "Together with ReadoutWindowEndTime_ns, defines the readout window. Any DigiHits with arrival time before ReadoutWindowStartTime_ns are discarded."
+    };
+
+    // Readout window end time in ns
+    Gaudi::Property<double> m_ReadoutWindowEndTime_ns{
+        this,
+        "ReadoutWindowEndTime_ns",
+        450.0,
+        "Together with ReadoutWindowStartTime_ns, defines the readout window. Any DigiHits with arrival time after ReadoutWindowEndTime_ns are discarded."
+    };
+
 
     /// Convert EDM4hep Vector3d to TVector3
     TVector3 Convert_EDM4hepVector_to_TVector3(const edm4hep::Vector3d& v, double scale) const {
