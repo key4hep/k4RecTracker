@@ -1,3 +1,31 @@
+# v00.06.00
+
+* 2025-10-19 Andrea De Vita ([PR#65](https://github.com/key4hep/k4RecTracker/pull/65))
+  - A new functional is available in `Tracking/components/GGTF_tracking.cpp`. It supports track finding using CLD, IDEA, and ALLEGRO detectors. The function returns `extension::Tracks` to ensure compatibility with IDEA and ALLEGRO, whose wire hits are not included in `edm4hep`. To run the track finder, you must specify the path to the trained model via the `SteeringFile`. A simple pre-trained model using IDEA v3 o1 is provided in the `test` folder as an example.
+  - The utility functions previously used exclusively in Tracking/components/TracksFromGenParticles.cpp have been moved to Tracking/include/utils.hpp, making them accessible to other functional components as well.
+  - `test_TracksFromGenParticles` now includes both the data production and the functional test. These two steps have been integrated into a single test, simplifying the workflow and reducing redundancy.
+
+* 2025-10-15 sss ([PR#70](https://github.com/key4hep/k4RecTracker/pull/70))
+  - Fix cmake developer warnings.
+
+* 2025-10-15 sss ([PR#69](https://github.com/key4hep/k4RecTracker/pull/69))
+  - Fix an unused variable warning seen with clang.
+
+* 2025-07-28 jmcarcell ([PR#66](https://github.com/key4hep/k4RecTracker/pull/66))
+  - Use `REQUIRED` with `find_package` to fail immediately, also avoid duplicated `find_package` calls
+  - Link to `k4Interface` and `DDRec`, which were used but not linked to. It was working fine when using the stack but locally I was getting errors
+
+* 2025-07-07 Andreas Loeschcke Centeno ([PR#61](https://github.com/key4hep/k4RecTracker/pull/61))
+  - New funcitonal _TrackdNdxDelphesBased_ to attach the dN/dx information to tracks, using the delphes approach:
+    - Uses track length and particle βγ to calculate number of clusters for track (calling delphes functions directly)
+
+* 2025-06-20 Andrea De Vita ([PR#63](https://github.com/key4hep/k4RecTracker/pull/63))
+  - [DCHdigi_v01] PositionAlongWireError and DistanceToWireError are now populated with the corresponding resolution values, rather than the shift applied to the simulated hit.
+
+* 2025-05-30 jmcarcell ([PR#60](https://github.com/key4hep/k4RecTracker/pull/60))
+  - Move DataHandle and MetaDataHandle to the k4FWCore namespace, done in k4FWCore in https://github.com/key4hep/k4FWCore/pull/317
+  - Bump the required version of k4FWCore
+
 # v00.05.00
 
 * 2025-05-27 jmcarcell ([PR#52](https://github.com/key4hep/k4RecTracker/pull/52))
