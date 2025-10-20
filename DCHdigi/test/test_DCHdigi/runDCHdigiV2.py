@@ -2,7 +2,7 @@
 # gaudi steering file that runs DCHdigi
 #
 # to execute:
-# k4run runDCHdigi.py
+# k4run runDCHdigiV2.py
 
 from Gaudi.Configuration import INFO,DEBUG
 from Configurables import EventDataSvc, UniqueIDGenSvc
@@ -24,6 +24,8 @@ DCHdigi = DCHdigi_v02("DCHdigi2",
                       xyResolution_mm = 0.1, # in mm
                       Deadtime_ns = 400., # in ns
                       GasType = 0, 
+                      ReadoutWindowStartTime_ns = 0., # in ns
+                      ReadoutWindowDuration_ns = 450., # in ns
                       OutputLevel = INFO)
 
 mgr = ApplicationMgr(

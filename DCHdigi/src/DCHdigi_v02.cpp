@@ -234,7 +234,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
 
             // If the DigiHit time would fall outside the readout window, do not create a DigiHit and continue to the next train
             if (hit_train.front().arrival_time_ns < m_ReadoutWindowStartTime_ns.value() ||
-                hit_train.front().arrival_time_ns > m_ReadoutWindowEndTime_ns.value()) {
+                hit_train.front().arrival_time_ns > m_ReadoutWindowStartTime_ns.value() + m_ReadoutWindowDuration_ns.value()) {
                 continue;
             }
 
