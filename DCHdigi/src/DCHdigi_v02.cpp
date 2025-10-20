@@ -160,7 +160,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             // Get hit position to calculate distance to wire
             // Need to convert to TVector3 to use the DCH_info methods
             // Use dd4hep:mm as scale to convert into the dd4hep default units (_ddu)
-            auto simhit_position_ddu = this->Convert_EDM4hepVector_to_TVector3(simhit.getPosition(), dd4hep::mm);
+            auto simhit_position_ddu = this->toTVector3(simhit.getPosition())*dd4hep::mm;
 
             auto hit_to_wire_vector_ddu = m_dch_info->Calculate_hitpos_to_wire_vector(layer, nphi, simhit_position_ddu);
             auto hit_projection_on_the_wire_ddu = simhit_position_ddu + hit_to_wire_vector_ddu;
@@ -186,7 +186,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             );
 
             // Convert to edm4hep vector and cast to mm
-            edm4hep::Vector3d digihit_position_mm = this->Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire_ddu, 1.0 / dd4hep::mm);
+            edm4hep::Vector3d digihit_position_mm = this->toEDM4hepVector(hit_projection_on_the_wire_ddu)*(1/dd4hep::mm);
 
             double distance_to_readout_mm = (this->m_dch_info->Lhalf/dd4hep::mm - std::abs(digihit_position_mm.z))/std::cos(WireStereoAngle);
             double travel_time_ns = this->get_signal_travel_time(distance_to_readout_mm);
