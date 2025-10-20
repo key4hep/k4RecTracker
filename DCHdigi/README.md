@@ -17,6 +17,7 @@
 * New digitized hit class is used as an EDM4hep data extension, to be integrated into EDM4hep
 * Smearing of the digitized hit position along the wire and radially is done according to the input parameter values (`zResolution_mm` and `xyResolution_mm`, respectively). The digitized hit position is the projection of the simulated hit position onto the sense wire (at the center of the cell)
 * Time of DigiHit consists of SimHit creation time +  drift time to wire + signal travelling time along the wire to the readout
+* The readout window can be defined via two `Gaudi::Property` members (start time and duration) to filter any DigiHits with associated time outside this window
 * dN/dx information is added via Delphes parametrisation. The cluster size is not calculated at the moment, only the total number of clusters for the DigiHit
 * It requires that the cellID contain the layer and number of cell within the layer (nphi). It does not matter if the segmentation comes from geometrical segmentation by using twisted tubes and hyperboloids (and the cellID is created out of volume IDs), or the segmentation is virtual DD4hep segmentation
 * Random number generator uses the seeds calculated on an event basis by the UID service, from the podio header information (run/event number)

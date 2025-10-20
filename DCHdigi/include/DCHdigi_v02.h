@@ -30,6 +30,8 @@
  *     - @param m_xy_resolution_mm Spatial resolution in the direction perpendicular to the wire, in mm
  *     - @param m_deadtime_ns Deadtime of a cell in ns, hit trains in the same cell separated by more than this time will create separate DigiHits
  *     - @param m_GasType Gas type for the delphes dN/dx calculation: 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
+ *     - @param m_ReadoutWindowStartTime_ns Start time of the readout window in ns
+ *     - @param m_ReadoutWindowDuration_ns Duration of the readout window in ns
  *     - @param m_uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring reproducibility.
  *     - @param m_geoSvcName The name of the GeoSvc instance, needed to intialise the DCH_info class for geometry calculations
  *
@@ -140,15 +142,15 @@ private:
         this,
         "ReadoutWindowStartTime_ns",
         0.0,
-        "Together with ReadoutWindowEndTime_ns, defines the readout window. Any DigiHits with arrival time before ReadoutWindowStartTime_ns are discarded."
+        "Together with ReadoutWindowDuration_ns, defines the readout window. Any DigiHits with arrival time before ReadoutWindowStartTime_ns are discarded."
     };
 
-    // Readout window end time in ns
-    Gaudi::Property<double> m_ReadoutWindowEndTime_ns{
+    // Readout window duration in ns
+    Gaudi::Property<double> m_ReadoutWindowDuration_ns{
         this,
-        "ReadoutWindowEndTime_ns",
+        "ReadoutWindowDuration_ns",
         450.0,
-        "Together with ReadoutWindowStartTime_ns, defines the readout window. Any DigiHits with arrival time after ReadoutWindowEndTime_ns are discarded."
+        "Together with ReadoutWindowStartTime_ns, defines the readout window. Any DigiHits with arrival time after ReadoutWindowStartTime_ns + ReadoutWindowDuration_ns are discarded."
     };
 
 
