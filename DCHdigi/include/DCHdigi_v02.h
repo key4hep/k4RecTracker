@@ -155,12 +155,12 @@ private:
 
 
     /// Convert EDM4hep Vector3d to TVector3
-    TVector3 Convert_EDM4hepVector_to_TVector3(const edm4hep::Vector3d& v, double scale) const {
-        return {v[0] * scale, v[1] * scale, v[2] * scale};
+    TVector3 toTVector3(const edm4hep::Vector3d& v) const {
+        return {v[0], v[1], v[2]};
     };
     /// Convert TVector3 to EDM4hep Vector3d
-    edm4hep::Vector3d Convert_TVector3_to_EDM4hepVector(const TVector3& v, double scale) const {
-        return {v.x() * scale, v.y() * scale, v.z() * scale};
+    edm4hep::Vector3d toEDM4hepVector(const TVector3& v) const {
+        return {v.x(), v.y(), v.z()};
     };
 
     // /// Function to calculate the drift time from the distance to the wire
