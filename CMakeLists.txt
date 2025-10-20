@@ -8,7 +8,7 @@ cmake_policy(SET CMP0167 NEW)
 
 # please keep this layout for version setting, used by the automatic tagging script
 set(${PackageName}_VERSION_MAJOR 0)
-set(${PackageName}_VERSION_MINOR 5)
+set(${PackageName}_VERSION_MINOR 6)
 set(${PackageName}_VERSION_PATCH 0)
 
 set(${PackageName}_VERSION "${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}.${PACKAGE_VERSION_PATCH}")
