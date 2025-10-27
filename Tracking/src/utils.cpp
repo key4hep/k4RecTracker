@@ -10,22 +10,30 @@ dd4hep::rec::LayeredCalorimeterData * getExtension(unsigned int includeFlag, uns
 
     const std::vector< dd4hep::DetElement>& theDetectors = dd4hep::DetectorSelector(detector).detectors(  includeFlag, excludeFlag );
 
+    if (theDetectors.empty()) {
+      // this is a standalone function, so we cannot use any message service
+      std::cout << "k4RecTracker/Tracking/src/utils.cpp: No detectors found for the given selection:" << std::endl;
+      std::cout << "  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag ) << std::endl;
+
+      return nullptr;
+    }
+
     int debug_lvl = 0; 
     if (debug_lvl > 0) {
          std::cout << " getExtension :  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
             << "  found : " << theDetectors.size() << "  - first det: " << theDetectors.at(0).name()
             << std::endl;
-        
     }
        
-    if( theDetectors.size()  != 1 ){
+    if (theDetectors.size() != 1) {
 
       std::stringstream es ;
-      es << " getExtension: selection is not unique (or empty)  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
-        << " --- found detectors : " ;
-      for( unsigned i=0, N= theDetectors.size(); i<N ; ++i ){
+      es << " getExtension: selection is not unique - includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
+         << " --- found detectors : " ;
+      for( unsigned i=0, N= theDetectors.size(); i<N ; ++i ) {
         es << theDetectors.at(i).name() << ", " ;
       }
+
       throw std::runtime_error( es.str() ) ;
     }
 

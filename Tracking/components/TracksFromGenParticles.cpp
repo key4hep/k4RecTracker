@@ -78,9 +78,12 @@ struct TracksFromGenParticles final
     if (m_extrapolateToECal) {
       bool retrieved = false;
 
-      try {
-        const dd4hep::rec::LayeredCalorimeterData * caloExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL | dd4hep::DetType::ENDCAP),
-                                                                                  ( dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD ) );
+      dd4hep::rec::LayeredCalorimeterData* caloExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL | dd4hep::DetType::ENDCAP),
+                                                                          ( dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD ) );
+
+      if (caloExtension) { // special case handling for DRC o1
+        debug() << "DRC extension found, using it..." << endmsg;
+
         m_eCalBarrelInnerR = caloExtension->extent[0] / dd4hep::mm;
         m_eCalBarrelMaxZ = caloExtension->extent[2] / dd4hep::mm;
         debug() << "DRC barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
@@ -95,42 +98,46 @@ struct TracksFromGenParticles final
         debug() << "DRC endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
         retrieved = true;
       }
-      catch(...) {
-        debug() << "DRC extension not found, looking for ECAL..." << endmsg;
-        m_eCalBarrelInnerR = 0.; // set to 0, will use it later to avoid projecting to the barrel
-        m_eCalEndCapInnerR = 0.;
-      };
 
-      if (!retrieved) {
-        try {
-          const dd4hep::rec::LayeredCalorimeterData * eCalBarrelExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
-                                                                                          ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
-          m_eCalBarrelInnerR = eCalBarrelExtension->extent[0] / dd4hep::mm;
-          m_eCalBarrelMaxZ = eCalBarrelExtension->extent[3] / dd4hep::mm;
+      if (!retrieved) { // typical cases
+        // set "special" parameters to 0, will use it later to avoid projecting to the empty detector
+        m_eCalBarrelInnerR = 0.;
+        m_eCalEndCapInnerR = 0.;
+
+        // try barrel first
+        caloExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
+                                      ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
+
+        if (caloExtension) {
+          m_eCalBarrelInnerR = caloExtension->extent[0] / dd4hep::mm;
+          m_eCalBarrelMaxZ = caloExtension->extent[3] / dd4hep::mm;
           debug() << "ECAL barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
           debug() << "ECAL barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
         }
-        catch(...) {
-          warning() << "ECAL barrel extension not found" << endmsg;
-          m_eCalBarrelInnerR = 0.; // set to 0, will use it later to avoid projecting to the barrel
-        };
 
-        try {
-          const dd4hep::rec::LayeredCalorimeterData * eCalEndCapExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
-                                                                                          ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
-          m_eCalEndCapInnerR = eCalEndCapExtension->extent[0] / dd4hep::mm;
-          m_eCalEndCapOuterR = eCalEndCapExtension->extent[1] / dd4hep::mm;
-          m_eCalEndCapInnerZ = eCalEndCapExtension->extent[2] / dd4hep::mm;
-          m_eCalEndCapOuterZ = eCalEndCapExtension->extent[3] / dd4hep::mm;
+        // then try endcap
+        caloExtension = getExtension( ( dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
+                                      ( dd4hep::DetType::AUXILIARY  |  dd4hep::DetType::FORWARD ) );
+
+        if (caloExtension) {
+          m_eCalEndCapInnerR = caloExtension->extent[0] / dd4hep::mm;
+          m_eCalEndCapOuterR = caloExtension->extent[1] / dd4hep::mm;
+          m_eCalEndCapInnerZ = caloExtension->extent[2] / dd4hep::mm;
+          m_eCalEndCapOuterZ = caloExtension->extent[3] / dd4hep::mm;
           debug() << "ECAL endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
           debug() << "ECAL endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
           debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
           debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
         }
-        catch(...) {
-          warning() << "ECAL endcap extension not found" << endmsg;
-          m_eCalEndCapInnerR = 0.; // set to 0, will use it later to avoid projecting to the endcap
-        };
+
+        if (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.) {
+          retrieved = true;
+        }
+      }
+
+      if (!retrieved) {
+        error() << "Could not retrieve calorimeter dimensions from detector description, cannot perform extrapolation to calorimeter." << endmsg;
+        return StatusCode::FAILURE;
       }
     }
 
