@@ -10,7 +10,6 @@
 #include "DD4hep/Detector.h"
 
 // STL
-#include <random>
 #include <ranges>
 
 
@@ -95,14 +94,9 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
     extension::SenseWireHitCollection output;
     extension::SenseWireHitSimTrackerHitLinkCollection links;
 
-    std::mt19937_64 random_engine;
+    
     auto engine_seed = m_uniqueIDSvc->getUniqueID(header, this->name());
-    random_engine.seed(engine_seed);
-
-    // Create the random distributions for smearing the coordinates in dd4hep default units
-    std::normal_distribution<double> gauss_z_ddu{0., m_z_resolution_mm.value() * dd4hep::mm};
-    std::normal_distribution<double> gauss_xy_ddu{0., m_xy_resolution_mm.value() * dd4hep::mm};
-
+    TRandom3 random_engine(engine_seed);
     
     debug() << "Processing event " << ++m_event_counter << endmsg;
     debug() << "Processing SimTrackerHitCollection with " << input.size() << " hits." << endmsg;
@@ -170,12 +164,12 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             // POSITION SMEARING AND TIME COMPUTATION //
             ////////////////////////////////////////////
             // xy smearing
-            double smearing_xy_mm = gauss_xy_ddu(random_engine) / dd4hep::mm; 
+            double smearing_xy_mm = random_engine.Gaus(0.0, m_xy_resolution_mm.value()); 
             double digihit_distance_to_wire_mm = std::max(0.0, distance_to_wire_mm + smearing_xy_mm);
             double drift_time_ns = this->get_drift_time(digihit_distance_to_wire_mm);
 
             // z smearing
-            double smearing_z_ddu = gauss_z_ddu(random_engine);
+            double smearing_z_ddu = random_engine.Gaus(0.0, m_z_resolution_mm.value()*dd4hep::mm);
             TVector3 wire_direction_ez_ddu = (m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
             hit_projection_on_the_wire_ddu += smearing_z_ddu * wire_direction_ez_ddu; // Need to multiply smearing_z_ddu with dd4hep::mm to cast into default units
 
@@ -275,7 +269,12 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
                     // As simplfication: just take the betagamma value from the first hit we encounter (unlikely to change much over the course of one cell)
                     double mass_GeV = mcparticle.getMass();
                     double momentum_GeV = edm4hep::utils::magnitude(mcparticle.getMomentum());
-                    cluster_info.beta_gamma = momentum_GeV / mass_GeV;
+                    if (mass_GeV < 1e-9*dd4hep::GeV) {
+                        // Must be a hit from a secondary associated to a photon (likely secondary is an electron)
+                        // Use electron mass as approximation
+                        mass_GeV = 0.000511;
+                    }
+                    cluster_info.beta_gamma = std::clamp(momentum_GeV / mass_GeV, 0.5, 20000.0); // Clamp to parametrisation range in delphes
                     cluster_info.path_length_mm = simhit->getPathLength();
                 } else {
                     // If the particle is already present, update the existing entry
@@ -298,9 +297,9 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
                 double nclusters_per_mm = m_delphesTrkUtil.Nclusters(particle_info.beta_gamma, m_GasType.value()) / 1000.0;
                 double nclusters_mean = nclusters_per_mm * particle_info.path_length_mm;
 
-                std::poisson_distribution<int> poisson_dist(nclusters_mean);
-                total_nclusters += poisson_dist(random_engine);
+                total_nclusters += sample_zero_truncated_poisson(nclusters_mean, random_engine);
             }
+
 
 
             /////////////////////////////

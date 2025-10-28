@@ -77,6 +77,9 @@
 // delphes
 #include "TrackCovariance/TrkUtil.h"
 
+// ROOT
+#include "TRandom3.h"
+
 class DCHdigi_v02 final
     : public k4FWCore::MultiTransformer<std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection>
                                        (const edm4hep::SimTrackerHitCollection&, 
@@ -90,6 +93,14 @@ public:
                    const edm4hep::EventHeaderCollection& header) const override;
 
     StatusCode initialize() override final;
+
+    // Fast zero-truncated Poisson sampler
+    inline int sample_zero_truncated_poisson(double lambda, TRandom3& gen) const {
+        double u = gen.Uniform(std::exp(-lambda), 1.0);
+        double t = -std::log(u);
+        int k = gen.Poisson(lambda - t);
+        return 1 + k;
+    }
 
 private:
     SmartIF<IUniqueIDGenSvc> m_uniqueIDSvc{nullptr};
