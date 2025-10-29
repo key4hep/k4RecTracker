@@ -97,7 +97,7 @@ StatusCode DCHdigi_v02::initialize() {
         return StatusCode::FAILURE;
     }
 
-    m_event_counter = 0;
+    m_event_counter.reset();
     return StatusCode::SUCCESS;
 }
 
@@ -112,7 +112,8 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
     auto engine_seed = m_uniqueIDSvc->getUniqueID(header, this->name());
     TRandom3 random_engine(engine_seed);
     
-    debug() << "Processing event " << ++m_event_counter << endmsg;
+    debug() << "Processing event " << m_event_counter.value() << endmsg;
+    m_event_counter+=1;
     debug() << "Processing SimTrackerHitCollection with " << input.size() << " hits." << endmsg;
 
     std::unordered_map<uint64_t, std::vector<edm4hep::SimTrackerHit>> cell_map;

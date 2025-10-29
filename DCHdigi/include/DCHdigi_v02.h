@@ -52,6 +52,7 @@
 // Gaudi
 #include <GaudiKernel/SmartIF.h>
 #include <GaudiKernel/ISvcLocator.h>
+#include "Gaudi/Accumulators.h"
 
 // k4FWCore
 #include "k4FWCore/Transformer.h"
@@ -109,7 +110,7 @@ private:
     SmartIF<IGeoSvc> m_geoSvc{nullptr};
     Gaudi::Property<std::string> m_geoSvcName{this, "GeoSvcName", "GeoSvc", "The name of the GeoSvc instance"};
 
-    mutable unsigned int m_event_counter;
+    mutable Gaudi::Accumulators::Counter<Gaudi::Accumulators::atomicity::full, unsigned int> m_event_counter;
 
     TrkUtil m_delphesTrkUtil;
 
