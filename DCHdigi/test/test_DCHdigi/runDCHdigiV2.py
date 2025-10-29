@@ -23,9 +23,11 @@ DCHdigi = DCHdigi_v02("DCHdigi2",
                       zResolution_mm = 1., # in mm 
                       xyResolution_mm = 0.1, # in mm
                       Deadtime_ns = 400., # in ns
-                      GasType = 0, 
-                      ReadoutWindowStartTime_ns = 0., # in ns
+                      GasType = 0,  # 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
+                      ReadoutWindowStartTime_ns = 1., # in ns (taking into account time of flight, drift, and signal travel)
                       ReadoutWindowDuration_ns = 450., # in ns
+                      DriftVelocity_um_per_ns = -1.0, # in um/ns, if negative, automatically chosen based on GasType
+                      SignalVelocity_mm_per_ns = 200.0, # in mm/ns (Default: 2/3 of the speed of light)
                       OutputLevel = INFO)
 
 mgr = ApplicationMgr(

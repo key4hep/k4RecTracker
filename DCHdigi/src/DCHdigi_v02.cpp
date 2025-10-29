@@ -83,6 +83,20 @@ StatusCode DCHdigi_v02::initialize() {
     // set the cellID decoder
     m_decoder = dch_sd.readout().idSpec().decoder();
 
+    if (!(m_drift_velocity_um_per_ns.value() > 0.0)) {
+        m_drift_velocity_um_per_ns.setValue(get_default_drift_velocity_um_per_ns());
+        info() << "Drift velocity automatically set to " << m_drift_velocity_um_per_ns.value()
+               << " um/ns for gas type " << m_GasType.value() << endmsg;
+    } else {
+        info() << "Using user-specified drift velocity: " << m_drift_velocity_um_per_ns.value()
+               << " um/ns" << endmsg;
+    }
+
+    if (!(m_signal_velocity_mm_per_ns.value() > 0.0)) {
+        error() << "Signal velocity must be positive!" << endmsg;
+        return StatusCode::FAILURE;
+    }
+
     m_event_counter = 0;
     return StatusCode::SUCCESS;
 }
@@ -166,7 +180,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             // xy smearing
             double smearing_xy_mm = random_engine.Gaus(0.0, m_xy_resolution_mm.value()); 
             double digihit_distance_to_wire_mm = std::max(0.0, distance_to_wire_mm + smearing_xy_mm);
-            double drift_time_ns = this->get_drift_time(digihit_distance_to_wire_mm);
+            double drift_time_ns = this->get_drift_time_ns(digihit_distance_to_wire_mm);
 
             // z smearing
             double smearing_z_ddu = random_engine.Gaus(0.0, m_z_resolution_mm.value()*dd4hep::mm);
@@ -183,7 +197,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             edm4hep::Vector3d digihit_position_mm = this->toEDM4hepVector(hit_projection_on_the_wire_ddu)*(1/dd4hep::mm);
 
             double distance_to_readout_mm = (this->m_dch_info->Lhalf/dd4hep::mm - std::abs(digihit_position_mm.z))/std::cos(WireStereoAngle);
-            double travel_time_ns = this->get_signal_travel_time(distance_to_readout_mm);
+            double travel_time_ns = this->get_signal_travel_time_ns(distance_to_readout_mm);
 
             double arrival_time_ns = simhit.getTime() + drift_time_ns + travel_time_ns;
 
@@ -346,30 +360,46 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
 }
 
 
-double DCHdigi_v02::get_drift_time(double distance_to_wire_mm) const {
+double DCHdigi_v02::get_drift_time_ns(double distance_to_wire_mm) const {
     // Calculate the drift time based on the distance to the wire
     // This is a preliminary implementation that needs to be updated with a realistic model
     // For now, we use a simple linear model with a constant drift velocity
-
-    double drift_velocity_um_per_ns = 25.0;
 
     // Convert distance to wire from mm to um
     double distance_to_wire_um = distance_to_wire_mm * 1000.0;
 
     // Calculate the drift time in ns
-    double drift_time_ns = distance_to_wire_um / drift_velocity_um_per_ns;
+    double drift_time_ns = distance_to_wire_um / m_drift_velocity_um_per_ns.value();
     return drift_time_ns;
 }
 
 
-double DCHdigi_v02::get_signal_travel_time(double distance_to_readout_mm) const {
+double DCHdigi_v02::get_signal_travel_time_ns(double distance_to_readout_mm) const {
     // Calculate the time it takes for the signal to travel along the wire to the readout electronics
-    // Assume 2/3 of the speed of light for the signal propagation speed
-
-    double speed_of_light_mm_per_ns = 299.792458;
-    double signal_speed_mm_per_ns = speed_of_light_mm_per_ns * 2.0 / 3.0;
 
     // Calculate the signal travel time in ns
-    double signal_travel_time_ns = distance_to_readout_mm / signal_speed_mm_per_ns;
+    double signal_travel_time_ns = distance_to_readout_mm / m_signal_velocity_mm_per_ns.value();
     return signal_travel_time_ns;
+}
+
+double DCHdigi_v02::get_default_drift_velocity_um_per_ns() const {
+    // Return the default drift velocity based on the gas type
+    // Currently, all gas types return the same value as placeholder
+    switch (m_GasType.value()) {
+        case 0: // He(90%)-Isobutane(10%)
+            return 25.0;
+        case 1: // pure He
+            warning() << "Pure Helium gas selected, but no specific drift velocity implemented. Using default value of 25 um/ns." << endmsg;
+            return 25.0;
+        case 2: // Ar(50%)-Ethane(50%)
+            warning() << "Ar-Ethane gas mixture selected, but no specific drift velocity implemented. Using default value of 25 um/ns." << endmsg;
+            return 25.0;
+        case 3: // pure Ar
+            warning() << "Pure Argon gas selected, but no specific drift velocity implemented. Using default value of 25 um/ns." << endmsg;
+            return 25.0;
+        default:
+            warning() << "Unknown gas type " << m_GasType.value()
+                      << ", using default drift velocity for He-Isobutane (25 um/ns)" << endmsg;
+            return 25.0;
+    }
 }

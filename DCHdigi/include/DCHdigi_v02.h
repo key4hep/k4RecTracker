@@ -134,11 +134,28 @@ private:
         0.1,
         "Spatial resolution in the direction perpendicular to the wire, in mm."};
 
+    // Deadtime of a cell in ns
     Gaudi::Property<double> m_deadtime_ns{
         this,
         "Deadtime_ns",
         400.0,
         "Deadtime of a cell in ns."
+    };
+
+    // Gas drift velocity in um/ns
+    Gaudi::Property<double> m_drift_velocity_um_per_ns{
+        this,
+        "DriftVelocity_um_per_ns",
+        -1.0,
+        "Gas drift velocity in um/ns. If negative, automatically chosen based on GasType. Currently assumed constant for the drift time calculation."
+    };
+
+    // Signal velocity in the wire in mm/ns
+    Gaudi::Property<double> m_signal_velocity_mm_per_ns{
+        this,
+        "SignalVelocity_mm_per_ns",
+        TMath::C()*1e-6*2.0/3.0, // 2/3 of the speed of light in mm/ns (1e-6 is to convert from m/s to mm/ns)
+        "Signal velocity in the wire in mm/ns. Default value: 2/3 of the speed of light."
     };
 
     // Gas mixture in the chamber
@@ -152,7 +169,7 @@ private:
     Gaudi::Property<double> m_ReadoutWindowStartTime_ns{
         this,
         "ReadoutWindowStartTime_ns",
-        0.0,
+        1.0,
         "Together with ReadoutWindowDuration_ns, defines the readout window. Any DigiHits with arrival time before ReadoutWindowStartTime_ns are discarded."
     };
 
@@ -175,10 +192,13 @@ private:
     };
 
     // /// Function to calculate the drift time from the distance to the wire
-    double get_drift_time(double distance_to_wire_mm) const;
+    double get_drift_time_ns(double distance_to_wire_mm) const;
 
     // /// Function to calculate the time it takes for the signal to travel from the wire to the readout electronics
-    double get_signal_travel_time(double distance_to_readout_mm) const;
+    double get_signal_travel_time_ns(double distance_to_readout_mm) const;
+
+    /// Function to get the drift velocity based on the gas type
+    double get_default_drift_velocity_um_per_ns() const;
 
 };
 
