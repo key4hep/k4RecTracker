@@ -4,7 +4,7 @@
  * @author Andreas Loeschcke Centeno
  * @date   2025-10-09
  *
- * Gaudi MultiTransformer that digitises SimTrackerHits from a Drift Chamber to edm4hep::SenseWireHits (currently a custom hit type defined in DCHdigi/dataFormatExtension)
+ * Gaudi MultiTransformer that digitises SimTrackerHits from a Drift Chamber to edm4hep::SenseWireHits
  * 
  * In comparison to DCHdigi_v01, this version will produce only one DigiHit per cell, combining all SimHits in the same cell (unless there is siginificant time difference between the SimHits, larger than the m_deadtime_ns parameter).
  * To do this, the hits in the cells are sorted by time, after adding a (simplified, to be updated in the future) drift time and time to reach the readout.
@@ -64,10 +64,9 @@
 // edm4hep
 #include "edm4hep/SimTrackerHitCollection.h"
 #include "edm4hep/EventHeaderCollection.h"
+#include "edm4hep/SenseWireHitCollection.h"
+#include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
 
-// edm4hep extension
-#include "extension/SenseWireHitCollection.h"
-#include "extension/SenseWireHitSimTrackerHitLinkCollection.h"
 
 // DD4hep
 #include "DDSegmentation/BitFieldCoder.h"
@@ -82,14 +81,14 @@
 #include "TRandom3.h"
 
 class DCHdigi_v02 final
-    : public k4FWCore::MultiTransformer<std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection>
+    : public k4FWCore::MultiTransformer<std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>
                                        (const edm4hep::SimTrackerHitCollection&, 
                                         const edm4hep::EventHeaderCollection&)> {
 
 public:
     DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc);
 
-    std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection> 
+    std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> 
         operator()(const edm4hep::SimTrackerHitCollection& input,
                    const edm4hep::EventHeaderCollection& header) const override;
 

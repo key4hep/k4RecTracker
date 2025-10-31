@@ -101,12 +101,12 @@ StatusCode DCHdigi_v02::initialize() {
     return StatusCode::SUCCESS;
 }
 
-std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection> 
+std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> 
 DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
                         const edm4hep::EventHeaderCollection& header) const {
 
-    extension::SenseWireHitCollection output;
-    extension::SenseWireHitSimTrackerHitLinkCollection links;
+    edm4hep::SenseWireHitCollection output;
+    edm4hep::TrackerHitSimTrackerHitLinkCollection links;
 
     
     auto engine_seed = m_uniqueIDSvc->getUniqueID(header, this->name());
