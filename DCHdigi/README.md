@@ -14,7 +14,6 @@
 
 ## DCHdigi_v02
 * SimHits in one cell are grouped in 'trains' (by time of arrival at the readout), with each train creating one DigiHit (for a single particle traversing one cell, this typically leads to one DigiHit in the cell). Trains are separated by cell dead time (`Deadtime_ns`)
-* New digitized hit class is used as an EDM4hep data extension, to be integrated into EDM4hep
 * Smearing of the digitized hit position along the wire and radially is done according to the input parameter values (`zResolution_mm` and `xyResolution_mm`, respectively). The digitized hit position is the projection of the simulated hit position onto the sense wire (at the center of the cell)
 * Time of DigiHit consists of SimHit creation time +  drift time to wire + signal travelling time along the wire to the readout
 * The readout window can be defined via two `Gaudi::Property` members (start time and duration) to filter any DigiHits with associated time outside this window
