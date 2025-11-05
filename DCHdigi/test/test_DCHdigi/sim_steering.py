@@ -1,9 +1,10 @@
 from DDSim.DD4hepSimulation import DD4hepSimulation
 from g4units import mm, GeV, MeV
+
 SIM = DD4hepSimulation()
 
 ## The compact XML file, or multiple compact files, if the last one is the closer.
-SIM.compactFile = ['compact/DCH_standalone_o1_v02.xml']
+SIM.compactFile = ["compact/DCH_standalone_o1_v02.xml"]
 ## Lorentz boost for the crossing angle, in radian!
 SIM.crossingAngleBoost = 0.0
 SIM.enableDetailedShowerMode = False
@@ -100,7 +101,7 @@ SIM.vertexSigma = [0.0, 0.0, 0.0, 0.0]
 SIM.action.calo = "Geant4ScintillatorCalorimeterAction"
 
 ## List of patterns matching sensitive detectors of type Calorimeter.
-SIM.action.calorimeterSDTypes = ['calorimeter']
+SIM.action.calorimeterSDTypes = ["calorimeter"]
 
 ##  set the default event action
 SIM.action.event = []
@@ -112,7 +113,7 @@ SIM.action.event = []
 ##       SIM.action.mapActions['tpc'] = "TPCSDAction"
 ##
 SIM.action.mapActions = {}
-SIM.action.mapActions['DCH_v2'] = "Geant4SimpleTrackerAction"
+SIM.action.mapActions["DCH_v2"] = "Geant4SimpleTrackerAction"
 
 ##  set the default run action
 SIM.action.run = []
@@ -127,10 +128,13 @@ SIM.action.step = []
 SIM.action.track = []
 
 ##  set the default tracker action
-SIM.action.tracker = ('Geant4TrackerWeightedAction', {'HitPositionCombination': 2, 'CollectSingleDeposits': False})
+SIM.action.tracker = (
+    "Geant4TrackerWeightedAction",
+    {"HitPositionCombination": 2, "CollectSingleDeposits": False},
+)
 
 ## List of patterns matching sensitive detectors of type Tracker.
-SIM.action.trackerSDTypes = ['tracker']
+SIM.action.trackerSDTypes = ["tracker"]
 
 
 ################################################################################
@@ -239,7 +243,7 @@ SIM.guineapig.particlesPerEvent = "-1"
 ################################################################################
 
 ##  direction of the particle gun, 3 vector
-SIM.gun.direction = (1,1,1)
+SIM.gun.direction = (1, 1, 1)
 
 ## choose the distribution of the random direction for theta
 ##
@@ -252,12 +256,12 @@ SIM.gun.direction = (1,1,1)
 ##
 ##     Setting a distribution will set isotrop = True
 ##
-#SIM.gun.distribution = 'cos(theta)'
+# SIM.gun.distribution = 'cos(theta)'
 
 ## Total energy (including mass) for the particle gun.
 ##
 ## If not None, it will overwrite the setting of momentumMin and momentumMax
-SIM.gun.energy = '10*GeV'
+SIM.gun.energy = "10*GeV"
 
 ## Maximal pseudorapidity for random distibution (overrides thetaMin)
 SIM.gun.etaMax = None
@@ -278,9 +282,9 @@ SIM.gun.momentumMax = 10000.0
 ## Minimal momentum when using distribution (default = 0.0)
 SIM.gun.momentumMin = 0.0
 SIM.gun.multiplicity = 1
-#SIM.gun.particle = "mu+"
-#SIM.gun.particle = "pi+"
-#SIM.gun.particle = "kaon+"
+# SIM.gun.particle = "mu+"
+# SIM.gun.particle = "pi+"
+# SIM.gun.particle = "kaon+"
 SIM.gun.particle = "proton"
 
 ## Maximal azimuthal angle for random distribution
@@ -467,7 +471,7 @@ SIM.part.printEndTracking = False
 SIM.part.printStartTracking = False
 
 ## List of processes to save, on command line give as whitespace separated string in quotation marks
-SIM.part.saveProcesses = ['Decay']
+SIM.part.saveProcesses = ["Decay"]
 
 ## Optionally enable an extended Particle Handler
 SIM.part.userParticleHandler = "Geant4TCUserParticleHandler"
@@ -539,7 +543,43 @@ SIM.physics.rangecut = 0.7
 ##
 ##     Quarks, gluons and W's Z's etc should not be treated by Geant4
 ##
-SIM.physics.rejectPDGs = {1, 2, 3, 4, 5, 6, 3201, 3203, 4101, 4103, 21, 23, 24, 5401, 25, 2203, 5403, 3101, 3103, 4403, 2101, 5301, 2103, 5303, 4301, 1103, 4303, 5201, 5203, 3303, 4201, 4203, 5101, 5103, 5503}
+SIM.physics.rejectPDGs = {
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    3201,
+    3203,
+    4101,
+    4103,
+    21,
+    23,
+    24,
+    5401,
+    25,
+    2203,
+    5403,
+    3101,
+    3103,
+    4403,
+    2101,
+    5301,
+    2103,
+    5303,
+    4301,
+    1103,
+    4303,
+    5201,
+    5203,
+    3303,
+    4201,
+    4203,
+    5101,
+    5103,
+    5503,
+}
 
 ## Set of PDG IDs for particles that should not be passed to Geant4 if their properTime is 0.
 ##

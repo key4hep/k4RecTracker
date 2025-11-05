@@ -9,6 +9,7 @@
 import ROOT
 import sys
 
+
 def main():
     exit_code = 0
 
@@ -35,6 +36,7 @@ def main():
         exit_code += 2
 
     return exit_code
+
 
 if __name__ == "__main__":
     code = main()
