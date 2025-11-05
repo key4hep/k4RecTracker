@@ -78,7 +78,7 @@
 #include "extension/TrackerHit.h"
 
 // === DD4hep ===
-#include "DD4hep/Detector.h"       
+#include "DD4hep/Detector.h"
 #include "DDRec/DCH_info.h"
 #include "DDRec/Vector3D.h"
 #include "DDSegmentation/BitFieldCoder.h"
@@ -88,13 +88,13 @@
 
 /** @struct GGTF_tracking
  *
- *  Gaudi MultiTransformer that generates a Track collection by analyzing the digitalized hits through the GGTF_tracking. 
+ *  Gaudi MultiTransformer that generates a Track collection by analyzing the digitalized hits through the GGTF_tracking.
  *  The first step takes the raw hits and it returns a collection of 4-dimensional points inside an embedding space.
- *  Eeach 4-dim point has 3 geometric coordinates and 1 charge, the meaning of which can be described intuitively by a potential, 
+ *  Eeach 4-dim point has 3 geometric coordinates and 1 charge, the meaning of which can be described intuitively by a potential,
  *  which attracts hits belonging to the same cluster and drives away those that do not.
  *  This collection of 4-dim points is analysed by a clustering step, which groups together hits belonging to the same track.
  *
- *  input: 
+ *  input:
  *    - digitalized hits from DC (global coordinates) : extension::SenseWireHitCollection
  *    - digitalized hits from vertex (global coordinates) : edm4hep::TrackerHitPlaneCollection
  *    - digitalized hits from silicon wrapper (global coordinates) : edm4hep::TrackerHitPlaneCollection
@@ -109,25 +109,25 @@
  *
  */
 
-struct GGTF_tracking final : 
-        k4FWCore::MultiTransformer< std::tuple<extension::TrackCollection>(   
-                                                                    const std::vector<const edm4hep::TrackerHitPlaneCollection*>&, 
-                                                                    const std::vector<const extension::SenseWireHitCollection*>&)>                                                                                            
+struct GGTF_tracking final :
+        k4FWCore::MultiTransformer< std::tuple<extension::TrackCollection>(
+                                                                    const std::vector<const edm4hep::TrackerHitPlaneCollection*>&,
+                                                                    const std::vector<const extension::SenseWireHitCollection*>&)>
 {
-    GGTF_tracking(const std::string& name, ISvcLocator* svcLoc) : 
+    GGTF_tracking(const std::string& name, ISvcLocator* svcLoc) :
         MultiTransformer ( name, svcLoc,
-            {   
-                 
+            {
+
                 KeyValues("InputPlanarHitCollections", {"InputPlanarHitCollections"}),
                 KeyValues("InputWireHitCollections", {"InputWireHitCollections"})
 
             },
-            {   
-               
-               KeyValues("OutputTracksGGTF", {"OutputTracksGGTF"})      
-            
+            {
+
+               KeyValues("OutputTracksGGTF", {"OutputTracksGGTF"})
+
             }) {m_geoSvc = serviceLocator()->service(m_geoSvcName);}
-    
+
     StatusCode initialize() {
 
         ///////////////////////////////
@@ -190,9 +190,9 @@ struct GGTF_tracking final :
 
    }
 
-    
-    std::tuple<extension::TrackCollection> operator()(      const std::vector<const edm4hep::TrackerHitPlaneCollection*>& inputPlanarHitCollections, 
-                                                            const std::vector<const extension::SenseWireHitCollection*>& inputWireHitCollections) const override 
+
+    std::tuple<extension::TrackCollection> operator()(      const std::vector<const edm4hep::TrackerHitPlaneCollection*>& inputPlanarHitCollections,
+                                                            const std::vector<const extension::SenseWireHitCollection*>& inputWireHitCollections) const override
     {
 
         ////////////////////////////////////////
@@ -207,35 +207,35 @@ struct GGTF_tracking final :
 
         /// Processing hits from the Silicon Detectors
         std::vector<int64_t> listHitTypePlanar; int planarHitIndex = 0;
-        std::vector<int64_t> listPlanarHitIndices; int planarHitCollectionIndex = 0; 
+        std::vector<int64_t> listPlanarHitIndices; int planarHitCollectionIndex = 0;
         for (const auto& inputHitCollection : inputPlanarHitCollections)
-        {   
-            
+        {
+
             int planarHitSubCollectionIndex = 0;
             for (const auto& inputHit : *inputHitCollection) {
-                
+
                 // Add the 3D position of the hit to the global input list.
                 listGlobalInputs.push_back(inputHit.getPosition().x);
                 listGlobalInputs.push_back(inputHit.getPosition().y);
                 listGlobalInputs.push_back(inputHit.getPosition().z);
-                
+
                 // Add placeholder values for additional input dimensions.
-                listGlobalInputs.push_back(1.0); 
+                listGlobalInputs.push_back(1.0);
                 listGlobalInputs.push_back(0.0);
                 listGlobalInputs.push_back(0.0);
-                listGlobalInputs.push_back(0.0); 
-                
+                listGlobalInputs.push_back(0.0);
+
                 // Store the current index in listHitTypePlanar and increment the global iterator.
                 listHitTypePlanar.push_back(globalHitIndex);
 
                 listPlanarHitIndices.push_back(planarHitCollectionIndex);
                 listPlanarHitIndices.push_back(planarHitSubCollectionIndex);
 
-                globalHitIndex              += 1;  
-                planarHitIndex              += 1;   
-                planarHitSubCollectionIndex += 1;   
-                
-                
+                globalHitIndex              += 1;
+                planarHitIndex              += 1;
+                planarHitSubCollectionIndex += 1;
+
+
             }
 
             planarHitCollectionIndex += 1;
@@ -251,25 +251,25 @@ struct GGTF_tracking final :
 
         /// Processing hits from gaseous detectors
         std::vector<int64_t> listHitTypeWire; int wireHitIndex = 0;
-        std::vector<int64_t> listWireHitIndices; int wireHitCollectionIndex = 0; 
+        std::vector<int64_t> listWireHitIndices; int wireHitCollectionIndex = 0;
         for (const auto& inputHitCollection : inputWireHitCollections)
         {
             int wireHitSubCollectionIndex = 0;
             for (const auto& inputHit : *inputHitCollection) {
-                
+
                 // position along the wire, wire direction and drift distance
-                edm4hep::Vector3d wirePos = inputHit.getPosition();   
+                edm4hep::Vector3d wirePos = inputHit.getPosition();
                 TVector3 wirePosVector(static_cast<float>(wirePos.x),static_cast<float>(wirePos.y),static_cast<float>(wirePos.z));
 
-                double distanceToWire     = inputHit.getDistanceToWire(); 
-                double wireAzimuthalAngle = inputHit.getWireAzimuthalAngle();  
-                double wireStereoAngle    = inputHit.getWireStereoAngle();  
-                
+                double distanceToWire     = inputHit.getDistanceToWire();
+                double wireAzimuthalAngle = inputHit.getWireAzimuthalAngle();
+                double wireStereoAngle    = inputHit.getWireStereoAngle();
+
                 // Direction of the wire: z'
                 TVector3 direction(0,0,1);
                 direction.RotateX(wireStereoAngle);
                 direction.RotateZ(wireAzimuthalAngle);
-            
+
                 TVector3 zPrime; zPrime = direction.Unit();
 
                 // x' axis, orthogonal to z'
@@ -285,27 +285,27 @@ struct GGTF_tracking final :
                 // Transform to global
                 TVector3 leftGlobalPos  = xPrime * leftLocalPos.X() + yPrime * leftLocalPos.Y() + zPrime * leftLocalPos.Z() + wirePosVector;
                 TVector3 rightGlobalPos = xPrime * rightLocalPos.X() + yPrime * rightLocalPos.Y() + zPrime * rightLocalPos.Z() + wirePosVector;
-        
+
                 // Add the 3D position of the left hit to the global input list.
                 listGlobalInputs.push_back(leftGlobalPos.X());
                 listGlobalInputs.push_back(leftGlobalPos.Y());
                 listGlobalInputs.push_back(leftGlobalPos.Z());
-                
+
                 // Add the difference between the right and left hit positions to the global input list.
-                listGlobalInputs.push_back(0.0); 
+                listGlobalInputs.push_back(0.0);
                 listGlobalInputs.push_back(rightGlobalPos.X() - leftGlobalPos.X());
                 listGlobalInputs.push_back(rightGlobalPos.y() - leftGlobalPos.Y());
                 listGlobalInputs.push_back(rightGlobalPos.Z() - leftGlobalPos.Z());
-                
+
                 // Store the current index in listHitTypeWire and increment the global iterator.
                 listHitTypeWire.push_back(globalHitIndex);
 
                 listWireHitIndices.push_back(wireHitCollectionIndex);
                 listWireHitIndices.push_back(wireHitSubCollectionIndex);
 
-                globalHitIndex            += 1;  
-                wireHitIndex              += 1;   
-                wireHitSubCollectionIndex += 1;                  
+                globalHitIndex            += 1;
+                wireHitIndex              += 1;
+                wireHitSubCollectionIndex += 1;
             }
         }
         // Convert ListHitType_CDC to a Torch tensor for use in PyTorch models.
@@ -338,7 +338,7 @@ struct GGTF_tracking final :
             ////////// GATR STEP //////////
             ///////////////////////////////
 
-            // Calculate the total size of the input tensor, based on the number of hits (it) and the 
+            // Calculate the total size of the input tensor, based on the number of hits (it) and the
             // number of features per hit (7: x, y, z, and four placeholders).
             size_t inputTensorTotalSize                 = globalHitIndex * 7;
             std::vector<int64_t> inputTensorShape       = {globalHitIndex, 7};
@@ -346,7 +346,7 @@ struct GGTF_tracking final :
             // Create a vector to store the input tensors that will be fed into the ONNX model.
             std::vector<Ort::Value> inputModelTensors;
             inputModelTensors.emplace_back(Ort::Value::CreateTensor<float>(m_fInfo, listGlobalInputs.data(), inputTensorTotalSize, inputTensorShape.data(), inputTensorShape.size()));
-            
+
             // Run the ONNX inference session with the provided input tensor.
             auto outputModelTensors = m_fSession->Run(Ort::RunOptions{nullptr}, m_fInames.data(), inputModelTensors.data(), m_fInames.size(), m_fOnames.data(), m_fOnames.size());
             float* floatarr           = outputModelTensors.front().GetTensorMutableData<float>();
@@ -360,13 +360,13 @@ struct GGTF_tracking final :
             torch::Tensor uniqueTensor;
             torch::Tensor inverseIndices;
             std::tie(uniqueTensor, inverseIndices) = at::_unique(clusteringIndeces, true, true);
-          
+
             /////////////////////////////////
             ////////// OUTPUT STEP //////////
             /////////////////////////////////
 
             // Get the total number of unique tracks based on the uniqueTensor size
-            int64_t numTracks = uniqueTensor.numel(); 
+            int64_t numTracks = uniqueTensor.numel();
             bool has_zero = (uniqueTensor == 0).any().item<bool>();
             if (!has_zero)
             {
@@ -386,7 +386,7 @@ struct GGTF_tracking final :
 
                 // Create a mask to select all hits belonging to the current track
                 torch::Tensor mask = (clusteringIndeces == idTrack);
-                
+
                 // Find the indices of the hits that belong to the current track
                 torch::Tensor indices = torch::nonzero(mask).flatten();
 
@@ -404,13 +404,13 @@ struct GGTF_tracking final :
                         auto planarCollection = inputPlanarHitCollections[idx1];
                         auto hit               = planarCollection->at(idx2);
                         outputTrack.addToTrackerHits(hit);
-                        
+
                     } else {
                         // wire hit
                         auto wireCollection = inputWireHitCollections[idx1];
                         auto hit             = wireCollection->at(idx2);
                         outputTrack.addToTrackerHits(hit);
-                        
+
                     }
                 }
 
@@ -419,18 +419,18 @@ struct GGTF_tracking final :
             inverseIndices.reset();
             uniqueTensor.reset();
             clusteringIndeces.reset();
-            
+
             inputModelTensors.clear();
             outputModelTensors.clear();
-            
-            
+
+
         }
 
         listHitTypePlanarTensor.reset();
         listPlanarHitIndices_tensor.reset();
         listHitTypeWireTensor.reset();
         listWireHitIndicesTensor.reset();
-        
+
 
         std::vector<int64_t>().swap(listHitTypePlanar);
         std::vector<int64_t>().swap(listPlanarHitIndices);
@@ -441,10 +441,10 @@ struct GGTF_tracking final :
         return std::make_tuple(std::move(outputTracks));
 
 
-    } 
+    }
 
-    StatusCode finalize() {     
-        
+    StatusCode finalize() {
+
         info() << "Run report:" << endmsg;
         info() << "Number of analysed events: " << m_indexCounter << endmsg;
         info() << "----------------\n" << endmsg;
@@ -467,12 +467,12 @@ struct GGTF_tracking final :
         std::unique_ptr<Ort::Session> m_fSession;
 
         /// ONNX session options.
-        /// These settings control the behavior of the inference session, such as optimization level, 
+        /// These settings control the behavior of the inference session, such as optimization level,
         /// execution providers, and other configuration parameters.
         Ort::SessionOptions m_fSessionOptions;
 
         /// ONNX memory info.
-        /// This object provides information about memory allocation and is used during the creation of 
+        /// This object provides information about memory allocation and is used during the creation of
         /// ONNX tensors. It specifies the memory type and device (e.g., CPU, GPU).
         const OrtMemoryInfo* m_fInfo;
         struct m_memoryInfo;
@@ -504,7 +504,7 @@ struct GGTF_tracking final :
         /// Pointers to drift chamber information
         dd4hep::rec::DCH_info* m_dchInfo;
         dd4hep::DDSegmentation::BitFieldCoder* m_dchDecoder;
-        
+
 
 };
 

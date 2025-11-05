@@ -140,9 +140,9 @@ dch_digitizer = DCHsimpleDigitizer("DCHsimpleDigitizer",
     outputDigiHits = dch_reco_hit_name
 )
 
-# run the genfit tracking 
+# run the genfit tracking
 from Configurables import GenFitter
-genfitter = GenFitter("GenFitter", inputHits = dch_reco_hit_name, outputTracks = "genfit_tracks") 
+genfitter = GenFitter("GenFitter", inputHits = dch_reco_hit_name, outputTracks = "genfit_tracks")
 
 ################ Output
 from Configurables import PodioOutput

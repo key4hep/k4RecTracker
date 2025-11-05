@@ -236,9 +236,9 @@ idea_siwrd_digitizer = VTXdigitizer("SiWrDdigitizer",
    OutputLevel = INFO
 )
 
-# run the genfit tracking 
+# run the genfit tracking
 # from Configurables import GenFitter
-# genfitter = GenFitter("GenFitter", inputHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"), outputTracks = "genfit_tracks") 
+# genfitter = GenFitter("GenFitter", inputHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"), outputTracks = "genfit_tracks")
 
 ################ Output
 from Configurables import PodioOutput

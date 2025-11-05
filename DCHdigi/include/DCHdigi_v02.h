@@ -5,13 +5,13 @@
  * @date   2025-10-09
  *
  * Gaudi MultiTransformer that digitises SimTrackerHits from a Drift Chamber to edm4hep::SenseWireHits
- * 
+ *
  * In comparison to DCHdigi_v01, this version will produce only one DigiHit per cell, combining all SimHits in the same cell (unless there is siginificant time difference between the SimHits, larger than the m_deadtime_ns parameter).
  * To do this, the hits in the cells are sorted by time, after adding a (simplified, to be updated in the future) drift time and time to reach the readout.
  * They are further separated in hit 'trains' if the time difference between two hits is larger than the deadtime of a cell.
  * Each hit train creates one DigiHit, with the time and the position coming from the first hit (sorted by time) in the train.
  * The energy deposit will be the sum of all hits in the train.
- * 
+ *
  * The functional also does a dN/dx calculation for the cell, based on the parametrisation in delphes.
  * This is done by summing all the step lengths in the cell and getting the beta*gamma of the particle and passing it to the delphes parametrisation.
  * In case of multiple particles in the same cell, the number of clusters is calculated for each particle and summed up.
@@ -23,7 +23,7 @@
  * Inputs:
  *     - SimTrackerHitCollection (SimTrackerHits in the DCH)
  *     - EventHeaderCollection (for consistently seeding the random engine)
- * 
+ *
  * Properties:
  *     - @param m_dch_name The name of the drift chamber geometry, needed to get the decoder for the cellID
  *     - @param m_z_resolution_mm Spatial resolution in the direction along the wire, in mm
@@ -37,14 +37,14 @@
  *
  * Outputs:
  *     - SenseWireHitCollection: Digitised hits
- *     - SenseWireHitSimTrackerHitLinkCollection: Links between SenseWireHits and the first SimTrackerHit in the train 
- * 
+ *     - SenseWireHitSimTrackerHitLinkCollection: Links between SenseWireHits and the first SimTrackerHit in the train
+ *
  * LIMITATIONS: (status 09/10/2025)
  *     - The drift time calculation is preliminary and needs to be updated with a realistic model
  *     - Potentially also the time to reach the readout could be updated
  *     - Hits with the isProducedBySecondary flag are not treated accurately for the dNdx calculation
  *     - The number of electrons in each cluster is not calculated
- * 
+ *
  */
 
 #pragma once
@@ -82,13 +82,13 @@
 
 class DCHdigi_v02 final
     : public k4FWCore::MultiTransformer<std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>
-                                       (const edm4hep::SimTrackerHitCollection&, 
+                                       (const edm4hep::SimTrackerHitCollection&,
                                         const edm4hep::EventHeaderCollection&)> {
 
 public:
     DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc);
 
-    std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> 
+    std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>
         operator()(const edm4hep::SimTrackerHitCollection& input,
                    const edm4hep::EventHeaderCollection& header) const override;
 
@@ -123,14 +123,14 @@ private:
 
     // z resolution in mm
     Gaudi::Property<double> m_z_resolution_mm{
-        this, 
-        "zResolution_mm", 
+        this,
+        "zResolution_mm",
         1.0,
         "Spatial resolution in the direction along the wire, in mm."};
     // xy resolution in mm
     Gaudi::Property<double> m_xy_resolution_mm{
-        this, 
-        "xyResolution_mm", 
+        this,
+        "xyResolution_mm",
         0.1,
         "Spatial resolution in the direction perpendicular to the wire, in mm."};
 

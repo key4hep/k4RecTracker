@@ -18,13 +18,13 @@ dd4hep::rec::LayeredCalorimeterData * getExtension(unsigned int includeFlag, uns
       return nullptr;
     }
 
-    int debug_lvl = 0; 
+    int debug_lvl = 0;
     if (debug_lvl > 0) {
          std::cout << " getExtension :  includeFlag: " << dd4hep::DetType( includeFlag ) << " excludeFlag: " << dd4hep::DetType( excludeFlag )
             << "  found : " << theDetectors.size() << "  - first det: " << theDetectors.at(0).name()
             << std::endl;
     }
-       
+
     if (theDetectors.size() != 1) {
 
       std::stringstream es ;
@@ -47,7 +47,7 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
     edm4hep::TrackState trackState_AtCalorimeter = edm4hep::TrackState{};
 
     double posAtCalorimeter[] = {ecalProjection.GetX(), ecalProjection.GetY(), ecalProjection.GetZ()};
-    int debug_lvl = 0; 
+    int debug_lvl = 0;
     if (debug_lvl > 0) {
       std::cout << "Projection at calo: x, y, z, r = "
       << posAtCalorimeter[0] << " "
@@ -55,7 +55,7 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
       << posAtCalorimeter[2] << " "
       << sqrt(posAtCalorimeter[0]*posAtCalorimeter[0] + posAtCalorimeter[1]*posAtCalorimeter[1]) << std::endl;
     }
-   
+
     // get extrapolated momentum from the helix with ref point at last hit
     double momAtCalorimeter[] = {0.,0.,0.};
     helixAtLastHit.getExtrapolatedMomentum(posAtCalorimeter, momAtCalorimeter);
@@ -112,7 +112,7 @@ void FillTrackWithCalorimeterExtrapolation(
     pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
     pandora::CartesianVector secondBestECalProjection(0.f, 0.f, 0.f);
     float minGenericTime(std::numeric_limits<float>::max());
-                        
+
     // create helix to project
     // rather than using parameters at production, better to use those from
     // last hit
@@ -122,7 +122,7 @@ void FillTrackWithCalorimeterExtrapolation(
     const pandora::Helix helix(pos_lasthit, mom_lasthit, charge ,m_Bz);
     const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
     const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
-                        
+
     // First project to endcap
     pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
     if (m_eCalEndCapInnerR>0) {
@@ -141,8 +141,8 @@ void FillTrackWithCalorimeterExtrapolation(
                 bestECalProjection = endCapProjection;
         }
     }
-                                    
-                                    
+
+
     // Then project to barrel surface(s), and keep projection
     // if extrapolation is within the z acceptance of the detector
     pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
@@ -150,7 +150,7 @@ void FillTrackWithCalorimeterExtrapolation(
 
       float genericTime(std::numeric_limits<float>::max());
       const pandora::StatusCode statusCode(helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint, barrelProjection, genericTime));
-      
+
       if (
           (pandora::STATUS_CODE_SUCCESS == statusCode) &&
           (std::fabs(barrelProjection.GetZ())<= m_eCalBarrelMaxZ)
@@ -165,15 +165,15 @@ void FillTrackWithCalorimeterExtrapolation(
               }
       }
     }
-            
+
     // store extrapolation to calo
     // by default, store extrapolation with lower arrival time
     // get extrapolated position
     edm4hep::TrackState trackState_AtCalorimeter = getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit,m_Bz);
-  
+
     // attach the TrackState to the track
     edm4hep_track.addToTrackStates(trackState_AtCalorimeter);
-  
+
   }
 }
 
@@ -346,18 +346,18 @@ TMatrixDSym computeTrackStateCovMatrix(TVectorD stateTrack, TVectorD params, TVe
 
   TMatrixDSym covarianceTrack_temp(5);
   covarianceTrack_temp = statecovMatrix.Similarity(J);
-  
+
 
   TMatrixDSym covarianceTrackState(6);
   for (int i = 0; i < 5; ++i) {
-      for (int j = 0; j <= i; ++j) { 
+      for (int j = 0; j <= i; ++j) {
           double val = covarianceTrack_temp(i, j);
           covarianceTrackState(i, j) = val;
           covarianceTrackState(j, i) = val;
       }
   }
 
-   
+
   covarianceTrackState(5, 5) = timeError*timeError;
 
   return covarianceTrackState;
