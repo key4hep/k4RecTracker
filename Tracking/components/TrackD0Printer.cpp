@@ -1,11 +1,15 @@
-#include "Gaudi/Property.h"
-#include "GaudiKernel/MsgStream.h"
+#include "utils.hpp"
+
 #include "edm4hep/Track.h"
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackState.h"
-#include "k4FWCore/Consumer.h"
 #include "podio/RelationRange.h"
-#include "printStars.h"
+
+#include "Gaudi/Property.h"
+#include "GaudiKernel/MsgStream.h"
+
+#include "k4FWCore/Consumer.h"
+
 #include <fmt/core.h>
 
 #include <algorithm>

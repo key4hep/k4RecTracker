@@ -20,6 +20,8 @@
 #include "extension/MutableTrack.h"
 #include "extension/TrackCollection.h"
 
+#include <Gaudi/Algorithm.h>
+
 //=== Others ===
 #include <Objects/Helix.h>
 #include <TMatrixDSym.h>
@@ -188,5 +190,10 @@ int getHypotesisCharge(int pdg);
  */
 TMatrixDSym computeTrackStateCovMatrix(TVectorD stateTrack, TVectorD params, TVector3 referencePoint, double timeError,
                                        TMatrixDSym statecovMatrix);
+
+/**
+ * @brief Print the message in a block of stars ('*') at level DEBUG
+ */
+void printInStars(const Gaudi::Algorithm* thisAlg, const std::string& msg, const int lineWidth);
 
 #endif // UTILS_HPP
