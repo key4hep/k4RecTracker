@@ -115,7 +115,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
                     const edm4hep::EventHeaderCollection&   headers) const {
   /// initialize engines
   auto [rng_engine, myRandom] = this->CreateRandomEngines(headers);
-    
+
   // Gaussian random number generator used for the smearing of the z position, in cm!
   std::normal_distribution<double> gauss_z_cm{0., m_z_resolution.value() * MM_TO_CM};
   // Gaussian random number generator used for the smearing of the xy position, in cm!

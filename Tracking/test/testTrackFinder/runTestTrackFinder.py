@@ -1,5 +1,5 @@
 import os
-import math 
+import math
 from Gaudi.Configuration import INFO,DEBUG
 from Configurables import EventDataSvc,UniqueIDGenSvc
 from Configurables import RndmGenSvc

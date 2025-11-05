@@ -48,7 +48,7 @@ function(set_test_env _testname)
     PYTHONPATH=${CMAKE_BINARY_DIR}:${PROJECT_BINARY_DIR}/genConfDir:${CMAKE_BINARY_DIR}/DCHdigi/genConfDir:$ENV{PYTHONPATH}
     GAUDI_PLUGIN_PATH=${CMAKE_BINARY_DIR}/.plugins:${CMAKE_BINARY_DIR}/DCHdigi:${CMAKE_INSTALL_PREFIX}/lib64:$ENV{GAUDI_PLUGIN_PATH}
   )
-  
+
 endfunction()
 
 add_subdirectory(DCHdigi)

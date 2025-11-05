@@ -110,7 +110,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
             debug() << "MCParticle betagamma: " << betagamma << endmsg;
             // Check if betagamma is in valid range of delphes parametrisation (status: 16 June 2025)
             if (betagamma < 0.5 || betagamma > 20000.0) {
-                warning() << "beta*gamma value outside of \"good\" range of delphes parametrisation (0.5-20000), dN/dx will be set to dummy value: " 
+                warning() << "beta*gamma value outside of \"good\" range of delphes parametrisation (0.5-20000), dN/dx will be set to dummy value: "
                         << dummy_value << " clusters/mm" << endmsg;
                 goto store_value;
             }
@@ -143,7 +143,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
             double track_length = m_delphesTrkUtil.TrkLen(delphes_track);
             // Check if track length calculation was successful
             if (track_length < std::numeric_limits<double>::epsilon()) {
-                warning() << "Delphes track length calculation returned 0.0, dN/dx will be set to dummy value: " 
+                warning() << "Delphes track length calculation returned 0.0, dN/dx will be set to dummy value: "
                         << dummy_value << " clusters/mm" << endmsg;
                 goto store_value;
             }

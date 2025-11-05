@@ -34,7 +34,7 @@ cd ../../
 export K4RECTRACKER=$PWD/k4RecTracker/install/share/k4RecTracker; PATH=$PWD/k4RecTracker/install/bin/:$PATH; CMAKE_PREFIX_PATH=$PWD/k4RecTracker/install/:$CMAKE_PREFIX_PATH; LD_LIBRARY_PATH=$PWD/k4RecTracker/install/lib:$PWD/k4RecTracker/install/lib64:$LD_LIBRARY_PATH; export PYTHONPATH=$PWD/k4RecTracker/install/python:$PYTHONPATH
 ```
 
-The following should be called in the folder hosting both `k4RecTracker` and `FCCDetectors` each time you start a new session (even you do not need to re-build): 
+The following should be called in the folder hosting both `k4RecTracker` and `FCCDetectors` each time you start a new session (even you do not need to re-build):
 ```
 export FCCDETECTORS=$PWD/FCCDetectors/;PATH=$PWD/FCCDetectors/install/bin/:$PATH;CMAKE_PREFIX_PATH=$PWD/FCCDetectors/install/:$CMAKE_PREFIX_PATH;LD_LIBRARY_PATH=$PWD/FCCDetectors/install/lib:$LD_LIBRARY_PATH;export PYTHONPATH=$PWD/FCCDetectors/install/python:$PYTHONPATH;LD_LIBRARY_PATH=$PWD/FCCDetectors/install/lib64:$LD_LIBRARY_PATH
 export K4RECTRACKER=$PWD/k4RecTracker/install/share/k4RecTracker; PATH=$PWD/k4RecTracker/install/bin/:$PATH; CMAKE_PREFIX_PATH=$PWD/k4RecTracker/install/:$CMAKE_PREFIX_PATH; LD_LIBRARY_PATH=$PWD/k4RecTracker/install/lib:$PWD/k4RecTracker/install/lib64:$LD_LIBRARY_PATH; export PYTHONPATH=$PWD/k4RecTracker/install/python:$PYTHONPATH
@@ -75,7 +75,7 @@ make get_data
 * `VTXdigi`: vertex detector digitization (for now, this step produces 'reco' collection)
 * `Tracking`: tracking algorithms orchestrating [GenFit](https://github.com/GenFit/GenFit)
 
-## Execute Examples 
+## Execute Examples
 
 ```bash
 k4run DCHdigi/test/runDCHsimpleDigitizer.py

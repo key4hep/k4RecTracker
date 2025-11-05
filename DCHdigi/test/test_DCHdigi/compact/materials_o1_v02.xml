@@ -122,26 +122,26 @@
     <D type="density" value="1.242" unit="g/cm3"/>
     <fraction n="0.65" ref="C"/>
     <fraction n="0.35" ref="Epoxy"/>
-  </material>  
+  </material>
 
     <!-- Carbon fiber for IDEA vertex: X0 of 26 cm -> (0.65*42.7 g/cm2 + 0.35*55.36 g/cm2)/1.5 g/cm3 = 31.4 cm, so use density of 1.5 g/cm^3 * 26 cm/31.4 cm = 1.242 g/cm^3 instead, FIX COMPOSITION! Scaled down to 66% to account for fill factor of 66% -->
   <material name="CarbonFiberVtx66D">
     <D type="density" value="0.8197" unit="g/cm3"/>
     <fraction n="0.65" ref="C"/>
     <fraction n="0.35" ref="Epoxy"/>
-  </material>  
+  </material>
 
   <material name="CarbonFiber_66D">
     <D type="density" value="1.0" unit="g/cm3"/>
     <fraction n="0.65" ref="C"/>
     <fraction n="0.35" ref="Epoxy"/>
-  </material>  
+  </material>
 
   <material name="CarbonFiber_20D">
     <D type="density" value="0.3" unit="g/cm3"/>
     <fraction n="0.65" ref="C"/>
     <fraction n="0.35" ref="Epoxy"/>
-  </material>  
+  </material>
 
   <material name="Rohacell31">
     <D type="density" value="0.032" unit="g/cm3"/>
@@ -150,14 +150,14 @@
     <composite n="2" ref="O"/>
     <composite n="1" ref="N"/>
   </material>
-  
+
   <material name="Rohacell31_50D">
     <D type="density" value="0.016" unit="g/cm3"/>
     <composite n="9" ref="C"/>
     <composite n="13" ref="H"/>
     <composite n="2" ref="O"/>
     <composite n="1" ref="N"/>
-  </material>  
+  </material>
 
   <material name="RPCGasDefault" state="gas">
     <D type="density" value="0.0037" unit="g/cm3"/>
@@ -333,7 +333,7 @@
   <material name="IronDens785">
     <D value="7.85" unit="g/cm3"/>
     <fraction n="1.0" ref="Fe"/>
-  </material>  
+  </material>
 
     <material name="AlBeMet162">
       <D value="2.1" unit="g/cm3"/>
@@ -597,5 +597,5 @@
     <fraction n="0.0042" ref="Fluorine"/>
   </material>
   <!-- End of microRWELL materials -->
-  
+
 </materials>

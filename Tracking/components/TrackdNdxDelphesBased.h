@@ -33,12 +33,12 @@
  *  The benefit of this approach is that any future updates in the delphes code are automatically available here.
  *  For limitations, see below.
  *  First status of this algorithm was presented here: https://indico.cern.ch/event/1556632/#72-parametrized-cluster-counti
- *  
+ *
  *  PLEASE NOTE :
  *  This algortihm is mostly meant as work-around to be able to provide dN/dx values for track in order to enable studies which require such information,
  *  while work on a more accurate dN/dx digitiser on a cell-basis (instead of track-basis) is being conducted.
- * 
- *  Inputs: 
+ *
+ *  Inputs:
  *      - TrackMCParticleCollection (tracks for the track length calculation, MCparticle for the number of cluster calculation)
  *      - EventHeaderCollection     (for consistently seeding the random engine)
  *  Properties:
@@ -50,7 +50,7 @@
  *  Outputs:
  *      - RecDqdxCollection: To each track, a quantity dqdx is associated, currently (13.06.2025) with only a value (not using error and type flag)
  *                           If the calculation somehow fails (see limitations below), the dqdx value is set to a dummy value (-999)
- * 
+ *
  *  LIMITATIONS (Status 13.06.2025) :
  *      - Entirely dependent on the implementation of the delphes functions:
  *          - Cluster calculation only available for 4 gas mixtures
@@ -61,7 +61,7 @@
  *          - Track length calculation assumes a perfectly cylindrical drift volume
  *      - Since this parametrisation is based on full tracks, the energy loss in the tracking volume cannot be accounted for
  *      - dN/dx quantity is only filled with a value, no error at the moment
- *  
+ *
  *  @author Andreas Loeschcke Centeno
  */
 class TrackdNdxDelphesBased final

@@ -32,7 +32,7 @@ namespace {
 
 DCHdigi_v02::DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc)
     : MultiTransformer(
-        name, 
+        name,
         svcLoc,
         {
             KeyValues("InputSimHitCollection", {""}),
@@ -101,17 +101,17 @@ StatusCode DCHdigi_v02::initialize() {
     return StatusCode::SUCCESS;
 }
 
-std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> 
+std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>
 DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
                         const edm4hep::EventHeaderCollection& header) const {
 
     edm4hep::SenseWireHitCollection output;
     edm4hep::TrackerHitSimTrackerHitLinkCollection links;
 
-    
+
     auto engine_seed = m_uniqueIDSvc->getUniqueID(header, this->name());
     TRandom3 random_engine(engine_seed);
-    
+
     debug() << "Processing event " << m_event_counter.value() << endmsg;
     m_event_counter+=1;
     debug() << "Processing SimTrackerHitCollection with " << input.size() << " hits." << endmsg;
@@ -179,7 +179,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             // POSITION SMEARING AND TIME COMPUTATION //
             ////////////////////////////////////////////
             // xy smearing
-            double smearing_xy_mm = random_engine.Gaus(0.0, m_xy_resolution_mm.value()); 
+            double smearing_xy_mm = random_engine.Gaus(0.0, m_xy_resolution_mm.value());
             double digihit_distance_to_wire_mm = std::max(0.0, distance_to_wire_mm + smearing_xy_mm);
             double drift_time_ns = this->get_drift_time_ns(digihit_distance_to_wire_mm);
 
@@ -214,7 +214,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
         // Sort the hit_info vector by time so that we can determine the trains
         std::ranges::sort(hit_info_vector, {}, &HitInfo::arrival_time_ns);
 
-        
+
         std::vector<std::vector<HitInfo>> hit_train_vector;
         hit_train_vector.reserve(hit_info_vector.size());
         if (!hit_info_vector.empty()){
@@ -269,7 +269,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
 
                 // Each particle will create a different number of clusters (different beta*gamma values)
                 // So store the MCparticles in a map for later cluster calculations
-                auto mcparticle = simhit->getParticle();                
+                auto mcparticle = simhit->getParticle();
                 auto object_id = mcparticle.getObjectID();
 
                 // Check if the particle is already in the map
@@ -320,7 +320,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             /////////////////////////////
             // SAVING THE SENSEWIREHIT //
             /////////////////////////////
-            
+
             // Use the first hit in the train for the time, position, and distance to wire
             const auto& first_hit = hit_train.front();
             auto sense_wire_hit = output.create();
@@ -353,7 +353,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
             link.setTo(*(first_hit.simhit));
 
         } // end of loop over hit_train_vector
-        
+
     } // end of loop over the cells
 
     return std::make_tuple(std::move(output), std::move(links));
