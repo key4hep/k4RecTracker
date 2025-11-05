@@ -20,17 +20,13 @@ IN_OUT_BASE_PATH = BASE_PATH / "data" / PROCESSOR_NAME
 CORE_PATH = f"{ARGS.version}_{detModNames[ARGS.detectorModels]}"
 
 # assert that the input path exists
-INPUT_PATH = (IN_OUT_BASE_PATH / "input_data" / f"{CORE_PATH}_REC").with_suffix(
-    FILE_SUFFIX
-)
+INPUT_PATH = (IN_OUT_BASE_PATH / "input_data" / f"{CORE_PATH}_REC").with_suffix(FILE_SUFFIX)
 assert INPUT_PATH.exists(), f"ERROR: The input path ({INPUT_PATH}) does not exist!"
 
 iosvc = IOSvc()
 iosvc.Input = str(INPUT_PATH)
 iosvc.Output = str(
-    (IN_OUT_BASE_PATH / "out_track_params" / f"{CORE_PATH}_track_params").with_suffix(
-        FILE_SUFFIX
-    )
+    (IN_OUT_BASE_PATH / "out_track_params" / f"{CORE_PATH}_track_params").with_suffix(FILE_SUFFIX)
 )
 # iosvc.outputCommands = ["drop *", "keep SiTrackPhi"]
 

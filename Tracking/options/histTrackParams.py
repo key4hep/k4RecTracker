@@ -78,10 +78,7 @@ for detMod in args.detectorModels:
     basePath = Path(getenv("dtDir", str(Path.home() / "promotion" / "data")))
 
     # build vars based on above vars
-    keys = [
-        f"{trackName}{varName}"
-        for trackName, varName in product(track_types, var_names)
-    ]
+    keys = [f"{trackName}{varName}" for trackName, varName in product(track_types, var_names)]
     in_file = basePath / processor / corePath.with_suffix(".edm4hep.root")
 
     with uproot.open(str(in_file) + ":events") as events:
@@ -95,8 +92,7 @@ for detMod in args.detectorModels:
         data[detMod] = events.arrays(filter_name=regex, library="pd")
         for var in var_names:
             data[detMod][f"d_{var}"] = (
-                data[detMod][f"{track_types[0]}{var}"]
-                - data[detMod][f"{track_types[1]}{var}"]
+                data[detMod][f"{track_types[0]}{var}"] - data[detMod][f"{track_types[1]}{var}"]
             )
         if args.debug:
             print("Matched branches are:")
@@ -106,9 +102,7 @@ for detMod in args.detectorModels:
 #############################################
 # plotting funcs
 #############################################
-def process_data_for_hist(
-    data, det_mod, var_column_name, rm_outliers, thresh_outlier_detection
-):
+def process_data_for_hist(data, det_mod, var_column_name, rm_outliers, thresh_outlier_detection):
     # TODO: remove comment?
     """
     Process the data for plotting, handling outliers if required.
@@ -179,9 +173,7 @@ def plot_track_param_hist(data, thresh_outlier_detection, args, var, labels, his
 
 
 # plotting func for collective plot of group of vars
-def plot_track_param_hist_var_groups(
-    data, thresh_outlier_detection, args, det_mod, labels, group
-):
+def plot_track_param_hist_var_groups(data, thresh_outlier_detection, args, det_mod, labels, group):
     hist_args_diff_detmods = {
         "x": [
             process_data_for_hist(
@@ -206,20 +198,13 @@ def plot_track_param_hist_var_groups(
 
 
 # plotting func for collective plot of all det mods
-def plot_track_param_hist_diff_detmods(
-    data, thresh_outlier_detection, args, var, labels
-):
+def plot_track_param_hist_diff_detmods(data, thresh_outlier_detection, args, var, labels):
     hist_args_diff_detmods = {
         "x": [
-            process_data_for_hist(
-                data, det_mod, var, args.rm_outliers, thresh_outlier_detection
-            )
+            process_data_for_hist(data, det_mod, var, args.rm_outliers, thresh_outlier_detection)
             for det_mod in args.detectorModels
         ],
-        "label": [
-            registry.get(det_mod).get_name(args.detname)
-            for det_mod in args.detectorModels
-        ],
+        "label": [registry.get(det_mod).get_name(args.detname) for det_mod in args.detectorModels],
     }
     plot_track_param_hist(
         data,
