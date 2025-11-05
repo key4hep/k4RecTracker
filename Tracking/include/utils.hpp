@@ -3,32 +3,30 @@
 
 //=== Standard Library ===
 #include <cmath>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
-#include <limits>
 
 //=== DD4hep / DDRec ===
-#include "DD4hep/DetType.h"
 #include "DD4hep/DetElement.h"
+#include "DD4hep/DetType.h"
 #include "DD4hep/Detector.h"
 #include "DD4hep/DetectorSelector.h"
 #include <DDRec/DetectorData.h>
 
 //=== edm4hep ===
 #include "edm4hep/TrackState.h"
-#include "extension/TrackCollection.h"
 #include "extension/MutableTrack.h"
+#include "extension/TrackCollection.h"
 
 //=== Others ===
-#include <marlinutil/HelixClass_double.h>
 #include <Objects/Helix.h>
-#include <torch/torch.h>
 #include <TMatrixDSym.h>
 #include <TVector3.h>
 #include <TVectorD.h>
-
-
+#include <marlinutil/HelixClass_double.h>
+#include <torch/torch.h>
 
 /////////////////////////////////
 /// Track propagation to Ecal ///
@@ -53,8 +51,7 @@
  * @throws std::runtime_error If the global detector instance is not initialized.
  * @throws std::runtime_error If the selection of DetElements is not unique or empty.
  */
-dd4hep::rec::LayeredCalorimeterData * getExtension(unsigned int includeFlag, unsigned int excludeFlag);
-
+dd4hep::rec::LayeredCalorimeterData* getExtension(unsigned int includeFlag, unsigned int excludeFlag);
 
 /**
  * @brief Computes the track state extrapolated at the calorimeter surface.
@@ -73,8 +70,8 @@ dd4hep::rec::LayeredCalorimeterData * getExtension(unsigned int includeFlag, uns
  *
  * @return edm4hep::TrackState The extrapolated track state at the calorimeter surface.
  */
-edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector& ecalProjection, const HelixClass_double& helixAtLastHit,double m_Bz);
-
+edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector& ecalProjection,
+                                                  const HelixClass_double& helixAtLastHit, double m_Bz);
 
 /**
  * @brief Extrapolates the track parameters to the calorimeter surface and updates the track with this information.
@@ -101,17 +98,10 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
  * @param m_eCalEndCapOuterR Outer radius of the endcap calorimeter.
  * @param m_eCalEndCapInnerZ z-position of the inner surface of the endcap calorimeter.
  */
-void FillTrackWithCalorimeterExtrapolation(
-    extension::MutableTrack& edm4hep_track,
-    double m_Bz,
-    int charge,
-    double a,
-    double m_eCalBarrelInnerR,
-    double m_eCalBarrelMaxZ,
-    double m_eCalEndCapInnerR,
-    double m_eCalEndCapOuterR,
-    double m_eCalEndCapInnerZ
-);
+void FillTrackWithCalorimeterExtrapolation(extension::MutableTrack& edm4hep_track, double m_Bz, int charge, double a,
+                                           double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
+                                           double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
+                                           double m_eCalEndCapInnerZ);
 
 ////////////////////////////
 /// Clustering Utilities ///
@@ -190,11 +180,13 @@ int getHypotesisCharge(int pdg);
  *
  * @param stateTrack 6D state vector: (x, y, z, px, py, pz)
  * @param params 6D vector of track parameters: (omega, phi0, d0, z0, tanLambda, time)
- * @param referencePoint 3D point for impact parameter calculation - see https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
+ * @param referencePoint 3D point for impact parameter calculation - see
+ * https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
  * @param timeError uncertainty on the time parameter (ns)
  * @param statecovMatrix covariance matrix of the original state vector (6x6)
  * @return TMatrixDSym covariance matrix of the track parameters + time (6x6)
  */
-TMatrixDSym computeTrackStateCovMatrix(TVectorD stateTrack, TVectorD params, TVector3 referencePoint, double timeError, TMatrixDSym statecovMatrix);
+TMatrixDSym computeTrackStateCovMatrix(TVectorD stateTrack, TVectorD params, TVector3 referencePoint, double timeError,
+                                       TMatrixDSym statecovMatrix);
 
 #endif // UTILS_HPP
