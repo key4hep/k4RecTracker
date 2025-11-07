@@ -71,7 +71,6 @@ StatusCode DCHsimpleDigitizer::execute(const EventContext&) const {
                                       input_sim_hit.getPosition().z * dd4hep::mm};
     // get the simHit coordinate in cm in the wire reference frame to be able to apply smearing of radius perpendicular
     // to the wire
-    // wireTransformMatrix.MasterToLocal(simHitGlobalPosition, simHitLocalPosition);
     const auto simHitLocalPosition = wireDetElement.nominal().worldToLocal(simHitGlobalPosition);
     debug() << "Cell ID string: " << m_decoder->valueString(cellID) << endmsg;
     debug() << "Global simHit x " << simHitGlobalPosition[0] << " --> Local simHit x " << simHitLocalPosition.X()
