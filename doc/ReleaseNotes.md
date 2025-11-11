@@ -1,3 +1,20 @@
+# v00.07.00
+
+* 2025-11-11 Juan Miguel Carceller ([PR#73](https://github.com/key4hep/k4RecTracker/pull/73))
+  - Avoid warnings about possible dangling references when storing the transformation matrix, similarly to how it was done in https://github.com/HEP-FCC/k4RecCalorimeter/pull/184#issue-3517931900
+
+* 2025-11-05 Thomas Madlener ([PR#71](https://github.com/key4hep/k4RecTracker/pull/71))
+  - Add pre-commit config and enforce formatting rules via CI
+
+* 2025-11-05 Andreas Loeschcke Centeno ([PR#67](https://github.com/key4hep/k4RecTracker/pull/67))
+  - `DCHdigi_v02`
+     - combines SimHits in a cell to one DigiHit (potentially multiple DigiHits, if the SimHits are significantly separated by time)
+     - Based on exchange with experts, time and position measurements of DigiHit are governed by first hit arriving at the readout 
+     - dN/dx calculation based on delphes parametrisation
+
+* 2025-11-04 Sanghyun Ko ([PR#62](https://github.com/key4hep/k4RecTracker/pull/62))
+  - Case handling to enable the track (from GenPtc) extrapolation for IDEA
+
 # v00.06.00
 
 * 2025-10-19 Andrea De Vita ([PR#65](https://github.com/key4hep/k4RecTracker/pull/65))
