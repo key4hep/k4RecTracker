@@ -65,27 +65,23 @@ StatusCode DCHsimpleDigitizer::execute(const EventContext&) const {
         Form("superLayer_%ld_layer_%ld_phi_%ld_wire", m_decoder->get(cellID, "superLayer"),
              m_decoder->get(cellID, "layer"), m_decoder->get(cellID, "phi"));
     dd4hep::DetElement wireDetElement = cellDetElement.child(wireDetElementName);
-    // get the transformation matrix used to place the wire
-    const auto wireTransformMatrix = wireDetElement.nominal().worldTransformation();
     // Retrieve global position in mm and apply unit transformation (translation matrix is tored in cm)
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,
                                       input_sim_hit.getPosition().z * dd4hep::mm};
-    double simHitLocalPosition[3] = {0, 0, 0};
     // get the simHit coordinate in cm in the wire reference frame to be able to apply smearing of radius perpendicular
     // to the wire
-    wireTransformMatrix.MasterToLocal(simHitGlobalPosition, simHitLocalPosition);
+    const auto simHitLocalPosition = wireDetElement.nominal().worldToLocal(simHitGlobalPosition);
     debug() << "Cell ID string: " << m_decoder->valueString(cellID) << endmsg;
-    ;
-    debug() << "Global simHit x " << simHitGlobalPosition[0] << " --> Local simHit x " << simHitLocalPosition[0]
+    debug() << "Global simHit x " << simHitGlobalPosition[0] << " --> Local simHit x " << simHitLocalPosition.X()
             << " in cm" << endmsg;
-    debug() << "Global simHit y " << simHitGlobalPosition[1] << " --> Local simHit y " << simHitLocalPosition[1]
+    debug() << "Global simHit y " << simHitGlobalPosition[1] << " --> Local simHit y " << simHitLocalPosition.Y()
             << " in cm" << endmsg;
-    debug() << "Global simHit z " << simHitGlobalPosition[2] << " --> Local simHit z " << simHitLocalPosition[2]
+    debug() << "Global simHit z " << simHitGlobalPosition[2] << " --> Local simHit z " << simHitLocalPosition.Z()
             << " in cm" << endmsg;
     // build a vector to easily apply smearing of distance to the wire
-    dd4hep::rec::Vector3D simHitLocalPositionVector(simHitLocalPosition[0], simHitLocalPosition[1],
-                                                    simHitLocalPosition[2]);
+    dd4hep::rec::Vector3D simHitLocalPositionVector(simHitLocalPosition.X(), simHitLocalPosition.Y(),
+                                                    simHitLocalPosition.Z());
     // get the smeared distance to the wire (cylindrical coordinate as the smearing should be perpendicular to the wire)
     double smearedDistanceToWire = simHitLocalPositionVector.rho() + m_gauss_xy.shoot() * dd4hep::mm;
     // smear the z position (in local coordinate the z axis is aligned with the wire i.e. it take the stereo angle into
@@ -104,12 +100,12 @@ StatusCode DCHsimpleDigitizer::execute(const EventContext&) const {
     // go back to the global frame
     double digiHitLocalPosition[3] = {digiHitLocalPositionVector.x(), digiHitLocalPositionVector.y(),
                                       digiHitLocalPositionVector.z()};
-    double digiHitGlobalPosition[3] = {0, 0, 0};
-    wireTransformMatrix.LocalToMaster(digiHitLocalPosition, digiHitGlobalPosition);
+    const auto digiHitGlobalPosition = wireDetElement.nominal().localToWorld(digiHitLocalPosition);
+
     // go back to mm
-    edm4hep::Vector3d digiHitGlobalPositionVector(digiHitGlobalPosition[0] / dd4hep::mm,
-                                                  digiHitGlobalPosition[1] / dd4hep::mm,
-                                                  digiHitGlobalPosition[2] / dd4hep::mm);
+    edm4hep::Vector3d digiHitGlobalPositionVector(digiHitGlobalPosition.X() / dd4hep::mm,
+                                                  digiHitGlobalPosition.Y() / dd4hep::mm,
+                                                  digiHitGlobalPosition.Z() / dd4hep::mm);
     output_digi_hit.setPosition(digiHitGlobalPositionVector);
     output_digi_hit.setCellID(cellID);
   }

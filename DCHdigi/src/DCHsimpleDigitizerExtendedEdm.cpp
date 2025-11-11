@@ -80,26 +80,24 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute(const EventContext&) const {
         Form("superLayer_%ld_layer_%ld_phi_%ld_wire", m_decoder->get(cellID, "superLayer"),
              m_decoder->get(cellID, "layer"), m_decoder->get(cellID, "phi"));
     dd4hep::DetElement wireDetElement = cellDetElement.child(wireDetElementName);
-    // get the transformation matrix used to place the wire (DD4hep works with cm)
-    const auto wireTransformMatrix = wireDetElement.nominal().worldTransformation();
     // Retrieve global position in mm and transform it to cm because the DD4hep translation matrix is stored in cm
     double simHitGlobalPosition[3] = {input_sim_hit.getPosition().x * dd4hep::mm,
                                       input_sim_hit.getPosition().y * dd4hep::mm,
                                       input_sim_hit.getPosition().z * dd4hep::mm};
-    double simHitLocalPosition[3] = {0, 0, 0};
     // get the simHit coordinate in cm in the wire reference frame to be able to apply smearing of radius perpendicular
     // to the wire
-    wireTransformMatrix.MasterToLocal(simHitGlobalPosition, simHitLocalPosition);
+    const auto simHitLocalPosition = wireDetElement.nominal().worldToLocal(simHitGlobalPosition);
     debug() << "Cell ID string: " << m_decoder->valueString(cellID) << endmsg;
-    debug() << "Global simHit x " << simHitGlobalPosition[0] << " --> Local simHit x " << simHitLocalPosition[0]
+    debug() << "Global simHit x " << simHitGlobalPosition[0] << " --> Local simHit x " << simHitLocalPosition.X()
             << " in cm" << endmsg;
-    debug() << "Global simHit y " << simHitGlobalPosition[1] << " --> Local simHit y " << simHitLocalPosition[1]
+    debug() << "Global simHit y " << simHitGlobalPosition[1] << " --> Local simHit y " << simHitLocalPosition.Y()
             << " in cm" << endmsg;
-    debug() << "Global simHit z " << simHitGlobalPosition[2] << " --> Local simHit z " << simHitLocalPosition[2]
+    debug() << "Global simHit z " << simHitGlobalPosition[2] << " --> Local simHit z " << simHitLocalPosition.Z()
             << " in cm" << endmsg;
     // build a vector to easily apply smearing of distance to the wire, going back to mm
-    dd4hep::rec::Vector3D simHitLocalPositionVector(
-        simHitLocalPosition[0] / dd4hep::mm, simHitLocalPosition[1] / dd4hep::mm, simHitLocalPosition[2] / dd4hep::mm);
+    dd4hep::rec::Vector3D simHitLocalPositionVector(simHitLocalPosition.X() / dd4hep::mm,
+                                                    simHitLocalPosition.Y() / dd4hep::mm,
+                                                    simHitLocalPosition.Z() / dd4hep::mm);
     // get the smeared distance to the wire (cylindrical coordinate as the smearing should be perpendicular to the wire)
     debug() << "Original distance to wire: " << simHitLocalPositionVector.rho() << " mm" << endmsg;
     double smearedDistanceToWire = simHitLocalPositionVector.rho() + m_gauss_xy.shoot();
@@ -117,32 +115,30 @@ StatusCode DCHsimpleDigitizerExtendedEdm::execute(const EventContext&) const {
     double leftHitLocalPosition[3] = {-1 * smearedDistanceToWire * dd4hep::mm, 0, smearedZ * dd4hep::mm};
     double rightHitLocalPosition[3] = {smearedDistanceToWire * dd4hep::mm, 0, smearedZ * dd4hep::mm};
     // transform the left and right hit local position in global coordinate (still cm here)
-    double leftHitGlobalPosition[3] = {0, 0, 0};
-    double rightHitGlobalPosition[3] = {0, 0, 0};
-    wireTransformMatrix.LocalToMaster(leftHitLocalPosition, leftHitGlobalPosition);
-    wireTransformMatrix.LocalToMaster(rightHitLocalPosition, rightHitGlobalPosition);
-    // std::cout << (leftHitGlobalPosition[2]==rightHitGlobalPosition[2]) <<  std::endl; // FIXME why are left and right
-    // global z coordinates the same?
-    debug() << "Global leftHit x " << leftHitGlobalPosition[0] << " --> Local leftHit x " << leftHitLocalPosition[0]
+    const auto leftHitGlobalPosition = wireDetElement.nominal().localToWorld(leftHitLocalPosition);
+    const auto rightHitGlobalPosition = wireDetElement.nominal().localToWorld(rightHitLocalPosition);
+    // std::cout << (leftHitGlobalPosition.Z()==rightHitGlobalPosition.Z()) <<  std::endl; // FIXME why are left and
+    // right global z coordinates the same?
+    debug() << "Global leftHit x " << leftHitGlobalPosition.X() << " --> Local leftHit x " << leftHitLocalPosition[0]
             << " in cm" << endmsg;
-    debug() << "Global leftHit y " << leftHitGlobalPosition[1] << " --> Local leftHit y " << leftHitLocalPosition[1]
+    debug() << "Global leftHit y " << leftHitGlobalPosition.Y() << " --> Local leftHit y " << leftHitLocalPosition[1]
             << " in cm" << endmsg;
-    debug() << "Global leftHit z " << leftHitGlobalPosition[2] << " --> Local leftHit z " << leftHitLocalPosition[2]
+    debug() << "Global leftHit z " << leftHitGlobalPosition.Z() << " --> Local leftHit z " << leftHitLocalPosition[2]
             << " in cm" << endmsg;
-    debug() << "Global rightHit x " << rightHitGlobalPosition[0] << " --> Local rightHit x " << rightHitLocalPosition[0]
-            << " in cm" << endmsg;
-    debug() << "Global rightHit y " << rightHitGlobalPosition[1] << " --> Local rightHit y " << rightHitLocalPosition[1]
-            << " in cm" << endmsg;
-    debug() << "Global rightHit z " << rightHitGlobalPosition[2] << " --> Local rightHit z " << rightHitLocalPosition[2]
-            << " in cm" << endmsg;
+    debug() << "Global rightHit x " << rightHitGlobalPosition.X() << " --> Local rightHit x "
+            << rightHitLocalPosition[0] << " in cm" << endmsg;
+    debug() << "Global rightHit y " << rightHitGlobalPosition.Y() << " --> Local rightHit y "
+            << rightHitLocalPosition[1] << " in cm" << endmsg;
+    debug() << "Global rightHit z " << rightHitGlobalPosition.Z() << " --> Local rightHit z "
+            << rightHitLocalPosition[2] << " in cm" << endmsg;
     // fill the output DriftChamberDigi (making sure we are back in mm)
     output_digi_hit.setCellID(cellID);
     edm4hep::Vector3d leftHitGlobalPositionVector =
-        edm4hep::Vector3d(leftHitGlobalPosition[0] / dd4hep::mm, leftHitGlobalPosition[1] / dd4hep::mm,
-                          leftHitGlobalPosition[2] / dd4hep::mm);
+        edm4hep::Vector3d(leftHitGlobalPosition.X() / dd4hep::mm, leftHitGlobalPosition.Y() / dd4hep::mm,
+                          leftHitGlobalPosition.Z() / dd4hep::mm);
     edm4hep::Vector3d rightHitGlobalPositionVector =
-        edm4hep::Vector3d(rightHitGlobalPosition[0] / dd4hep::mm, rightHitGlobalPosition[1] / dd4hep::mm,
-                          rightHitGlobalPosition[2] / dd4hep::mm);
+        edm4hep::Vector3d(rightHitGlobalPosition.X() / dd4hep::mm, rightHitGlobalPosition.Y() / dd4hep::mm,
+                          rightHitGlobalPosition.Z() / dd4hep::mm);
     output_digi_hit.setLeftPosition(leftHitGlobalPositionVector);
     output_digi_hit.setRightPosition(rightHitGlobalPositionVector);
     output_digi_hit.setTime(input_sim_hit.getTime()); // will apply smearing when we know more from R&D teams
