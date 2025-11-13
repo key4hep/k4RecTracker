@@ -1,5 +1,7 @@
 #include "utils.hpp"
 
+#include <fmt/core.h>
+
 dd4hep::rec::LayeredCalorimeterData* getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
 
   dd4hep::rec::LayeredCalorimeterData* theExtension = 0;
@@ -352,4 +354,10 @@ TMatrixDSym computeTrackStateCovMatrix(TVectorD stateTrack, TVectorD params, TVe
   covarianceTrackState(5, 5) = timeError * timeError;
 
   return covarianceTrackState;
+}
+
+void printInStars(const Gaudi::Algorithm* thisAlg, const std::string& msg, const int lineWidth) {
+  thisAlg->debug() << fmt::format("{:*^{}}", "", lineWidth) << endmsg;
+  thisAlg->debug() << fmt::format("{:*^{}}", msg, lineWidth) << endmsg;
+  thisAlg->debug() << fmt::format("{:*^{}}", "", lineWidth) << endmsg;
 }
