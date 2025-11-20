@@ -42,23 +42,23 @@ StatusCode VTXdigitizerDetailed::initialize() {
       return StatusCode::FAILURE;
     }
 
-    hErrorX = new TH1D("hErrorX","Distance in X in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
+    hErrorX = new TH1D("hErrorX","Distance in X in local frame between the true hit and digitized one in mm", 10000, -0.05, 0.05);
     hErrorX->SetDirectory(0);
-    hErrorY = new TH1D("hErrorY","Distance in Y in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
+    hErrorY = new TH1D("hErrorY","Distance in Y in local frame between the true hit and digitized one in mm", 10000, -0.05, 0.05);
     hErrorY->SetDirectory(0);
-    hErrorZ = new TH1D("hErrorZ","Distance in Z in local frame between the true hit and digitized one in mm", 6000, -0.3, 0.3);
+    hErrorZ = new TH1D("hErrorZ","Distance in Z in local frame between the true hit and digitized one in mm", 10000, -0.05, 0.05);
     hErrorZ->SetDirectory(0);
-    hError = new TH1D("hError","Distance between the true hit and digitized one in mm", 1000, 0., 0.1);
+    hError = new TH1D("hError","Distance between the true hit and digitized one in mm", 10000, 0., 0.05);
     hError->SetDirectory(0);
 
     // Before Threshold 
 
-    hChargeBeforeThreshold = new TH1D("hChargeBeforeThreshold", "Pixel Charge before threshold", 100, 0., 100.);
+    hChargeBeforeThreshold = new TH1D("hChargeBeforeThreshold", "Pixel Charge before threshold", 4000, 0., 20.);
     hChargeBeforeThreshold->SetXTitle("Pixel Charge Without Threshold (ke)");
     hChargeBeforeThreshold->SetYTitle("Pixels");
     hChargeBeforeThreshold->SetDirectory(0);
 
-    hActivePixelCountBeforeThreshold = new TH1D("hActivePixelCountPerCluster", "Active Pixels Before Threshold per Cluster", 100, 0, 50);
+    hActivePixelCountBeforeThreshold = new TH1D("hActivePixelCountPerCluster", "Active Pixels Before Threshold per Cluster", 60, 0, 30);
     hActivePixelCountBeforeThreshold->SetXTitle("Active Pixels");
     hActivePixelCountBeforeThreshold->SetYTitle("Clusters");
     hActivePixelCountBeforeThreshold->SetDirectory(0);
@@ -66,30 +66,30 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
     // After Threshold
 
-    hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "Pixel Charge after threshold", 100, 0., 100.);
+    hChargeAboveThreshold = new TH1D("hChargeAboveThreshold", "Pixel Charge after threshold", 4000, 0., 20.);
     hChargeAboveThreshold->SetXTitle("Pixel Charge (ke)");
     hChargeAboveThreshold->SetYTitle("Pixels");
     hChargeAboveThreshold->SetDirectory(0);
 
-    hActivePixelCountAfterThreshold = new TH1D("hActivePixelCountAfterThresholdPerCluster", "Active Pixels After Threshold per Cluster", 100, 0, 50);
+    hActivePixelCountAfterThreshold = new TH1D("hActivePixelCountAfterThresholdPerCluster", "Active Pixels After Threshold per Cluster", 60, 0, 30);
     hActivePixelCountAfterThreshold->SetXTitle("Active Pixels");
     hActivePixelCountAfterThreshold->SetYTitle("Clusters");
     hActivePixelCountAfterThreshold->SetDirectory(0);
 
     // Charge per cluster of pixels
 
-    hChargePerCluster = new TH1D("hChargePerCluster", "Charge per Cluster", 100, 0., 100.);
+    hChargePerCluster = new TH1D("hChargePerCluster", "Charge per Cluster", 3000, 0., 30.);
     hChargePerCluster->SetXTitle("Charge in Cluster (ke)");
     hChargePerCluster->SetYTitle("Clusters");
     hChargePerCluster->SetDirectory(0);
 
     /// Drift due to magnetic field
 
-    hXDriftDueToMagField = new TH1D("hXDriftDueToMagField", "X Drift due to magnetic field", 100, -0.04, 0.04);
+    hXDriftDueToMagField = new TH1D("hXDriftDueToMagField", "X Drift due to magnetic field", 2000, -0.01, 0.01);
     hXDriftDueToMagField->SetXTitle("X Drift due to magnetic field (mm)");
     hXDriftDueToMagField->SetDirectory(0);
 
-    hYDriftDueToMagField = new TH1D("hYDriftDueToMagField", "Y Drift due to magnetic field", 100, -0.04, 0.04);
+    hYDriftDueToMagField = new TH1D("hYDriftDueToMagField", "Y Drift due to magnetic field", 2000, -0.01, 0.01);
     hYDriftDueToMagField->SetXTitle("Y Drift due to magnetic field (mm)");
     hYDriftDueToMagField->SetDirectory(0);
 
@@ -154,7 +154,6 @@ StatusCode VTXdigitizerDetailed::initialize() {
             << m_readoutName.value() << ": " << e.what() << endmsg;
     return StatusCode::FAILURE;
   }
-
 
   if (m_decoder->fieldDescription().find("layer") == std::string::npos){
     error() 
@@ -279,7 +278,7 @@ std::vector<VTXdigitizerDetailed::ChargeDepositUnit> VTXdigitizerDetailed::prima
    *  The positions are given in mm
    */
   
-  const float segmentLength = 0.005; //5microns in mm //Something to put as a property?
+  const float segmentLength = 0.001; //1micron in mm //Something to put as a property?
   float pathLength = hit.getPathLength(); // Path Length of the particle in the active material in mm
   int numberOfSegments = int(pathLength / segmentLength); // Number of segments
   if (numberOfSegments <1) { numberOfSegments = 1; }
