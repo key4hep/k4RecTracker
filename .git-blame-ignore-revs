@@ -1,2 +1,8 @@
 # clang-format
 16c94e817787e7bb4872faaa20667dcf56db7c11
+# whitespace cleanup
+2aaa998c5b845d0a5e23f618f618fbf0c929f037
+# ruff format
+9d7bd27603093bb38011db2c72d108585470af8e
+# clang-format again (this time we enforce it)
+663205c5fd14030b7df5812c8c2c0175aaaa772e

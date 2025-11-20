@@ -95,10 +95,11 @@ StatusCode DCHdigi_v01::initialize() {
   return StatusCode::SUCCESS;
 }
 
-std::tuple<std::mt19937_64, TRandom3> DCHdigi_v01::CreateRandomEngines(const edm4hep::EventHeaderCollection& headers) const {
+std::tuple<std::mt19937_64, TRandom3>
+DCHdigi_v01::CreateRandomEngines(const edm4hep::EventHeaderCollection& headers) const {
   auto engine_seed = m_uidSvc->getUniqueID(headers, this->name());
   auto rng_engine = std::mt19937_64(engine_seed);
-  auto random_seed = m_uidSvc->getUniqueID(headers, this->name()+"_1");
+  auto random_seed = m_uidSvc->getUniqueID(headers, this->name() + "_1");
   auto myRandom = TRandom3(random_seed);
   // advance internal state to minimize possibility of creating correlations
   rng_engine.discard(10);
@@ -112,10 +113,10 @@ std::tuple<std::mt19937_64, TRandom3> DCHdigi_v01::CreateRandomEngines(const edm
 ///////////////////////////////////////////////////////////////////////////////////////
 std::tuple<extension::SenseWireHitCollection, extension::SenseWireHitSimTrackerHitLinkCollection>
 DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
-                    const edm4hep::EventHeaderCollection&   headers) const {
+                        const edm4hep::EventHeaderCollection& headers) const {
   /// initialize engines
   auto [rng_engine, myRandom] = this->CreateRandomEngines(headers);
-    
+
   // Gaussian random number generator used for the smearing of the z position, in cm!
   std::normal_distribution<double> gauss_z_cm{0., m_z_resolution.value() * MM_TO_CM};
   // Gaussian random number generator used for the smearing of the xy position, in cm!
@@ -297,7 +298,6 @@ void DCHdigi_v01::PrintConfiguration(std::ostream& io) {
   return;
 }
 
-
 ///////////////////////////////////////////////////////////////////////////////////////
 ///////////////////////       CalculateNClusters       ////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////
@@ -312,7 +312,8 @@ bool DCHdigi_v01::IsParticleCreatedInsideDriftChamber(const edm4hep::MCParticle&
   return (vertexZabs < DCH_halflengh) && (vertexRsquared > DCH_rin_squared) && (vertexRsquared < DCH_rout_squared);
 }
 
-std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit, TRandom3 & myRandom) const {
+std::pair<uint32_t, std::vector<int>> DCHdigi_v01::CalculateClusters(const edm4hep::SimTrackerHit& input_sim_hit,
+                                                                     TRandom3& myRandom) const {
 
   const edm4hep::MCParticle& thisParticle = input_sim_hit.getParticle();
   // if gamma, optical photon, or other particle with null mass, or hit with zero energy deposited, return zero clusters
@@ -330,7 +331,6 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
   float ExECl1 = 0;
   float cut = 1000; // controlla
   float EIzs = 25.6;
-  float ExECl1totRec = 0;
   float rndCorr(0);
   const int nhEp = 10;
   float hEpcut[10] = {100, 200, 300, 400, 500, 600, 700, 800, 900, 1000};
@@ -488,7 +488,6 @@ std::pair<uint32_t, std::vector<int> > DCHdigi_v01::CalculateClusters(const edm4
       if (ExECl1 > Eloss) {
         ExECl1 = Eloss;
       }
-      ExECl1totRec += ExECl1;
       NCl1++;
       Eloss -= ExECl1;
       // cluster size is 1

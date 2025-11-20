@@ -12,6 +12,17 @@
 * Random number generator uses the seeds calculated on an event basis by the UID service, from the podio header information (run/event number)
 * This digitizer is meant to be used with `DriftChamber_o1_v02` from k4geo and is expected to work for the upcoming `DriftChamber_o1_v03`
 
+## DCHdigi_v02
+* SimHits in one cell are grouped in 'trains' (by time of arrival at the readout), with each train creating one DigiHit (for a single particle traversing one cell, this typically leads to one DigiHit in the cell). Trains are separated by cell dead time (`Deadtime_ns`)
+* Smearing of the digitized hit position along the wire and radially is done according to the input parameter values (`zResolution_mm` and `xyResolution_mm`, respectively). The digitized hit position is the projection of the simulated hit position onto the sense wire (at the center of the cell)
+* Time of DigiHit consists of SimHit creation time +  drift time to wire + signal travelling time along the wire to the readout
+* The readout window can be defined via two `Gaudi::Property` members (start time and duration) to filter any DigiHits with associated time outside this window
+* dN/dx information is added via Delphes parametrisation. The cluster size is not calculated at the moment, only the total number of clusters for the DigiHit
+* It requires that the cellID contain the layer and number of cell within the layer (nphi). It does not matter if the segmentation comes from geometrical segmentation by using twisted tubes and hyperboloids (and the cellID is created out of volume IDs), or the segmentation is virtual DD4hep segmentation
+* Random number generator uses the seeds calculated on an event basis by the UID service, from the podio header information (run/event number)
+* This digitizer is meant to be used with `DriftChamber_o1_v02` from k4geo and is expected to work for the upcoming `DriftChamber_o1_v03`
+
+
 ## DCHsimpleDigitizerExtendedEdm
 
 * Algorithm for creating digitized drift chamber hits (based on edm4hep::TrackerHit3D) from edm4hep::SimTrackerHit. Resolution along z and xy (distance to the wire) has to be specified. The smearing is applied in the wire reference frame, by means of the placement matrix of the wires
