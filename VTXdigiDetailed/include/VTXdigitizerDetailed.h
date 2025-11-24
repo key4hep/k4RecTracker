@@ -96,9 +96,9 @@ class VTXdigitizerDetailed final  //Gaudi::Functional::
     // Normal Vector direction in sensor local frame (normal to sensor surface) (initialised during the first hit in primary_ionization -> should be the same in the full sub-detector)
     mutable std::string m_LocalNormalVectorDir = "";
     // Define 50microns in mm
-    float m_Dist50; //=0.050
+    float m_Dist50 = 0.050;
     // Define the area of integration of the charge in number of sigma around the central position
-    float m_ClusterWidth; //=3.0  (set in initialize function)
+    float m_ClusterWidth = 3.0;
 
     // Declare the geometry service (initialised in the constructor)
     SmartIF<IGeoSvc> m_geoSvc;

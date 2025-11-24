@@ -129,7 +129,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
   }
   info() << "GeoSvc successfully retrieved" << endmsg;
 
-  // Get detectir from geoSvc
+  // Get detector from geoSvc
   const auto detector = m_geoSvc->getDetector();
   
   // Get the readout name from "inputSimHits" if "readoutName" not set by the user
@@ -201,12 +201,6 @@ StatusCode VTXdigitizerDetailed::initialize() {
     error() << m_detectorName << " : Detector type should be BARREL or ENDCAP " << endmsg;
     return StatusCode::FAILURE;
    }
-
-  // InitiAlize the diffusion parameters
-  m_Dist50 = 0.050; // Define 50microns in mm
-
-  // initialise the cluster width
-  m_ClusterWidth = 3.0;
 
   debug() << "Initializing VTXdigitizerDetailed with the following parameters:" << endmsg;
   debug() << "Detector Name: " << m_detectorName << endmsg;
