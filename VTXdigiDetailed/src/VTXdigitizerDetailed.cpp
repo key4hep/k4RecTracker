@@ -7,24 +7,24 @@ DECLARE_COMPONENT(VTXdigitizerDetailed)
 
 VTXdigitizerDetailed::VTXdigitizerDetailed(const std::string& aname, ISvcLocator* asvcLoc)
       : MultiTransformer(aname, asvcLoc,
-      {KeyValues("inputSimHits", {""})},
-      {KeyValues("outputDigiHits", {""}),
-       KeyValues("outputSimDigiAssociation", {""})})
+      {KeyValue("inputSimHits", "")},
+      {KeyValue("outputDigiHits", ""),
+       KeyValue("outputSimDigiAssociation", "")})
       {}
 
 StatusCode VTXdigitizerDetailed::initialize() {
 
   // Check that input and output collections names are declared by the user
 
-  if ( inputLocations("inputSimHits")[0].empty() ) {
+  if ( inputLocations("inputSimHits").empty() ) {
     error() << "You must specify the inputSimHits collection name!" << endmsg;
     return StatusCode::FAILURE;
   }
-  if ( outputLocations("outputDigiHits")[0].empty() ) {
+  if ( outputLocations("outputDigiHits").empty() ) {
     error() << "You must specify the outputDigiHits collection name!" << endmsg;
     return StatusCode::FAILURE;
   }
-  if ( outputLocations("outputSimDigiAssociation")[0].empty() ) {
+  if ( outputLocations("outputSimDigiAssociation").empty() ) {
     error() << "You must specify the outputSimDigiAssociation collection name!" << endmsg;
     return StatusCode::FAILURE;
   }
@@ -136,7 +136,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
   info() << "GeoSvc successfully retrieved" << endmsg;
 
   // Get the readout name from "inputSimHits" if "readoutName" not set by the user
-  if (m_readoutName.value().empty()) { m_readoutName = inputLocations("inputSimHits")[0]; }
+  if (m_readoutName.value().empty()) { m_readoutName = inputLocations("inputSimHits"); }
 
   // Check if the readout exists
   if (m_geoSvc->getDetector()->readouts().find(m_readoutName.value()) == m_geoSvc->getDetector()->readouts().end()) {
@@ -940,30 +940,28 @@ void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
 
   // save the debug histograms in a file
   // file is saved and closed when going out of scope
+  auto filename = m_DebugFileName.value().c_str();
+  std::unique_ptr<TFile> ofile{TFile::Open( filename, "recreate")};
+  if (!ofile || ofile->IsZombie())
   {
-    auto filename = m_DebugFileName.value().c_str();
-    std::unique_ptr<TFile> ofile{TFile::Open( filename, "recreate")};
-    if (!ofile || ofile->IsZombie())
-    {
-      error() << "Error: Could not open file " << filename << std::endl;
-      return;
-    }
-    ofile->cd();
-    hErrorX->Write();
-    hErrorY->Write();
-    hErrorZ->Write();
-    hError->Write();    
-    hXDriftDueToMagField->Write();
-    hYDriftDueToMagField->Write();
-
-    hChargeBeforeThreshold->Write();
-    hActivePixelCountBeforeThreshold->Write();
-    hChargeAboveThreshold->Write();
-    hActivePixelCountAfterThreshold->Write();
-    hChargePerCluster->Write();
-    hClusterPerLayer->Write();
-    hActivePixelPerlayer->Write();
+    error() << "Error: Could not open file " << filename << std::endl;
+    return;
   }
+  ofile->cd();
+  hErrorX->Write();
+  hErrorY->Write();
+  hErrorZ->Write();
+  hError->Write();    
+  hXDriftDueToMagField->Write();
+  hYDriftDueToMagField->Write();
+
+  hChargeBeforeThreshold->Write();
+  hActivePixelCountBeforeThreshold->Write();
+  hChargeAboveThreshold->Write();
+  hActivePixelCountAfterThreshold->Write();
+  hChargePerCluster->Write();
+  hClusterPerLayer->Write();
+  hActivePixelPerlayer->Write();
 
 
   // Restore previous ROOT directory
