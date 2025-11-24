@@ -142,13 +142,31 @@ StatusCode VTXdigitizerDetailed::initialize() {
   }
 
   //Set the cellID decoder
+
+  const std::string metadataKey = podio::collMetadataParamName(inputLocations("inputSimHits")[0], edm4hep::labels::CellIDEncoding);
+  std::string encodingString;
+  try {
+    auto optionalEncoding = k4FWCore::getParameter<std::string>(metadataKey, this);
+    if (!optionalEncoding.has_value()) {
+      error() << "CellIDEncoding metadata key '" << metadataKey << "' not found for collection '"
+              << inputLocations("inputSimHits")[0] << "'. Cannot initialize decoder." << endmsg;
+      return StatusCode::FAILURE;
+    }
+    encodingString = optionalEncoding.value();
+  } 
+  catch (const std::exception& e) {
+    error() << "An unexpected exception occurred while retrieving metadata: " << e.what() << endmsg;
+    return StatusCode::FAILURE;
+  }
+
   try {
     m_decoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(
-        detector->readout(m_readoutName.value()).idSpec().fieldDescription()
+        encodingString
     );
-  } catch (const std::runtime_error& e) {
-    error() << "Failed to create BitFieldCoder for readout "
-            << m_readoutName.value() << ": " << e.what() << endmsg;
+  } 
+  catch (const std::runtime_error& e) {
+    error() << "Failed to create BitFieldCoder for collection "
+            << inputLocations("inputSimHits")[0] << " using encoding: " << encodingString << ": " << e.what() << endmsg;
     return StatusCode::FAILURE;
   }
 
@@ -171,7 +189,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
   // retrieve the volume manager
   m_volman = detector->volumeManager();
 
-   // Get the sensor thickness and 2D size per layer in mm
+  // Get the sensor thickness and 2D size per layer in mm
   dd4hep::DetType type(detector->detector(m_detectorName).typeFlag()); // Get detector Type
   if (type.is(dd4hep::DetType::BARREL)) { // if this is a barrel detector
     getSensorThickness<dd4hep::rec::ZPlanarData>();

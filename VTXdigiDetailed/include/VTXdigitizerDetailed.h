@@ -2,6 +2,7 @@
 
 // ROOT headers
 #include <memory> // for std::unique_ptr
+#include <optional>
 #include "TFile.h"
 #include "TH1D.h"
 #include "TH2D.h"
@@ -9,9 +10,9 @@
 
 // GAUDI
 #include "Gaudi/Property.h"
-//#include "Gaudi/Functional/Transformer.h"
 
 #include <k4FWCore/Transformer.h>
+#include "k4FWCore/MetadataUtils.h"
 #include "GaudiKernel/IRndmGenSvc.h"
 #include "GaudiKernel/RndmGenerators.h"
 #include "GaudiKernel/ServiceHandle.h"
