@@ -35,6 +35,7 @@
 #include "DDRec/Vector3D.h"
 #include "DDRec/Vector2D.h"
 #include "DDRec/SurfaceManager.h"
+#include "DDRec/Surface.h"
 
 #include "DDSegmentation/BitFieldCoder.h"
 
@@ -78,8 +79,6 @@ class VTXdigitizerDetailed final  //Gaudi::Functional::
     // Detector readout names
     // If not provided, it will be initialised as "inputSimHits" in inititialize function
     Gaudi::Property<std::string> m_readoutName{this, "readoutName", "", "Name of the detector readout"};
-    // Normal Vector direction in sensor local frame (may differ according to geometry definition within k4geo)
-    Gaudi::Property<std::string> m_LocalNormalVectorDir{this,"LocalNormalVectorDir","","Normal Vector direction in sensor local frame (may differ according to geometry definition within k4geo)"};
     // Tangent of sensor's Lorentz angle (default is 0.1)
     Gaudi::Property<float> m_tanLorentzAnglePerTesla{this, "tanLorentzAnglePerTesla", 0.1f, "Tangent of sensor's Lorentz angle per Tesla (default is 0.1)"};
     // Charge diffusion
@@ -93,6 +92,8 @@ class VTXdigitizerDetailed final  //Gaudi::Functional::
 
     // List of sensor thickness per layer in millimeter
     std::vector<float> m_sensorThickness;
+    // Normal Vector direction in sensor local frame (normal to sensor surface) (initialised during the first hit in primary_ionization -> should be the same in the full sub-detector)
+    mutable std::string m_LocalNormalVectorDir = "";
     // Define 50microns in mm
     float m_Dist50; //=0.050
     // Define the area of integration of the charge in number of sigma around the central position
@@ -104,6 +105,8 @@ class VTXdigitizerDetailed final  //Gaudi::Functional::
     std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_decoder;
     // Volume manager to get the physical cell sensitive volume
     dd4hep::VolumeManager m_volman;
+    // Surface map from SurfaceManager
+    const dd4hep::rec::SurfaceMap* surfaceMap;
     
     // Random Number Service
     SmartIF<IRndmGenSvc> m_randSvc;
@@ -175,6 +178,8 @@ class VTXdigitizerDetailed final  //Gaudi::Functional::
     // Additional member functions
     // Private methods
     template<typename T> void getSensorThickness();
+
+    void GetNormalVectorLocal(const edm4hep::SimTrackerHit& input_sim_hit) const;
 
     std::vector<ChargeDepositUnit> primary_ionization(const edm4hep::SimTrackerHit& hit) const;
 

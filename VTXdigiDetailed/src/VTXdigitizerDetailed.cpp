@@ -16,7 +16,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   // Check that input and output collections names are declared by the user
 
-  if ( inputLocations("inputSimHits")[0].empty() ) {  // Check if input collection name is provided. Use [0] as inputlocation always gives a vector or string for KeyValue(s)
+  if ( inputLocations("inputSimHits")[0].empty() ) {
     error() << "You must specify the inputSimHits collection name!" << endmsg;
     return StatusCode::FAILURE;
   }
@@ -26,12 +26,6 @@ StatusCode VTXdigitizerDetailed::initialize() {
   }
   if ( outputLocations("outputSimDigiAssociation")[0].empty() ) {
     error() << "You must specify the outputSimDigiAssociation collection name!" << endmsg;
-    return StatusCode::FAILURE;
-  }
-
-  // Initialise LocalNormalVectorDir with forcing the user to declare a value
-  if ( !(m_LocalNormalVectorDir=="x" || m_LocalNormalVectorDir=="y" || m_LocalNormalVectorDir=="z") ) {
-    error() << "LocalNormalVectorDir property should be declared as a string with the direction (x,y or z) of the normal vector to sensitive surface in the sensor local frame (may differ according to the geometry definition within k4geo). Add a - sign before the direction in case of indirect frame." << endmsg;
     return StatusCode::FAILURE;
   }
   
@@ -135,11 +129,14 @@ StatusCode VTXdigitizerDetailed::initialize() {
   }
   info() << "GeoSvc successfully retrieved" << endmsg;
 
+  // Get detectir from geoSvc
+  const auto detector = m_geoSvc->getDetector();
+  
   // Get the readout name from "inputSimHits" if "readoutName" not set by the user
   if (m_readoutName.value().empty()) { m_readoutName = inputLocations("inputSimHits")[0]; }
 
   // Check if the readout exists
-  if (m_geoSvc->getDetector()->readouts().find(m_readoutName.value()) == m_geoSvc->getDetector()->readouts().end()) {
+  if (detector->readouts().find(m_readoutName.value()) == detector->readouts().end()) {
     error() << "Readout '" << m_readoutName.value() << "' does not exist in the geometry! Please Provide a readout name through 'readoutName' property" << endmsg;
     return StatusCode::FAILURE;  // Or handle it gracefully
   }
@@ -147,7 +144,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
   //Set the cellID decoder
   try {
     m_decoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(
-        m_geoSvc->getDetector()->readout(m_readoutName.value()).idSpec().fieldDescription()
+        detector->readout(m_readoutName.value()).idSpec().fieldDescription()
     );
   } catch (const std::runtime_error& e) {
     error() << "Failed to create BitFieldCoder for readout "
@@ -162,11 +159,20 @@ StatusCode VTXdigitizerDetailed::initialize() {
     return StatusCode::FAILURE;
   }
 
+  // Retrieve the surface map from the SurfaceManager
+  
+  const auto surfMan = detector->extension<dd4hep::rec::SurfaceManager>();
+  surfaceMap = surfMan->map(m_detectorName);
+
+  if (!surfaceMap) {
+    throw std::runtime_error(fmt::format("Could not find surface map for detector: {} in SurfaceManager", m_detectorName.value()));
+  }
+  
   // retrieve the volume manager
-  m_volman = m_geoSvc->getDetector()->volumeManager();
+  m_volman = detector->volumeManager();
 
    // Get the sensor thickness and 2D size per layer in mm
-  dd4hep::DetType type(m_geoSvc->getDetector()->detector(m_detectorName).typeFlag()); // Get detector Type
+  dd4hep::DetType type(detector->detector(m_detectorName).typeFlag()); // Get detector Type
   if (type.is(dd4hep::DetType::BARREL)) { // if this is a barrel detector
     getSensorThickness<dd4hep::rec::ZPlanarData>();
   }
@@ -225,6 +231,12 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
   
   for (const auto& input_sim_hit : inputSimHits) {
 
+    // Get the normal vector direction in local frame during the first hit digitization
+    if (m_LocalNormalVectorDir=="")
+    {
+      GetNormalVectorLocal(input_sim_hit);
+    }
+
     // Check if the hit is a secondary or an overlay
     if (input_sim_hit.isProducedBySecondary()) {
       nSecondaryHits++;
@@ -232,6 +244,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
       nOverlayHits++;
     }
     
+    // Digitization process
     auto ionizationPoints = primary_ionization(input_sim_hit);
 
     auto collectionPoints = drift(input_sim_hit, ionizationPoints);
@@ -271,9 +284,50 @@ StatusCode VTXdigitizerDetailed::finalize() {
   return StatusCode::SUCCESS;
 }
 
+void VTXdigitizerDetailed::GetNormalVectorLocal(const edm4hep::SimTrackerHit& input_sim_hit) const {
+  /** Retrieve the normal vector direction in local frame (normal to sensor surface)
+   *  This function is called during the first hit digitization to initialise the member m_LocalNormalVectorDir
+   */
+
+  const dd4hep::DDSegmentation::CellID& cellID = input_sim_hit.getCellID();
+  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
+  const std::uint64_t reduced_cellID = cellID & m_mask;  // Mask to 32 bits only
+  dd4hep::rec::SurfaceMap::const_iterator sI = surfaceMap->find(reduced_cellID);
+  if (sI == surfaceMap->end()) {
+    throw std::runtime_error(fmt::format("VTXdigitizerDetailed::operator(): no surface found for cellID : {}", reduced_cellID));
+  }
+  const dd4hep::rec::ISurface* surf = sI->second;
+  //normal vector is by default in global frame
+  dd4hep::rec::Vector3D normal_Global = surf->normal();
+  TGeoHMatrix sensorTransformMatrix = m_volman.lookupDetElement(cellID).nominal().worldTransformation();
+  double normal_Local_tmp[3] = {0, 0, 0};
+  sensorTransformMatrix.MasterToLocalVect(normal_Global, normal_Local_tmp);
+  dd4hep::rec::Vector3D normal_local(normal_Local_tmp[0],normal_Local_tmp[1],normal_Local_tmp[2]);
+
+  // Determine which axis is the normal vector direction in local frame
+  double epsilon = 1.0e-6; // A reasonable tolerance for floating-point comparisons
+
+  if (std::abs(std::abs(normal_local.z()) - 1.0) < epsilon && std::abs(normal_local.x()) < epsilon && std::abs(normal_local.y()) < epsilon) {
+      m_LocalNormalVectorDir = "z";
+  } 
+  else if (std::abs(std::abs(normal_local.y()) - 1.0) < epsilon && std::abs(normal_local.x()) < epsilon && std::abs(normal_local.z()) < epsilon) {
+      m_LocalNormalVectorDir = "y";
+  }
+  else if (std::abs(std::abs(normal_local.x()) - 1.0) < epsilon && std::abs(normal_local.y()) < epsilon && std::abs(normal_local.z()) < epsilon) {
+      m_LocalNormalVectorDir = "x"; 
+  }
+  else {
+      error() << "Local normal vector is not aligned with local X, Y, or Z axis!" << endmsg;
+  }
+  
+  debug() << "Local normal vector direction is: " << m_LocalNormalVectorDir << endmsg;
+
+  return;
+}
+
 std::vector<VTXdigitizerDetailed::ChargeDepositUnit> VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit) const {
   /** Generate primary ionization along the track segment.
-   *  Divide the track into small sub-segments of 5 microns
+   *  Divide the track into small sub-segments of 1 microns
    *  Straight line approximation for trajectory of the incoming particle inside the active media
    *  The positions are given in mm
    */
@@ -530,7 +584,7 @@ VTXdigitizerDetailed::hit_map_type VTXdigitizerDetailed::get_charge_per_pixel(co
   }
   else 
   {
-    warning() << "Solid type not recognized: " << solid.type() << endmsg;
+    error() << "Solid type not recognized: " << solid.type() << endmsg;
   }
 
   float widthMin = -dimX / 2. / dd4hep::mm, widthMax = dimX / 2. / dd4hep::mm;
@@ -604,7 +658,7 @@ VTXdigitizerDetailed::hit_map_type VTXdigitizerDetailed::get_charge_per_pixel(co
 
         // Check if the pixel is within the sensor bounds
         if (ix < MinPixXSensor || ix > MaxPixXSensor || iy < MinPixYSensor || iy > MaxPixYSensor) {
-          warning() << "Pixel out of bounds (skipped) : " << ix << ":" << iy << endmsg;
+          debug() << "Pixel out of bounds (skipped) : " << ix << ":" << iy << endmsg;
           continue; // Skip pixels outside the sensor bounds
         }
 
@@ -865,11 +919,6 @@ void VTXdigitizerDetailed::SetProperDirectFrame(TGeoHMatrix& sensorTransformMatr
    */
   
   std::string LocalNormalVectorDir = m_LocalNormalVectorDir;
-  bool IsDirect = true; // Is the origin frame direct ?
-  if (LocalNormalVectorDir[0]=='-') {
-    IsDirect = false;
-    LocalNormalVectorDir = LocalNormalVectorDir[1];
-  }  
 
   // If the orthogonal direction is along X or Y in local frame, rotate the frame to have Z orthogonal to sensors instead
   if (LocalNormalVectorDir=="x") {
@@ -881,14 +930,10 @@ void VTXdigitizerDetailed::SetProperDirectFrame(TGeoHMatrix& sensorTransformMatr
     sensorTransformMatrix.Multiply(rot);
   }
 
-  // If the frame isn't direct, make it direct by reflecting the x axis. This is necessary to correctly calculte the drift in X-Y due to B-field
-  if (!IsDirect) {
-    sensorTransformMatrix.ReflectX(false);
-  }
 } // End SetProperDirectFrame
 
 void VTXdigitizerDetailed::SetLocalPos_In_ProperDirectFrame(float& x, float& y, float& z) const {
-  /** Change the sensorTransformMatrix to have a direct frame with z orthogonal to sensor surface
+  /** Change coordinates of a point to have a direct frame with z orthogonal to sensor surface
    */
 
   std::string LocalNormalVectorDir = m_LocalNormalVectorDir;
