@@ -16,15 +16,15 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   // Check that input and output collections names are declared by the user
 
-  if ( inputLocations("inputSimHits").empty() ) {
+  if ( inputLocations("inputSimHits")[0].empty() ) {  // Check if input collection name is provided. Use [0] as inputlocation always gives a vector or string for KeyValue(s)
     error() << "You must specify the inputSimHits collection name!" << endmsg;
     return StatusCode::FAILURE;
   }
-  if ( outputLocations("outputDigiHits").empty() ) {
+  if ( outputLocations("outputDigiHits")[0].empty() ) {
     error() << "You must specify the outputDigiHits collection name!" << endmsg;
     return StatusCode::FAILURE;
   }
-  if ( outputLocations("outputSimDigiAssociation").empty() ) {
+  if ( outputLocations("outputSimDigiAssociation")[0].empty() ) {
     error() << "You must specify the outputSimDigiAssociation collection name!" << endmsg;
     return StatusCode::FAILURE;
   }
@@ -136,7 +136,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
   info() << "GeoSvc successfully retrieved" << endmsg;
 
   // Get the readout name from "inputSimHits" if "readoutName" not set by the user
-  if (m_readoutName.value().empty()) { m_readoutName = inputLocations("inputSimHits"); }
+  if (m_readoutName.value().empty()) { m_readoutName = inputLocations("inputSimHits")[0]; }
 
   // Check if the readout exists
   if (m_geoSvc->getDetector()->readouts().find(m_readoutName.value()) == m_geoSvc->getDetector()->readouts().end()) {
