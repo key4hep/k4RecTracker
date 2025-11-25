@@ -131,15 +131,6 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   // Get detector from geoSvc
   const auto detector = m_geoSvc->getDetector();
-  
-  // Get the readout name from "inputSimHits" if "readoutName" not set by the user
-  if (m_readoutName.value().empty()) { m_readoutName = inputLocations("inputSimHits")[0]; }
-
-  // Check if the readout exists
-  if (detector->readouts().find(m_readoutName.value()) == detector->readouts().end()) {
-    error() << "Readout '" << m_readoutName.value() << "' does not exist in the geometry! Please Provide a readout name through 'readoutName' property" << endmsg;
-    return StatusCode::FAILURE;  // Or handle it gracefully
-  }
 
   //Set the cellID decoder
 
@@ -172,7 +163,7 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   if (m_decoder->fieldDescription().find("layer") == std::string::npos){
     error() 
-      << " Readout " << m_readoutName.value() << " does not contain layer id!"
+      << " Collection " << inputLocations("inputSimHits")[0] << " does not contain layer id!"
       << endmsg;
     return StatusCode::FAILURE;
   }
@@ -204,7 +195,6 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   debug() << "Initializing VTXdigitizerDetailed with the following parameters:" << endmsg;
   debug() << "Detector Name: " << m_detectorName << endmsg;
-  debug() << "Readout Name: " << m_readoutName.value() << endmsg;
 
   debug() << "Threshold: " << m_Threshold << endmsg; 
   debug() << "Threshold Smearing : " << m_ThresholdSmearing << endmsg;
@@ -565,11 +555,10 @@ VTXdigitizerDetailed::hit_map_type VTXdigitizerDetailed::get_charge_per_pixel(co
   hit_map_type hit_map;
 
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-  const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName.value()).segmentation();
-  const auto cellDims = segmentation.cellDimensions(cellID);
+  int ilayer = m_decoder->get(cellID, "layer");
 
-  const float PixSizeX = cellDims[0] / dd4hep::mm;
-  const float PixSizeY = cellDims[1] / dd4hep::mm;
+  const float PixSizeX = m_PixSizeX[ilayer] ; // in mm
+  const float PixSizeY = m_PixSizeY[ilayer] ; // in mm
 
   std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
   const std::uint64_t reduced_cellID = cellID & m_mask;
@@ -726,11 +715,10 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
   // Get the pixel dimensions in mm along x and y in the (modified) local frame with z orthogonal (see SetProperDirectFrame function)
 
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-  const auto& segmentation = m_geoSvc->getDetector()->readout(m_readoutName.value()).segmentation();
-  auto cellDims = segmentation.cellDimensions(cellID);
+  int ilayer = m_decoder->get(cellID, "layer");
   
-  const float PixSizeX = cellDims[0] / dd4hep::mm;
-  const float PixSizeY = cellDims[1] / dd4hep::mm;
+  const float PixSizeX = m_PixSizeX[ilayer] ; // in mm
+  const float PixSizeY = m_PixSizeY[ilayer] ; // in mm
 
 
   debug() << "SimHit CellID: " << cellID << endmsg;
@@ -803,9 +791,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
   if (m_DebugHistos) {
     hActivePixelCountAfterThreshold->Fill(CountAfterThreshold);
     hChargePerCluster->Fill(sumWeights / 1e3);
-
-    int iLayer = m_decoder->get(cellID, "layer");
-    hActivePixelPerlayer->Fill(iLayer, CountAfterThreshold);
+    hActivePixelPerlayer->Fill(ilayer, CountAfterThreshold);
   }
 
   double sumWeightsSqX = 0.; // Sum of the square of weights along x (used later for position resolution)
@@ -884,8 +870,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
   output_digi_hit.setPosition(DigiGlobalPosVec);
   
   // Apply time smearing
-  int iLayer = m_decoder->get(cellID, "layer");
-  output_digi_hit.setTime(hit.getTime() + m_gauss_t_vec[iLayer].shoot());
+  output_digi_hit.setTime(hit.getTime() + m_gauss_t_vec[ilayer].shoot());
   
   output_digi_hit.setCellID(cellID);
 

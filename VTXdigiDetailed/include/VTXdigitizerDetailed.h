@@ -77,9 +77,10 @@ class VTXdigitizerDetailed final  //Gaudi::Functional::
   private:
     // Detector name
     Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Vertex", "Name of the detector (default: Vertex)"};
-    // Detector readout names
-    // If not provided, it will be initialised as "inputSimHits" in inititialize function
-    Gaudi::Property<std::string> m_readoutName{this, "readoutName", "", "Name of the detector readout"};
+    // List of pixels sizes along Phi angle in mm per layer (for strips, this is the pitch)
+    Gaudi::Property<std::vector<float>> m_PixSizeX{this, "PixSizePhi", {0.020}, "List of pixels sizes along Phi angle in mm per layer (for strips, this is the pitch)"};
+    // List of pixels sizes along Theta angle in mm per layer (for strips, this is the pitch) (Theta is along BeamPipe for Barrel and along ring radius for Endcaps)
+    Gaudi::Property<std::vector<float>> m_PixSizeY{this, "PixSizeTheta", {0.020}, "List of pixels sizes along Theta angle in mm per layer (for strips, this is the pitch)"};
     // Tangent of sensor's Lorentz angle (default is 0.1)
     Gaudi::Property<float> m_tanLorentzAnglePerTesla{this, "tanLorentzAnglePerTesla", 0.1f, "Tangent of sensor's Lorentz angle per Tesla (default is 0.1)"};
     // Charge diffusion
