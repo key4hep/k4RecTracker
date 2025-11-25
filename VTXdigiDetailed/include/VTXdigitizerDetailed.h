@@ -81,6 +81,8 @@ class VTXdigitizerDetailed final  //Gaudi::Functional::
     Gaudi::Property<std::vector<float>> m_PixSizeX{this, "PixSizePhi", {0.020}, "List of pixels sizes along Phi angle in mm per layer (for strips, this is the pitch)"};
     // List of pixels sizes along Theta angle in mm per layer (for strips, this is the pitch) (Theta is along BeamPipe for Barrel and along ring radius for Endcaps)
     Gaudi::Property<std::vector<float>> m_PixSizeY{this, "PixSizeTheta", {0.020}, "List of pixels sizes along Theta angle in mm per layer (for strips, this is the pitch)"};
+    // Length of ionization steps in millimeters
+    Gaudi::Property<float> m_IonizationGranularity{this, "IonizationGranularity", 0.001, "Length of ionization steps in millimeters (default is 1 micron)"};
     // Tangent of sensor's Lorentz angle (default is 0.1)
     Gaudi::Property<float> m_tanLorentzAnglePerTesla{this, "tanLorentzAnglePerTesla", 0.1f, "Tangent of sensor's Lorentz angle per Tesla (default is 0.1)"};
     // Charge diffusion

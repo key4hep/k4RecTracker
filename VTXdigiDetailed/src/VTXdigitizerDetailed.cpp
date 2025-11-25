@@ -334,9 +334,8 @@ std::vector<VTXdigitizerDetailed::ChargeDepositUnit> VTXdigitizerDetailed::prima
    *  The positions are given in mm
    */
   
-  const float segmentLength = 0.001; //1micron in mm //Something to put as a property?
   float pathLength = hit.getPathLength(); // Path Length of the particle in the active material in mm
-  int numberOfSegments = int(pathLength / segmentLength); // Number of segments
+  int numberOfSegments = int(pathLength / m_IonizationGranularity); // Number of segments
   if (numberOfSegments <1) { numberOfSegments = 1; }
 
   float GeVperElectron = 3.61E-09; // Mean ionization energy in silicon [GeV]
