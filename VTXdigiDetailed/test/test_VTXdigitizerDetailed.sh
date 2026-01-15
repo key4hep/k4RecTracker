@@ -1,7 +1,7 @@
 #!/bin/bash
 ###############################################################################
 # Test script for VTXdigitizerDetailed
-# 
+#
 # This script runs a quick test of the VTXdigitizerDetailed digitizer
 # Usage: ./test_VTXdigitizerDetailed.sh
 #
@@ -301,8 +301,8 @@ echo "  Output file: ${OUTPUT_FILE}_REC.edm4hep.root"
 echo "========================================================================"
 
 # If use source to lauch the script, avoid exiting the parent shell on error or undefined variable
-set +e  
-set +u  
+set +e
+set +u
 
 # Return to the initial directory
 cd "${INITIAL_DIR}"
