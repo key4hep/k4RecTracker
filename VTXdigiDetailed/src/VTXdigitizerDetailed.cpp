@@ -210,7 +210,7 @@ void VTXdigitizerDetailed::getSensorThickness() {
     m_sensorThickness[layerCount] = (float)(layer.thicknessSensitive / dd4hep::mm);
     ++layerCount;
   }
-
+  debug() << "Sensor thickness per layer (mm): " << m_sensorThickness[0] << endmsg;
 } // End getSensorThickness
 
 std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>
@@ -227,6 +227,12 @@ VTXdigitizerDetailed::operator()(const edm4hep::SimTrackerHitCollection& inputSi
   auto output_sim_digi_link_col = edm4hep::TrackerHitSimTrackerHitLinkCollection();
 
   for (const auto& input_sim_hit : inputSimHits) {
+
+    if (input_sim_hit.getTime() > m_maxHitTime) {
+      debug() << "Skipping SimHit with large time: " << input_sim_hit.getTime()
+              << " ns (CellID: " << input_sim_hit.getCellID() << ")" << endmsg;
+      continue;
+    }
 
     // Get the normal vector direction in local frame during the first hit digitization
     if (m_LocalNormalVectorDir == "") {

@@ -103,6 +103,8 @@ private:
       this, "Sigma50", 0.00151, "Charge diffusion in millimeters for 50 micron Si. Default = 0.00151mm taken from CMS"};
   // t resolution in ns
   Gaudi::Property<std::vector<float>> m_t_resolution{this, "tResolution", {0.1}, "Time resolutions per layer [ns]"};
+  // Maximum time for hit to be recorded in ns
+  Gaudi::Property<float> m_maxHitTime{this, "maxHitTime", 100.0, "Maximum time for hit to be recorded in ns"};
   // Threshold in electron
   Gaudi::Property<float> m_Threshold{this, "Threshold", 0.0, "Charge Threshold in e (default: 0.0)"};
   // Threshold smearing in electron
