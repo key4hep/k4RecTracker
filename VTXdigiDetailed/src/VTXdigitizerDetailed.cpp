@@ -230,7 +230,10 @@ VTXdigitizerDetailed::operator()(const edm4hep::SimTrackerHitCollection& inputSi
 
     // Get the normal vector direction in local frame during the first hit digitization
     if (m_LocalNormalVectorDir == "") {
+      debug() << "First hit digitization, retrieve the local normal vector direction" << endmsg;
       GetNormalVectorLocal(input_sim_hit);
+    } else {
+      debug() << "Local normal vector direction already retrieved: " << m_LocalNormalVectorDir << endmsg;
     }
 
     // Check if the hit is a secondary or an overlay
@@ -357,13 +360,20 @@ VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit) cons
   // Get transformation matrix of sensor and get central position and momentum vector in local frame
   // const auto& sensorTransformMatrix = m_volman.lookupVolumePlacement(cellID).matrix();
   TGeoHMatrix sensorTransformMatrix = m_volman.lookupDetElement(cellID).nominal().worldTransformation();
-  SetProperDirectFrame(sensorTransformMatrix); // Change coordinates to have z orthogonal to sensor with direct frame
   double hitLocalCentralPosition[3] = {0, 0, 0};
   double hitLocalMomentum[3] = {0, 0, 0};
 
-  // get the simHit coordinate in cm in the sensor reference frame
-  sensorTransformMatrix.MasterToLocal(hitGlobalCentralPosition, hitLocalCentralPosition);
+  // get the simHit coordinate in cm and momentum in the sensor reference frame
   sensorTransformMatrix.MasterToLocalVect(hitGlobalMomentum, hitLocalMomentum);
+  SetLocalPos_In_ProperDirectFrame(hitLocalMomentum[0], hitLocalMomentum[1], hitLocalMomentum[2]);
+
+  debug() << "Hit global momentum vector: (" << hitGlobalMomentum[0] << ", " << hitGlobalMomentum[1] << ", "
+          << hitGlobalMomentum[2] << ")" << endmsg;
+  debug() << "Hit local momentum vector: (" << hitLocalMomentum[0] << ", " << hitLocalMomentum[1] << ", "
+          << hitLocalMomentum[2] << ")" << endmsg;
+
+  sensorTransformMatrix.MasterToLocal(hitGlobalCentralPosition, hitLocalCentralPosition);
+  SetLocalPos_In_ProperDirectFrame(hitLocalCentralPosition[0], hitLocalCentralPosition[1], hitLocalCentralPosition[2]);
 
   // build vectors to simplify next calculation and come back to mm
   dd4hep::rec::Vector3D hitLocalCentralPositionVec(hitLocalCentralPosition[0] / dd4hep::mm,
@@ -514,8 +524,8 @@ dd4hep::rec::Vector3D VTXdigitizerDetailed::DriftDirection(const edm4hep::SimTra
   double BFieldLocal[3] = {0, 0, 0};
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
   auto sensorTransformMatrix = m_volman.lookupDetElement(cellID).nominal().worldTransformation();
-  SetProperDirectFrame(sensorTransformMatrix); // Change coordinates to have z orthogonal to sensor with direct frame
   sensorTransformMatrix.MasterToLocalVect(BFieldGlobal, BFieldLocal);
+  SetLocalPos_In_ProperDirectFrame(BFieldLocal[0], BFieldLocal[1], BFieldLocal[2]);
 
   // Retrieve local magnetic field in a vector and in Tesla
   dd4hep::rec::Vector3D BFieldLocalVec(BFieldLocal[0] / dd4hep::tesla, BFieldLocal[1] / dd4hep::tesla,
@@ -563,7 +573,7 @@ VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
 
   const auto solid = m_volman.lookupDetElement(reduced_cellID).volume().solid();
 
-  float dimX, dimY, dimZ; // Dimensions of the solid in cm
+  double dimX, dimY, dimZ; // Dimensions of the solid in cm
   if (std::string(solid.type()) == "TGeoBBox") {
     dd4hep::Box box(solid);
     dimX = 2 * box.x(); // Get the dimensions in cm
@@ -718,8 +728,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
    * TrackerhitplaneCollection For now, the position is taken from a weighted average, maybe try with a 2D Gaussian fit
    */
 
-  // Get the pixel dimensions in mm along x and y in the (modified) local frame with z orthogonal (see
-  // SetProperDirectFrame function)
+  // Get the pixel dimensions in mm along x and y in the (modified) local frame with z orthogonal
 
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
   int ilayer = m_decoder->get(cellID, "layer");
@@ -733,8 +742,8 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
     int value = m_decoder->get(cellID, name);
     debug() << "  " << name << " = " << value << endmsg;
   }
-  debug() << "Hit position in mm: (" << hit.getPosition().x * dd4hep::mm << ", " << hit.getPosition().y * dd4hep::mm
-          << ", " << hit.getPosition().z * dd4hep::mm << ")" << endmsg;
+  debug() << "Hit position in mm : (" << hit.getPosition().x << ", " << hit.getPosition().y << ", "
+          << hit.getPosition().z << ")" << endmsg;
   debug() << "is Secondary ? : " << hit.isProducedBySecondary() << endmsg;
   debug() << "is Overlay ? : " << hit.isOverlay() << endmsg;
 
@@ -831,7 +840,7 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
   double resV = (PixSizeY / sqrt(12)) * sqrt(sumWeightsSqY) / sumWeights;
 
   double dirLocalX[3] = {1., 0., 0.}; // X direction in local frame
-  double dirLocalY[3] = {0., 1., 0.}; // X direction in local frame
+  double dirLocalY[3] = {0., 1., 0.}; // Y direction in local frame
   double dirGlobalU[3];               // Global direction U (corresponding to local X)
   double dirGlobalV[3];               // Global direction V (cooresponding to local Y)
   double DigiLocalPos[3] = {DigiLocalX * dd4hep::mm, DigiLocalY * dd4hep::mm,
@@ -842,12 +851,16 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
 
   // Get the transformation matrix between local and global frames
   auto sensorTransformMatrix = m_volman.lookupDetElement(cellID).nominal().worldTransformation();
-  SetProperDirectFrame(sensorTransformMatrix); // Change coordinates to have z orthogonal to sensor with direct frame
+
+  // Transfrom the local positions and directions in ProperDirectFrame (z normal to sensor) to DD4Hep Standard Frame
+  SetLocalPos_In_StandardDD4hepFrame(dirLocalX[0], dirLocalX[1], dirLocalX[2]);
+  SetLocalPos_In_StandardDD4hepFrame(dirLocalY[0], dirLocalY[1], dirLocalY[2]);
+  SetLocalPos_In_StandardDD4hepFrame(DigiLocalPos[0], DigiLocalPos[1], DigiLocalPos[2]);
 
   // Transform the local positions and directions to global ones
-  sensorTransformMatrix.LocalToMaster(DigiLocalPos, DigiGlobalPos);
   sensorTransformMatrix.LocalToMasterVect(dirLocalX, dirGlobalU);
   sensorTransformMatrix.LocalToMasterVect(dirLocalY, dirGlobalV);
+  sensorTransformMatrix.LocalToMaster(DigiLocalPos, DigiGlobalPos);
 
   // Go back to mm
   edm4hep::Vector3d DigiGlobalPosVec(DigiGlobalPos[0] / dd4hep::mm, DigiGlobalPos[1] / dd4hep::mm,
@@ -892,6 +905,18 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
   output_sim_digi_link.setFrom(output_digi_hit);
   output_sim_digi_link.setTo(hit);
 
+  debug() << "Output Digi hit : " << endmsg;
+  debug() << "EDep : " << output_digi_hit.getEDep() << endmsg;
+  debug() << "Position (mm) : (" << output_digi_hit.getPosition().x << ", " << output_digi_hit.getPosition().y << ", "
+          << output_digi_hit.getPosition().z << ")" << endmsg;
+  debug() << "Time (ns) : " << output_digi_hit.getTime() << endmsg;
+  debug() << "CellID : " << output_digi_hit.getCellID() << endmsg;
+  debug() << "Vector U Theta : " << u_direction[0] << endmsg;
+  debug() << "Vector U Phi : " << u_direction[1] << endmsg;
+  debug() << "Vector V Theta : " << v_direction[0] << endmsg;
+  debug() << "Vector V Phi : " << v_direction[1] << endmsg;
+  debug() << "Du (mm) : " << output_digi_hit.getDu() << endmsg;
+  debug() << "Dv (mm) : " << output_digi_hit.getDv() << endmsg;
   // Fill the debug histograms if needed
   if (m_DebugHistos) {
 
@@ -903,6 +928,8 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
     double hitLocalCentralPosition[3] = {0, 0, 0};
     // get the simHit coordinate in cm in the sensor reference frame
     sensorTransformMatrix.MasterToLocal(hitGlobalCentralPosition, hitLocalCentralPosition);
+    SetLocalPos_In_ProperDirectFrame(hitLocalCentralPosition[0], hitLocalCentralPosition[1],
+                                     hitLocalCentralPosition[2]);
 
     double DistX = DigiLocalX - hitLocalCentralPosition[0] / dd4hep::mm;
     double DistY = DigiLocalY - hitLocalCentralPosition[1] / dd4hep::mm;
@@ -916,37 +943,13 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
 
 } // End get_hist_signal_point
 
-void VTXdigitizerDetailed::SetProperDirectFrame(TGeoHMatrix& sensorTransformMatrix) const {
-  /** Change the sensorTransformMatrix to have a direct frame with z orthogonal to sensor surface
-   */
-
-  std::string LocalNormalVectorDir = m_LocalNormalVectorDir;
-
-  // If the orthogonal direction is along X or Y in local frame, rotate the frame to have Z orthogonal to sensors
-  // instead
-  if (LocalNormalVectorDir == "x") {
-    TGeoRotation rot("rot", 90., 90., 0.); // X->Z / Y->X / Z->Y
-    sensorTransformMatrix.Multiply(rot);
-  }
-  if (LocalNormalVectorDir == "y") {
-    TGeoRotation rot("rot", 0., -90., 0.); // X->X / Y->Z / Z->-Y
-    sensorTransformMatrix.Multiply(rot);
-  }
-
-} // End SetProperDirectFrame
-
-void VTXdigitizerDetailed::SetLocalPos_In_ProperDirectFrame(float& x, float& y, float& z) const {
+void VTXdigitizerDetailed::SetLocalPos_In_ProperDirectFrame(double& x, double& y, double& z) const {
   /** Change coordinates of a point to have a direct frame with z orthogonal to sensor surface
    */
 
   std::string LocalNormalVectorDir = m_LocalNormalVectorDir;
-  bool IsDirect = true; // Is the origin frame direct ?
-  if (LocalNormalVectorDir[0] == '-') {
-    IsDirect = false;
-    LocalNormalVectorDir = LocalNormalVectorDir[1];
-  }
 
-  float x_tmp, y_tmp, z_tmp;
+  double x_tmp, y_tmp, z_tmp;
 
   // If the orthogonal direction is along X or Y in local frame, rotate the frame to have Z orthogonal to sensors
   // instead
@@ -967,17 +970,43 @@ void VTXdigitizerDetailed::SetLocalPos_In_ProperDirectFrame(float& x, float& y, 
     y_tmp = y;
   }
 
-  // If the frame isn't direct, make it direct by reflecting the x axis. This is necessary to correctly calculte the
-  // drift in X-Y due to B-field
-  if (!IsDirect) {
-    x_tmp = -x_tmp;
-  }
-
   x = x_tmp;
   y = y_tmp;
   z = z_tmp;
 
 } // SetLocalPos_In_ProperDirectFrame
+
+void VTXdigitizerDetailed::SetLocalPos_In_StandardDD4hepFrame(double& x, double& y, double& z) const {
+  /** Change coordinates of a point in Proper Direct Frame with z orthogonal to sensor surface
+   *  back to the standard DD4hep local frame
+   */
+
+  std::string LocalNormalVectorDir = m_LocalNormalVectorDir;
+
+  double x_tmp = x, y_tmp = y, z_tmp = z;
+
+  // If the orthogonal direction is along X or Y in local frame, rotate the frame to have the good axie orthogonal to
+  // sensors
+  if (LocalNormalVectorDir == 'x') {
+    // Z->X / X->Y / Y->Z
+    x_tmp = z;
+    y_tmp = x;
+    z_tmp = y;
+  } else if (LocalNormalVectorDir == 'y') {
+    // X->X / Z->Y / Y->-Z
+    x_tmp = x;
+    y_tmp = -z;
+    z_tmp = y;
+  } else {
+    x_tmp = x;
+    y_tmp = y;
+    z_tmp = z;
+  }
+
+  x = x_tmp;
+  y = y_tmp;
+  z = z_tmp;
+} // SetLocalPos_In_StandardDD4hepFrame
 
 void VTXdigitizerDetailed::Create_outputROOTfile_for_debugHistograms() const {
   /** This is an internal function to save the debug histograms in the corresponding rootfile

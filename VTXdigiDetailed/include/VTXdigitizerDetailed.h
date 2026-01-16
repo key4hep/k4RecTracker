@@ -219,9 +219,8 @@ private:
                        edm4hep::TrackerHitSimTrackerHitLinkCollection& output_sim_digi_link_col,
                        const hit_map_type& hit_map) const;
 
-  void SetProperDirectFrame(TGeoHMatrix& sensorTransformMatrix) const;
-
-  void SetLocalPos_In_ProperDirectFrame(float& x, float& y, float& z) const;
+  void SetLocalPos_In_ProperDirectFrame(double& x, double& y, double& z) const;
+  void SetLocalPos_In_StandardDD4hepFrame(double& x, double& y, double& z) const;
 
 private:
   // Additional Debug information
