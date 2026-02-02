@@ -136,7 +136,7 @@ struct GGTF_tracking final : k4FWCore::MultiTransformer<std::tuple<extension::Tr
 
     // Initialize the ONNX memory info object for CPU memory allocation.
     // This specifies that the memory will be allocated using the Arena Allocator on the CPU.
-    m_fInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+    m_fInfo = std::make_unique<Ort::MemoryInfo>(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault));
 
     // Create and initialize the ONNX environment with a logging level set to WARNING.
     // This environment handles logging and runtime configuration for the ONNX session.
@@ -346,7 +346,7 @@ struct GGTF_tracking final : k4FWCore::MultiTransformer<std::tuple<extension::Tr
       // Create a vector to store the input tensors that will be fed into the ONNX model.
       std::vector<Ort::Value> inputModelTensors;
       inputModelTensors.emplace_back(Ort::Value::CreateTensor<float>(
-          m_fInfo, listGlobalInputs.data(), inputTensorTotalSize, inputTensorShape.data(), inputTensorShape.size()));
+          *m_fInfo, listGlobalInputs.data(), inputTensorTotalSize, inputTensorShape.data(), inputTensorShape.size()));
 
       // Run the ONNX inference session with the provided input tensor.
       auto outputModelTensors = m_fSession->Run(Ort::RunOptions{nullptr}, m_fInames.data(), inputModelTensors.data(),
@@ -466,8 +466,7 @@ private:
   /// ONNX memory info.
   /// This object provides information about memory allocation and is used during the creation of
   /// ONNX tensors. It specifies the memory type and device (e.g., CPU, GPU).
-  const OrtMemoryInfo* m_fInfo;
-  struct m_memoryInfo;
+  std::unique_ptr<Ort::MemoryInfo> m_fInfo;
 
   /// Stores the input and output names for the ONNX model.
   /// These vectors contain the names of the inputs (fInames) and outputs (fOnames) that the model expects.
