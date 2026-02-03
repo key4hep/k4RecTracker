@@ -1,6 +1,6 @@
 #include "../src/ChargeCollector.h"
 
-namespace VTXdigi_details {
+namespace VTXdigi_tools {
 using ::VTXdigi_Modular; // unqualified name introduction from global namespace (just so I remember what to call this in C++ speak ~ Jona)
 using ::endmsg; // makes the Copilot autocomplete work better
 
@@ -51,6 +51,6 @@ void ChargeCollector_LUT::Collect() const {
 void ChargeCollector_Drift::Collect() const {
 
 }
-} // namespace VTXdigi_details
+} // namespace VTXdigi_tools
 
 

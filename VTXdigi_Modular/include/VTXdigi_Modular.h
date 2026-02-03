@@ -1,6 +1,7 @@
 #pragma once
 
 #include "IChargeCollector.h" 
+#include "VTXdigi_tools.h"
 
 #include "Gaudi/Property.h"
 
@@ -14,15 +15,16 @@
 
 // K4FWCORE
 #include "k4Interface/IGeoSvc.h"
-
 #include "k4FWCore/Transformer.h" // added by Jona
 #include "k4Interface/IUniqueIDGenSvc.h" // added by Jona
 
 // DD4HEP
 #include "DDRec/SurfaceManager.h"
 
+// ROOT
 #include "TRandom2.h"
 
+// C++ std
 #include <string> // added by Jona
 #include <vector>
 #include <cmath> // for std::fmod
@@ -43,7 +45,7 @@
  */
 
 /* -- Forward declarations -- */
-namespace VTXdigi_details {
+namespace VTXdigi_tools {
   class IChargeCollector;
 }
 
@@ -106,7 +108,7 @@ private:
   
   /* -- Member variables -- */
 
-  std::unique_ptr<VTXdigi_details::IChargeCollector> m_chargeCollector = nullptr;
+  std::unique_ptr<VTXdigi_tools::IChargeCollector> m_chargeCollector = nullptr;
 
   int m_layerCount = 0; 
   std::array<int, 2> m_pixelCount = {0, 0}; 

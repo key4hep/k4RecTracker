@@ -4,7 +4,7 @@
 
 struct VTXdigi_Modular;
 
-namespace VTXdigi_details {
+namespace VTXdigi_tools {
 using ::VTXdigi_Modular;
 
 class IChargeCollector {
@@ -20,4 +20,4 @@ protected:
 
 std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& digitizer, const std::string& algorithm);
 
-} // namespace VTXdigi_details
+} // namespace VTXdigi_tools
