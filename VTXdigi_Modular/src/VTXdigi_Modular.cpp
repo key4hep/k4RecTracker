@@ -37,13 +37,16 @@ VTXdigi_Modular::VTXdigi_Modular(const std::string& name, ISvcLocator* svcLoc)
 StatusCode VTXdigi_Modular::initialize() {
   info() << "INITIALIZING VTXdigi_Modular..." << endmsg;
 
+  if (!VTXdigi_tools::ToolTest())
+    return StatusCode::FAILURE;
+
   InitServicesAndGeometry();
   InitLayersAndSensors();
 
   /* This needs to come in after the properties, geometry and services have all been initialized */
   m_chargeCollector = VTXdigi_tools::CreateChargeCollector(*this, m_chargeCollectionMethod);
 
-  VTXdigi_tools::PixelChargeMatrix pixelMatrix(0,0); // just to test that the class compiles
+  VTXdigi_tools::PixelChargeMatrix pixelMatrix = VTXdigi_tools::PixelChargeMatrix(0,0); // just to test that the class compiles
 
   info() << " - Initialized successfully." << endmsg;
   return StatusCode::SUCCESS;
@@ -62,13 +65,17 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
   (const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const {
   debug() << "STARTING event with " << simHits.size() << " simHits." << endmsg;
   
-  /* TODO: */
-
   /* output collections */
   auto digiHits = edm4hep::TrackerHitPlaneCollection();
   auto digiHitsLinks = edm4hep::TrackerHitSimTrackerHitLinkCollection();
   
+  /* TODO: Impletement FAST charge collection method (simply smear simHit position)
+  * I would simply create a function that returns digiHits and digiHitLinks directly from simHits, to be returned here.
+  * this makes a lot of the init etc unnecessary, so maybe have a separate class for that? ~ Jona 2026-02 */
+
   m_chargeCollector->Collect();
+
+
 
   return std::make_tuple(std::move(digiHits), std::move(digiHitsLinks));
 } // operator()

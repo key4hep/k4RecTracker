@@ -4,7 +4,49 @@
 #include <numeric>
 #include <tuple>
 
+#include "Gaudi/Property.h"
+
+// #include "DDRec/ISurface.h"
+// #include "DDRec/SurfaceManager.h"
+#include "DDRec/Surface.h"
+
+#include "DDRec/Material.h"
+
+#include "DD4hep/Objects.h"
+#include "DD4hep/Volumes.h"
+#include "DD4hep/Shapes.h"
+#include "DD4hep/DetElement.h"
+
 namespace VTXdigi_tools {
+
+bool ToolTest();
+
+/* -- Binning tools -- */
+
+/** @brief Given a histogram definition (x0, binWidth, nBins) and a value x, compute the bin index i in which x falls.
+ * @return Int, -1 if x is out of range.
+ * @note Bins are 0-indexed (vs ROOT's 1-indexing) */
+int ComputeBinIndex(float x, float binX0, float binWidth, int binN);
+
+/** @brief Compute the pixel indices (i_u, i_v) for a given (local) position inside the sensor */
+std::array<int, 2> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<float, 2> pixelPitch, const std::array<size_t, 2> pixelCount);
+
+/** @brief Compute the in-pixel indices (j_u, j_v, j_w) for a given (local) position inside the pixel and layer index
+ *  @note Assumption: each layer has only 1 type if sensor */
+std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<size_t, 3> binCount, const std::array<float, 2> pixelPitch, const std::array<float, 2> sensorLength, const float sensorThickness);
+
+/** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,w) 
+ * 
+ * @note The w coordinate is set to depletedRegionDepthCenter. 0 for center, +25 for sensor surface, +20 for TPSCo 65nm maps.
+*/
+dd4hep::rec::Vector3D ComputePixelCenter_Local(const std::array<int, 2> pixelIndex, const dd4hep::rec::ISurface& surface,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter);
+
+/** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,0) */
+dd4hep::rec::Vector3D ComputePixelCenter_Local(const std::array<int, 2> pixelIndex, const dd4hep::rec::ISurface& surface, const std::array<float, 2> pixelPitch);
+
+
+
+/* -- Pixel Charge Matrix -- */
 
 /** @brief Holds the charge collected in a 2d matrix of pixels surrounding a simHit.
  * 
@@ -48,5 +90,24 @@ class PixelChargeMatrix {
     inline bool _OutOfBounds(int i_u, int i_v) const;
     void _ExpandMatrix(int i_u, int i_v);
 }; // class PixelChargeMatrix
+
+class SensorChargeMatrix {
+  /* Holds the charge collected in a sensor, stored as a map of pixel indices to charge. This is used as an intermediate step before creating the output TrackerHit, which requires a fixed-size matrix. */
+
+  std::vector<int> m_sensorCharge; // map of pixel indices (i_u, i_v) to charge
+  std::array<size_t, 2> m_pixelCount; // number of pixels in u and v direction
+
+  public:
+    SensorChargeMatrix(std::array<size_t, 2> pixelCount);
+
+    void FillCharge(std::array<int, 2> pixel, int charge);
+    int GetCharge(std::array<int, 2> pixel) const;
+    int GetTotalCharge() const;
+    void Reset();
+
+  private:
+    inline bool _OutOfBounds(std::array<int, 2> pixel) const;
+    inline int _FindIndex(std::array<int, 2> pixel) const;
+}; // class SensorChargeMatrix
 
 } // namespace VTXdigi_tools

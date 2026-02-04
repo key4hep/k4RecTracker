@@ -9,12 +9,12 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
     return std::make_unique<ChargeCollector_LUT>(digitizer);
   } else if (algorithm == "Drift") {
     // return std::make_unique<ChargeCollector_Drift>(digitizer);
+    throw std::runtime_error("ChargeCollector_Drift not implemented yet.");
   } else if (algorithm == "Fast") {
     // return std::make_unique<ChargeCollector_Fast>();
     throw std::runtime_error("ChargeCollector_Fast not implemented yet.");
-  } else {
-    throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
   }
+  throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
 }
 
 struct Path  {
@@ -33,24 +33,29 @@ Path ComputePath(const dd4hep::rec::ISurface& surface, const edm4hep::SimTracker
   return path;
 }
 
+
 /* -- LUT approach -- */
 
 ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer) {
-  
+  m_digitizer.debug() << "ChargeCollector_LUT constructed." << endmsg;
 }
 
-
-void ChargeCollector_LUT::Collect() const {
+PixelChargeMatrix ChargeCollector_LUT::Collect() const {
   m_digitizer.verbose() << "ChargeCollector_LUT::Collect() called." << endmsg;
 
+  PixelChargeMatrix pixelMatrix(0, 0);
 
+  return PixelChargeMatrix(0, 0);
 }
+
 
 /* -- Drift approach -- */
 
-void ChargeCollector_Drift::Collect() const {
+PixelChargeMatrix ChargeCollector_Drift::Collect() const {
 
+  return PixelChargeMatrix(0, 0);
 }
+
 } // namespace VTXdigi_tools
 
 

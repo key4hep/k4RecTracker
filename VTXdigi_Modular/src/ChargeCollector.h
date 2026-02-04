@@ -14,9 +14,9 @@ struct Path;
 
 class ChargeCollector_LUT : public IChargeCollector {
 
-  public:
-    explicit ChargeCollector_LUT(const VTXdigi_Modular& digitizer);
-    void Collect() const override;
+public:
+  explicit ChargeCollector_LUT(const VTXdigi_Modular& digitizer);
+  PixelChargeMatrix Collect() const override;
 };
 
 
@@ -25,7 +25,7 @@ class ChargeCollector_LUT : public IChargeCollector {
 class ChargeCollector_Drift : public IChargeCollector {
 
 public:
-  void Collect() const override;
+  PixelChargeMatrix Collect() const override;
 };
 
 

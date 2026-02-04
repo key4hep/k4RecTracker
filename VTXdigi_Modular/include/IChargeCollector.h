@@ -4,13 +4,16 @@
 
 struct VTXdigi_Modular;
 
+
 namespace VTXdigi_tools {
+
+class PixelChargeMatrix; // forward-declare things in include/VTXdigi_tools.h
 using ::VTXdigi_Modular;
 
 class IChargeCollector {
 public:
   virtual ~IChargeCollector() = default;
-  virtual void Collect() const = 0;
+  virtual PixelChargeMatrix Collect() const = 0;
 
 protected:
   explicit IChargeCollector(const VTXdigi_Modular& digitizer) : m_digitizer(digitizer) {}
