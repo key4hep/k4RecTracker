@@ -6,14 +6,16 @@ struct VTXdigi_Modular;
 
 
 namespace VTXdigi_tools {
-
-class PixelChargeMatrix; // forward-declare things in include/VTXdigi_tools.h
-using ::VTXdigi_Modular;
+  
+  using ::VTXdigi_Modular; 
+  
+  class Hit; // forward-declare things in include/VTXdigi_tools.h
+  class SensorChargeMatrix;
 
 class IChargeCollector {
 public:
   virtual ~IChargeCollector() = default;
-  virtual PixelChargeMatrix Collect() const = 0;
+  virtual void FillHit(const Hit& hit, SensorChargeMatrix& hitMap) const = 0;
 
 protected:
   explicit IChargeCollector(const VTXdigi_Modular& digitizer) : m_digitizer(digitizer) {}

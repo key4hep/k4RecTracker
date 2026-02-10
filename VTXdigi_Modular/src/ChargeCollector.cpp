@@ -13,6 +13,8 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
   } else if (algorithm == "Fast") {
     // return std::make_unique<ChargeCollector_Fast>();
     throw std::runtime_error("ChargeCollector_Fast not implemented yet.");
+  } else if (algorithm == "SinglePixel") {
+    return std::make_unique<ChargeCollector_SinglePixel>(digitizer);
   }
   throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
 }
@@ -34,27 +36,33 @@ Path ComputePath(const dd4hep::rec::ISurface& surface, const edm4hep::SimTracker
 }
 
 
+/* -- Single pixel approach -- */
+
+ChargeCollector_SinglePixel::ChargeCollector_SinglePixel(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer) {
+  m_digitizer.debug() << "ChargeCollector_SinglePixel constructed." << endmsg;
+}
+
+
+
+void ChargeCollector_SinglePixel::FillHit(const Hit& hit, SensorChargeMatrix& hitMap) const {
+  m_digitizer.verbose() << "ChargeCollector_SinglePixel::Collect() called." << endmsg;
+
+}
+
+
 /* -- LUT approach -- */
 
 ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer) {
   m_digitizer.debug() << "ChargeCollector_LUT constructed." << endmsg;
 }
 
-PixelChargeMatrix ChargeCollector_LUT::Collect() const {
-  m_digitizer.verbose() << "ChargeCollector_LUT::Collect() called." << endmsg;
-
-  PixelChargeMatrix pixelMatrix(0, 0);
-
-  return PixelChargeMatrix(0, 0);
+void ChargeCollector_LUT::FillHit(const Hit& hit, SensorChargeMatrix& hitMap) const {
+  m_digitizer.verbose() << "ChargeCollector_LUT::FillHit() called." << endmsg;
 }
 
 
 /* -- Drift approach -- */
 
-PixelChargeMatrix ChargeCollector_Drift::Collect() const {
-
-  return PixelChargeMatrix(0, 0);
-}
 
 } // namespace VTXdigi_tools
 

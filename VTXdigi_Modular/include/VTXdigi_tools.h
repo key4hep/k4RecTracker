@@ -7,7 +7,7 @@
 #include "Gaudi/Property.h"
 
 // #include "DDRec/ISurface.h"
-// #include "DDRec/SurfaceManager.h"
+#include "DDRec/SurfaceManager.h"
 #include "DDRec/Surface.h"
 
 #include "DDRec/Material.h"
@@ -17,9 +17,55 @@
 #include "DD4hep/Shapes.h"
 #include "DD4hep/DetElement.h"
 
+// #include "edm4hep/SimTrackerHitCollection.h"
+// #include "edm4hep/EventHeaderCollection.h" 
+#include "edm4hep/TrackerHitPlaneCollection.h"
+#include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
+
+
+
 namespace VTXdigi_tools {
 
+
+
+/* -- Tool tests -- */
+
 bool ToolTest();
+
+
+/* -- SimHit -- */
+
+class Hit {
+  /* any member that is added needs to be added to swap, too! */
+  edm4hep::SimTrackerHit m_simHit;
+  dd4hep::rec::ISurface* m_surface;
+    
+  dd4hep::DDSegmentation::CellID m_cellID; // cellID without segmentation bits
+  int m_charge;
+  int m_layerNumber;
+  int m_nSegments = 0;
+
+public:
+  Hit(edm4hep::SimTrackerHit simHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
+  Hit(const Hit& other) = default;
+  Hit(Hit&& other) = default;
+
+  friend void swap(Hit& a, Hit& b) noexcept;
+
+  inline const edm4hep::SimTrackerHit& simHit() const { return m_simHit; }
+  inline dd4hep::rec::ISurface* surface() const { return m_surface; }
+  inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
+  inline int charge() const { return m_charge; }
+  inline int number() const { return m_layerNumber; }
+  inline int nSegments() const { return m_nSegments; }
+};
+
+void swap(Hit& a, Hit& b) noexcept;
+
+/* -- helpers -- */
+
+dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);
+edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec);
 
 /* -- Binning tools -- */
 

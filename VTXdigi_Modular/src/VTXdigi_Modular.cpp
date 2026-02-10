@@ -63,19 +63,58 @@ StatusCode VTXdigi_Modular::finalize() {
 
 std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> VTXdigi_Modular::operator()
   (const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const {
-  debug() << "STARTING event with " << simHits.size() << " simHits." << endmsg;
+  const long int eventNumber = headers.at(0).getEventNumber();
+  ++m_counter_eventsRead;
+  info() << "STARTING event " << eventNumber << " with " << simHits.size() << " simHits. Read " << m_counter_eventsRead.value() << " events so far." << endmsg;
+
+  std::vector<VTXdigi_tools::Hit> hits; // class to hold simHit + associated info
+  hits.reserve(simHits.size());
+  for (const auto& simHit : simHits) {
+    hits.emplace_back(simHit, m_surfaceMap, m_cellIdDecoder);
+    /* This copies each simHit into the hit container. 
+    Because simHits are const references (rvalues), we cannot store references (pointers) to them directly in the Hit objects.
+    I can't think of a significantly better way to handle this where we can delete select hits without invalidating references. 
+    Hit could contain a index i that refers to the i-th simHit (instead of the simHit itself), but that would make the code too complicated for my taste.
+    I hope linking digiHits to simHits still works after copying the simHits. If not, we need to rethink the approach, maybe use simHitIndex in Hit. ~ Jona 2026-02 */
+  }
+
+  /* process all hits on this sensor */
+
+  while (hits.begin() != hits.end()) {
+    const dd4hep::DDSegmentation::CellID cellID = hits.back().cellID();
+    debug() << "Processing sensor with cellID " << cellID << ". " << hits.size() << " hits remaining." << endmsg;
+
+    VTXdigi_tools::SensorChargeMatrix hitMap(m_pixelCount); // matrix to hold integer charge collected in this sensor, to be digitized at the end
+    int hitsOnSensor = 0;
+    
+    /* loop over all hits, digitise hits on this sensor, remove digitised hits from the vector */
+    for (auto hitRIter = hits.rbegin(); hitRIter != hits.rend(); hitRIter++) { 
+      // loop backwards to be able to quickly remove elements from the vector without modifying the order of un-processed hits
+      if (hitRIter->cellID() != cellID){
+        verbose() << "   - Hit NOT on the sensor, skipping." << endmsg;
+        continue;
+      }
+      debug() << "   - Hit on the sensor. EDep " << hitRIter->simHit().getEDep() << " keV." << endmsg;
+      ++hitsOnSensor;
+
+      /* Digitise hit -> deposit charge on hitMap*/
+
+      /* remove hit from vector by swapping with last element, avoids reshuffling vector when deleting element in center */
+      std::iter_swap(hitRIter, hits.rbegin());
+      hits.pop_back(); 
+    }
+    /* (a) write or (b) clusterise & write all pixel hits on this sensor */
+    debug() << " - Found " << hitsOnSensor << " hits on sensor with cellID " << cellID << "." << endmsg;
+  }
   
-  /* output collections */
+  /* Clusterise and create digiHits, digiHitsLinks */
+
   auto digiHits = edm4hep::TrackerHitPlaneCollection();
   auto digiHitsLinks = edm4hep::TrackerHitSimTrackerHitLinkCollection();
-  
+
   /* TODO: Impletement FAST charge collection method (simply smear simHit position)
   * I would simply create a function that returns digiHits and digiHitLinks directly from simHits, to be returned here.
   * this makes a lot of the init etc unnecessary, so maybe have a separate class for that? ~ Jona 2026-02 */
-
-  m_chargeCollector->Collect();
-
-
 
   return std::make_tuple(std::move(digiHits), std::move(digiHitsLinks));
 } // operator()
@@ -100,6 +139,9 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
    *  - m_volumeManager
    *  - m_subDetector
    */
+  if (m_subDetName.value() == m_undefinedString)
+    throw GaudiException("Property SubDetectorName is not set!", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+
   m_uidService = service<IUniqueIDGenSvc>("UniqueIDGenSvc", true);
   if (!m_uidService)
     throw GaudiException("Unable to get UniqueIDGenSvc", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
@@ -118,11 +160,11 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (!m_detector)
     throw GaudiException("Unable to retrieve the DD4hep detector from GeoSvc", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
   
-  const dd4hep::rec::SurfaceManager* simSurfaceManager = m_detector->extension<dd4hep::rec::SurfaceManager>();
-  if (!simSurfaceManager)
+  const dd4hep::rec::SurfaceManager* surfaceManager = m_detector->extension<dd4hep::rec::SurfaceManager>();
+  if (!surfaceManager)
     throw GaudiException("Unable to retrieve the SurfaceManager from the DD4hep detector", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-  
-  m_surfaceMap = simSurfaceManager->map(m_subDetName.value());
+
+  m_surfaceMap = surfaceManager->map(m_subDetName.value());
   if (!m_surfaceMap)
     throw GaudiException("Unable to retrieve the simSurface map for subdetector " + m_subDetName.value(), "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
@@ -130,8 +172,6 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (!m_volumeManager.isValid())
     throw GaudiException("Unable to retrieve the VolumeManager from the DD4hep detector", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
-  if (m_subDetName.value() == m_undefinedString)
-    throw GaudiException("Property SubDetectorName is not set!", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   /* IDEA / Allegro: 
    *   - subDet is child of detector, eg. Vertex 

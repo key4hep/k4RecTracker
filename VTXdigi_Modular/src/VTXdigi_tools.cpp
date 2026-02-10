@@ -4,6 +4,35 @@
 namespace VTXdigi_tools {
 
 
+Hit::Hit(edm4hep::SimTrackerHit simHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simHit(simHit) {
+
+  /* Mask removes segmentation bits, now cellID is unique for each sensor */
+  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
+  m_cellID = simHit.getCellID() & m_mask;
+  const auto surfaceIt = surfaceMap->find(m_cellID);
+  if (surfaceIt == surfaceMap->end())
+    throw std::runtime_error("VTXdigi_Allpix2::HitInfo constructor: Could not find SimSurface for this hit's (reduced) cellID: " + std::to_string(m_cellID));
+  // m_surface = std::make_shared<dd4hep::rec::ISurface>(surfaceIt->second);
+  m_surface = surfaceIt->second;
+
+  m_charge = static_cast<int>(simHit.getEDep() * 273.97f); // convert energy deposit (in keV) to number of electrons (eh-pair ~ 3.65 eV)
+  m_layerNumber = static_cast<int>(cellIdDecoder->get(m_cellID, "layer"));
+} // Hit::Hit()
+
+void swap(Hit& a, Hit& b) noexcept {
+  if (&a == &b) 
+    return;
+
+  using std::swap;
+  swap(a.m_simHit, b.m_simHit);
+  swap(a.m_surface, b.m_surface);
+  swap(a.m_cellID, b.m_cellID);
+  swap(a.m_charge, b.m_charge);
+  swap(a.m_layerNumber, b.m_layerNumber);
+  swap(a.m_nSegments, b.m_nSegments);
+} // swap(Hit&, Hit&)
+
+/* -- helpers -- */
 
 /* -- Binning things -- */
 
@@ -233,9 +262,9 @@ inline int SensorChargeMatrix::_FindIndex(std::array<int, 2> pixel) const {
 
 bool ToolTest() {
   std::cout << " | Running VTXdigi tool tests" << std::endl;
+  bool passed = true;
   
   std::cout << " | VTXdigi_tools::ComputeBinIndex()";
-  bool passed = true;
   {
     bool passedInternal = true;
     const float binX0 = -1.0f;

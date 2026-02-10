@@ -111,10 +111,15 @@ private:
   std::unique_ptr<VTXdigi_tools::IChargeCollector> m_chargeCollector = nullptr;
 
   int m_layerCount = 0; 
-  std::array<int, 2> m_pixelCount = {0, 0}; 
+  std::array<size_t, 2> m_pixelCount = {0, 0}; 
   std::array<float, 2> m_pixelPitch = {0.0f, 0.0f};
   float m_sensorThickness = 0.0f;
   std::array<float, 2> m_sensorLength = {0.0f, 0.0f};
+
+  /* -- Counters -- */
+
+  mutable Gaudi::Accumulators::Counter<> m_counter_eventsRead{this, "Events read"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRead{this, "SimTrackerHits read"};
 
 }; // class VTXdigi_Modular
 
