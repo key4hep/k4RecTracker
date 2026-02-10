@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include "DDRec/SurfaceManager.h"
 
 struct VTXdigi_Modular;
 
@@ -15,7 +16,7 @@ namespace VTXdigi_tools {
 class IChargeCollector {
 public:
   virtual ~IChargeCollector() = default;
-  virtual void FillHit(const Hit& hit, SensorChargeMatrix& hitMap) const = 0;
+  virtual void FillHit(const Hit& hit, SensorChargeMatrix& hitMap, const TGeoHMatrix& trafoMatrix) const = 0;
 
 protected:
   explicit IChargeCollector(const VTXdigi_Modular& digitizer) : m_digitizer(digitizer) {}

@@ -43,10 +43,10 @@ StatusCode VTXdigi_Modular::initialize() {
   InitServicesAndGeometry();
   InitLayersAndSensors();
 
-  /* This needs to come in after the properties, geometry and services have all been initialized */
-  m_chargeCollector = VTXdigi_tools::CreateChargeCollector(*this, m_chargeCollectionMethod);
 
-  VTXdigi_tools::PixelChargeMatrix pixelMatrix = VTXdigi_tools::PixelChargeMatrix(0,0); // just to test that the class compiles
+  /* This needs to come in after the properties, geometry and services have all been initialized */
+  verbose() << "Initializing charge collection method: " << m_chargeCollectionMethod.value() << endmsg;
+  m_chargeCollector = VTXdigi_tools::CreateChargeCollector(*this, m_chargeCollectionMethod);
 
   info() << " - Initialized successfully." << endmsg;
   return StatusCode::SUCCESS;
@@ -63,55 +63,57 @@ StatusCode VTXdigi_Modular::finalize() {
 
 std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> VTXdigi_Modular::operator()
   (const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const {
-  const long int eventNumber = headers.at(0).getEventNumber();
-  ++m_counter_eventsRead;
-  info() << "STARTING event " << eventNumber << " with " << simHits.size() << " simHits. Read " << m_counter_eventsRead.value() << " events so far." << endmsg;
+  if (!CheckEventSetup(simHits, headers))
+    return std::make_tuple(edm4hep::TrackerHitPlaneCollection(), edm4hep::TrackerHitSimTrackerHitLinkCollection());
 
   std::vector<VTXdigi_tools::Hit> hits; // class to hold simHit + associated info
   hits.reserve(simHits.size());
   for (const auto& simHit : simHits) {
-    hits.emplace_back(simHit, m_surfaceMap, m_cellIdDecoder);
+    if (CheckSimhitLayer(simHit))
+      hits.emplace_back(simHit, m_surfaceMap, m_cellIdDecoder);
     /* This copies each simHit into the hit container. 
     Because simHits are const references (rvalues), we cannot store references (pointers) to them directly in the Hit objects.
     I can't think of a significantly better way to handle this where we can delete select hits without invalidating references. 
-    Hit could contain a index i that refers to the i-th simHit (instead of the simHit itself), but that would make the code too complicated for my taste.
+    Hit could contain a index i that refers to the i-th simHit (instead of the simHit itself), but that would make the code too complicated (for now).
     I hope linking digiHits to simHits still works after copying the simHits. If not, we need to rethink the approach, maybe use simHitIndex in Hit. ~ Jona 2026-02 */
   }
-
-  /* process all hits on this sensor */
-
-  while (hits.begin() != hits.end()) {
-    const dd4hep::DDSegmentation::CellID cellID = hits.back().cellID();
-    debug() << "Processing sensor with cellID " << cellID << ". " << hits.size() << " hits remaining." << endmsg;
-
-    VTXdigi_tools::SensorChargeMatrix hitMap(m_pixelCount); // matrix to hold integer charge collected in this sensor, to be digitized at the end
-    int hitsOnSensor = 0;
-    
-    /* loop over all hits, digitise hits on this sensor, remove digitised hits from the vector */
-    for (auto hitRIter = hits.rbegin(); hitRIter != hits.rend(); hitRIter++) { 
-      // loop backwards to be able to quickly remove elements from the vector without modifying the order of un-processed hits
-      if (hitRIter->cellID() != cellID){
-        verbose() << "   - Hit NOT on the sensor, skipping." << endmsg;
-        continue;
-      }
-      debug() << "   - Hit on the sensor. EDep " << hitRIter->simHit().getEDep() << " keV." << endmsg;
-      ++hitsOnSensor;
-
-      /* Digitise hit -> deposit charge on hitMap*/
-
-      /* remove hit from vector by swapping with last element, avoids reshuffling vector when deleting element in center */
-      std::iter_swap(hitRIter, hits.rbegin());
-      hits.pop_back(); 
-    }
-    /* (a) write or (b) clusterise & write all pixel hits on this sensor */
-    debug() << " - Found " << hitsOnSensor << " hits on sensor with cellID " << cellID << "." << endmsg;
-  }
-  
-  /* Clusterise and create digiHits, digiHitsLinks */
+  debug() << " - Accepted " << hits.size() << " simHits after initial selection. Digitising sensor-wise..." << endmsg;
 
   auto digiHits = edm4hep::TrackerHitPlaneCollection();
   auto digiHitsLinks = edm4hep::TrackerHitSimTrackerHitLinkCollection();
+  
+  while (hits.begin() != hits.end()) {
+    const dd4hep::DDSegmentation::CellID cellID = hits.back().cellID(); // shortened cellID
+    debug() << "   - Processing sensor with cellID " << cellID << " (layer " << hits.back().layerNumber() << "). Event has " << hits.size() << " remaining hits." << endmsg;
 
+    TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation); // transformation from global to local sensor coordinates
+    VTXdigi_tools::SensorChargeMatrix hitMap(m_pixelCount); // (integer) matrix to hold charge collected in this sensor, to be digitized at the end
+    int hitsOnSensor = 0;
+    
+    for (auto hitRIter = hits.rbegin(); hitRIter != hits.rend(); hitRIter++) { 
+      // loop backwards to be able to quickly remove elements from the vector without modifying the order of un-processed hits
+      if (hitRIter->cellID() != cellID){
+        verbose() << "       - Found hit. NOT on the sensor, continuing..." << endmsg;
+        continue;
+      }
+      verbose() << "       - Found hit. On the sensor. Processing..." << endmsg;
+      ++hitsOnSensor;
+
+      m_chargeCollector->FillHit(*hitRIter, hitMap, trafoMatrix); // deposit charges in hitMap according to the chosen charge collection method
+
+      /* remove hit from vector by swapping with last element, avoids reshuffling the whole vector every time */
+      std::iter_swap(hitRIter, hits.rbegin());
+      hits.pop_back(); 
+    }
+
+    /* (a) write or (b) clusterise & write all pixel hits on this sensor */
+
+    debug() << "     - Found " << hitsOnSensor << " hits on sensor. hitMap collected " << hitMap.GetTotalCharge() << " e in " << hitMap.GetTotalPixelsWithCharge() << " pixels." << endmsg;
+  } // loop over sensors with hits
+  
+  /* Clusterise and create digiHits, digiHitsLinks */
+
+  
   /* TODO: Impletement FAST charge collection method (simply smear simHit position)
   * I would simply create a function that returns digiHits and digiHitLinks directly from simHits, to be returned here.
   * this makes a lot of the init etc unnecessary, so maybe have a separate class for that? ~ Jona 2026-02 */
@@ -172,6 +174,58 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (!m_volumeManager.isValid())
     throw GaudiException("Unable to retrieve the VolumeManager from the DD4hep detector", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
+  
+  { /* DD4hep has a transformation from the global detector coordinates to each sensors local system. The definition of the local system might change.
+    * We have to make sure that a sensor always sits in the u-v plane in the local system, eg. we might have to swap the axes of the local system. 
+    * We accomplish this with a transformation matrix. This is valid for all sensors in the subdetector */
+    
+    /* Set the sensor local transformation matrix, st. the sensors normal vector is parallel to w-axis (by simply looking at the first sensor in the map) */
+    auto surfaceMapIter = m_surfaceMap->begin();
+    if (surfaceMapIter == m_surfaceMap->end())
+      throw GaudiException("Surface map for subdetector " + m_subDetName.value() + " is empty.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+    const unsigned long cellID = surfaceMapIter->first;
+    const dd4hep::rec::ISurface* surface = surfaceMapIter->second;
+  
+    TGeoHMatrix sensorTrafoMatrix = m_volumeManager.lookupDetElement(cellID).nominal().worldTransformation();
+    double tempVec[3];
+    
+    const double epsilon = 1.0e-6; // reasonable for comparing to 1
+    
+    /* first: rotate sensor normal onto W-axis*/
+    sensorTrafoMatrix.MasterToLocalVect(surface->normal().unit(), tempVec);
+    dd4hep::rec::Vector3D n_local(tempVec[0], tempVec[1], tempVec[2]);
+
+    if (std::abs(n_local.x() - 1.0) < epsilon) {
+      debug() << "   - Local sensor normal vector is (1,0,0). Defining rotation matrix to rotate it to (0,0,1)." << endmsg;
+      m_sensorNormalRotation = TGeoRotation("rot",90.,90.,0.);
+    } 
+    else if (std::abs(n_local.y() - 1.0) < epsilon) {
+      debug() << "   - Local sensor normal vector is (0,1,0). Defining rotation matrix to rotate it to (0,0,1)." << endmsg;
+      m_sensorNormalRotation = TGeoRotation("rot",0.,-90.,0.);
+    } 
+    else if (std::abs(n_local.z() - 1.0) < epsilon) {
+      debug() << "   - Local sensor normal vector is already parallel to (0,0,1)." << endmsg;
+      // no rotation needed
+    } 
+    else {
+      error() << "Sensor local normal vector is not aligned with any local axis!" << endmsg;
+    }
+
+    /* TODO: this only makes sure that the sensor normal vector is perpendicular to the surface.
+    * It does NOT make sure that the local x and y are not swapped and have the correct polarity
+    * I do NOT have the energy to think about Euler angles now. ~Jona, 2026-02 
+    * This at least prints a warning if it isn't correct. */
+    TGeoHMatrix M = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation);
+    M.MasterToLocalVect(surface->u().unit(), tempVec);
+    if (std::abs(tempVec[0]-1.) > epsilon || std::abs(tempVec[1]) > epsilon || std::abs(tempVec[2]) > epsilon)
+      warning() << "After rotation, local sensor U direction (" << tempVec[0] << "," << tempVec[1] << "," << tempVec[2] << ") is not parallel to (1,0,0) axis!" << endmsg;
+    M.MasterToLocalVect(surface->v().unit(), tempVec);
+    if (std::abs(tempVec[0]) > epsilon || std::abs(tempVec[1]-1.) > epsilon || std::abs(tempVec[2]) > epsilon)
+      warning() << "After rotation, local sensor V direction (" << tempVec[0] << "," << tempVec[1] << "," << tempVec[2] << ") is not parallel to (0,1,0) axis!" << endmsg;
+    M.MasterToLocalVect(surface->normal().unit(), tempVec);
+    if (std::abs(tempVec[0]) > epsilon || std::abs(tempVec[1]) > epsilon || std::abs(tempVec[2]-1.) > epsilon)
+      warning() << "After rotation, local sensor normal direction (" << tempVec[0] << "," << tempVec[1] << "," << tempVec[2] << ") is not parallel to (0,0,1) axis!" << endmsg;
+  }
 
   /* IDEA / Allegro: 
    *   - subDet is child of detector, eg. Vertex 
@@ -191,7 +245,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (!m_subDetector)
     throw GaudiException("Unable to retrieve the subdetector DetElement " + m_subDetName.value(), "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
-  debug() << " - Successfully retrieved all necessary services and dd4hep detector elements." << endmsg;
+  debug() << " - Retrieved all necessary services and dd4hep detector elements." << endmsg;
 }
 
 void VTXdigi_Modular::InitLayersAndSensors() {
@@ -229,9 +283,9 @@ void VTXdigi_Modular::InitLayersAndSensors() {
         throw GaudiException("Requested layer " + std::to_string(layerNumber) + " to digitize, but this layer does not exist in subdetector " + m_subDetName.value(), "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
       }
     }
-    debug() << " - Digitizing only specific layers, as defined in Gaudi property by the user. All requested layers were found." << endmsg;
+    debug() << "   - Digitizing only specific layers, as defined in Gaudi property by the user. All requested layers were found." << endmsg;
   }
-  info() << " - Digitizing " << m_layerCount << " layers: " << m_layersToDigitize.value() << " in subdetector " << m_subDetName.value() << "." << endmsg;
+  info() << "   - Digitizing " << m_layerCount << " layers: " << m_layersToDigitize.value() << " in subdetector " << m_subDetName.value() << "." << endmsg;
 
   /* Get pixel pitch from the segmentation (from the readout that matches our simHitCollection) 
   *  I don't know of a better way to do this (that also works for the IDEA detector model) */
@@ -281,11 +335,11 @@ void VTXdigi_Modular::InitLayersAndSensors() {
     /* If list of layers-to-be-digitised is given: skip layers that are not on the list*/
     if (!m_layersToDigitize.value().empty()) {
       if (std::find(m_layersToDigitize.value().begin(), m_layersToDigitize.value().end(), layerNumber) == m_layersToDigitize.value().end()) {
-        verbose() << " - Skipping layer " << layerKey << " (layerNumber " << layerNumber << ", volumeID " << layerVolumeID << " with " << layer.children().size() << " modules) as it is not in the LayersToDigitize list." << endmsg;
+        verbose() << "   - Skipping layer " << layerKey << " (layerNumber " << layerNumber << ", volumeID " << layerVolumeID << " with " << layer.children().size() << " modules) as it is not in the LayersToDigitize list." << endmsg;
         continue;
       }
     }
-    verbose() << " - Found layer \"" << layerKey << "\" (layerNumber " << layerNumber << ", volumeID " << layerVolumeID << ", " << layer.children().size() << " modules) for subDetector \"" << m_subDetName.value() << "\"." << endmsg;
+    verbose() << "   - Found layer \"" << layerKey << "\" (layerNumber " << layerNumber << ", volumeID " << layerVolumeID << ", " << layer.children().size() << " modules) for subDetector \"" << m_subDetName.value() << "\"." << endmsg;
 
     for (const auto& [moduleKey, module] : layer.children()) {
       ++moduleNumber;
@@ -331,3 +385,38 @@ void VTXdigi_Modular::InitLayersAndSensors() {
   
   info() << " - Retrieved sensor parameters: area (" << m_sensorLength.at(0) << " x " << m_sensorLength.at(1) << ") mm, thickness " << m_sensorThickness << " mm, pixel pitch (" << m_pixelPitch.at(0) << " x " << m_pixelPitch.at(1) << ") mm, pixel count (" << m_pixelCount.at(0) << " x " << m_pixelCount.at(1) << "). All " << sensorNumber << " sensors in the relevant layers share these parameters." << endmsg;
 } // InitLayersAndSensors()
+
+
+
+/* ---- Eventloop functions ---- */
+
+bool VTXdigi_Modular::CheckEventSetup(const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const {
+  info() << "PROCESSING event (run " << headers.at(0).getRunNumber() << ", event " << headers.at(0).getEventNumber() << ", found " << simHits.size() << " simHits). Processed " << m_counter_eventsRead.value()+1 << " events so far." << endmsg;
+  ++m_counter_eventsRead;
+
+  if (simHits.size()==0) {
+    debug() << " - No SimTrackerHits in collection, returning empty output collections" << endmsg;
+    ++m_counter_eventsRejected_noSimHits;
+    return false;
+  }
+
+  ++m_counter_eventsAccepted;
+  return true;
+}
+
+bool VTXdigi_Modular::CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const {
+  const int layer = m_cellIdDecoder->get(simHit.getCellID(), "layer");
+  if (m_layersToDigitize.value().size()>0) { 
+    if (std::find(m_layersToDigitize.value().begin(), m_layersToDigitize.value().end(),  layer) == m_layersToDigitize.value().end()) {
+      verbose() << " - Dismissing simHit in layer " << layer << ". (not in the list of layers to digitize)" << endmsg;
+      ++m_counter_simHitsRejected_LayerNotToBeDigitized;
+      return false;
+    }
+  }
+  else {
+    verbose() << " - All layers are to be digitized, as property \"LayersToDigitize\" is not set ." << endmsg;
+  }
+
+  ++m_counter_simHitsAccepted;
+  return true;
+}

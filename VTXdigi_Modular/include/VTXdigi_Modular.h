@@ -47,11 +47,10 @@
 /* -- Forward declarations -- */
 namespace VTXdigi_tools {
   class IChargeCollector;
+  class ChargeCollector_SinglePixel;
 }
 
-struct VTXdigi_Modular final 
-  : k4FWCore::MultiTransformer 
-    <std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> (const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
+struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> (const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
 
   VTXdigi_Modular(const std::string& name, ISvcLocator* svcLoc);
   
@@ -62,7 +61,8 @@ struct VTXdigi_Modular final
 
 private: 
 
-  friend class IChargeCollector;
+  // friend class VTXdigi_tools::IChargeCollector;
+  friend class VTXdigi_tools::ChargeCollector_SinglePixel;
 
   /* ---- Initialization & finalization functions ---- */
 
@@ -72,7 +72,9 @@ private:
 
   /* ---- Core algorithm functions ---- */
 
+  bool CheckEventSetup(const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const;
 
+  bool CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const;
   
   /* -- Properties -- */
 
@@ -98,7 +100,7 @@ private:
   SmartIF<IGeoSvc> m_geoService;
   std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_cellIdDecoder;
   const dd4hep::Detector* m_detector = nullptr;
-  const dd4hep::rec::SurfaceMap* m_surfaceMap;
+  const dd4hep::rec::SurfaceMap* m_surfaceMap; // map from cellID (unsigned long, without segmentation bits) to simSurface (dd4hep::rec::ISurface*)
   dd4hep::VolumeManager m_volumeManager; // volume manager to get the physical cell sensitive volume
   dd4hep::DetElement m_subDetector; // subdetector DetElement. contains layers as children
   
@@ -115,11 +117,16 @@ private:
   std::array<float, 2> m_pixelPitch = {0.0f, 0.0f};
   float m_sensorThickness = 0.0f;
   std::array<float, 2> m_sensorLength = {0.0f, 0.0f};
+  TGeoRotation m_sensorNormalRotation = TGeoRotation("sensorNormalRotation"); // rotation to rotate the sensor local coordinate system. Initialised to unit matrix. The same information was previously stored in m_localNormalVectorDir.
 
   /* -- Counters -- */
 
   mutable Gaudi::Accumulators::Counter<> m_counter_eventsRead{this, "Events read"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_eventsRejected_noSimHits{this, "Events rejected (no simHits)"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_eventsAccepted{this, "Events accepted"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRead{this, "SimTrackerHits read"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRejected_LayerNotToBeDigitized{this, "SimTrackerHits rejected (layer not to be digitized)"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_simHitsAccepted{this, "SimTrackerHits accepted"};
 
 }; // class VTXdigi_Modular
 

@@ -40,7 +40,7 @@ class Hit {
   edm4hep::SimTrackerHit m_simHit;
   dd4hep::rec::ISurface* m_surface;
     
-  dd4hep::DDSegmentation::CellID m_cellID; // cellID without segmentation bits
+  dd4hep::DDSegmentation::CellID m_cellID; // cellID (without segmentation bits)
   int m_charge;
   int m_layerNumber;
   int m_nSegments = 0;
@@ -56,7 +56,7 @@ public:
   inline dd4hep::rec::ISurface* surface() const { return m_surface; }
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
   inline int charge() const { return m_charge; }
-  inline int number() const { return m_layerNumber; }
+  inline int layerNumber() const { return m_layerNumber; }
   inline int nSegments() const { return m_nSegments; }
 };
 
@@ -66,6 +66,11 @@ void swap(Hit& a, Hit& b) noexcept;
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);
 edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec);
+
+TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::CellID& cellID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation);
+
+dd4hep::rec::Vector3D GlobalToLocal(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M);
+dd4hep::rec::Vector3D LocalToGlobal(const dd4hep::rec::Vector3D& local, const TGeoHMatrix& M);
 
 /* -- Binning tools -- */
 
@@ -149,6 +154,7 @@ class SensorChargeMatrix {
     void FillCharge(std::array<int, 2> pixel, int charge);
     int GetCharge(std::array<int, 2> pixel) const;
     int GetTotalCharge() const;
+    int GetTotalPixelsWithCharge() const;
     void Reset();
 
   private:

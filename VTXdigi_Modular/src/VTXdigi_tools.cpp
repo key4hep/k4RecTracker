@@ -15,7 +15,9 @@ Hit::Hit(edm4hep::SimTrackerHit simHit, const dd4hep::rec::SurfaceMap* surfaceMa
   // m_surface = std::make_shared<dd4hep::rec::ISurface>(surfaceIt->second);
   m_surface = surfaceIt->second;
 
-  m_charge = static_cast<int>(simHit.getEDep() * 273.97f); // convert energy deposit (in keV) to number of electrons (eh-pair ~ 3.65 eV)
+  const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
+  m_charge = static_cast<int>(simHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
+
   m_layerNumber = static_cast<int>(cellIdDecoder->get(m_cellID, "layer"));
 } // Hit::Hit()
 
@@ -33,6 +35,43 @@ void swap(Hit& a, Hit& b) noexcept {
 } // swap(Hit&, Hit&)
 
 /* -- helpers -- */
+
+dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
+  return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
+}
+edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec) {
+  return edm4hep::Vector3d(vec.x(), vec.y(), vec.z());
+}
+
+TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::CellID& cellID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation) {
+  TGeoHMatrix M = volumeManager.lookupDetElement(cellID).nominal().worldTransformation();
+
+  /* rotate the local coordinate system st. sensor U is (1,0,0), V is (0,1,0) and normal vector is (0,0,1) */
+  M.Multiply(sensorNormalRotation);
+  
+  /* rotation is unitless, but need to convert translation from cm to mm (dd4hep::mm = 0.1) */
+  double* transl = M.GetTranslation();
+  transl[0] = transl[0] / dd4hep::mm;
+  transl[1] = transl[1] / dd4hep::mm;
+  transl[2] = transl[2] / dd4hep::mm;
+  M.SetTranslation(transl);
+
+  return M;
+}
+
+dd4hep::rec::Vector3D GlobalToLocal(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M) {
+  double local[3];
+  M.MasterToLocal(global, local);
+  return dd4hep::rec::Vector3D(local[0], local[1], local[2]);
+}
+
+dd4hep::rec::Vector3D LocalToGlobal(const dd4hep::rec::Vector3D& local, const TGeoHMatrix& M) {
+  double global[3];
+  M.LocalToMaster(local, global);
+  return dd4hep::rec::Vector3D(global[0], global[1], global[2]);
+}
+
+
 
 /* -- Binning things -- */
 
@@ -103,8 +142,6 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
 
   return {j_u, j_v, j_w};
 } // ComputeInPixelIndices()
-
-
 
 dd4hep::rec::Vector3D ComputePixelCenter_Local(const std::array<int, 2> pixelIndex, const dd4hep::rec::ISurface& surface,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
@@ -231,6 +268,10 @@ void SensorChargeMatrix::FillCharge(std::array<int, 2> pixel, int charge)
 
 int SensorChargeMatrix::GetTotalCharge() const {
   return std::accumulate(m_sensorCharge.begin(), m_sensorCharge.end(), 0);
+}
+
+int SensorChargeMatrix::GetTotalPixelsWithCharge() const {
+  return std::count_if(m_sensorCharge.begin(), m_sensorCharge.end(), [](int charge) { return charge > 0; });
 }
 
 int SensorChargeMatrix::GetCharge(std::array<int, 2> pixel) const {
