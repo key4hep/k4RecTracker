@@ -75,6 +75,10 @@ private:
   bool CheckEventSetup(const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const;
 
   bool CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const;
+
+  void FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) const;
+  void FillHistograms_perPixel(const int layer, const VTXdigi_tools::PixelHit& pix) const;
+  void FillHistograms_perDigiHit(const VTXdigi_tools::Hit& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::PixelHit& pix, const TGeoHMatrix& trafoMatrix) const;
   
   /* -- Properties -- */
 
@@ -88,13 +92,17 @@ private:
 
   /* -- Properties mainlyrelated to the main event loop -- */
 
-  Gaudi::Property<std::vector<int>> m_layersToDigitize{this, "LayersToDigitize", {}, "Which layers to digitize (0-indexed). If empty, all layers are digitized."};
+  Gaudi::Property<std::vector<int>> m_layers{this, "Layers", {}, "Which layers to run on (0-indexed). If empty, all layers are run."};
 
   /* -- Properties and members related to the various charge collection algorithms-- */
 
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
   Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0mm. Used for the digitised hit position."};
 
+
+
+  Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false, "Flag to create and fill debug histograms. Not recommended for multithreading, might lead to crashes. Default is false."};
+  Gaudi::Property<int> m_infoPrintInterval{this, "InfoPrintInterval", 100, "Interval for printing information during processing."};
   
   /* -- Services, geometry variables -- */
   
@@ -114,7 +122,6 @@ private:
 
   std::unique_ptr<VTXdigi_tools::IChargeCollector> m_chargeCollector = nullptr;
 
-  int m_layerCount = 0; 
   std::array<size_t, 2> m_pixelCount = {0, 0}; 
   std::array<float, 2> m_pixelPitch = {0.0f, 0.0f};
   float m_sensorThickness = 0.0f;
@@ -129,6 +136,82 @@ private:
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRead{this, "SimTrackerHits read"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRejected_LayerNotToBeDigitized{this, "SimTrackerHits rejected (layer not to be digitized)"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsAccepted{this, "SimTrackerHits accepted"};
+
+  /* -- Histograms -- */
+
+  enum { 
+    hist1d_simHitE, 
+    hist1d_simHitCharge,
+    hist1d_simHitMomentum_keV,
+    hist1d_simHitMomentum_MeV,
+    hist1d_simHitMomentum_GeV,
+    hist1d_digiHitCharge,
+    hist1d_simHitPDG,
+    hist1d_digiHitsPerSimHit,
+    hist1d_clusterSize,
+    hist1d_clusterSize_createdInGenerator,
+    hist1d_clusterSize_createdInSimulation,
+    hist1d_residualU, 
+    hist1d_residualV, 
+    hist1d_residualW, 
+    hist1d_residualR, 
+    hist1dArrayLen
+  }; // all other hists have an individual instance per layer
+  mutable std::unordered_map<
+    int, // layer number
+    std::array<
+      std::unique_ptr<
+        Gaudi::Accumulators::StaticHistogram<
+          1, 
+          Gaudi::Accumulators::atomicity::full,
+          float
+        >
+      >,
+      hist1dArrayLen
+    >
+  > m_hist1d;
+
+  // enum{
+  //   histProfile1d_clusterSize_vs_hit_z,
+  //   histProfile1d_clusterSize_vs_module_z,
+  //   histProfile1d_clusterSize_vs_hit_cosTheta,
+  //   histProfile1dArrayLen };
+  // mutable std::vector<
+  //   std::array<
+  //     std::unique_ptr<
+  //       Gaudi::Accumulators::StaticProfileHistogram<
+  //         1,
+  //         Gaudi::Accumulators::atomicity::full,
+  //         float
+  //       >
+  //     >,
+  //     histProfile1dArrayLen
+  //   >
+  // > m_histProfile1d;  
+
+  // enum { 
+  //   hist2d_hitMap_simHits,
+  //   hist2d_hitMap_digiHits, 
+  //   hist2d_clusterSize_vs_hit_z,
+  //   hist2d_clusterSize_vs_hit_z_createdInGenerator,
+  //   hist2d_clusterSize_vs_hit_z_createdInSim,
+  //   hist2d_clusterSize_vs_module_z,
+  //   hist2dArrayLen
+  // };
+  // std::vector<
+  //   std::array<
+  //     std::unique_ptr<
+  //       Gaudi::Accumulators::StaticHistogram<
+  //         2,
+  //         Gaudi::Accumulators::atomicity::full,
+  //         float
+  //       >
+  //     >,
+  //     hist2dArrayLen
+  //   >
+  // > m_hist2d;
+
+
 
 }; // class VTXdigi_Modular
 

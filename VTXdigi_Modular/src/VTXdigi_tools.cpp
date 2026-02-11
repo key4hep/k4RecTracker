@@ -51,6 +51,9 @@ void CreateDigiHit(const edm4hep::SimTrackerHit& simHit, edm4hep::TrackerHitPlan
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
   return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
 }
+dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3f vec) {
+  return dd4hep::rec::Vector3D(static_cast<double>(vec.x), static_cast<double>(vec.y), static_cast<double>(vec.z));
+}
 edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec) {
   return edm4hep::Vector3d(vec.x(), vec.y(), vec.z());
 }

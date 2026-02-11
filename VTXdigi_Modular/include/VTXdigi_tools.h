@@ -58,7 +58,7 @@ public:
 
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
   inline int charge() const { return m_charge; }
-  inline int layerNumber() const { return m_layerNumber; }
+  inline int layer() const { return m_layerNumber; }
   inline int nSegments() const { return m_nSegments; }
 };
 
@@ -69,6 +69,7 @@ void swap(Hit& a, Hit& b) noexcept;
 void CreateDigiHit(const edm4hep::SimTrackerHit& simHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const int charge);
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);
+dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3f vec);
 edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec);
 
 TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::CellID& cellID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation);

@@ -41,8 +41,11 @@ StatusCode VTXdigi_Modular::initialize() {
     return StatusCode::FAILURE;
 
   InitServicesAndGeometry();
+
   InitLayersAndSensors();
 
+  if (m_debugHistograms)
+    InitHistograms();
 
   /* This needs to come in after the properties, geometry and services have all been initialized */
   verbose() << "Initializing charge collection method: " << m_chargeCollectionMethod.value() << endmsg;
@@ -77,6 +80,8 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
       Hit could contain a index i that refers to the i-th simHit (instead of the simHit itself), but that would make the code too complicated (for now).
       I hope linking digiHits to simHits still works after copying the simHits. If not, we need to rethink the approach, maybe use simHitIndex in Hit.
       This is very similar to what is done in DCHdigi, so it's probably fine. ~ Jona 2026-02 */
+      if (m_debugHistograms.value())
+        FillHistograms_perSimHit(sensorHits[cellID].back());
     }
   }
   debug() << " - Found hits on " << sensorHits.size() << " individual sensors. Digitising sensor-wise..." << endmsg;
@@ -87,8 +92,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
 
   /* loop over sensors */
   for (const auto& [cellID, hits] : sensorHits) {
-    const int layer = VTXdigi_tools::GetLayer(cellID, m_cellIdDecoder);
-    debug() << "   - Processing sensor with cellID " << cellID << " (layer " << layer << "). Has " << hits.size() << " hits." << endmsg;
+    debug() << "   - Processing sensor with cellID " << cellID << " (layer " << hits.back().layer() << "). Has " << hits.size() << " hits." << endmsg;
   
     TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation); // transformation from global to local sensor coordinates
     VTXdigi_tools::SensorChargeMatrix hitMap(m_pixelCount); // (integer) matrix to hold charge collected in this sensor, to be digitized at the end
@@ -123,6 +127,8 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
       }
 
       VTXdigi_tools::CreateDigiHit(closestHit->simHit(), digiHits, digiHitLinks, pixPos_global, pix.charge);
+      FillHistograms_perDigiHit(*closestHit, pixPos_local, pix, trafoMatrix);
+
     } /* loop over firing pixels */
   } /* loop over sensors */
 
@@ -267,38 +273,35 @@ void VTXdigi_Modular::InitLayersAndSensors() {
   * Sets the members: 
   *  - m_pixelPitch 
   *  - m_sensorThickness
-  *  - m_layerCount
+  *  - m_layers
   *  - */
   verbose() << " - Retrieving layers, subdetector geometry, and sensor size and pitch..." << endmsg;
 
   /* Find layers that we want to digitize */
   verbose() << "   - Determining relevant layers... " << endmsg;
-  m_layerCount = 0;
   std::vector<int> availableLayers;
-  for (const auto& [layerName, layer] : m_subDetector.children()) {
-    dd4hep::VolumeID layerVolumeID = layer.volumeID();
-    const int layerNumber = m_cellIdDecoder->get(layerVolumeID, "layer");
-    availableLayers.push_back(layerNumber);
+  for (const auto& [layerName, layerObj] : m_subDetector.children()) {
+    dd4hep::VolumeID layerVolumeID = layerObj.volumeID();
+    const int layer = m_cellIdDecoder->get(layerVolumeID, "layer");
+    availableLayers.push_back(layer);
   }
   if (availableLayers.empty())
     throw GaudiException("No layers found in subdetector " + m_subDetName.value(), "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
 
-  if (m_layersToDigitize.value().empty()) {
+  if (m_layers.value().empty()) {
     /* digitize all layers in m_subDetector */
-    m_layerCount = availableLayers.size();
-    m_layersToDigitize = availableLayers;
+    m_layers.value() = availableLayers;
   } else {
     /* If layers-to-digitize is specified: check that all requested layers exist */
-    m_layerCount = m_layersToDigitize.value().size();
 
-    for (const auto layerNumber : m_layersToDigitize.value()) {
-      if (std::find(availableLayers.begin(), availableLayers.end(), layerNumber) == availableLayers.end()) {
-        throw GaudiException("Requested layer " + std::to_string(layerNumber) + " to digitize, but this layer does not exist in subdetector " + m_subDetName.value(), "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+    for (const auto layer : m_layers.value()) {
+      if (std::find(availableLayers.begin(), availableLayers.end(), layer) == availableLayers.end()) {
+        throw GaudiException("Requested layer " + std::to_string(layer) + " to digitize, but this layer does not exist in subdetector " + m_subDetName.value(), "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
       }
     }
     debug() << "   - Digitizing only specific layers, as defined in Gaudi property by the user. All requested layers were found." << endmsg;
   }
-  info() << "   - Digitizing " << m_layerCount << " layers: " << m_layersToDigitize.value() << " in subdetector " << m_subDetName.value() << "." << endmsg;
+  info() << "   - Digitizing " << m_layers.value().size() << " layers: " << m_layers.value() << " in subdetector " << m_subDetName.value() << "." << endmsg;
 
   /* Get pixel pitch from the segmentation (from the readout that matches our simHitCollection) 
   *  I don't know of a better way to do this (that also works for the IDEA detector model) */
@@ -342,36 +345,36 @@ void VTXdigi_Modular::InitLayersAndSensors() {
   *  This takes << 1s for the IDEA VTX */
   int moduleNumber = 0, sensorNumber = 0;
   bool membersDefined = false;
-  for (const auto& [layerKey, layer] : m_subDetector.children()) {
-    dd4hep::VolumeID layerVolumeID = layer.volumeID();
-    int layerNumber = m_cellIdDecoder->get(layerVolumeID, "layer");
-    /* If list of layers-to-be-digitised is given: skip layers that are not on the list*/
-    if (!m_layersToDigitize.value().empty()) {
-      if (std::find(m_layersToDigitize.value().begin(), m_layersToDigitize.value().end(), layerNumber) == m_layersToDigitize.value().end()) {
-        verbose() << "   - Skipping layer " << layerKey << " (layerNumber " << layerNumber << ", volumeID " << layerVolumeID << " with " << layer.children().size() << " modules) as it is not in the LayersToDigitize list." << endmsg;
+  for (const auto& [layerKey, layerObj] : m_subDetector.children()) {
+    dd4hep::VolumeID layerVolumeID = layerObj.volumeID();
+    int layer = m_cellIdDecoder->get(layerVolumeID, "layer");
+    /* If list of layers is given: skip layers that are not on the list*/
+    if (!m_layers.value().empty()) {
+      if (std::find(m_layers.value().begin(), m_layers.value().end(), layer) == m_layers.value().end()) {
+        verbose() << "   - Skipping layer " << layerKey << " (layer " << layer << ", volumeID " << layerVolumeID << " with " << layerObj.children().size() << " modules) as it is not in the LayersToDigitize list." << endmsg;
         continue;
       }
     }
-    verbose() << "   - Found layer \"" << layerKey << "\" (layerNumber " << layerNumber << ", volumeID " << layerVolumeID << ", " << layer.children().size() << " modules) for subDetector \"" << m_subDetName.value() << "\"." << endmsg;
+    verbose() << "   - Found layer \"" << layerKey << "\" (layer " << layer << ", volumeID " << layerVolumeID << ", " << layerObj.children().size() << " modules) for subDetector \"" << m_subDetName.value() << "\"." << endmsg;
 
-    for (const auto& [moduleKey, module] : layer.children()) {
+    for (const auto& [moduleKey, moduleObj] : layerObj.children()) {
       ++moduleNumber;
-      for (const auto& [sensorKey, sensor] : module.children()) {
+      for (const auto& [sensorKey, sensorObj] : moduleObj.children()) {
         ++sensorNumber;
-        dd4hep::VolumeID sensorVolumeID = sensor.volumeID();
+        dd4hep::VolumeID sensorVolumeID = sensorObj.volumeID();
 
-        const auto surfaceIt = m_surfaceMap->find(sensor.volumeID());
+        const auto surfaceIt = m_surfaceMap->find(sensorObj.volumeID());
         if (surfaceIt == m_surfaceMap->end()) {
-          throw GaudiException("Could not find surface for sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layerNumber) + " of subDetector " + m_subDetName.value() + " while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+          throw GaudiException("Could not find surface for sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + " while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
         }
         dd4hep::rec::ISurface* surface = surfaceIt->second;
         if (!surface) {
-          throw GaudiException("Surface pointer for sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layerNumber) + " of subDetector " + m_subDetName.value() + " is null while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+          throw GaudiException("Surface pointer for sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + " is null while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
         }
 
         const float sensorLength_u = surface->length_along_u() * 10; // convert to mm
         const float sensorLength_v = surface->length_along_v() * 10; 
-        const float sensorThickness = (surface->innerThickness() + surface->outerThickness()) * 10;
+        const float sensorThickness = (surface->innerThickness() + surface->outerThickness()) * 10; //
 
         if (!membersDefined) {
           /* Set members based on the first sensor we find */
@@ -385,12 +388,12 @@ void VTXdigi_Modular::InitLayersAndSensors() {
           m_pixelCount.at(0) = std::round(pixelCountU);
           m_pixelCount.at(1) = std::round(pixelCountV);
           membersDefined = true;
-          verbose() << "     - Found sensor: " << sensorKey << ", volumeID: " << sensorVolumeID << " (sensor " << sensorNumber << " in layer " << layerNumber << "). Setting expected dimensions to (" << m_sensorLength.at(0) << " x " << m_sensorLength.at(1) << " x " << m_sensorThickness << ") mm3." << endmsg;
+          verbose() << "     - Found sensor: " << sensorKey << ", volumeID: " << sensorVolumeID << " (sensor " << sensorNumber << " in layer " << layer << "). Setting expected dimensions to (" << m_sensorLength.at(0) << " x " << m_sensorLength.at(1) << " x " << m_sensorThickness << ") mm3." << endmsg;
         } // if !membersDefined
         else {
           /* For all other sensors: check for consistency with first sensor */
           if (std::abs(sensorLength_u - m_sensorLength.at(0)) > 0.001 || std::abs(sensorLength_v - m_sensorLength.at(1)) > 0.001 || std::abs(sensorThickness - m_sensorThickness) > 0.001)
-            throw GaudiException("Sensor dimension mismatch found in sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layerNumber) + " of subDetector " + m_subDetName.value() + ": expected dimensions of (" + std::to_string(m_sensorLength.at(0)) + " x " + std::to_string(m_sensorLength.at(1)) + " x " + std::to_string(m_sensorThickness) + ") mm3, but found (" + std::to_string(sensorLength_u) + " x " + std::to_string(sensorLength_v) + " x " + std::to_string(sensorThickness) + ") mm3. This algorithm expects exactly one type of sensor per subDetector. Use different instances of the algorithm if different layers consist of different sensors.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+            throw GaudiException("Sensor dimension mismatch found in sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + ": expected dimensions of (" + std::to_string(m_sensorLength.at(0)) + " x " + std::to_string(m_sensorLength.at(1)) + " x " + std::to_string(m_sensorThickness) + ") mm3, but found (" + std::to_string(sensorLength_u) + " x " + std::to_string(sensorLength_v) + " x " + std::to_string(sensorThickness) + ") mm3. This algorithm expects exactly one type of sensor per subDetector. Use different instances of the algorithm if different layers consist of different sensors.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
         } // if membersDefined
       } // loop over sensors
     } // loop over modules
@@ -399,12 +402,162 @@ void VTXdigi_Modular::InitLayersAndSensors() {
   info() << " - Retrieved sensor parameters: area (" << m_sensorLength.at(0) << " x " << m_sensorLength.at(1) << ") mm, thickness " << m_sensorThickness << " mm, pixel pitch (" << m_pixelPitch.at(0) << " x " << m_pixelPitch.at(1) << ") mm, pixel count (" << m_pixelCount.at(0) << " x " << m_pixelCount.at(1) << "). All " << sensorNumber << " sensors in the relevant layers share these parameters." << endmsg;
 } // InitLayersAndSensors()
 
+void VTXdigi_Modular::InitHistograms() {
+  /* Define axes globally to make adjusting them easier
+  * TODO: Make some of these adjustable via Gaudi Parameters? Might not be necessary.*/
+  Gaudi::Accumulators::Axis<float> axis_z{200, -200, 200};
+  Gaudi::Accumulators::Axis<float> axis_cosTheta{100, 0, 1};
+  Gaudi::Accumulators::Axis<float> axis_theta{4*180, 0, 180};
+  Gaudi::Accumulators::Axis<float> axis_phi{4*180, -180, 180};
+  
+  Gaudi::Accumulators::Axis<float> axis_moduleID{2000, -0.5f, 1999.5f};
+  Gaudi::Accumulators::Axis<float> axis_clusterSize{30, -0.5f, 29.5f};
+  Gaudi::Accumulators::Axis<float> axis_E{1000, 0, m_sensorThickness*2000.f};
+  Gaudi::Accumulators::Axis<float> axis_charge{1000, 0, m_sensorThickness*500000.f};
+  Gaudi::Accumulators::Axis<float> axis_momentum_keV{10000, 0.f, 1000.f};
+  Gaudi::Accumulators::Axis<float> axis_momentum_MeV{10000, 0.f, 1000.f};
+  Gaudi::Accumulators::Axis<float> axis_momentum_GeV{10000, 0.f, 1000.f};
+  
+  Gaudi::Accumulators::Axis<float> axis_residual{2000, -1000.f, 1000.f};
+  Gaudi::Accumulators::Axis<float> axis_pdg{1401, -700.5f, 700.5f};
 
+  Gaudi::Accumulators::Axis<float> axis_pixels_u{
+    static_cast<unsigned int>(m_pixelCount.at(0)),
+    -0.5f,
+    static_cast<float>(m_pixelCount.at(0)+0.5)};
+  Gaudi::Accumulators::Axis<float> axis_pixels_v{
+    static_cast<unsigned int>(m_pixelCount.at(1)),
+    -0.5f,
+    static_cast<float>(m_pixelCount.at(1)+0.5)};
+    
+  /* Fill histograms per layer */
+  for (int layer : m_layers.value()) {
+    if (layer == 0) {
+      axis_z = Gaudi::Accumulators::Axis<float>{100, -96.5, 96.5}; // Want to cover layer 0 of IDEA vertex det perfectly to avoid binning-edge-effects, so we use a the correct length of 185 mm
+    }
+
+    std::array< std::unique_ptr< Gaudi::Accumulators::StaticHistogram< 1, Gaudi::Accumulators::atomicity::full, float > >, hist1dArrayLen > hist1d;
+
+    hist1d.at(hist1d_simHitE).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_energyDep",
+        "SimHit deposited energy - Layer " + std::to_string(layer) + ";Energy [keV];Entries",
+        axis_E
+      }
+    );
+    hist1d.at(hist1d_simHitCharge).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_chargeDep",
+        "SimHit deposited charge - Layer " + std::to_string(layer) + ";Charge [e-];Entries",
+        axis_charge
+      }
+    );
+    hist1d.at(hist1d_simHitMomentum_keV).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_momentum_keV",
+        "SimHit particle momentum at hit position - Layer " + std::to_string(layer) + ";Momentum [keV/c];Entries",
+        axis_momentum_keV
+      }
+    );
+    hist1d.at(hist1d_simHitMomentum_MeV).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_momentum_MeV",
+        "SimHit particle momentum at hit position - Layer " + std::to_string(layer) + ";Momentum [MeV/c];Entries",
+        axis_momentum_MeV
+      }
+    );
+    hist1d.at(hist1d_simHitMomentum_GeV).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_momentum_GeV",
+        "SimHit particle momentum at hit position - Layer " + std::to_string(layer) + ";Momentum [GeV/c];Entries",
+        axis_momentum_GeV
+      }
+    );
+    hist1d.at(hist1d_simHitPDG).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_PDG",
+        "SimHit particle PDG code - Layer " + std::to_string(layer) + ";PDG;Entries",
+        axis_pdg
+      }
+    );
+    
+
+
+    hist1d.at(hist1d_digiHitCharge).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_chargeDep",
+        "DigiHit charge - Layer " + std::to_string(layer) + ";Charge [e-];Entries",
+        axis_charge
+      }
+    );
+    hist1d.at(hist1d_digiHitsPerSimHit).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHits_per_simHit",
+        "Raw number of digiHits created per simHit - Layer " + std::to_string(layer) + ";DigiHits per SimHit;Entries",
+        axis_clusterSize // not technically correct, but works
+      }
+    );
+
+    hist1d.at(hist1d_clusterSize).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/clusterSize",
+        "Number of pixels per cluster (after clustering algorithm) - Layer " + std::to_string(layer) + ";Cluster size [pixels];Entries",
+        axis_clusterSize
+      }
+    );
+    hist1d.at(hist1d_clusterSize_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/clusterSize_createdInGenerator",
+        "Number of pixels per cluster (for simHits created in generator) - Layer " + std::to_string(layer) + ";Cluster size [pixels];Entries",
+        axis_clusterSize
+      }
+    );
+    hist1d.at(hist1d_clusterSize_createdInSimulation).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/clusterSize_createdInSimulation",
+        "Number of pixels per cluster (for simHits created in simulation) - Layer " + std::to_string(layer) + ";Cluster size [pixels];Entries",
+        axis_clusterSize
+      }
+    );
+
+    hist1d.at(hist1d_residualU).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u",
+        "Residual (u_digiHit - u_simHit) in local u direction - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residualV).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v",
+        "Residual (v_digiHit - v_simHit) in local v direction - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residualW).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_w",
+        "Residual (w_digiHit - w_simHit) in local w direction (ie. sensor normal direction) - Layer " + std::to_string(layer) + ";Residual w [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residualR).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_r",
+        "Residual magnitude (|r_digiHit - r_simHit|) - Layer " + std::to_string(layer) + ";Residual r [um];Entries",
+        axis_residual
+      }
+    );
+
+    m_hist1d.emplace(layer, std::move(hist1d));
+  } /* loop over layers */
+}
 
 /* ---- Eventloop functions ---- */
 
 bool VTXdigi_Modular::CheckEventSetup(const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const {
-  info() << "PROCESSING event (run " << headers.at(0).getRunNumber() << ", event " << headers.at(0).getEventNumber() << ", found " << simHits.size() << " simHits). Processed " << m_counter_eventsRead.value()+1 << " events so far." << endmsg;
+  if (m_counter_eventsRead.value() % m_infoPrintInterval.value() == 0)
+    info() << "PROCESSING event (run " << headers.at(0).getRunNumber() << ", event " << headers.at(0).getEventNumber() << ", found " << simHits.size() << " simHits). Processed " << m_counter_eventsRead.value() << " events so far." << endmsg;
   ++m_counter_eventsRead;
 
   if (simHits.size()==0) {
@@ -419,8 +572,8 @@ bool VTXdigi_Modular::CheckEventSetup(const edm4hep::SimTrackerHitCollection& si
 
 bool VTXdigi_Modular::CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const {
   const int layer = m_cellIdDecoder->get(simHit.getCellID(), "layer");
-  if (m_layersToDigitize.value().size()>0) { 
-    if (std::find(m_layersToDigitize.value().begin(), m_layersToDigitize.value().end(),  layer) == m_layersToDigitize.value().end()) {
+  if (m_layers.value().size()>0) { 
+    if (std::find(m_layers.value().begin(), m_layers.value().end(),  layer) == m_layers.value().end()) {
       verbose() << " - Dismissing simHit in layer " << layer << ". (not in the list of layers to digitize)" << endmsg;
       ++m_counter_simHitsRejected_LayerNotToBeDigitized;
       return false;
@@ -433,3 +586,43 @@ bool VTXdigi_Modular::CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) con
   ++m_counter_simHitsAccepted;
   return true;
 }
+
+void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) const {
+  /* executed once for each simHit */
+  const int layer = hit.layer();
+  const dd4hep::rec::Vector3D simHitMomentum = VTXdigi_tools::ConvertVector(hit.simHit().getMomentum()); // in GeV
+  debug() << " sim Momentum = " << simHitMomentum.r() << " GeV/c" << endmsg;
+
+  ++(*m_hist1d.at(layer).at(hist1d_simHitE))[hit.simHit().getEDep() * (dd4hep::GeV / dd4hep::keV)]; 
+  ++(*m_hist1d.at(layer).at(hist1d_simHitCharge))[hit.charge()]; 
+  ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_keV))[simHitMomentum.r() * 1.E6]; 
+  ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_MeV))[simHitMomentum.r() * 1.E3]; 
+  ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_GeV))[simHitMomentum.r()]; 
+  ++(*m_hist1d.at(layer).at(hist1d_simHitPDG))[hit.simHit().getParticle().getPDG()];
+}
+
+void VTXdigi_Modular::FillHistograms_perPixel(const int layer, const VTXdigi_tools::PixelHit& pix) const {
+  /* executed once for each digiHit */
+
+}
+
+void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Hit& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::PixelHit& pix, const TGeoHMatrix& trafoMatrix) const {
+  /* executed once for each digiHit */
+  const int layer = hit.layer();
+  const dd4hep::rec::Vector3D simHitPos_global = VTXdigi_tools::ConvertVector(hit.simHit().getPosition());
+  const dd4hep::rec::Vector3D simHitPos_local = VTXdigi_tools::GlobalToLocal(simHitPos_global, trafoMatrix);
+
+  ++(*m_hist1d.at(layer).at(hist1d_digiHitCharge))[pix.charge]; 
+  
+  /* residual = observed - predicted */
+  const dd4hep::rec::Vector3D residual_local = pos_local - simHitPos_local;
+  ++(*m_hist1d.at(layer).at(hist1d_residualU))[residual_local.x() / dd4hep::um]; // convert to um
+  ++(*m_hist1d.at(layer).at(hist1d_residualV))[residual_local.y() / dd4hep::um];
+  ++(*m_hist1d.at(layer).at(hist1d_residualW))[residual_local.z() / dd4hep::um];
+  ++(*m_hist1d.at(layer).at(hist1d_residualR))[residual_local.r() / dd4hep::um];
+}
+
+// hist1d_digiHitsPerSimHit,
+// hist1d_clusterSize,
+// hist1d_clusterSize_createdInGenerator,
+// hist1d_clusterSize_createdInSimulation,
