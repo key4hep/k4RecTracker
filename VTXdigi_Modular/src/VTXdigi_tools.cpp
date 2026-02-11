@@ -5,10 +5,7 @@ namespace VTXdigi_tools {
 
 
 Hit::Hit(edm4hep::SimTrackerHit simHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simHit(simHit) {
-
-  /* Mask removes segmentation bits, now cellID is unique for each sensor */
-  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
-  m_cellID = simHit.getCellID() & m_mask;
+  m_cellID = GetCellID_short(simHit);
   const auto surfaceIt = surfaceMap->find(m_cellID);
   if (surfaceIt == surfaceMap->end())
     throw std::runtime_error("VTXdigi_Allpix2::HitInfo constructor: Could not find SimSurface for this hit's (reduced) cellID: " + std::to_string(m_cellID));
@@ -18,7 +15,7 @@ Hit::Hit(edm4hep::SimTrackerHit simHit, const dd4hep::rec::SurfaceMap* surfaceMa
   const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
   m_charge = static_cast<int>(simHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
 
-  m_layerNumber = static_cast<int>(cellIdDecoder->get(m_cellID, "layer"));
+  m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
 } // Hit::Hit()
 
 void swap(Hit& a, Hit& b) noexcept {
@@ -35,6 +32,21 @@ void swap(Hit& a, Hit& b) noexcept {
 } // swap(Hit&, Hit&)
 
 /* -- helpers -- */
+
+void CreateDigiHit(const edm4hep::SimTrackerHit& simHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const int charge) {
+  const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
+
+  auto digiHit = digiHits.create();
+
+  digiHit.setCellID(simHit.getCellID());
+  digiHit.setEDep(charge / chargePerkeV); // convert e- to keV
+  digiHit.setPosition(ConvertVector(position));
+  digiHit.setTime(simHit.getTime());
+  
+  auto digiHitLink = digiHitLinks.create();
+  digiHitLink.setFrom(digiHit);
+  digiHitLink.setTo(simHit);
+}
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
   return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
@@ -71,7 +83,18 @@ dd4hep::rec::Vector3D LocalToGlobal(const dd4hep::rec::Vector3D& local, const TG
   return dd4hep::rec::Vector3D(global[0], global[1], global[2]);
 }
 
+dd4hep::DDSegmentation::CellID GetCellID_short(const edm4hep::SimTrackerHit& simHit) {
+  /* Mask removes segmentation bits, now cellID is unique for each sensor */
+  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
+  return simHit.getCellID() & m_mask;
+}
 
+int GetLayer(const dd4hep::DDSegmentation::CellID& cellID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
+  return static_cast<int>(cellIdDecoder->get(cellID, "layer"));
+} 
+int GetLayer(const edm4hep::SimTrackerHit& simHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
+  return GetLayer(GetCellID_short(simHit), cellIdDecoder);
+}
 
 /* -- Binning things -- */
 
@@ -143,21 +166,18 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
   return {j_u, j_v, j_w};
 } // ComputeInPixelIndices()
 
-dd4hep::rec::Vector3D ComputePixelCenter_Local(const std::array<int, 2> pixelIndex, const dd4hep::rec::ISurface& surface,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter) {
+dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
   
-  float length_u = surface.length_along_u() * 10; // convert to mm (works, checked 2025-10-17)
-  float length_v = surface.length_along_v() * 10;
-  
-  float u = -0.5 * length_u + (pixelIndex[0] + 0.5) * pixelPitch[0]; // in mm
-  float v = -0.5 * length_v + (pixelIndex[1] + 0.5) * pixelPitch[1];
+  float u = -0.5 * sensorLength[0] + (pixelIndex[0] + 0.5) * pixelPitch[0]; // in mm
+  float v = -0.5 * sensorLength[1] + (pixelIndex[1] + 0.5) * pixelPitch[1];
   float w = depletedRegionDepthCenter;
   
   return dd4hep::rec::Vector3D(u, v, w); 
 }
 
-dd4hep::rec::Vector3D ComputePixelCenter_Local(const std::array<int, 2> pixelIndex, const dd4hep::rec::ISurface& surface, const std::array<float, 2> pixelPitch) {
-  return ComputePixelCenter_Local(pixelIndex, surface, pixelPitch, 0.f);
+dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch) {
+  return ComputePixelPos_local(pixelIndex, sensorLength, pixelPitch, 0.f);
 }
 
 /* -- PixelChargeMatrix -- */
@@ -268,6 +288,21 @@ void SensorChargeMatrix::FillCharge(std::array<int, 2> pixel, int charge)
 
 int SensorChargeMatrix::GetTotalCharge() const {
   return std::accumulate(m_sensorCharge.begin(), m_sensorCharge.end(), 0);
+}
+
+std::vector<PixelHit> SensorChargeMatrix::GetPixelsWithCharge() const {
+  std::vector<PixelHit> pixelsWithCharge;
+  pixelsWithCharge.reserve(GetTotalPixelsWithCharge());
+
+  for (int i_v = 0; i_v < static_cast<int>(m_pixelCount.at(1)); ++i_v) {
+    for (int i_u = 0; i_u < static_cast<int>(m_pixelCount.at(0)); ++i_u) {
+      const int charge = GetCharge({i_u, i_v});
+      if (charge > 0) {
+        pixelsWithCharge.push_back(PixelHit{{i_u, i_v}, charge});
+      }
+    }
+  }
+  return pixelsWithCharge;
 }
 
 int SensorChargeMatrix::GetTotalPixelsWithCharge() const {

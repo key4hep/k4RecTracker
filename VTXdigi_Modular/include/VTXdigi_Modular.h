@@ -93,6 +93,8 @@ private:
   /* -- Properties and members related to the various charge collection algorithms-- */
 
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
+  Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0mm. Used for the digitised hit position."};
+
   
   /* -- Services, geometry variables -- */
   

@@ -39,11 +39,12 @@ class Hit {
   /* any member that is added needs to be added to swap, too! */
   edm4hep::SimTrackerHit m_simHit;
   dd4hep::rec::ISurface* m_surface;
-    
+  
   dd4hep::DDSegmentation::CellID m_cellID; // cellID (without segmentation bits)
   int m_charge;
   int m_layerNumber;
   int m_nSegments = 0;
+
 
 public:
   Hit(edm4hep::SimTrackerHit simHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
@@ -54,6 +55,7 @@ public:
 
   inline const edm4hep::SimTrackerHit& simHit() const { return m_simHit; }
   inline dd4hep::rec::ISurface* surface() const { return m_surface; }
+
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
   inline int charge() const { return m_charge; }
   inline int layerNumber() const { return m_layerNumber; }
@@ -64,6 +66,8 @@ void swap(Hit& a, Hit& b) noexcept;
 
 /* -- helpers -- */
 
+void CreateDigiHit(const edm4hep::SimTrackerHit& simHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const int charge);
+
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);
 edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec);
 
@@ -71,6 +75,12 @@ TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::CellID& cellI
 
 dd4hep::rec::Vector3D GlobalToLocal(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M);
 dd4hep::rec::Vector3D LocalToGlobal(const dd4hep::rec::Vector3D& local, const TGeoHMatrix& M);
+
+dd4hep::DDSegmentation::CellID GetCellID_short(const edm4hep::SimTrackerHit& simHit);
+
+int GetLayer(const dd4hep::DDSegmentation::CellID& cellID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
+int GetLayer(const edm4hep::SimTrackerHit& simHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
+
 
 /* -- Binning tools -- */
 
@@ -90,12 +100,10 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
  * 
  * @note The w coordinate is set to depletedRegionDepthCenter. 0 for center, +25 for sensor surface, +20 for TPSCo 65nm maps.
 */
-dd4hep::rec::Vector3D ComputePixelCenter_Local(const std::array<int, 2> pixelIndex, const dd4hep::rec::ISurface& surface,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter);
+dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter);
 
 /** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,0) */
-dd4hep::rec::Vector3D ComputePixelCenter_Local(const std::array<int, 2> pixelIndex, const dd4hep::rec::ISurface& surface, const std::array<float, 2> pixelPitch);
-
-
+dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch);
 
 /* -- Pixel Charge Matrix -- */
 
@@ -142,6 +150,11 @@ class PixelChargeMatrix {
     void _ExpandMatrix(int i_u, int i_v);
 }; // class PixelChargeMatrix
 
+struct PixelHit {
+  std::array<int, 2> index; // pixel indices i_u, i_v
+  int charge;
+};
+
 class SensorChargeMatrix {
   /* Holds the charge collected in a sensor, stored as a map of pixel indices to charge. This is used as an intermediate step before creating the output TrackerHit, which requires a fixed-size matrix. */
 
@@ -154,6 +167,7 @@ class SensorChargeMatrix {
     void FillCharge(std::array<int, 2> pixel, int charge);
     int GetCharge(std::array<int, 2> pixel) const;
     int GetTotalCharge() const;
+    std::vector<PixelHit> GetPixelsWithCharge() const;
     int GetTotalPixelsWithCharge() const;
     void Reset();
 

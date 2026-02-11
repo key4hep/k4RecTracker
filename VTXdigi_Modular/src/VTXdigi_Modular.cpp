@@ -66,59 +66,72 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
   if (!CheckEventSetup(simHits, headers))
     return std::make_tuple(edm4hep::TrackerHitPlaneCollection(), edm4hep::TrackerHitSimTrackerHitLinkCollection());
 
-  std::vector<VTXdigi_tools::Hit> hits; // class to hold simHit + associated info
-  hits.reserve(simHits.size());
+  std::unordered_map<dd4hep::DDSegmentation::CellID, std::vector<VTXdigi_tools::Hit>> sensorHits; // map from sensor (shortened cellID) to hits
   for (const auto& simHit : simHits) {
-    if (CheckSimhitLayer(simHit))
-      hits.emplace_back(simHit, m_surfaceMap, m_cellIdDecoder);
-    /* This copies each simHit into the hit container. 
-    Because simHits are const references (rvalues), we cannot store references (pointers) to them directly in the Hit objects.
-    I can't think of a significantly better way to handle this where we can delete select hits without invalidating references. 
-    Hit could contain a index i that refers to the i-th simHit (instead of the simHit itself), but that would make the code too complicated (for now).
-    I hope linking digiHits to simHits still works after copying the simHits. If not, we need to rethink the approach, maybe use simHitIndex in Hit. ~ Jona 2026-02 */
+    if (CheckSimhitLayer(simHit)){
+      const dd4hep::DDSegmentation::CellID cellID = VTXdigi_tools::GetCellID_short(simHit);
+      sensorHits[cellID].emplace_back(simHit, m_surfaceMap, m_cellIdDecoder);
+      /* This copies each simHit into the hit container. 
+      Because simHits are const references (rvalues), we cannot store references (pointers) to them directly in the Hit objects.
+      I can't think of a significantly better way to handle this where we can delete select hits without invalidating references. 
+      Hit could contain a index i that refers to the i-th simHit (instead of the simHit itself), but that would make the code too complicated (for now).
+      I hope linking digiHits to simHits still works after copying the simHits. If not, we need to rethink the approach, maybe use simHitIndex in Hit.
+      This is very similar to what is done in DCHdigi, so it's probably fine. ~ Jona 2026-02 */
+    }
   }
-  debug() << " - Accepted " << hits.size() << " simHits after initial selection. Digitising sensor-wise..." << endmsg;
+  debug() << " - Found hits on " << sensorHits.size() << " individual sensors. Digitising sensor-wise..." << endmsg;
 
   auto digiHits = edm4hep::TrackerHitPlaneCollection();
-  auto digiHitsLinks = edm4hep::TrackerHitSimTrackerHitLinkCollection();
-  
-  while (hits.begin() != hits.end()) {
-    const dd4hep::DDSegmentation::CellID cellID = hits.back().cellID(); // shortened cellID
-    debug() << "   - Processing sensor with cellID " << cellID << " (layer " << hits.back().layerNumber() << "). Event has " << hits.size() << " remaining hits." << endmsg;
+  auto digiHitLinks = edm4hep::TrackerHitSimTrackerHitLinkCollection();
+  std::vector<VTXdigi_tools::Hit> hitsSensor;
 
+  /* loop over sensors */
+  for (const auto& [cellID, hits] : sensorHits) {
+    const int layer = VTXdigi_tools::GetLayer(cellID, m_cellIdDecoder);
+    debug() << "   - Processing sensor with cellID " << cellID << " (layer " << layer << "). Has " << hits.size() << " hits." << endmsg;
+  
     TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation); // transformation from global to local sensor coordinates
     VTXdigi_tools::SensorChargeMatrix hitMap(m_pixelCount); // (integer) matrix to hold charge collected in this sensor, to be digitized at the end
-    int hitsOnSensor = 0;
-    
-    for (auto hitRIter = hits.rbegin(); hitRIter != hits.rend(); hitRIter++) { 
-      // loop backwards to be able to quickly remove elements from the vector without modifying the order of un-processed hits
-      if (hitRIter->cellID() != cellID){
-        verbose() << "       - Found hit. NOT on the sensor, continuing..." << endmsg;
-        continue;
-      }
-      verbose() << "       - Found hit. On the sensor. Processing..." << endmsg;
-      ++hitsOnSensor;
 
-      m_chargeCollector->FillHit(*hitRIter, hitMap, trafoMatrix); // deposit charges in hitMap according to the chosen charge collection method
-
-      /* remove hit from vector by swapping with last element, avoids reshuffling the whole vector every time */
-      std::iter_swap(hitRIter, hits.rbegin());
-      hits.pop_back(); 
+    /* loop over hits on this sensor, deposit charges into hitMap */
+    for (const VTXdigi_tools::Hit& hit : hits) {
+      m_chargeCollector->FillHit(hit, hitMap, trafoMatrix); // use the chosen charge collection method
     }
 
-    /* (a) write or (b) clusterise & write all pixel hits on this sensor */
+    /* Create digiHits from the hitMap */
+    for (const VTXdigi_tools::PixelHit& pix : hitMap.GetPixelsWithCharge()) {
+      const dd4hep::rec::Vector3D pixPos_local = VTXdigi_tools::ComputePixelPos_local(pix.index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
+      const dd4hep::rec::Vector3D pixPos_global = VTXdigi_tools::LocalToGlobal(pixPos_local, trafoMatrix);
 
-    debug() << "     - Found " << hitsOnSensor << " hits on sensor. hitMap collected " << hitMap.GetTotalCharge() << " e in " << hitMap.GetTotalPixelsWithCharge() << " pixels." << endmsg;
-  } // loop over sensors with hits
-  
-  /* Clusterise and create digiHits, digiHitsLinks */
+      /* Match pixel hits to simHits. 
+      * TODO: So far, we simply match each pixel hit to the closest simHit. At high occupancy (ttbar) this will lead to wrong associations (for 2 simHits that are very close), might deteriorate truth-matching of tracks or similar.
+      * (instead, maybe save a list of all source-simHits for each pixel? This is the correct way to do it, but quite a bit more expensive. This would also mean we cannot simply remove each used hit from the hits vector) */
+      const VTXdigi_tools::Hit* closestHit = &hits.at(0);
+      float closestDist = std::numeric_limits<float>::max();
+      bool firsthit = false;
+      for (const VTXdigi_tools::Hit& hit : hits) {
+        if (!firsthit) {
+          firsthit = true;
+          continue; // skip first hit, already set as closestHit
+        }
+        const dd4hep::rec::Vector3D hitPos_local = VTXdigi_tools::GlobalToLocal(VTXdigi_tools::ConvertVector(hit.simHit().getPosition()), trafoMatrix);
+        const float dist = (hitPos_local - pixPos_local).r();
+        if (dist < closestDist){
+          closestHit = &hit;
+          closestDist = dist;
+        }
+      }
 
-  
+      VTXdigi_tools::CreateDigiHit(closestHit->simHit(), digiHits, digiHitLinks, pixPos_global, pix.charge);
+    } /* loop over firing pixels */
+  } /* loop over sensors */
+
   /* TODO: Impletement FAST charge collection method (simply smear simHit position)
   * I would simply create a function that returns digiHits and digiHitLinks directly from simHits, to be returned here.
   * this makes a lot of the init etc unnecessary, so maybe have a separate class for that? ~ Jona 2026-02 */
 
-  return std::make_tuple(std::move(digiHits), std::move(digiHitsLinks));
+  debug() << " - Finished digitization. Created " << digiHits.size() << " digiHits." << endmsg;
+  return std::make_tuple(std::move(digiHits), std::move(digiHitLinks));
 } // operator()
 
 
