@@ -11,20 +11,14 @@
 ###############################################################################
 
 
-# Save the initial directory
-INITIAL_DIR=$(pwd)
-# Get the directory of the script
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Go to the script directory (to have a clean environment with access to local files)
-cd "${SCRIPT_DIR}"
+SRC_TEST="${SOURCE_DIR_TEST:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
+export SRC_TEST
+export PYTHONPATH="${SRC_TEST}:$PYTHONPATH"
 
 # Check required environment variables
 if [ -z "${K4GEO:-}" ] || [ -z "${CLDCONFIG:-}" ]; then
     source /cvmfs/sw.hsf.org/key4hep/setup.sh
 fi
-
-# Add script directory to PYTHONPATH to find local python modules
-export PYTHONPATH="${SCRIPT_DIR}:$PYTHONPATH"
 
 # Configuration
 N_EVENTS=10
@@ -64,7 +58,7 @@ echo ""
 echo "[2/3] Running digitization with VTXdigitizerDetailed..."
 
 # Run digitization
-k4run test_digi_steering.py --inputFiles ${TEMP_SIM} --outputBasename ${OUTPUT_FILE} -n ${N_EVENTS}
+k4run ${SRC_TEST}/test_digi_steering.py --inputFiles ${TEMP_SIM} --outputBasename ${OUTPUT_FILE} -n ${N_EVENTS}
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Digitization failed"
@@ -95,7 +89,3 @@ echo "========================================================================"
 echo "  ✓ Test PASSED"
 echo "  Output file: ${OUTPUT_FILE}_REC.edm4hep.root"
 echo "========================================================================"
-
-
-# Return to the initial directory
-cd "${INITIAL_DIR}"

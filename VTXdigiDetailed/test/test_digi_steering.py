@@ -51,7 +51,7 @@ CONFIG = {
     "OutputModeChoices": ["LCIO", "EDM4hep"],  # , "both"] FIXME: both is not implemented yet
 }
 
-REC_COLLECTION_CONTENTS_FILE = "collections_rec_level.txt"  # file with the collections to be patched in when writing from LCIO to EDM4hep
+SRC_PATH = os.environ.get("SRC_TEST", ".")
 
 geoservice = GeoSvc("GeoSvc")
 geoservice.detectors = [reco_args.compactFile]
@@ -103,12 +103,16 @@ EventNumber.Parameters = {"HowOften": ["1"]}
 
 # setup AIDA histogramming and add eventual background overlay
 algList.append(MyAIDAProcessor)
-sequenceLoader.load("Overlay")
+sequenceLoader.load(os.path.join(SRC_PATH, "Overlay"))
 # tracker hit digitisation
-sequenceLoader.load("TrackingDigi")
+sequenceLoader.load(os.path.join(SRC_PATH, "TrackingDigi"))
 
 # event number processor, down here to attach the conversion back to edm4hep to it
 algList.append(EventNumber)
+
+
+# Output file writing, in EDM4hep
+io_handler.add_edm4hep_writer(f"{reco_args.outputBasename}_REC.edm4hep.root", ["keep *"])
 
 # We need to attach all the necessary converters
 io_handler.finalize_converters()
