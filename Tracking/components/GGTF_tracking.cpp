@@ -128,7 +128,7 @@ struct GGTF_tracking final : k4FWCore::MultiTransformer<std::tuple<extension::Tr
     m_geoSvc = serviceLocator()->service(m_geoSvcName);
   }
 
-  StatusCode initialize() {
+  StatusCode initialize() override {
 
     ///////////////////////////////
     ///// ONNX Initialization /////
@@ -437,7 +437,7 @@ struct GGTF_tracking final : k4FWCore::MultiTransformer<std::tuple<extension::Tr
     return std::make_tuple(std::move(outputTracks));
   }
 
-  StatusCode finalize() {
+  StatusCode finalize() override {
 
     info() << "Run report:" << endmsg;
     info() << "Number of analysed events: " << m_indexCounter << endmsg;
