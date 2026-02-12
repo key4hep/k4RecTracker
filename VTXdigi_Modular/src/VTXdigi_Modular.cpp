@@ -95,7 +95,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
     debug() << "   - Processing sensor with cellID " << cellID << " (layer " << hits.back().layer() << "). Has " << hits.size() << " hits." << endmsg;
   
     TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation); // transformation from global to local sensor coordinates
-    VTXdigi_tools::SensorChargeMatrix hitMap(m_pixelCount); // (integer) matrix to hold charge collected in this sensor, to be digitized at the end
+    VTXdigi_tools::HitMap hitMap(m_pixelCount); // (integer) matrix to hold charge collected in this sensor, to be digitized at the end
 
     /* loop over hits on this sensor, deposit charges into hitMap */
     for (const VTXdigi_tools::Hit& hit : hits) {
@@ -557,7 +557,8 @@ void VTXdigi_Modular::InitHistograms() {
 
 bool VTXdigi_Modular::CheckEventSetup(const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const {
   if (m_counter_eventsRead.value() % m_infoPrintInterval.value() == 0)
-    info() << "PROCESSING event (run " << headers.at(0).getRunNumber() << ", event " << headers.at(0).getEventNumber() << ", found " << simHits.size() << " simHits). Processed " << m_counter_eventsRead.value() << " events so far." << endmsg;
+  info() << "PROCESSING event [run " << headers.at(0).getRunNumber() << ", event " << headers.at(0).getEventNumber() << ", found " << simHits.size() << " simHits]. " << m_counter_eventsRead.value() << " events so far." << endmsg;
+  /* events are not necessarily numbered sequentially... */
   ++m_counter_eventsRead;
 
   if (simHits.size()==0) {
@@ -622,6 +623,7 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Hit& hit, c
   ++(*m_hist1d.at(layer).at(hist1d_residualR))[residual_local.r() / dd4hep::um];
 }
 
+/* TODO: add */
 // hist1d_digiHitsPerSimHit,
 // hist1d_clusterSize,
 // hist1d_clusterSize_createdInGenerator,

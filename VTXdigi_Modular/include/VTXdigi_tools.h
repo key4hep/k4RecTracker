@@ -106,75 +106,31 @@ dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex,
 /** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,0) */
 dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch);
 
-/* -- Pixel Charge Matrix -- */
-
-/** @brief Holds the charge collected in a 2d matrix of pixels surrounding a simHit.
- * 
- * @note Starts from default matrix size of 11x11 pixels, expands dynamically. Expanding is computationally expensive.
- */
-class PixelChargeMatrix {
-  /* Stores the charge deposited in a (size_u x size_v) pixel matrix around a given origin pixel.
-    * In case charge is added outside the matrix bounds, the matrix range is expanded in that direction.
-    * The size of the matrix is defined via the Gaudi property MaximumClusterSize. */
-
-  const int m_initialSize = 11; // initial size of the matrix in u and v direction
-  const int m_overExpansionStep = 3; // number of additional pixels to expand the matrix by, when a charge is added outside the current bounds
-  std::vector<float> m_pixelCharge;
-  int m_range_u[2], m_range_v[2]; // Inclusive matrix range. -> size = range[1] - range[0] + 1
-  /* range CAN extend into negative values or outside of sensor area, this ensures graceful handling of hits outside inditial bounds. These might be discarded later, if outside of sensor. */
-  int m_origin[2]; // origin pixel indices
-
-  public:
-
-    PixelChargeMatrix(int i_origin_u, int i_origin_v);
-
-    void Reset();
-    
-    inline int GetOriginU() const { return m_origin[0]; }
-    inline int GetOriginV() const { return m_origin[1]; }
-    inline int GetRangeMin_u() const { return m_range_u[0]; }
-    inline int GetRangeMax_u() const { return m_range_u[1]; }
-    inline int GetRangeMin_v() const { return m_range_v[0]; }
-    inline int GetRangeMax_v() const { return m_range_v[1]; }
-    inline int GetSize_u() const { return m_range_u[1] - m_range_u[0] + 1; }
-    inline int GetSize_v() const { return m_range_v[1] - m_range_v[0] + 1; }
-    inline std::tuple<int, int> GetSize() const;
-    inline std::tuple<int, int> GetOrigin() const;
-
-    float GetTotalCharge() const;
-    float GetCharge(int i_u, int i_v) const;
-    void FillCharge(int i_u, int i_v, float charge);
-
-  private:
-    inline int _FindIndex(int i_u, int i_v) const;
-    inline bool _OutOfBounds(int i_u, int i_v) const;
-    void _ExpandMatrix(int i_u, int i_v);
-}; // class PixelChargeMatrix
 
 struct PixelHit {
   std::array<int, 2> index; // pixel indices i_u, i_v
   int charge;
 };
 
-class SensorChargeMatrix {
-  /* Holds the charge collected in a sensor, stored as a map of pixel indices to charge. This is used as an intermediate step before creating the output TrackerHit, which requires a fixed-size matrix. */
+class HitMap {
+  /* I tried implementing a vector that contains every pixel, but for large pixel counts this is very memory-inefficient. Instead, this class uses a std::map to only store pixels that have charge. This is more memory efficient for sparse hits, with O(1) simHit/sensor/event this is at least a factor 100 faster that the vector approach. Maybe not the case to ttbar run with O(0.1%) pixel occupancy. */
+  std::unordered_map< int, int> m_pixCharge; // map of pixel indices (i_u, i_v) to charge. std::array<int,2> is not hashable, so we need an index
+  std::array<size_t, 2> m_pixCount; // number of pixels in u and v direction
 
-  std::vector<int> m_sensorCharge; // map of pixel indices (i_u, i_v) to charge
-  std::array<size_t, 2> m_pixelCount; // number of pixels in u and v direction
+public:
+  HitMap(std::array<size_t, 2> pixCount);
 
-  public:
-    SensorChargeMatrix(std::array<size_t, 2> pixelCount);
+  void FillCharge(std::array<int, 2> pix, int charge);
+  int GetCharge(std::array<int, 2> pix) const;
+  int GetTotalCharge() const;
+  std::vector<PixelHit> GetPixelsWithCharge() const;
+  inline int GetTotalPixelsWithCharge() const;
+  inline void Reset();
 
-    void FillCharge(std::array<int, 2> pixel, int charge);
-    int GetCharge(std::array<int, 2> pixel) const;
-    int GetTotalCharge() const;
-    std::vector<PixelHit> GetPixelsWithCharge() const;
-    int GetTotalPixelsWithCharge() const;
-    void Reset();
-
-  private:
-    inline bool _OutOfBounds(std::array<int, 2> pixel) const;
-    inline int _FindIndex(std::array<int, 2> pixel) const;
-}; // class SensorChargeMatrix
+private:
+  inline bool _OutOfBounds(std::array<int, 2> pix) const;
+  inline int _Index(std::array<int, 2> pix) const;
+  inline std::array<int, 2> _Index(int index) const;
+}; // class HitMap
 
 } // namespace VTXdigi_tools

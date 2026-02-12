@@ -183,161 +183,77 @@ dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex,
   return ComputePixelPos_local(pixelIndex, sensorLength, pixelPitch, 0.f);
 }
 
-/* -- PixelChargeMatrix -- */
+/* -- HitMap -- */
 
-PixelChargeMatrix::PixelChargeMatrix(int i_origin_u, int i_origin_v) : m_pixelCharge(m_initialSize * m_initialSize, 0.f), m_origin{ i_origin_u, i_origin_v } {
-    // At first, the range is centered around the origin
-  const int halfSize = (m_initialSize - 1) / 2;
-  m_range_u[0] = m_origin[0] - halfSize;
-  m_range_u[1] = m_origin[0] + halfSize;
-  m_range_v[0] = m_origin[1] - halfSize;
-  m_range_v[1] = m_origin[1] + halfSize;
+HitMap::HitMap(std::array<size_t, 2> pixelCount) : m_pixCount(pixelCount) {
+  const int inverseOccupancy = 5000; // assume occupancy, 5e-4 is quite conservative for Z-run
+  m_pixCharge.reserve(pixelCount.at(0) * pixelCount.at(1) / inverseOccupancy); // avoid too many reallocations
 }
 
-void PixelChargeMatrix::Reset() {
-  std::fill(m_pixelCharge.begin(), m_pixelCharge.end(), 0.f);
-}
-
-inline std::tuple<int, int> PixelChargeMatrix::GetSize() const {
-  return std::make_tuple(GetSize_u(), GetSize_v());
-}
-inline std::tuple<int, int> PixelChargeMatrix::GetOrigin() const {
-  return std::make_tuple(m_origin[0], m_origin[1]);
-}
-
-float PixelChargeMatrix::GetTotalCharge() const {
-  return std::accumulate(m_pixelCharge.begin(), m_pixelCharge.end(), 0.f);
-}
-
-float PixelChargeMatrix::GetCharge(int i_u, int i_v) const {
-  if (_OutOfBounds(i_u, i_v)) {
-    throw std::runtime_error("PixelChargeMatrix::GetCharge: pixel i_u or i_v ( " + std::to_string(i_u) + ", " + std::to_string(i_v) + ") out of range");
+void HitMap::FillCharge(std::array<int, 2> pix, int charge) {
+  if (_OutOfBounds(pix)) {
+    throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(pix[0]) + ", " + std::to_string(pix[1]) + ") out of range");
   }
-  return m_pixelCharge[_FindIndex(i_u, i_v)];
+  m_pixCharge[_Index(pix)] += charge; // operator[] default-constructs missing entries with value 0, so we can directly add charge to it. Mind blown ~ Jona 2025-10
 }
 
-void PixelChargeMatrix::FillCharge(int i_u, int i_v, float charge) {
-  if (_OutOfBounds(i_u, i_v)) {
-    _ExpandMatrix(i_u, i_v);
+int HitMap::GetCharge(std::array<int, 2> pix) const {
+  if (_OutOfBounds(pix)) {
+    throw std::runtime_error("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(pix[0]) + ", " + std::to_string(pix[1]) + ") out of range");
   }
-  m_pixelCharge[_FindIndex(i_u, i_v)] += charge;
-}
-
-inline int PixelChargeMatrix::_FindIndex(int i_u, int i_v) const {
-  int i_u_rel = i_u - m_range_u[0];
-  int i_v_rel = i_v - m_range_v[0];
-  return i_u_rel + i_v_rel * GetSize_u();
-}
-
-inline bool PixelChargeMatrix::_OutOfBounds(int i_u, int i_v) const {
-  return (
-    i_u < m_range_u[0]
-    || i_u > m_range_u[1]
-    || i_v < m_range_v[0]
-    || i_v > m_range_v[1]);
-}
-
-void PixelChargeMatrix::_ExpandMatrix(int i_u, int i_v) {
-  /* Expand the matrix to include (i_u, i_v) and an excess of m_expansionStep pixels. */
-
-  int rangeNew_u[2] = { m_range_u[0], m_range_u[1] }; 
-  int rangeNew_v[2] = { m_range_v[0], m_range_v[1] };
-
-  // TODO: optimise the expansion logic below, to expand to two directions at once if hit is close to corner ~ Jona 2025-10
-
-  /* Expand it in each direction if necessary */
-  if (i_u < m_range_u[0]) {
-    rangeNew_u[0] = i_u - m_overExpansionStep;
-  } else if (i_u > m_range_u[1]) {
-    rangeNew_u[1] = i_u + m_overExpansionStep;
+  auto it = m_pixCharge.find(_Index(pix));
+  if (it != m_pixCharge.end()) {
+    return it->second;
   }
-  if (i_v < m_range_v[0]) {
-    rangeNew_v[0] = i_v - m_overExpansionStep;
-  } else if (i_v > m_range_v[1]) {
-    rangeNew_v[1] = i_v + m_overExpansionStep;
-  }
-
-  const int newSizeU = rangeNew_u[1] - rangeNew_u[0] + 1;
-  const int newSizeV = rangeNew_v[1] - rangeNew_v[0] + 1;
-
-  std::vector<float> newPixelCharge(newSizeU * newSizeV, 0.f);
-
-  /* Copy old charges into new vector, row by row */
-  for (int row = 0; row < GetSize_v(); ++row) {
-    std::copy(
-      m_pixelCharge.begin() + row * GetSize_u(),
-      m_pixelCharge.begin() + (row + 1) * GetSize_u(),
-      newPixelCharge.begin() + (row + (m_range_v[0] - rangeNew_v[0])) * newSizeU + (m_range_u[0] - rangeNew_u[0])
-    );
-  }
-
-  m_pixelCharge.swap(newPixelCharge);
-  std::copy(rangeNew_u, rangeNew_u + 2, m_range_u);
-  std::copy(rangeNew_v, rangeNew_v + 2, m_range_v);
-} // _ExpandMatrix()
-
-
-/* -- SensorChargeMatrix -- */
-
-SensorChargeMatrix::SensorChargeMatrix(std::array<size_t, 2> pixelCount) : m_sensorCharge(pixelCount.at(0) * pixelCount.at(1), 0), m_pixelCount(pixelCount) {}
-
-void SensorChargeMatrix::FillCharge(std::array<int, 2> pixel, int charge)
-{
-  if (_OutOfBounds(pixel)) {
-    throw std::runtime_error("SensorChargeMatrix::FillCharge: pixel i_u or i_v ( " + std::to_string(pixel[0]) + ", " + std::to_string(pixel[1]) + ") out of range");
-  }
-  m_sensorCharge[_FindIndex(pixel)] += charge;
+  return 0; // if pixel not found, charge is 0
 }
 
-int SensorChargeMatrix::GetTotalCharge() const {
-  return std::accumulate(m_sensorCharge.begin(), m_sensorCharge.end(), 0);
+int HitMap::GetTotalCharge() const {
+  int totalCharge = 0;
+  for (const auto& [index, charge] : m_pixCharge) {
+    totalCharge += charge;
+  }
+  return totalCharge;
 }
 
-std::vector<PixelHit> SensorChargeMatrix::GetPixelsWithCharge() const {
-  std::vector<PixelHit> pixelsWithCharge;
-  pixelsWithCharge.reserve(GetTotalPixelsWithCharge());
+std::vector<PixelHit> HitMap::GetPixelsWithCharge() const {
+  std::vector<PixelHit> pixHits;
+  pixHits.reserve(m_pixCharge.size());
 
-  for (int i_v = 0; i_v < static_cast<int>(m_pixelCount.at(1)); ++i_v) {
-    for (int i_u = 0; i_u < static_cast<int>(m_pixelCount.at(0)); ++i_u) {
-      const int charge = GetCharge({i_u, i_v});
-      if (charge > 0) {
-        pixelsWithCharge.push_back(PixelHit{{i_u, i_v}, charge});
-      }
+  for (const auto& [index, charge] : m_pixCharge) {
+    if (charge > 0) {
+      pixHits.push_back(PixelHit{_Index(index), charge});
     }
   }
-  return pixelsWithCharge;
+  return pixHits;
 }
 
-int SensorChargeMatrix::GetTotalPixelsWithCharge() const {
-  return std::count_if(m_sensorCharge.begin(), m_sensorCharge.end(), [](int charge) { return charge > 0; });
+inline int HitMap::GetTotalPixelsWithCharge() const {
+  return m_pixCharge.size();
 }
 
-int SensorChargeMatrix::GetCharge(std::array<int, 2> pixel) const {
-  if (_OutOfBounds(pixel)) {
-    throw std::runtime_error("SensorChargeMatrix::GetCharge: pixel i_u or i_v ( " + std::to_string(pixel[0]) + ", " + std::to_string(pixel[1]) + ") out of range");
-  }
-  return m_sensorCharge[_FindIndex(pixel)];
+inline void HitMap::Reset() {
+  m_pixCharge.clear();
 }
 
-void SensorChargeMatrix::Reset() {
-  std::fill(m_sensorCharge.begin(), m_sensorCharge.end(), 0);
-}
-
-inline bool SensorChargeMatrix::_OutOfBounds(std::array<int, 2> pixel) const {
+inline bool HitMap::_OutOfBounds(std::array<int, 2> pix) const { 
   return (
-    pixel[0] < 0
-    || pixel[0] >= static_cast<int>(m_pixelCount.at(0))
-    || pixel[1] < 0
-    || pixel[1] >= static_cast<int>(m_pixelCount.at(1))
+    pix[0] < 0
+    || pix[0] >= static_cast<int>(m_pixCount.at(0))
+    || pix[1] < 0
+    || pix[1] >= static_cast<int>(m_pixCount.at(1))
   );
 }
 
-inline int SensorChargeMatrix::_FindIndex(std::array<int, 2> pixel) const {
-  return pixel[0] + pixel[1] * m_pixelCount.at(0);
+inline int HitMap::_Index(std::array<int, 2> pix) const {
+  return pix[0] + pix[1] * m_pixCount.at(0);
+}
+inline std::array<int, 2> HitMap::_Index(int index) const {
+  return { index % static_cast<int>(m_pixCount.at(0)), index / static_cast<int>(m_pixCount.at(0)) };
 }
 
 
-/* Tool tests */
+/* -- Tool tests -- */
 
 bool ToolTest() {
   std::cout << " | Running VTXdigi tool tests" << std::endl;
@@ -461,80 +377,71 @@ bool ToolTest() {
     passed = passed && passedInternal;
   }
 
-  std::cout << " | VTXdigi_tools::PixelChargeMatrix()";
+  std::cout << " | VTXdigi_tools::HitMap()";
   {
     bool passedInternal = true;
 
-    PixelChargeMatrix matrix(0,0);
+    HitMap hitMap({10,10});
 
-    matrix.FillCharge(0,0,1.0f);
-    matrix.FillCharge(1,1,2.0f);
+    hitMap.FillCharge({0,0},1);
+    hitMap.FillCharge({1,1},2);
 
-    if (matrix.GetCharge(0,0) != 1.0f) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected charge 1.0f at (0,0), got " << matrix.GetCharge(0,0) << std::endl;
+    if (hitMap.GetCharge({0,0}) != 1) {
+      std::cout << " - FAILED " << std::endl << " | -> Expected charge 1 at (0,0), got " << hitMap.GetCharge({0,0}) << std::endl;
       passedInternal = false;
     }
-    if (matrix.GetCharge(1,1) != 2.0f) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected charge 2.0f at (1,1), got " << matrix.GetCharge(1,1) << std::endl;
+    if (hitMap.GetCharge({1,1}) != 2) {
+      std::cout << " - FAILED " << std::endl << " | -> Expected charge 2 at (1,1), got " << hitMap.GetCharge({1,1}) << std::endl;
       passedInternal = false;
     }
-    if (matrix.GetTotalCharge() != 3.0f) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 3.0f, got " << matrix.GetTotalCharge() << std::endl; 
-      passedInternal = false;
-    }
-
-    matrix.Reset();
-    if (matrix.GetTotalCharge() != 0.0f) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 0.0f after Reset(), got " << matrix.GetTotalCharge() << std::endl; 
+    if (hitMap.GetTotalCharge() != 3) {
+      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 3, got " << hitMap.GetTotalCharge() << std::endl; 
       passedInternal = false;
     }
 
-    std::tuple<int, int> sizeBefore = matrix.GetSize();
-    matrix.FillCharge(20,20,1.5f); // should trigger expansion
-    if (matrix.GetCharge(20,20) != 1.5f) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected charge 1.5f at (20,20), got " << matrix.GetCharge(20,20) << std::endl;
+    hitMap.FillCharge({0,0},100); // test adding charge to existing pixel
+
+    if (hitMap.GetCharge({0,0}) != 101) {
+      std::cout << " - FAILED " << std::endl << " | -> Expected charge 101 at (0,0), got " << hitMap.GetCharge({0,0}) << std::endl;
       passedInternal = false;
     }
-    std::tuple<int, int> sizeAfter = matrix.GetSize();
-    if (std::get<0>(sizeAfter) <= std::get<0>(sizeBefore) || std::get<1>(sizeAfter) <= std::get<1>(sizeBefore)) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected matrix size to increase after expansion, before: (" << std::get<0>(sizeBefore) << ", " << std::get<1>(sizeBefore) << "), after: (" << std::get<0>(sizeAfter) << ", " << std::get<1>(sizeAfter) << ")" << std::endl;
+    if (hitMap.GetTotalCharge() != 103) {
+      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 103, got " << hitMap.GetTotalCharge() << std::endl; 
+      passedInternal = false;
+    }
+
+    try {
+      hitMap.FillCharge({-1,0},1);
+      std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (-1,0)" << std::endl;
+      passedInternal = false;
+    }
+    catch (const std::runtime_error& e) {}
+    try {
+      hitMap.FillCharge({0,-1},1);
+      std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (0,-1)" << std::endl;
+      passedInternal = false;
+    }
+    catch (const std::runtime_error& e) {}
+    try {
+      hitMap.FillCharge({10,0},1);
+      std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (10,0)" << std::endl;
+      passedInternal = false;
+    }
+    catch (const std::runtime_error& e) {}
+    try {
+      hitMap.FillCharge({0,10},1);
+      std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (0,10)" << std::endl;
+      passedInternal = false;
+    }
+    catch (const std::runtime_error& e) {}
+
+    hitMap.Reset();
+
+    if (hitMap.GetTotalCharge() != 0) {
+      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 0 after Reset(), got " << hitMap.GetTotalCharge() << std::endl; 
       passedInternal = false;
     }
     
-    if (passedInternal)
-      std::cout << " - PASSED" << std::endl;
-    passed = passed && passedInternal;
-  }
-
-  std::cout << " | VTXdigi_tools::SensorChargeMatrix()";
-  {
-    bool passedInternal = true;
-
-    const std::array<size_t, 2> pixelCount = { 10, 10 };
-    SensorChargeMatrix matrix(pixelCount);
-
-    matrix.FillCharge({0,0}, 1);
-    matrix.FillCharge({9,9}, 2);
-
-    if (matrix.GetCharge({0,0}) != 1) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected charge 1 at (0,0), got " << matrix.GetCharge({0,0}) << std::endl;
-      passedInternal = false;
-    }
-    if (matrix.GetCharge({9,9}) != 2) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected charge 2 at (9,9), got " << matrix.GetCharge({9,9}) << std::endl;
-      passedInternal = false;
-    }
-    if (matrix.GetTotalCharge() != 3) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 3, got " << matrix.GetTotalCharge() << std::endl; 
-      passedInternal = false;
-    }
-
-    matrix.Reset();
-    if (matrix.GetTotalCharge() != 0) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 0 after Reset(), got " << matrix.GetTotalCharge() << std::endl; 
-      passedInternal = false;
-    }
-
     if (passedInternal)
       std::cout << " - PASSED" << std::endl;
     passed = passed && passedInternal;

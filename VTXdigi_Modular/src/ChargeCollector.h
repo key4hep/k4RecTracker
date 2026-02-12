@@ -6,7 +6,7 @@
 namespace VTXdigi_tools {
 
 class Hit; // forward-declare things in include/VTXdigi_tools.h
-class SensorChargeMatrix;
+class HitMap;
 
 using ::VTXdigi_Modular;
 
@@ -19,7 +19,7 @@ struct Path;
 class ChargeCollector_SinglePixel : public IChargeCollector {
 public:
   explicit ChargeCollector_SinglePixel(const VTXdigi_Modular& digitizer);
-  void FillHit(const Hit& hit, SensorChargeMatrix& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+  void FillHit(const Hit& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
 };
 
 
@@ -28,7 +28,7 @@ public:
 class ChargeCollector_LUT : public IChargeCollector {
 public:
   explicit ChargeCollector_LUT(const VTXdigi_Modular& digitizer);
-  void FillHit(const Hit& hit, SensorChargeMatrix& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+  void FillHit(const Hit& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
 };
 
 /* -- Charge collector algorithm: Propagation-based -- */
@@ -36,7 +36,7 @@ public:
 class ChargeCollector_Drift : public IChargeCollector {
 public:
   explicit ChargeCollector_Drift(const VTXdigi_Modular& digitizer);
-  void FillHit(const Hit& hit, SensorChargeMatrix& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+  void FillHit(const Hit& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
 };
 
 

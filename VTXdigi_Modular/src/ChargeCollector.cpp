@@ -41,7 +41,7 @@ ChargeCollector_SinglePixel::ChargeCollector_SinglePixel(const VTXdigi_Modular& 
   m_digitizer.debug() << "ChargeCollector_SinglePixel constructed." << endmsg;
 }
 
-void ChargeCollector_SinglePixel::FillHit(const Hit& hit, SensorChargeMatrix& hitMap, const TGeoHMatrix& trafoMatrix) const {
+void ChargeCollector_SinglePixel::FillHit(const Hit& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
   const dd4hep::rec::Vector3D pos_global = ConvertVector(hit.simHit().getPosition());
   const dd4hep::rec::Vector3D pos_local = GlobalToLocal(pos_global, trafoMatrix);
 
