@@ -103,7 +103,6 @@ EventNumber.Parameters = {"HowOften": ["1"]}
 
 # setup AIDA histogramming and add eventual background overlay
 algList.append(MyAIDAProcessor)
-sequenceLoader.load(os.path.join(SRC_PATH, "Overlay"))
 # tracker hit digitisation
 sequenceLoader.load(os.path.join(SRC_PATH, "TrackingDigi"))
 
