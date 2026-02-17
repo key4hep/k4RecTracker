@@ -71,7 +71,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
   if (!CheckEventSetup(simHits, headers))
     return std::make_tuple(edm4hep::TrackerHitPlaneCollection(), edm4hep::TrackerHitSimTrackerHitLinkCollection());
 
-  std::unordered_map<dd4hep::DDSegmentation::CellID, std::vector<VTXdigi_tools::Hit>> sensorHits; // map from sensor (shortened cellID) to hits
+  std::unordered_map<dd4hep::DDSegmentation::CellID, std::vector<VTXdigi_tools::SimHitWrapper>> sensorHits; // map from sensor (shortened cellID) to hits
   for (const auto& simHit : simHits) {
     if (CheckSimhitLayer(simHit)){
       const dd4hep::DDSegmentation::CellID cellID = VTXdigi_tools::GetCellID_short(simHit);
@@ -90,7 +90,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
 
   auto digiHits = edm4hep::TrackerHitPlaneCollection();
   auto digiHitLinks = edm4hep::TrackerHitSimTrackerHitLinkCollection();
-  std::vector<VTXdigi_tools::Hit> hitsSensor;
+  std::vector<VTXdigi_tools::SimHitWrapper> hitsSensor;
 
   /* loop over sensors */
   for (const auto& [cellID, hits] : sensorHits) {
@@ -100,13 +100,13 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
     VTXdigi_tools::HitMap hitMap(m_pixelCount); // (integer) matrix to hold charge collected in this sensor, to be digitized at the end
 
     /* loop over hits on this sensor, deposit charges into hitMap */
-    for (const VTXdigi_tools::Hit& hit : hits) {
+    for (const VTXdigi_tools::SimHitWrapper& hit : hits) {
       m_chargeCollector->FillHit(hit, hitMap, trafoMatrix); // use the chosen charge collection method
     }
 
     /* Create digiHits from the hitMap */
     if (!m_clusterize.value()) {
-      for (const VTXdigi_tools::PixelHit& pix : hitMap.GetPixelsWithCharge()) {
+      for (const auto& [key, pix] : hitMap.Hits()) {
         const dd4hep::rec::Vector3D pixPos_local = VTXdigi_tools::ComputePixelPos_local(pix.index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
         const dd4hep::rec::Vector3D pixPos_global = VTXdigi_tools::LocalToGlobal(pixPos_local, trafoMatrix);
 
@@ -116,10 +116,10 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
         /* Match pixel hits to simHits. 
         * TODO: So far, we simply match each pixel hit to the closest simHit. At high occupancy (ttbar) this will lead to wrong associations (for 2 simHits that are very close), might deteriorate truth-matching of tracks or similar.
         * (instead, maybe save a list of all source-simHits for each pixel? This is the correct way to do it, but quite a bit more expensive. This would also mean we cannot simply remove each used hit from the hits vector) */
-        const VTXdigi_tools::Hit* closestHit = &hits.at(0);
+        const VTXdigi_tools::SimHitWrapper* closestHit = &hits.at(0);
         float closestDist = std::numeric_limits<float>::max();
         bool firsthit = false;
-        for (const VTXdigi_tools::Hit& hit : hits) {
+        for (const VTXdigi_tools::SimHitWrapper& hit : hits) {
           if (!firsthit) {
             firsthit = true;
             continue; // skip first hit, already set as closestHit
@@ -138,13 +138,16 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
       } /* loop over firing pixels */
     } /* if not clusterising */
     else { 
-      std::vector<VTXdigi_tools::PixelHit> pixHits = hitMap.GetPixelsWithCharge();
+      std::vector<VTXdigi_tools::Pixel> pixHits;
+      for (const auto& [key, pix] : hitMap.Hits()) {
+        pixHits.push_back(pix);
+      } // not terribly efficient, but I can't be assed to think about a non-hacky way to achieve this.
 
       /* For now: do direct-neighbor clustering.
       * TODO: implement diagonal neighbors? Could be interesting to test, at least. */
 
-      std::vector<VTXdigi_tools::PixelHit> clusterPixs;
-      clusterPixs.reserve(8); // avoid too many reallocations. 8 should include around 80-90% of clusters, i guess. 
+      std::vector<VTXdigi_tools::Pixel> clusterPixs;
+      clusterPixs.reserve(8); // 8 should include around 80-90% of clusters, i guess. 
 
       while (pixHits.size() > 0) {
         clusterPixs.clear();
@@ -153,12 +156,9 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
         clusterPixs.push_back(pixHits.back());
         pixHits.pop_back();
 
-        /* loop over remaining pixels, add direct neighbors to cluster 
-        Loop over an iterator, back to front*/
-
-
+        /* loop over remaining pixels, add to the cluster if they are dice */
         for (auto pixIter = pixHits.begin(); pixIter != pixHits.end();) {
-          /* TODO: I think there is a elegant (and more efficient, less loopy) recursive way to do this where each added pixel checks for neighbors in the set of remaining pixel hits. ~ Jona 2026-02 */
+          /* TODO: This is WRONG. I think there is a elegant (and more efficient, less loopy) recursive way to do this where each added pixel checks for neighbors in the set of remaining pixel hits. ~ Jona 2026-02 */
           if (IsDirectNeighbor(*pixIter, clusterPixs)) {
             clusterPixs.push_back(*pixIter);
             std::iter_swap(pixIter, pixHits.end() - 1);
@@ -169,7 +169,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
         } /* loop over pixel hits (that are not clusterized yet) */
 
         
-        const std::array<float, 2> clusterCenter = ComputeClusterPos_Weighted(clusterPixs);
+        const std::pair<float, float> clusterCenter = ComputeClusterPos_Weighted(clusterPixs);
         const dd4hep::rec::Vector3D clusterPos_local = VTXdigi_tools::ComputePos_local(clusterCenter, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
         const dd4hep::rec::Vector3D clusterPos_global = VTXdigi_tools::LocalToGlobal(clusterPos_local, trafoMatrix);
 
@@ -178,7 +178,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
           clusterCharge += pix.charge;
         }
 
-        debug() << "     - Found cluster with " << clusterPixs.size() << " pixels, charge " << clusterCharge << ", center at (" << clusterCenter[0] << ", " << clusterCenter[1] << "), local pos (" << clusterPos_local.x() << ", " << clusterPos_local.y() << ", " << clusterPos_local.z() << "). " << endmsg;
+        debug() << "     - Found cluster with " << clusterPixs.size() << " pixels, charge " << clusterCharge << ", center at (" << clusterCenter.first << ", " << clusterCenter.second << "), local pos (" << clusterPos_local.x() << ", " << clusterPos_local.y() << ", " << clusterPos_local.z() << "). " << endmsg;
         
         /* TODO: Match cluster to simHit. For now, simply match to closest simHit as for single pixels. This is probably less bad than for single pixels, because clusters are bigger and thus more likely to be close to their source simHit than single pixels are. But still not perfect. 
         TODO: implement better matching, maybe by saving a list of all source simHits for each pixel and then combining those lists for all pixels in the cluster? */
@@ -187,7 +187,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
         
         if (m_debugHistograms.value()) {
           // FillHistograms_perDigiHit(...);
-          for (const VTXdigi_tools::PixelHit& pix : clusterPixs)
+          for (const VTXdigi_tools::Pixel& pix : clusterPixs)
             FillHistograms_perPixel(hits.back().layer(), pix, clusterCenter); // per-pixel histograms
         } /* debug histograms */
 
@@ -205,10 +205,10 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
 
 
 
-bool IsDirectNeighbor(const VTXdigi_tools::PixelHit& pix, std::vector<VTXdigi_tools::PixelHit>& clusterPixs) {
+bool IsDirectNeighbor(const VTXdigi_tools::Pixel& pix, std::vector<VTXdigi_tools::Pixel>& clusterPixs) {
   for (const auto& clusterPix : clusterPixs) {
-    const int di_u = std::abs(pix.index[0] - clusterPix.index[0]);
-    const int di_v = std::abs(pix.index[1] - clusterPix.index[1]);
+    const int di_u = std::abs(pix.index.first - clusterPix.index.first);
+    const int di_v = std::abs(pix.index.second - clusterPix.index.second);
 
     if ((di_u == 1 && di_v == 0) || (di_u == 0 && di_v == 1)) {
       return true;
@@ -217,18 +217,18 @@ bool IsDirectNeighbor(const VTXdigi_tools::PixelHit& pix, std::vector<VTXdigi_to
   return false;
 }
 
-std::array<float, 2> ComputeClusterPos_Weighted(const std::vector<VTXdigi_tools::PixelHit>& clusterPixs) {
-  std::array<float, 2> pos{0.f, 0.f};
+std::pair<float, float> ComputeClusterPos_Weighted(const std::vector<VTXdigi_tools::Pixel>& clusterPixs) {
+  std::pair<float, float> pos{0.f, 0.f};
   int totalCharge = 0;
   for (const auto& pix : clusterPixs) {
-    pos[0] += pix.index[0] * pix.charge;
-    pos[1] += pix.index[1] * pix.charge;
+    pos.first += pix.index.first * pix.charge;
+    pos.second += pix.index.second * pix.charge;
     totalCharge += pix.charge;
   }
   if (totalCharge <= 0)
     throw std::runtime_error("ComputeClusterPos_Weighted: total charge of cluster is 0 or negative, cannot compute weighted position");
-  pos[0] /= totalCharge;
-  pos[1] /= totalCharge;
+  pos.first /= totalCharge;
+  pos.second /= totalCharge;
   return pos;
 }
 
@@ -412,8 +412,8 @@ void VTXdigi_Modular::InitLayersAndSensors() {
       if (!segmentation.isValid())
         throw GaudiException("Segmentation for readout " + readoutKey + " is not valid while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
       const auto cellDimensions = segmentation.cellDimensions(0); // this assumes all cells have the same dimensions (ie. only one sensor type in this readout)
-      m_pixelPitch.at(0) = cellDimensions.at(0) * 10; // convert cm to mm
-      m_pixelPitch.at(1) = cellDimensions.at(1) * 10;
+      m_pixelPitch.first = cellDimensions.at(0) * 10; // convert cm to mm
+      m_pixelPitch.second = cellDimensions.at(1) * 10;
       /* TODO: get pixel count from segmentation*/
     }
     else {
@@ -467,27 +467,27 @@ void VTXdigi_Modular::InitLayersAndSensors() {
         if (!membersDefined) {
           /* Set members based on the first sensor we find */
           m_sensorThickness = sensorThickness;
-          m_sensorLength.at(0) = sensorLength_u; 
-          m_sensorLength.at(1) = sensorLength_v;
-          float pixelCountU = m_sensorLength.at(0) / m_pixelPitch.at(0);
-          float pixelCountV = m_sensorLength.at(1) / m_pixelPitch.at(1);
+          m_sensorLength.first = sensorLength_u; 
+          m_sensorLength.second = sensorLength_v;
+          float pixelCountU = m_sensorLength.first / m_pixelPitch.first;
+          float pixelCountV = m_sensorLength.second / m_pixelPitch.second;
           if (abs(pixelCountU - std::round(pixelCountU)) > 0.001 || abs(pixelCountV - std::round(pixelCountV)) > 0.001)
-            throw GaudiException("Sensor side length (" + std::to_string(m_sensorLength.at(0)) + " x " + std::to_string(m_sensorLength.at(1)) + ") mm and pixel pitch (" + std::to_string(m_pixelPitch.at(0)) + " x " + std::to_string(m_pixelPitch.at(1)) + ") mm result in a non-integer pixel count (" + std::to_string(pixelCountU) + " x " + std::to_string(pixelCountV) + ") in subDetector " + m_subDetName.value() + ".", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
-          m_pixelCount.at(0) = std::round(pixelCountU);
-          m_pixelCount.at(1) = std::round(pixelCountV);
+            throw GaudiException("Sensor side length (" + std::to_string(m_sensorLength.first) + " x " + std::to_string(m_sensorLength.second) + ") mm and pixel pitch (" + std::to_string(m_pixelPitch.first) + " x " + std::to_string(m_pixelPitch.second) + ") mm result in a non-integer pixel count (" + std::to_string(pixelCountU) + " x " + std::to_string(pixelCountV) + ") in subDetector " + m_subDetName.value() + ".", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+          m_pixelCount.first = std::round(pixelCountU);
+          m_pixelCount.second = std::round(pixelCountV);
           membersDefined = true;
-          verbose() << "     - Found sensor: " << sensorKey << ", volumeID: " << sensorVolumeID << " (sensor " << sensorNumber << " in layer " << layer << "). Setting expected dimensions to (" << m_sensorLength.at(0) << " x " << m_sensorLength.at(1) << " x " << m_sensorThickness << ") mm3." << endmsg;
+          verbose() << "     - Found sensor: " << sensorKey << ", volumeID: " << sensorVolumeID << " (sensor " << sensorNumber << " in layer " << layer << "). Setting expected dimensions to (" << m_sensorLength.first << " x " << m_sensorLength.second << " x " << m_sensorThickness << ") mm3." << endmsg;
         } // if !membersDefined
         else {
           /* For all other sensors: check for consistency with first sensor */
-          if (std::abs(sensorLength_u - m_sensorLength.at(0)) > 0.001 || std::abs(sensorLength_v - m_sensorLength.at(1)) > 0.001 || std::abs(sensorThickness - m_sensorThickness) > 0.001)
-            throw GaudiException("Sensor dimension mismatch found in sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + ": expected dimensions of (" + std::to_string(m_sensorLength.at(0)) + " x " + std::to_string(m_sensorLength.at(1)) + " x " + std::to_string(m_sensorThickness) + ") mm3, but found (" + std::to_string(sensorLength_u) + " x " + std::to_string(sensorLength_v) + " x " + std::to_string(sensorThickness) + ") mm3. This algorithm expects exactly one type of sensor per subDetector. Use different instances of the algorithm if different layers consist of different sensors.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+          if (std::abs(sensorLength_u - m_sensorLength.first) > 0.001 || std::abs(sensorLength_v - m_sensorLength.second) > 0.001 || std::abs(sensorThickness - m_sensorThickness) > 0.001)
+            throw GaudiException("Sensor dimension mismatch found in sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + ": expected dimensions of (" + std::to_string(m_sensorLength.first) + " x " + std::to_string(m_sensorLength.second) + " x " + std::to_string(m_sensorThickness) + ") mm3, but found (" + std::to_string(sensorLength_u) + " x " + std::to_string(sensorLength_v) + " x " + std::to_string(sensorThickness) + ") mm3. This algorithm expects exactly one type of sensor per subDetector. Use different instances of the algorithm if different layers consist of different sensors.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
         } // if membersDefined
       } // loop over sensors
     } // loop over modules
   } // loop over layers
   
-  info() << " - Retrieved sensor parameters: area (" << m_sensorLength.at(0) << " x " << m_sensorLength.at(1) << ") mm, thickness " << m_sensorThickness << " mm, pixel pitch (" << m_pixelPitch.at(0) << " x " << m_pixelPitch.at(1) << ") mm, pixel count (" << m_pixelCount.at(0) << " x " << m_pixelCount.at(1) << "). All " << sensorNumber << " sensors in the relevant layers share these parameters." << endmsg;
+  info() << " - Retrieved sensor parameters: area (" << m_sensorLength.first << " x " << m_sensorLength.second << ") mm, thickness " << m_sensorThickness << " mm, pixel pitch (" << m_pixelPitch.first << " x " << m_pixelPitch.second << ") mm, pixel count (" << m_pixelCount.first << " x " << m_pixelCount.second << "). All " << sensorNumber << " sensors in the relevant layers share these parameters." << endmsg;
 } // InitLayersAndSensors()
 
 void VTXdigi_Modular::InitHistograms() {
@@ -511,13 +511,13 @@ void VTXdigi_Modular::InitHistograms() {
   Gaudi::Accumulators::Axis<float> axis_pdg{1401, -700.5f, 700.5f};
 
   Gaudi::Accumulators::Axis<float> axis_pixels_u{
-    static_cast<unsigned int>(m_pixelCount.at(0)),
+    static_cast<unsigned int>(m_pixelCount.first),
     -0.5f,
-    static_cast<float>(m_pixelCount.at(0)+0.5)};
+    static_cast<float>(m_pixelCount.first+0.5)};
   Gaudi::Accumulators::Axis<float> axis_pixels_v{
-    static_cast<unsigned int>(m_pixelCount.at(1)),
+    static_cast<unsigned int>(m_pixelCount.second),
     -0.5f,
-    static_cast<float>(m_pixelCount.at(1)+0.5)};
+    static_cast<float>(m_pixelCount.second+0.5)};
     
   /* Fill histograms per layer */
   for (int layer : m_layers.value()) {
@@ -737,7 +737,7 @@ bool VTXdigi_Modular::CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) con
   return true;
 }
 
-void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) const {
+void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const {
   /* executed once for each simHit */
 
   const int layer = hit.layer();
@@ -745,7 +745,7 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) co
   const dd4hep::rec::Vector3D simHitPos_global = VTXdigi_tools::ConvertVector(hit.simHit().getPosition());
   const TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(hit.cellID(), m_volumeManager, m_sensorNormalRotation);
   const dd4hep::rec::Vector3D simHitPos_local = VTXdigi_tools::GlobalToLocal(simHitPos_global, trafoMatrix);
-  const std::array<int, 2> pix_i = VTXdigi_tools::ComputePixelIndices(simHitPos_local, m_pixelPitch, m_pixelCount);
+  const std::pair<int, int> pix_i = VTXdigi_tools::ComputePixelIndices(simHitPos_local, m_pixelPitch, m_pixelCount);
 
   ++(*m_hist1d.at(layer).at(hist1d_simHitE))[hit.simHit().getEDep() * (dd4hep::GeV / dd4hep::keV)]; 
   ++(*m_hist1d.at(layer).at(hist1d_simHitCharge))[hit.charge()]; 
@@ -754,25 +754,25 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) co
   ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_GeV))[simHitMomentum.r()]; 
   ++(*m_hist1d.at(layer).at(hist1d_simHitPDG))[hit.simHit().getParticle().getPDG()];
 
-  ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits))[{pix_i.at(0), pix_i.at(1)}];
+  ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits))[{pix_i.first, pix_i.second}];
 }
 
-void VTXdigi_Modular::FillHistograms_perPixel(const int layer, const VTXdigi_tools::PixelHit& pix, const std::array<float, 2> clusterPos_local) const {
+void VTXdigi_Modular::FillHistograms_perPixel(const int layer, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const {
   /* executed once for each pixel */
 
-  ++(*m_hist2d.at(layer).at(hist2d_hitMap_pixelHits))[{pix.index.at(0), pix.index.at(1)}];
+  ++(*m_hist2d.at(layer).at(hist2d_hitMap_pixelHits))[{pix.index.first, pix.index.second}];
 
-  if (clusterPos_local[0] != 0 && clusterPos_local[1] != 0) { 
+  if (clusterPos_local.first != 0 && clusterPos_local.second != 0) { 
     /* cluster at (0,0) means that hits weren't clustered */
-    const float distToClusterCenter_u = static_cast<float>(pix.index.at(0)) - clusterPos_local[0]; // in pix
-    const float distToClusterCenter_v = static_cast<float>(pix.index.at(1)) - clusterPos_local[1];
+    const float distToClusterCenter_u = static_cast<float>(pix.index.first) - clusterPos_local.first; // in pix
+    const float distToClusterCenter_v = static_cast<float>(pix.index.second) - clusterPos_local.second;
 
     ++(*m_hist1d.at(layer).at(hist1d_pixelDistToClusterCenterU))[distToClusterCenter_u]; // convert to um
     ++(*m_hist1d.at(layer).at(hist1d_pixelDistToClusterCenterV))[distToClusterCenter_v];
   }
 }
 
-void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Hit& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::PixelHit& pix, const TGeoHMatrix& trafoMatrix) const {
+void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::SimHitWrapper& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::Pixel& pix, const TGeoHMatrix& trafoMatrix) const {
   /* executed once for each digiHit */
 
   const int layer = hit.layer();

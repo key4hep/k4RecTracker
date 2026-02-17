@@ -78,9 +78,9 @@ private:
 
   bool CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const;
 
-  void FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) const;
-  void FillHistograms_perPixel(const int layer, const VTXdigi_tools::PixelHit& pix, const std::array<float, 2> clusterPos_local) const;
-  void FillHistograms_perDigiHit(const VTXdigi_tools::Hit& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::PixelHit& pix, const TGeoHMatrix& trafoMatrix) const;
+  void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
+  void FillHistograms_perPixel(const int layer, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
+  void FillHistograms_perDigiHit(const VTXdigi_tools::SimHitWrapper& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::Pixel& pix, const TGeoHMatrix& trafoMatrix) const;
   
   /* -- Properties -- */
 
@@ -126,10 +126,10 @@ private:
 
   std::unique_ptr<VTXdigi_tools::IChargeCollector> m_chargeCollector = nullptr;
 
-  std::array<size_t, 2> m_pixelCount = {0, 0}; 
-  std::array<float, 2> m_pixelPitch = {0.0f, 0.0f};
+  std::pair<size_t, size_t> m_pixelCount = {0, 0}; 
+  std::pair<float, float> m_pixelPitch = {0.0f, 0.0f};
   float m_sensorThickness = 0.0f;
-  std::array<float, 2> m_sensorLength = {0.0f, 0.0f};
+  std::pair<float, float> m_sensorLength = {0.0f, 0.0f};
   TGeoRotation m_sensorNormalRotation = TGeoRotation("sensorNormalRotation"); // rotation to rotate the sensor local coordinate system. Initialised to unit matrix. The same information was previously stored in m_localNormalVectorDir.
 
   /* -- Counters -- */
@@ -219,9 +219,9 @@ private:
 
 }; // class VTXdigi_Modular
 
-bool IsDirectNeighbor(const VTXdigi_tools::PixelHit& pix, std::vector<VTXdigi_tools::PixelHit>& clusterPixs);
+bool IsDirectNeighbor(const VTXdigi_tools::Pixel& pix, std::vector<VTXdigi_tools::Pixel>& clusterPixs);
 
-std::array<float, 2> ComputeClusterPos_Weighted(const std::vector<VTXdigi_tools::PixelHit>& clusterPixs);
+std::pair<float, float> ComputeClusterPos_Weighted(const std::vector<VTXdigi_tools::Pixel>& clusterPixs);
 
 
 
