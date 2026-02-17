@@ -107,6 +107,9 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
       const dd4hep::rec::Vector3D pixPos_local = VTXdigi_tools::ComputePixelPos_local(pix.index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
       const dd4hep::rec::Vector3D pixPos_global = VTXdigi_tools::LocalToGlobal(pixPos_local, trafoMatrix);
 
+      if (m_debugHistograms.value())
+        FillHistograms_perPixel(hits.back().layer(), pix);
+
       /* Match pixel hits to simHits. 
       * TODO: So far, we simply match each pixel hit to the closest simHit. At high occupancy (ttbar) this will lead to wrong associations (for 2 simHits that are very close), might deteriorate truth-matching of tracks or similar.
       * (instead, maybe save a list of all source-simHits for each pixel? This is the correct way to do it, but quite a bit more expensive. This would also mean we cannot simply remove each used hit from the hits vector) */
@@ -550,6 +553,52 @@ void VTXdigi_Modular::InitHistograms() {
     );
 
     m_hist1d.emplace(layer, std::move(hist1d));
+
+    std::array< std::unique_ptr< Gaudi::Accumulators::StaticHistogram< 2, Gaudi::Accumulators::atomicity::full, float > >, hist2dArrayLen>  hist2d;
+
+    hist2d.at(hist2d_hitMap_simHits).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_hitMap",
+        "SimHit hit map (pixel in which this simHit position lies) - Layer " + std::to_string(layer) + ";Pixel u;Pixel v;Entries",
+        axis_pixels_u,
+        axis_pixels_v
+      }
+    );
+    hist2d.at(hist2d_hitMap_pixelHits).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/hitMap",
+        "Hit map (pixels that collect charge over the threshold) - Layer " + std::to_string(layer) + ";Pixel u;Pixel v;Entries",
+        axis_pixels_u,
+        axis_pixels_v
+      }
+    );
+    hist2d.at(hist2d_clusterSize_vs_hit_z).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/clusterSize_vs_hit_z_2D",
+        "Cluster size vs. global hit z - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Pixels per cluster;Entries",
+        axis_z,
+        axis_clusterSize
+      }
+    );
+    hist2d.at(hist2d_clusterSize_vs_hit_z_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/clusterSize_vs_hit_z_createdInGenerator_2D",
+        "Cluster size vs. global hit z (simHit particle created in generator) - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Pixels per cluster;Entries",
+        axis_z,
+        axis_clusterSize
+      }
+    );
+    hist2d.at(hist2d_clusterSize_vs_hit_z_createdInSim).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/clusterSize_vs_hit_z_createdInSimulation_2D",
+        "Cluster size vs. global hit z (simHit particle created in simulation) - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Pixels per cluster;Entries",
+        axis_z,
+        axis_clusterSize
+      }
+    );
+
+    m_hist2d.emplace(layer, std::move(hist2d));
+
   } /* loop over layers */
 }
 
@@ -590,9 +639,13 @@ bool VTXdigi_Modular::CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) con
 
 void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) const {
   /* executed once for each simHit */
+
   const int layer = hit.layer();
   const dd4hep::rec::Vector3D simHitMomentum = VTXdigi_tools::ConvertVector(hit.simHit().getMomentum()); // in GeV
-  debug() << " sim Momentum = " << simHitMomentum.r() << " GeV/c" << endmsg;
+  const dd4hep::rec::Vector3D simHitPos_global = VTXdigi_tools::ConvertVector(hit.simHit().getPosition());
+  const TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(hit.cellID(), m_volumeManager, m_sensorNormalRotation);
+  const dd4hep::rec::Vector3D simHitPos_local = VTXdigi_tools::GlobalToLocal(simHitPos_global, trafoMatrix);
+  const std::array<int, 2> pix_i = VTXdigi_tools::ComputePixelIndices(simHitPos_local, m_pixelPitch, m_pixelCount);
 
   ++(*m_hist1d.at(layer).at(hist1d_simHitE))[hit.simHit().getEDep() * (dd4hep::GeV / dd4hep::keV)]; 
   ++(*m_hist1d.at(layer).at(hist1d_simHitCharge))[hit.charge()]; 
@@ -600,23 +653,25 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) co
   ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_MeV))[simHitMomentum.r() * 1.E3]; 
   ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_GeV))[simHitMomentum.r()]; 
   ++(*m_hist1d.at(layer).at(hist1d_simHitPDG))[hit.simHit().getParticle().getPDG()];
+
+  ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits))[{pix_i.at(0), pix_i.at(1)}];
 }
 
 void VTXdigi_Modular::FillHistograms_perPixel(const int layer, const VTXdigi_tools::PixelHit& pix) const {
   /* executed once for each digiHit */
 
+  ++(*m_hist2d.at(layer).at(hist2d_hitMap_pixelHits))[{pix.index.at(0), pix.index.at(1)}];
 }
 
 void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Hit& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::PixelHit& pix, const TGeoHMatrix& trafoMatrix) const {
   /* executed once for each digiHit */
+
   const int layer = hit.layer();
   const dd4hep::rec::Vector3D simHitPos_global = VTXdigi_tools::ConvertVector(hit.simHit().getPosition());
   const dd4hep::rec::Vector3D simHitPos_local = VTXdigi_tools::GlobalToLocal(simHitPos_global, trafoMatrix);
+  const dd4hep::rec::Vector3D residual_local = pos_local - simHitPos_local; // residual = observed - predicted
 
   ++(*m_hist1d.at(layer).at(hist1d_digiHitCharge))[pix.charge]; 
-  
-  /* residual = observed - predicted */
-  const dd4hep::rec::Vector3D residual_local = pos_local - simHitPos_local;
   ++(*m_hist1d.at(layer).at(hist1d_residualU))[residual_local.x() / dd4hep::um]; // convert to um
   ++(*m_hist1d.at(layer).at(hist1d_residualV))[residual_local.y() / dd4hep::um];
   ++(*m_hist1d.at(layer).at(hist1d_residualW))[residual_local.z() / dd4hep::um];
@@ -628,3 +683,7 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Hit& hit, c
 // hist1d_clusterSize,
 // hist1d_clusterSize_createdInGenerator,
 // hist1d_clusterSize_createdInSimulation,
+// hist2d_clusterSize_vs_hit_z,
+// hist2d_clusterSize_vs_hit_z_createdInGenerator,
+// hist2d_clusterSize_vs_hit_z_createdInSim,
+// hist2d_clusterSize_vs_module_z,

@@ -117,6 +117,8 @@ class HitMap {
   std::unordered_map< int, int> m_pixCharge; // map of pixel indices (i_u, i_v) to charge. std::array<int,2> is not hashable, so we need an index
   std::array<size_t, 2> m_pixCount; // number of pixels in u and v direction
 
+  /* TODO: check if int is enough for pixel indices. 65k could be too small -> use size_t*/
+  
 public:
   HitMap(std::array<size_t, 2> pixCount);
 

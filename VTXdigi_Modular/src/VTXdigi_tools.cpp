@@ -186,7 +186,7 @@ dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex,
 /* -- HitMap -- */
 
 HitMap::HitMap(std::array<size_t, 2> pixelCount) : m_pixCount(pixelCount) {
-  const int inverseOccupancy = 5000; // assume occupancy, 5e-4 is quite conservative for Z-run
+  const int inverseOccupancy = 2000; // assume occupancy, 5e-4 is quite conservative for Z-run
   m_pixCharge.reserve(pixelCount.at(0) * pixelCount.at(1) / inverseOccupancy); // avoid too many reallocations
 }
 

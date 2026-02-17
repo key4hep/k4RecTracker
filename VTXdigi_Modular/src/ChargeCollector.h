@@ -14,11 +14,17 @@ using ::VTXdigi_Modular;
 struct Path;
 
 
-/* -- Charge collector algorithm: No charge sharing, single pixel hit -- */
+/* -- Charge collector algorithms for debugging -- */
 
 class ChargeCollector_SinglePixel : public IChargeCollector {
 public:
   explicit ChargeCollector_SinglePixel(const VTXdigi_Modular& digitizer);
+  void FillHit(const Hit& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+};
+
+class ChargeCollector_Debug : public IChargeCollector {
+public:
+  explicit ChargeCollector_Debug(const VTXdigi_Modular& digitizer);
   void FillHit(const Hit& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
 };
 

@@ -48,6 +48,7 @@
 namespace VTXdigi_tools {
   class IChargeCollector;
   class ChargeCollector_SinglePixel;
+  class ChargeCollector_Debug;
 }
 
 struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> (const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
@@ -63,6 +64,7 @@ private:
 
   // friend class VTXdigi_tools::IChargeCollector;
   friend class VTXdigi_tools::ChargeCollector_SinglePixel;
+  friend class VTXdigi_tools::ChargeCollector_Debug;
 
   /* ---- Initialization & finalization functions ---- */
 
@@ -189,29 +191,27 @@ private:
   //   >
   // > m_histProfile1d;  
 
-  // enum { 
-  //   hist2d_hitMap_simHits,
-  //   hist2d_hitMap_digiHits, 
-  //   hist2d_clusterSize_vs_hit_z,
-  //   hist2d_clusterSize_vs_hit_z_createdInGenerator,
-  //   hist2d_clusterSize_vs_hit_z_createdInSim,
-  //   hist2d_clusterSize_vs_module_z,
-  //   hist2dArrayLen
-  // };
-  // std::vector<
-  //   std::array<
-  //     std::unique_ptr<
-  //       Gaudi::Accumulators::StaticHistogram<
-  //         2,
-  //         Gaudi::Accumulators::atomicity::full,
-  //         float
-  //       >
-  //     >,
-  //     hist2dArrayLen
-  //   >
-  // > m_hist2d;
-
-
+  enum { 
+    hist2d_hitMap_simHits,
+    hist2d_hitMap_pixelHits, 
+    hist2d_clusterSize_vs_hit_z,
+    hist2d_clusterSize_vs_hit_z_createdInGenerator,
+    hist2d_clusterSize_vs_hit_z_createdInSim,
+    hist2dArrayLen
+  };
+  mutable std::unordered_map<
+    int, // layer number
+    std::array<
+      std::unique_ptr<
+        Gaudi::Accumulators::StaticHistogram<
+          2,
+          Gaudi::Accumulators::atomicity::full,
+          float
+        >
+      >,
+      hist2dArrayLen
+    >
+  > m_hist2d;
 
 }; // class VTXdigi_Modular
 

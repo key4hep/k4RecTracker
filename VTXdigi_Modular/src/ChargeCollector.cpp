@@ -17,6 +17,9 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
   } else if (algorithm == "SinglePixel") {
     return std::make_unique<ChargeCollector_SinglePixel>(digitizer);
   }
+  else if (algorithm == "Debug") {
+    return std::make_unique<ChargeCollector_Debug>(digitizer);
+  }
   throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
 }
 
@@ -30,6 +33,8 @@ struct Path  {
 };
 
 Path ComputePath(const dd4hep::rec::ISurface& surface, const edm4hep::SimTrackerHit& simHit) {
+  
+
   Path path;
   return path;
 }
@@ -45,20 +50,46 @@ void ChargeCollector_SinglePixel::FillHit(const Hit& hit, HitMap& hitMap, const 
   const dd4hep::rec::Vector3D pos_global = ConvertVector(hit.simHit().getPosition());
   const dd4hep::rec::Vector3D pos_local = GlobalToLocal(pos_global, trafoMatrix);
 
-  const std::array<int, 2> pixel_i = ComputePixelIndices(pos_local, m_digitizer.m_pixelPitch, m_digitizer.m_pixelCount);
+  const std::array<int, 2> pix = ComputePixelIndices(pos_local, m_digitizer.m_pixelPitch, m_digitizer.m_pixelCount);
+
+  if (!(pix.at(0) == -1 || pix.at(1) == -1 || pix.at(0) >= static_cast<int>(m_digitizer.m_pixelCount.at(0)) || pix.at(1) >= static_cast<int>(m_digitizer.m_pixelCount.at(1))))
+    hitMap.FillCharge(pix, hit.charge());
+}
+
+// /* -- Debug approach -- */
+
+ChargeCollector_Debug::ChargeCollector_Debug(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer) {
+  m_digitizer.debug() << "ChargeCollector_Debug constructed." << endmsg;
+}
+
+void ChargeCollector_Debug::FillHit(const Hit& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
+  const dd4hep::rec::Vector3D pos_global = ConvertVector(hit.simHit().getPosition());
+  const dd4hep::rec::Vector3D pos_local = GlobalToLocal(pos_global, trafoMatrix);
+
+  const std::array<int, 2> pix = ComputePixelIndices(pos_local, m_digitizer.m_pixelPitch, m_digitizer.m_pixelCount);
   m_digitizer.verbose() << "     - SimHit at global position       (" << pos_global.x() << ", " << pos_global.y() << ", " << pos_global.z() << ")" << endmsg;
   m_digitizer.verbose() << "       - corresponds to local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ")" << endmsg;
-  m_digitizer.verbose() << "       - and pixel indices             (" << pixel_i.at(0) << ", " << pixel_i.at(1) << ")" << endmsg;
+  m_digitizer.verbose() << "       - and pixel indices             (" << pix.at(0) << ", " << pix.at(1) << ")" << endmsg;
 
-  if (pixel_i.at(0) == -1 || pixel_i.at(1) == -1 || pixel_i.at(0) >= static_cast<int>(m_digitizer.m_pixelCount.at(0)) || pixel_i.at(1) >= static_cast<int>(m_digitizer.m_pixelCount.at(1))) {
+  if (pix.at(0) == -1 || pix.at(1) == -1 || pix.at(0) >= static_cast<int>(m_digitizer.m_pixelCount.at(0)) || pix.at(1) >= static_cast<int>(m_digitizer.m_pixelCount.at(1))) {
     m_digitizer.warning() << "simHit local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ") is out of sensor bounds U: [" << -m_digitizer.m_sensorLength.at(0)/2 << ", " << m_digitizer.m_sensorLength.at(0)/2 << "], V: [" << -m_digitizer.m_sensorLength.at(1)/2 << ", " << m_digitizer.m_sensorLength.at(1)/2 << "]. This simHit will be skipped." << endmsg;
   }
   else {
+    /* fill central pixel with 50% charge, two pixels to the right with 20% charge, pixel above with 10% charge */
     m_digitizer.verbose() << "       - Filling charge " << hit.charge() << " e." << endmsg;
-    hitMap.FillCharge(pixel_i, hit.charge());
+
+    hitMap.FillCharge(pix, static_cast<int>(std::round(hit.charge() * 0.5)));
+    if (pix.at(0) + 1 < static_cast<int>(m_digitizer.m_pixelCount.at(0)))
+      hitMap.FillCharge({pix.at(0) + 1, pix.at(1)}, static_cast<int>(std::round(hit.charge() * 0.2)));
+    if (pix.at(0) + 2 < static_cast<int>(m_digitizer.m_pixelCount.at(0)))
+      hitMap.FillCharge({pix.at(0) + 2, pix.at(1)}, static_cast<int>(std::round(hit.charge() * 0.2)));
+    if (pix.at(1) + 1 < static_cast<int>(m_digitizer.m_pixelCount.at(1)))
+      hitMap.FillCharge({pix.at(0), pix.at(1) + 1}, static_cast<int>(std::round(hit.charge() * 0.1)));
+
     m_digitizer.verbose() << "       - Total charge collected in hitMap: " << hitMap.GetTotalCharge() << " e." << endmsg;
   }
 }
+
 
 
 // /* -- LUT approach -- */
