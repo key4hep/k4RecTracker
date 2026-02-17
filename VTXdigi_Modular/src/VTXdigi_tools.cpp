@@ -172,8 +172,8 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
 dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
   
-  float u = -0.5 * sensorLength[0] + (pixelIndex[0] + 0.5) * pixelPitch[0]; // in mm
-  float v = -0.5 * sensorLength[1] + (pixelIndex[1] + 0.5) * pixelPitch[1];
+  float u = (static_cast<float>(pixelIndex[0]) + 0.5f) * pixelPitch[0] - 0.5f * sensorLength[0]; // in mm
+  float v = (static_cast<float>(pixelIndex[1]) + 0.5f) * pixelPitch[1] - 0.5f * sensorLength[1];
   float w = depletedRegionDepthCenter;
   
   return dd4hep::rec::Vector3D(u, v, w); 
@@ -182,6 +182,21 @@ dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex,
 dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch) {
   return ComputePixelPos_local(pixelIndex, sensorLength, pixelPitch, 0.f);
 }
+
+dd4hep::rec::Vector3D ComputePos_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter) {
+  /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
+  
+  float u = (index[0] + 0.5f) * pixelPitch[0] - 0.5f * sensorLength[0]; // in mm. Add 0.5*pixelPitch to shift from pixel edge to center, since index 0 is defined as the center of the pixel.
+  float v = (index[1] + 0.5f) * pixelPitch[1] - 0.5f * sensorLength[1];
+  float w = depletedRegionDepthCenter;
+  
+  return dd4hep::rec::Vector3D(u, v, w); 
+}
+
+dd4hep::rec::Vector3D ComputePos_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch) {
+  return ComputePos_local(index, sensorLength, pixelPitch, 0.f);
+}
+
 
 /* -- HitMap -- */
 
@@ -319,6 +334,45 @@ bool ToolTest() {
       std::array<int, 2> result = ComputePixelIndices(inputs.at(i), pixelPitch, pixelCount);
       if (result != expectedOutputs[i]) {
         std::cout << " - FAILED " << std::endl << " | -> Expected pixel indices (" << expectedOutputs[i][0] << ", " << expectedOutputs[i][1] << ") for (u,v,w)=(" << inputs.at(i).x() << ", " << inputs.at(i).y() << ", " << inputs.at(i).z() << "), got (" << result[0] << ", " << result[1] << ")" << std::endl;
+        passedInternal = false;
+      }
+    }
+
+    if (passedInternal)
+      std::cout << " - PASSED" << std::endl;
+    passed = passed && passedInternal;
+  }
+
+  std::cout << " | VTXdigi_tools::ComputePos_local()";
+  {
+    bool passedInternal = true;
+
+    const std::array<float, 2> pixelPitch = { 1.0, 2.0 };
+    const std::array<float, 2> sensorLength = { 10.0, 20.0 }; // 10 x 10 pixels
+
+    std::array<std::array<float, 2>, 5> inputs = {{{0., 0.}}};
+    inputs = {{
+      {0., 0.},
+      {4.5, 4.5},
+      {9.0, 9.0},
+      {-0.5, -0.5},
+      {9.5, 9.5},
+    }};
+    std::array<dd4hep::rec::Vector3D, inputs.size()> expectedOutputs = {{dd4hep::rec::Vector3D(0.f, 0.f, 0.f)}};
+    expectedOutputs = {{
+      dd4hep::rec::Vector3D( -4.5, -9.0, 0.0 ),
+      dd4hep::rec::Vector3D( 0., 0., 0. ),
+      dd4hep::rec::Vector3D( 4.5, 9.0, 0.0 ),
+      dd4hep::rec::Vector3D( -5.0, -10.0, 0.0 ),
+      dd4hep::rec::Vector3D( 5.0, 10.0, 0.0 ),
+    }};
+    
+    for (size_t i = 0; i < inputs.size(); ++i) {
+      dd4hep::rec::Vector3D result = ComputePos_local(inputs.at(i), sensorLength, pixelPitch);
+      if (std::abs(result.x() - expectedOutputs[i].x()) > 1e-6 || std::abs(result.y() - expectedOutputs[i].y()) > 1e-6) {
+        if (passedInternal)
+        std::cout << " - FAILED " << std::endl;
+        std::cout << " | -> Expected local position (" << expectedOutputs[i].x() << ", " << expectedOutputs[i].y() << ") for index (i_u,i_v)=(" << inputs.at(i)[0] << ", " << inputs.at(i)[1] << "), got (" << result.x() << ", " << result.y() << ")" << std::endl;
         passedInternal = false;
       }
     }

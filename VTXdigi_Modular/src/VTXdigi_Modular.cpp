@@ -23,6 +23,8 @@ DECLARE_COMPONENT(VTXdigi_Modular)
  * - Charges are given as either 
  *        - "raw charge" (as given by Geant4/Allpix2, before thresholding and noise) or 
  *        - "measured charge" (after thresholding and noise)
+ * 
+ * - I am sorry for the unholy mix of US and British spelling. I tried to keep the code consistent in US spelling. ~ Jona
  */
 
 VTXdigi_Modular::VTXdigi_Modular(const std::string& name, ISvcLocator* svcLoc)
@@ -103,36 +105,94 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
     }
 
     /* Create digiHits from the hitMap */
-    for (const VTXdigi_tools::PixelHit& pix : hitMap.GetPixelsWithCharge()) {
-      const dd4hep::rec::Vector3D pixPos_local = VTXdigi_tools::ComputePixelPos_local(pix.index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
-      const dd4hep::rec::Vector3D pixPos_global = VTXdigi_tools::LocalToGlobal(pixPos_local, trafoMatrix);
+    if (!m_clusterize.value()) {
+      for (const VTXdigi_tools::PixelHit& pix : hitMap.GetPixelsWithCharge()) {
+        const dd4hep::rec::Vector3D pixPos_local = VTXdigi_tools::ComputePixelPos_local(pix.index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
+        const dd4hep::rec::Vector3D pixPos_global = VTXdigi_tools::LocalToGlobal(pixPos_local, trafoMatrix);
 
-      if (m_debugHistograms.value())
-        FillHistograms_perPixel(hits.back().layer(), pix);
+        if (m_debugHistograms.value())
+          FillHistograms_perPixel(hits.back().layer(), pix, {0,0}); // cluster center{0,0} means no clustering
 
-      /* Match pixel hits to simHits. 
-      * TODO: So far, we simply match each pixel hit to the closest simHit. At high occupancy (ttbar) this will lead to wrong associations (for 2 simHits that are very close), might deteriorate truth-matching of tracks or similar.
-      * (instead, maybe save a list of all source-simHits for each pixel? This is the correct way to do it, but quite a bit more expensive. This would also mean we cannot simply remove each used hit from the hits vector) */
-      const VTXdigi_tools::Hit* closestHit = &hits.at(0);
-      float closestDist = std::numeric_limits<float>::max();
-      bool firsthit = false;
-      for (const VTXdigi_tools::Hit& hit : hits) {
-        if (!firsthit) {
-          firsthit = true;
-          continue; // skip first hit, already set as closestHit
+        /* Match pixel hits to simHits. 
+        * TODO: So far, we simply match each pixel hit to the closest simHit. At high occupancy (ttbar) this will lead to wrong associations (for 2 simHits that are very close), might deteriorate truth-matching of tracks or similar.
+        * (instead, maybe save a list of all source-simHits for each pixel? This is the correct way to do it, but quite a bit more expensive. This would also mean we cannot simply remove each used hit from the hits vector) */
+        const VTXdigi_tools::Hit* closestHit = &hits.at(0);
+        float closestDist = std::numeric_limits<float>::max();
+        bool firsthit = false;
+        for (const VTXdigi_tools::Hit& hit : hits) {
+          if (!firsthit) {
+            firsthit = true;
+            continue; // skip first hit, already set as closestHit
+          }
+          const dd4hep::rec::Vector3D hitPos_local = VTXdigi_tools::GlobalToLocal(VTXdigi_tools::ConvertVector(hit.simHit().getPosition()), trafoMatrix);
+          const float dist = (hitPos_local - pixPos_local).r();
+          if (dist < closestDist){
+            closestHit = &hit;
+            closestDist = dist;
+          }
         }
-        const dd4hep::rec::Vector3D hitPos_local = VTXdigi_tools::GlobalToLocal(VTXdigi_tools::ConvertVector(hit.simHit().getPosition()), trafoMatrix);
-        const float dist = (hitPos_local - pixPos_local).r();
-        if (dist < closestDist){
-          closestHit = &hit;
-          closestDist = dist;
+
+        VTXdigi_tools::CreateDigiHit(closestHit->simHit(), digiHits, digiHitLinks, pixPos_global, pix.charge);
+
+        FillHistograms_perDigiHit(*closestHit, pixPos_local, pix, trafoMatrix);
+      } /* loop over firing pixels */
+    } /* if not clusterising */
+    else { 
+      std::vector<VTXdigi_tools::PixelHit> pixHits = hitMap.GetPixelsWithCharge();
+
+      /* For now: do direct-neighbor clustering.
+      * TODO: implement diagonal neighbors? Could be interesting to test, at least. */
+
+      std::vector<VTXdigi_tools::PixelHit> clusterPixs;
+      clusterPixs.reserve(8); // avoid too many reallocations. 8 should include around 80-90% of clusters, i guess. 
+
+      while (pixHits.size() > 0) {
+        clusterPixs.clear();
+
+        /* start new cluster with first pixel in list */
+        clusterPixs.push_back(pixHits.back());
+        pixHits.pop_back();
+
+        /* loop over remaining pixels, add direct neighbors to cluster 
+        Loop over an iterator, back to front*/
+
+
+        for (auto pixIter = pixHits.begin(); pixIter != pixHits.end();) {
+          /* TODO: I think there is a elegant (and more efficient, less loopy) recursive way to do this where each added pixel checks for neighbors in the set of remaining pixel hits. ~ Jona 2026-02 */
+          if (IsDirectNeighbor(*pixIter, clusterPixs)) {
+            clusterPixs.push_back(*pixIter);
+            std::iter_swap(pixIter, pixHits.end() - 1);
+            pixHits.pop_back();
+          } else {
+            ++pixIter; // only increment if no element was removed, otherwise we would skip the element that was just swapped into the current position
+          }
+        } /* loop over pixel hits (that are not clusterized yet) */
+
+        
+        const std::array<float, 2> clusterCenter = ComputeClusterPos_Weighted(clusterPixs);
+        const dd4hep::rec::Vector3D clusterPos_local = VTXdigi_tools::ComputePos_local(clusterCenter, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
+        const dd4hep::rec::Vector3D clusterPos_global = VTXdigi_tools::LocalToGlobal(clusterPos_local, trafoMatrix);
+
+        int clusterCharge = 0;
+        for (const auto& pix : clusterPixs) {
+          clusterCharge += pix.charge;
         }
-      }
 
-      VTXdigi_tools::CreateDigiHit(closestHit->simHit(), digiHits, digiHitLinks, pixPos_global, pix.charge);
-      FillHistograms_perDigiHit(*closestHit, pixPos_local, pix, trafoMatrix);
+        debug() << "     - Found cluster with " << clusterPixs.size() << " pixels, charge " << clusterCharge << ", center at (" << clusterCenter[0] << ", " << clusterCenter[1] << "), local pos (" << clusterPos_local.x() << ", " << clusterPos_local.y() << ", " << clusterPos_local.z() << "). " << endmsg;
+        
+        /* TODO: Match cluster to simHit. For now, simply match to closest simHit as for single pixels. This is probably less bad than for single pixels, because clusters are bigger and thus more likely to be close to their source simHit than single pixels are. But still not perfect. 
+        TODO: implement better matching, maybe by saving a list of all source simHits for each pixel and then combining those lists for all pixels in the cluster? */
 
-    } /* loop over firing pixels */
+        /* TODO: create digiHit per cluster. */
+        
+        if (m_debugHistograms.value()) {
+          // FillHistograms_perDigiHit(...);
+          for (const VTXdigi_tools::PixelHit& pix : clusterPixs)
+            FillHistograms_perPixel(hits.back().layer(), pix, clusterCenter); // per-pixel histograms
+        } /* debug histograms */
+
+      } /* loop over clusters */
+    } /* if clusterizing */
   } /* loop over sensors */
 
   /* TODO: Impletement FAST charge collection method (simply smear simHit position)
@@ -145,7 +205,32 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
 
 
 
+bool IsDirectNeighbor(const VTXdigi_tools::PixelHit& pix, std::vector<VTXdigi_tools::PixelHit>& clusterPixs) {
+  for (const auto& clusterPix : clusterPixs) {
+    const int di_u = std::abs(pix.index[0] - clusterPix.index[0]);
+    const int di_v = std::abs(pix.index[1] - clusterPix.index[1]);
 
+    if ((di_u == 1 && di_v == 0) || (di_u == 0 && di_v == 1)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+std::array<float, 2> ComputeClusterPos_Weighted(const std::vector<VTXdigi_tools::PixelHit>& clusterPixs) {
+  std::array<float, 2> pos{0.f, 0.f};
+  int totalCharge = 0;
+  for (const auto& pix : clusterPixs) {
+    pos[0] += pix.index[0] * pix.charge;
+    pos[1] += pix.index[1] * pix.charge;
+    totalCharge += pix.charge;
+  }
+  if (totalCharge <= 0)
+    throw std::runtime_error("ComputeClusterPos_Weighted: total charge of cluster is 0 or negative, cannot compute weighted position");
+  pos[0] /= totalCharge;
+  pos[1] /= totalCharge;
+  return pos;
+}
 
 
 
@@ -422,6 +507,7 @@ void VTXdigi_Modular::InitHistograms() {
   Gaudi::Accumulators::Axis<float> axis_momentum_GeV{10000, 0.f, 1000.f};
   
   Gaudi::Accumulators::Axis<float> axis_residual{2000, -1000.f, 1000.f};
+  Gaudi::Accumulators::Axis<float> axis_residual_pixels{2020, -50.5f, 50.5f}; // 20 in-pix bins
   Gaudi::Accumulators::Axis<float> axis_pdg{1401, -700.5f, 700.5f};
 
   Gaudi::Accumulators::Axis<float> axis_pixels_u{
@@ -483,7 +569,6 @@ void VTXdigi_Modular::InitHistograms() {
         axis_pdg
       }
     );
-    
 
 
     hist1d.at(hist1d_digiHitCharge).reset(
@@ -549,6 +634,21 @@ void VTXdigi_Modular::InitHistograms() {
         "Layer" + std::to_string(layer) + "/digiHit_residual_r",
         "Residual magnitude (|r_digiHit - r_simHit|) - Layer " + std::to_string(layer) + ";Residual r [um];Entries",
         axis_residual
+      }
+    );
+
+    hist1d.at(hist1d_pixelDistToClusterCenterU).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/pixelHit_distanceToClusterCenter_u",
+        "Distance of pixel to center of cluster in u direction - Layer " + std::to_string(layer) + ";Distance to cluster center u [pix];Entries",
+        axis_residual_pixels
+      }
+    );
+    hist1d.at(hist1d_pixelDistToClusterCenterV).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/pixelHit_distanceToClusterCenter_v",
+        "Distance of pixel to center of cluster in v direction - Layer " + std::to_string(layer) + ";Distance to cluster center v [pix];Entries",
+        axis_residual_pixels
       }
     );
 
@@ -657,10 +757,19 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) co
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits))[{pix_i.at(0), pix_i.at(1)}];
 }
 
-void VTXdigi_Modular::FillHistograms_perPixel(const int layer, const VTXdigi_tools::PixelHit& pix) const {
-  /* executed once for each digiHit */
+void VTXdigi_Modular::FillHistograms_perPixel(const int layer, const VTXdigi_tools::PixelHit& pix, const std::array<float, 2> clusterPos_local) const {
+  /* executed once for each pixel */
 
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_pixelHits))[{pix.index.at(0), pix.index.at(1)}];
+
+  if (clusterPos_local[0] != 0 && clusterPos_local[1] != 0) { 
+    /* cluster at (0,0) means that hits weren't clustered */
+    const float distToClusterCenter_u = static_cast<float>(pix.index.at(0)) - clusterPos_local[0]; // in pix
+    const float distToClusterCenter_v = static_cast<float>(pix.index.at(1)) - clusterPos_local[1];
+
+    ++(*m_hist1d.at(layer).at(hist1d_pixelDistToClusterCenterU))[distToClusterCenter_u]; // convert to um
+    ++(*m_hist1d.at(layer).at(hist1d_pixelDistToClusterCenterV))[distToClusterCenter_v];
+  }
 }
 
 void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Hit& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::PixelHit& pix, const TGeoHMatrix& trafoMatrix) const {

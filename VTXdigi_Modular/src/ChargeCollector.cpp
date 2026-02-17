@@ -33,7 +33,7 @@ struct Path  {
 };
 
 Path ComputePath(const dd4hep::rec::ISurface& surface, const edm4hep::SimTrackerHit& simHit) {
-  
+
 
   Path path;
   return path;
@@ -85,7 +85,12 @@ void ChargeCollector_Debug::FillHit(const Hit& hit, HitMap& hitMap, const TGeoHM
       hitMap.FillCharge({pix.at(0) + 2, pix.at(1)}, static_cast<int>(std::round(hit.charge() * 0.2)));
     if (pix.at(1) + 1 < static_cast<int>(m_digitizer.m_pixelCount.at(1)))
       hitMap.FillCharge({pix.at(0), pix.at(1) + 1}, static_cast<int>(std::round(hit.charge() * 0.1)));
-
+    
+    /* split charge between this pixel and the one to the right */
+    // hitMap.FillCharge(pix, static_cast<int>(std::round(hit.charge() * 0.5)));
+    // if (pix.at(0) + 1 < static_cast<int>(m_digitizer.m_pixelCount.at(0)))
+    // hitMap.FillCharge({pix.at(0) + 1, pix.at(1)}, static_cast<int>(std::round(hit.charge() * 0.5)));
+    
     m_digitizer.verbose() << "       - Total charge collected in hitMap: " << hitMap.GetTotalCharge() << " e." << endmsg;
   }
 }

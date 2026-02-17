@@ -102,9 +102,21 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
  * @note The w coordinate is set to depletedRegionDepthCenter. 0 for center, +25 for sensor surface, +20 for TPSCo 65nm maps.
 */
 dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter);
-
 /** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,0) */
 dd4hep::rec::Vector3D ComputePixelPos_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch);
+
+
+/** @brief Compute the position of a given (pixel-)index (i_u,i_v) in sensor-local coordinates (u,v,0) .
+ * @note index 0 indicates the center of the pixel, index -0.5 the lower edge and +0.5 the upper edge.  
+ * @note Does not check if the position is within the sensor bounds!
+ * @note The w coordinate is set to depletedRegionDepthCenter. 0 for center, +25 for sensor surface, +20 for TPSCo 65nm maps.
+ */
+dd4hep::rec::Vector3D ComputePos_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter);
+/** @brief Compute the position of a given (pixel-)index (i_u,i_v) in sensor-local coordinates (u,v,0) .
+ * @note index 0 indicates the center of the pixel, index -0.5 the lower edge and +0.5 the upper edge.  
+ * @note Does not check if the position is within the sensor bounds!
+ */
+dd4hep::rec::Vector3D ComputePos_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch);
 
 
 struct PixelHit {
@@ -118,7 +130,7 @@ class HitMap {
   std::array<size_t, 2> m_pixCount; // number of pixels in u and v direction
 
   /* TODO: check if int is enough for pixel indices. 65k could be too small -> use size_t*/
-  
+
 public:
   HitMap(std::array<size_t, 2> pixCount);
 

@@ -79,7 +79,7 @@ private:
   bool CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const;
 
   void FillHistograms_perSimHit(const VTXdigi_tools::Hit& hit) const;
-  void FillHistograms_perPixel(const int layer, const VTXdigi_tools::PixelHit& pix) const;
+  void FillHistograms_perPixel(const int layer, const VTXdigi_tools::PixelHit& pix, const std::array<float, 2> clusterPos_local) const;
   void FillHistograms_perDigiHit(const VTXdigi_tools::Hit& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::PixelHit& pix, const TGeoHMatrix& trafoMatrix) const;
   
   /* -- Properties -- */
@@ -91,6 +91,8 @@ private:
 
   Gaudi::Property<std::string> m_geoServiceName{this, "GeoSvcName", "GeoSvc", "The name of the GeoSvc instance"};
   Gaudi::Property<std::string> m_encodingStringVariable{this, "EncodingStringParameterName", "GlobalTrackerReadoutID", "The name of the DD4hep constant that contains the Encoding string for tracking detectors"};
+  Gaudi::Property<bool> m_clusterize{this, "Clusterize", true, "Whether to clusterize hits or not. If false, each pixel hit is output as a separate trackerHit. If true, the cluster centre and total charge are output."};
+
 
   /* -- Properties mainlyrelated to the main event loop -- */
 
@@ -99,7 +101,7 @@ private:
   /* -- Properties and members related to the various charge collection algorithms-- */
 
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
-  Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0mm. Used for the digitised hit position."};
+  Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0 mm. Used for the digitised hit position."};
 
 
 
@@ -157,6 +159,8 @@ private:
     hist1d_residualV, 
     hist1d_residualW, 
     hist1d_residualR, 
+    hist1d_pixelDistToClusterCenterU,
+    hist1d_pixelDistToClusterCenterV,
     hist1dArrayLen
   }; // all other hists have an individual instance per layer
   mutable std::unordered_map<
@@ -215,7 +219,9 @@ private:
 
 }; // class VTXdigi_Modular
 
+bool IsDirectNeighbor(const VTXdigi_tools::PixelHit& pix, std::vector<VTXdigi_tools::PixelHit>& clusterPixs);
 
+std::array<float, 2> ComputeClusterPos_Weighted(const std::vector<VTXdigi_tools::PixelHit>& clusterPixs);
 
 
 
