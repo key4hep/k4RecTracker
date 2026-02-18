@@ -17,8 +17,8 @@
 
 //=== edm4hep ===
 #include "edm4hep/TrackState.h"
-#include "extension/MutableTrack.h"
-#include "extension/TrackCollection.h"
+#include "edm4hep/MutableTrack.h"
+#include "edm4hep/TrackCollection.h"
 
 //=== Others ===
 #include <Objects/Helix.h>
@@ -98,7 +98,7 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
  * @param m_eCalEndCapOuterR Outer radius of the endcap calorimeter.
  * @param m_eCalEndCapInnerZ z-position of the inner surface of the endcap calorimeter.
  */
-void FillTrackWithCalorimeterExtrapolation(extension::MutableTrack& edm4hep_track, double m_Bz, int charge, double a,
+void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double m_Bz, int charge, double a,
                                            double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
                                            double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
                                            double m_eCalEndCapInnerZ);
@@ -141,52 +141,5 @@ torch::Tensor find_condpoints(const torch::Tensor& betas, const torch::Tensor& u
  *         Points assigned to cluster 0 are considered unclustered.
  */
 torch::Tensor get_clustering(const std::vector<float>& output_vector, int num_rows, float tbeta, float td);
-
-///////////////////////////////////////
-/// Miscellaneous Utility Functions ///
-///////////////////////////////////////
-
-/**
- * @brief Returns the hypothesized charge for a given PDG code.
- *
- * Maps common particle PDG codes to their charge:
- * - Electrons (11): -1
- * - Positrons (-11): +1
- * - Muons (13): -1
- * - Anti-muons (-13): +1
- * - Charged pions (211, -211): ±1
- * - Charged kaons (321, -321): ±1
- * - Protons (2212): +1
- * - Anti-protons (-2212): -1
- *
- * Returns 0 if the PDG code is not recognized.
- *
- * @param pdg Particle Data Group (PDG) code of the particle.
- * @return int Hypothesized electric charge of the particle.
- */
-int getHypotesisCharge(int pdg);
-
-/**
- * @brief Computes the covariance matrix of the track state parameters.
- *
- * The state parameters are converted from Cartesian coordinates (position, momentum, time)
- * to track parameters (omega, phi0, d0, z0, tanLambda, time), and their covariance is propagated
- * through the Jacobian matrix J.
- *
- * Units expected:
- * - positions in mm
- * - momentum in GeV
- * - time in ns
- *
- * @param stateTrack 6D state vector: (x, y, z, px, py, pz)
- * @param params 6D vector of track parameters: (omega, phi0, d0, z0, tanLambda, time)
- * @param referencePoint 3D point for impact parameter calculation - see
- * https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
- * @param timeError uncertainty on the time parameter (ns)
- * @param statecovMatrix covariance matrix of the original state vector (6x6)
- * @return TMatrixDSym covariance matrix of the track parameters + time (6x6)
- */
-TMatrixDSym computeTrackStateCovMatrix(TVectorD stateTrack, TVectorD params, TVector3 referencePoint, double timeError,
-                                       TMatrixDSym statecovMatrix);
 
 #endif // UTILS_HPP

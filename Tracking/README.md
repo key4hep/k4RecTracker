@@ -2,7 +2,7 @@
 
 This subfolder contains the implementation of several Tracking tools for FCC-ee detectors using the key4hep framework:
 
-* GGTF_tracking
+* GGTFTrackFinder
 * PlotTrackHitResiduals
 * TrackdNdxDelphesBased
 * TracksFromGenParticles
@@ -19,7 +19,7 @@ In our end-to-end pipeline, hits from all tracking components are directly proce
 
 ### Technical Implementation
 
-We implemented a **Geometric Graph Track Finder (GGTF)** in `k4RecTracker/Tracking/components/GGTF_tracking.cpp`.
+We implemented a **Geometric Graph Track Finder (GGTF)** in `k4RecTracker/Tracking/components/GGTFTrackFinder.cpp`.
 Its workflow can be summarized as follows:
 
 1. **Input Extraction**
