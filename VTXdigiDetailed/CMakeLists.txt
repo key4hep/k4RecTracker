@@ -38,7 +38,7 @@ set(test_name "test_VTXdigitizerDetailed")
 set(test_script "${CMAKE_CURRENT_SOURCE_DIR}/test/test_VTXdigitizerDetailed.sh")
 add_test(NAME ${test_name}
          COMMAND bash ${test_script}
-         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} # Le test s'exécute dans build, mais lit le script dans source
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
 )
 set_tests_properties(${test_name} PROPERTIES
     ENVIRONMENT "SOURCE_DIR_TEST=${CMAKE_CURRENT_SOURCE_DIR}/test;K4RECTRACKER=${CMAKE_INSTALL_PREFIX}/share/k4RecTracker;PATH=${CMAKE_INSTALL_PREFIX}/bin:$ENV{PATH};PYTHONPATH=${CMAKE_INSTALL_PREFIX}/python:${CMAKE_CURRENT_SOURCE_DIR}/test:$ENV{PYTHONPATH};LD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX}/lib:${CMAKE_INSTALL_PREFIX}/lib64:$ENV{LD_LIBRARY_PATH}"
