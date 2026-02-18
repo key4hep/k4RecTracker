@@ -32,7 +32,7 @@ struct Path  {
   float charge;
 };
 
-Path ComputePath(const dd4hep::rec::ISurface& surface, const edm4hep::SimTrackerHit& simHit) {
+Path ComputePath(const dd4hep::rec::ISurface& surface, const edm4hep::SimTrackerHit& simTrackerHit) {
 
 
   Path path;
@@ -46,14 +46,13 @@ ChargeCollector_SinglePixel::ChargeCollector_SinglePixel(const VTXdigi_Modular& 
   m_digitizer.debug() << "ChargeCollector_SinglePixel constructed." << endmsg;
 }
 
-void ChargeCollector_SinglePixel::FillHit(const SimHitWrapper& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
-  // const dd4hep::rec::Vector3D pos_global = ConvertVector(hit.simHit().getPosition());
-  // const dd4hep::rec::Vector3D pos_local = GlobalToLocal(pos_global, trafoMatrix);
+void ChargeCollector_SinglePixel::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
+  const dd4hep::rec::Vector3D pos_global = ConvertVector(simHit.hitPtr()->getPosition());
+  const dd4hep::rec::Vector3D pos_local = GlobalToLocal(pos_global, trafoMatrix);
+  const std::pair<int, int> i_uv = ComputePixelIndices(pos_local, m_digitizer.m_pixelPitch, m_digitizer.m_pixelCount);
 
-  // const std::array<int, 2> pix = ComputePixelIndices(pos_local, m_digitizer.m_pixelPitch, m_digitizer.m_pixelCount);
-
-  // if (!(pix.at(0) == -1 || pix.at(1) == -1 || pix.at(0) >= static_cast<int>(m_digitizer.m_pixelCount.at(0)) || pix.at(1) >= static_cast<int>(m_digitizer.m_pixelCount.at(1))))
-  //   hitMap.FillCharge(pix, hit.charge());
+  if (!(i_uv.first == -1 || i_uv.second == -1 || i_uv.first >= static_cast<int>(m_digitizer.m_pixelCount.first) || i_uv.second >= static_cast<int>(m_digitizer.m_pixelCount.second)))
+    hitMap.FillCharge(i_uv, simHit.charge(), simHit.hitPtr());
 }
 
 // /* -- Debug approach -- */
@@ -62,35 +61,29 @@ ChargeCollector_Debug::ChargeCollector_Debug(const VTXdigi_Modular& digitizer) :
   m_digitizer.debug() << "ChargeCollector_Debug constructed." << endmsg;
 }
 
-void ChargeCollector_Debug::FillHit(const SimHitWrapper& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
-  const dd4hep::rec::Vector3D pos_global = ConvertVector(hit.simHit().getPosition());
+void ChargeCollector_Debug::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
+  const dd4hep::rec::Vector3D pos_global = ConvertVector(simHit.hitPtr()->getPosition());
   const dd4hep::rec::Vector3D pos_local = GlobalToLocal(pos_global, trafoMatrix);
+  const float charge = simHit.charge();
+  const std::pair<int, int> i_uv = ComputePixelIndices(pos_local, m_digitizer.m_pixelPitch, m_digitizer.m_pixelCount);
 
-  const std::pair<int, int> pix = ComputePixelIndices(pos_local, m_digitizer.m_pixelPitch, m_digitizer.m_pixelCount);
   m_digitizer.verbose() << "     - SimHit at global position       (" << pos_global.x() << ", " << pos_global.y() << ", " << pos_global.z() << ")" << endmsg;
   m_digitizer.verbose() << "       - corresponds to local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ")" << endmsg;
-  m_digitizer.verbose() << "       - and pixel indices             (" << pix.first << ", " << pix.second << ")" << endmsg;
-
-  if (pix.first == -1 || pix.second == -1 || pix.first >= static_cast<int>(m_digitizer.m_pixelCount.first) || pix.second >= static_cast<int>(m_digitizer.m_pixelCount.second)) {
+  m_digitizer.verbose() << "       - and pixel indices             (" << i_uv.first << ", " << i_uv.second << ")" << endmsg;
+  if (i_uv.first == -1 || i_uv.second == -1 || i_uv.first >= static_cast<int>(m_digitizer.m_pixelCount.first) || i_uv.second >= static_cast<int>(m_digitizer.m_pixelCount.second)) {
     m_digitizer.warning() << "simHit local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ") is out of sensor bounds U: [" << -m_digitizer.m_sensorLength.first/2 << ", " << m_digitizer.m_sensorLength.first/2 << "], V: [" << -m_digitizer.m_sensorLength.second/2 << ", " << m_digitizer.m_sensorLength.second/2 << "]. This simHit will be skipped." << endmsg;
   }
   else {
-    /* fill central pixel with 50% charge, two pixels to the right with 20% charge, pixel above with 10% charge */
-    m_digitizer.verbose() << "       - Filling charge " << hit.charge() << " e." << endmsg;
+    m_digitizer.verbose() << "       - Filling charge " << simHit.charge() << " e." << endmsg;
 
-    hitMap.FillCharge(pix, static_cast<int>(std::round(hit.charge() * 0.5)));
-    if (pix.first + 1 < static_cast<int>(m_digitizer.m_pixelCount.first))
-      hitMap.FillCharge({pix.first + 1, pix.second}, static_cast<int>(std::round(hit.charge() * 0.2)));
-    if (pix.first + 2 < static_cast<int>(m_digitizer.m_pixelCount.first))
-      hitMap.FillCharge({pix.first + 2, pix.second}, static_cast<int>(std::round(hit.charge() * 0.2)));
-    if (pix.second + 1 < static_cast<int>(m_digitizer.m_pixelCount.second))
-      hitMap.FillCharge({pix.first, pix.second + 1}, static_cast<int>(std::round(hit.charge() * 0.1)));
-    
-    /* split charge between this pixel and the one to the right */
-    // hitMap.FillCharge(pix, static_cast<int>(std::round(hit.charge() * 0.5)));
-    // if (pix.first + 1 < static_cast<int>(m_digitizer.m_pixelCount.first))
-    // hitMap.FillCharge({pix.first + 1, pix.second}, static_cast<int>(std::round(hit.charge() * 0.5)));
-    
+    hitMap.FillCharge(i_uv, 0.5*charge, simHit.hitPtr());
+    if (i_uv.first + 1 < static_cast<int>(m_digitizer.m_pixelCount.first))
+      hitMap.FillCharge({i_uv.first + 1, i_uv.second}, 0.2*charge, simHit.hitPtr()); 
+    if (i_uv.first + 2 < static_cast<int>(m_digitizer.m_pixelCount.first))
+      hitMap.FillCharge({i_uv.first + 2, i_uv.second}, 0.2*charge, simHit.hitPtr());
+    if (i_uv.second + 1 < static_cast<int>(m_digitizer.m_pixelCount.second))
+      hitMap.FillCharge({i_uv.first, i_uv.second + 1}, 0.1*charge, simHit.hitPtr());
+      
     m_digitizer.verbose() << "       - Total charge collected in hitMap: " << hitMap.GetTotalCharge() << " e." << endmsg;
   }
 }

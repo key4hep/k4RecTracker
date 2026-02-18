@@ -16,7 +16,7 @@ namespace VTXdigi_tools {
 class IChargeCollector {
 public:
   virtual ~IChargeCollector() = default;
-  virtual void FillHit(const SimHitWrapper& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const = 0;
+  virtual void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const = 0;
 
 protected:
   explicit IChargeCollector(const VTXdigi_Modular& digitizer) : m_digitizer(digitizer) {}

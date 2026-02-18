@@ -37,31 +37,31 @@ bool ToolTest();
 
 class SimHitWrapper {
   /* any member that is added needs to be added to swap, too! */
-  edm4hep::SimTrackerHit m_simHit;
+  std::shared_ptr<edm4hep::SimTrackerHit> m_simTrackerHit;
   dd4hep::rec::ISurface* m_surface;
   
   dd4hep::DDSegmentation::CellID m_cellID; // cellID (without segmentation bits)
-  int m_charge;
+  float m_charge;
   int m_layerNumber;
 
 public:
-  SimHitWrapper(edm4hep::SimTrackerHit simHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
+  SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
   SimHitWrapper(const SimHitWrapper& other) = default;
   SimHitWrapper(SimHitWrapper&& other) = default;
 
   friend void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
-  inline const edm4hep::SimTrackerHit& simHit() const { return m_simHit; }
+  inline const std::shared_ptr<edm4hep::SimTrackerHit> hitPtr() const { return m_simTrackerHit; }
   inline dd4hep::rec::ISurface* surface() const { return m_surface; }
 
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
-  inline int charge() const { return m_charge; }
+  inline float charge() const { return m_charge; }
   inline int layer() const { return m_layerNumber; }
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
 /* -- helpers -- */
 
-void CreateDigiHit(const edm4hep::SimTrackerHit& simHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const int charge);
+void CreateDigiHit(const edm4hep::SimTrackerHit& simTrackerHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const float charge);
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3f vec);
@@ -72,10 +72,11 @@ TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::CellID& cellI
 dd4hep::rec::Vector3D GlobalToLocal(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M);
 dd4hep::rec::Vector3D LocalToGlobal(const dd4hep::rec::Vector3D& local, const TGeoHMatrix& M);
 
-dd4hep::DDSegmentation::CellID GetCellID_short(const edm4hep::SimTrackerHit& simHit);
+dd4hep::DDSegmentation::CellID GetCellID_short(const edm4hep::SimTrackerHit& simTrackerHit);
+dd4hep::DDSegmentation::CellID GetCellID_short(const dd4hep::DDSegmentation::CellID& cellID);
 
 int GetLayer(const dd4hep::DDSegmentation::CellID& cellID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
-int GetLayer(const edm4hep::SimTrackerHit& simHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
+int GetLayer(const edm4hep::SimTrackerHit& simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
 
 
 /* -- Binning tools -- */
@@ -115,40 +116,43 @@ dd4hep::rec::Vector3D ComputePos_local(const std::pair<float, float> index, cons
 
 
 struct Pixel {
-  int charge;
-  std::vector<const edm4hep::SimTrackerHit*> simHits;
-  std::pair<int, int> index; // not strictly needed, but makes code a bit nicer because we don't have to pass it around separately.
+  float charge;
+  std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>> simTrackerHits;
+  std::pair<int, int> index; // This info is saved in (a) the map key, and (b) here inside the Pixel object. This is inefficient. But it makes the code a bit nicer not having to pass the index around separately.
 
 
-  Pixel(std::pair<int, int> pix) : charge(0), index(pix) {
-    simHits.reserve(2); // avoid too many reallocations, will rarely see more than 2 simHits contributing to the same pixel
+  Pixel(std::pair<int, int> pix) : charge(0.f), index(pix) {
+    simTrackerHits.reserve(2); // avoid too many reallocations, will rarely see more than 2 simTrackerHits contributing to the same pixel
   }
-  Pixel() : charge(0), index({-1, -1}) {
-    simHits.reserve(2); // avoid too many reallocations, will rarely see more than 2 simHits contributing to the same pixel
+  Pixel() : charge(0.f), index({-1, -1}) {
+    simTrackerHits.reserve(2); // avoid too many reallocations, will rarely see more than 2 simTrackerHits contributing to the same pixel
   }
 };
 
-inline uint64_t PixToKey(std::pair<int, int> pix);
-inline std::pair<int, int> PixFromKey(uint64_t key);
+
+struct PairHash {
+  size_t operator()(const std::pair<int,int>& i_uv) const noexcept {
+    return (static_cast<uint64_t>(i_uv.first) << 32) ^ static_cast<uint32_t>(i_uv.second);
+  }
+};
 
 class HitMap {
   /* I tried implementing a vector that contains every pixel, but for large pixel counts this is very memory-inefficient. Instead, this class uses a std::map to only store pixels that have charge. This is more memory efficient for sparse hits, with O(1) simHit/sensor/event this is at least a factor 100 faster that the vector approach. Maybe not the case to ttbar run with O(0.1%) pixel occupancy. */
-  std::unordered_map<uint64_t, Pixel> m_pixels; // map of pixel indices (i_u, i_v) to charge. std::array<int,2> is not hashable, so we need an index
+  std::unordered_map<std::pair<int, int>, Pixel, PairHash> m_pixels; // map of pixel indices (i_u, i_v) to charge. std::array<int,2> is not hashable, so we need an index
   std::pair<size_t, size_t> m_pixCount; // number of pixels in u and v direction
 
 public:
   HitMap(std::pair<size_t, size_t> pixCount);
 
-  void FillCharge(std::pair<int, int> pix, int charge);
-  void FillCharge(std::pair<int, int> pix, int charge, const edm4hep::SimTrackerHit* simHit);
-  int GetCharge(std::pair<int, int> pix) const;
-  int GetTotalCharge() const;
-  std::unordered_map<uint64_t, Pixel>& Hits();
+  void FillCharge(std::pair<int, int> i_uv, float charge, std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit);
+  float GetCharge(std::pair<int, int> i_uv) const;
+  float GetTotalCharge() const;
+  std::unordered_map<std::pair<int, int>, Pixel, PairHash>& Hits();
   inline int GetTotalPixelsWithCharge() const;
   inline void Reset();
 
 private:
-  inline bool _OutOfBounds(std::pair<int, int> pix) const;
+  inline bool _OutOfBounds(std::pair<int, int> i_uv) const;
 }; // class HitMap
 
 

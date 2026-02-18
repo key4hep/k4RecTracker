@@ -28,6 +28,8 @@
 #include <string> // added by Jona
 #include <vector>
 #include <cmath> // for std::fmod
+#include <queue>
+#include <typeinfo>
 
 // for debugging-csv
 #include <iostream>
@@ -80,7 +82,7 @@ private:
 
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
   void FillHistograms_perPixel(const int layer, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
-  void FillHistograms_perDigiHit(const VTXdigi_tools::SimHitWrapper& hit, const dd4hep::rec::Vector3D& pos_local, const VTXdigi_tools::Pixel& pix, const TGeoHMatrix& trafoMatrix) const;
+  void FillHistograms_perDigiHit(const std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>>& simTrackerHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const;
   
   /* -- Properties -- */
 
@@ -219,9 +221,7 @@ private:
 
 }; // class VTXdigi_Modular
 
-bool IsDirectNeighbor(const VTXdigi_tools::Pixel& pix, std::vector<VTXdigi_tools::Pixel>& clusterPixs);
+std::pair<float, float> ComputeClusterPos_Weighted(const std::vector<VTXdigi_tools::Pixel>& clusterPixs, const float clusterCharge);
 
-std::pair<float, float> ComputeClusterPos_Weighted(const std::vector<VTXdigi_tools::Pixel>& clusterPixs);
-
-
+std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
 

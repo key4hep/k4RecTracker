@@ -4,8 +4,8 @@
 namespace VTXdigi_tools {
 
 
-SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simHit(simHit) {
-  m_cellID = GetCellID_short(simHit);
+SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simTrackerHit(std::make_shared<edm4hep::SimTrackerHit>(simTrackerHit)) {
+  m_cellID = GetCellID_short(*m_simTrackerHit);
   const auto surfaceIt = surfaceMap->find(m_cellID);
   if (surfaceIt == surfaceMap->end())
     throw std::runtime_error("VTXdigi_Allpix2::HitInfo constructor: Could not find SimSurface for this hit's (reduced) cellID: " + std::to_string(m_cellID));
@@ -13,7 +13,7 @@ SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simHit, const dd4hep::rec::S
   m_surface = surfaceIt->second;
 
   const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
-  m_charge = static_cast<int>(simHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
+  m_charge = static_cast<float>(m_simTrackerHit->getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
 
   m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
 } // Hit::Hit()
@@ -23,7 +23,7 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
     return;
 
   using std::swap;
-  swap(a.m_simHit, b.m_simHit);
+  swap(a.m_simTrackerHit, b.m_simTrackerHit);
   swap(a.m_surface, b.m_surface);
   swap(a.m_cellID, b.m_cellID);
   swap(a.m_charge, b.m_charge);
@@ -32,19 +32,19 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 
 /* -- helpers -- */
 
-void CreateDigiHit(const edm4hep::SimTrackerHit& simHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const int charge) {
+void CreateDigiHit(const edm4hep::SimTrackerHit& simTrackerHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const float charge) {
   const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
 
   auto digiHit = digiHits.create();
 
-  digiHit.setCellID(simHit.getCellID());
+  digiHit.setCellID(simTrackerHit.getCellID());
   digiHit.setEDep(charge / chargePerkeV); // convert e- to keV
   digiHit.setPosition(ConvertVector(position));
-  digiHit.setTime(simHit.getTime());
+  digiHit.setTime(simTrackerHit.getTime());
   
   auto digiHitLink = digiHitLinks.create();
   digiHitLink.setFrom(digiHit);
-  digiHitLink.setTo(simHit);
+  digiHitLink.setTo(simTrackerHit);
 }
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
@@ -85,17 +85,22 @@ dd4hep::rec::Vector3D LocalToGlobal(const dd4hep::rec::Vector3D& local, const TG
   return dd4hep::rec::Vector3D(global[0], global[1], global[2]);
 }
 
-dd4hep::DDSegmentation::CellID GetCellID_short(const edm4hep::SimTrackerHit& simHit) {
+dd4hep::DDSegmentation::CellID GetCellID_short(const edm4hep::SimTrackerHit& simTrackerHit) {
   /* Mask removes segmentation bits, now cellID is unique for each sensor */
   std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
-  return simHit.getCellID() & m_mask;
+  return simTrackerHit.getCellID() & m_mask;
+}
+dd4hep::DDSegmentation::CellID GetCellID_short(const dd4hep::DDSegmentation::CellID& cellID) {
+  /* Mask removes segmentation bits, now cellID is unique for each sensor */
+  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
+  return cellID & m_mask;
 }
 
 int GetLayer(const dd4hep::DDSegmentation::CellID& cellID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
   return static_cast<int>(cellIdDecoder->get(cellID, "layer"));
 } 
-int GetLayer(const edm4hep::SimTrackerHit& simHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
-  return GetLayer(GetCellID_short(simHit), cellIdDecoder);
+int GetLayer(const edm4hep::SimTrackerHit& simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
+  return GetLayer(GetCellID_short(simTrackerHit), cellIdDecoder);
 }
 
 /* -- Binning things -- */
@@ -199,54 +204,42 @@ dd4hep::rec::Vector3D ComputePos_local(const std::pair<float, float> index, cons
 
 /* -- HitMap -- */
 
-inline uint64_t PixToKey(std::pair<int, int> pix) {
-  return (static_cast<uint64_t>(pix.first) << 32) | static_cast<uint32_t>(pix.second);
-}
-inline std::pair<int, int> PixFromKey(uint64_t key) {
-  const int i_u = static_cast<int>(key >> 32);
-  const int i_v = static_cast<int>(key & 0xFFFFFFFF);
-  return std::make_pair(i_u, i_v);
-}
+
 
 HitMap::HitMap(std::pair<size_t, size_t> pixelCount) : m_pixCount(pixelCount) {
   const int inverseOccupancy = 2000; // assume occupancy, 5e-4 is quite conservative for Z-run
   m_pixels.reserve(pixelCount.first * pixelCount.second / inverseOccupancy); // avoid too many reallocations
 }
 
-void HitMap::FillCharge(std::pair<int, int> pix, int charge) {
-  FillCharge(pix, charge, nullptr);
+void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit) {
+  if (_OutOfBounds(i_uv)) {
+    throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(i_uv.first) + ", " + std::to_string(i_uv.second) + ") out of range");
+  }
+
+  m_pixels.try_emplace(i_uv, i_uv); // does nothing if pixel already exists, otherwise creates it with default charge 0
+  m_pixels[i_uv].charge += charge;
+  m_pixels[i_uv].simTrackerHits.insert(simTrackerHit); 
 }
 
-void HitMap::FillCharge(std::pair<int, int> pix, int charge, const edm4hep::SimTrackerHit* simHit) {
-  if (_OutOfBounds(pix)) {
-    throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(pix.first) + ", " + std::to_string(pix.second) + ") out of range");
+float HitMap::GetCharge(std::pair<int, int> i_uv) const {
+  if (_OutOfBounds(i_uv)) {
+    throw std::runtime_error("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(i_uv.first) + ", " + std::to_string(i_uv.second) + ") out of range");
   }
-  const u_int64_t key = PixToKey(pix);
-  m_pixels.try_emplace(key, pix); // does nothing if pixel already exists, otherwise creates it with default charge 0
-  m_pixels[key].charge += charge;
-  m_pixels[key].simHits.push_back(simHit); 
+  auto it = m_pixels.find(i_uv);
+  if (it == m_pixels.end())
+    return 0.f; // if pixel not found, charge is 0
+  return it->second.charge;
 }
 
-int HitMap::GetCharge(std::pair<int, int> pix) const {
-  if (_OutOfBounds(pix)) {
-    throw std::runtime_error("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(pix.first) + ", " + std::to_string(pix.second) + ") out of range");
-  }
-  auto it = m_pixels.find(PixToKey(pix));
-  if (it != m_pixels.end()) {
-    return it->second.charge;
-  }
-  return 0; // if pixel not found, charge is 0
-}
-
-int HitMap::GetTotalCharge() const {
-  int totalCharge = 0;
-  for (const auto& [index, pixHit] : m_pixels) {
+float HitMap::GetTotalCharge() const {
+  float totalCharge = 0.f;
+  for (const auto& [i_uv, pixHit] : m_pixels) {
     totalCharge += pixHit.charge;
   }
   return totalCharge;
 }
 
-std::unordered_map<uint64_t, Pixel>& HitMap::Hits() {
+std::unordered_map<std::pair<int, int>, Pixel, PairHash>& HitMap::Hits() {
   return m_pixels;
 }
 
@@ -258,12 +251,12 @@ inline void HitMap::Reset() {
   m_pixels.clear();
 }
 
-inline bool HitMap::_OutOfBounds(std::pair<int, int> pix) const { 
+inline bool HitMap::_OutOfBounds(std::pair<int, int> i_uv) const { 
   return (
-    pix.first < 0
-    || pix.first >= static_cast<int>(m_pixCount.first)
-    || pix.second < 0
-    || pix.second >= static_cast<int>(m_pixCount.second)
+    i_uv.first < 0
+    || i_uv.first >= static_cast<int>(m_pixCount.first)
+    || i_uv.second < 0
+    || i_uv.second >= static_cast<int>(m_pixCount.second)
   );
 }
 
@@ -438,8 +431,8 @@ bool ToolTest() {
 
     HitMap hitMap({10,10});
 
-    hitMap.FillCharge({0,0},1);
-    hitMap.FillCharge({1,1},2);
+    hitMap.FillCharge({0,0},1, nullptr);
+    hitMap.FillCharge({1,1},2, nullptr);
 
     if (hitMap.GetCharge({0,0}) != 1) {
       std::cout << " - FAILED " << std::endl << " | -> Expected charge 1 at (0,0), got " << hitMap.GetCharge({0,0}) << std::endl;
@@ -454,7 +447,7 @@ bool ToolTest() {
       passedInternal = false;
     }
 
-    hitMap.FillCharge({0,0},100); // test adding charge to existing pixel
+    hitMap.FillCharge({0,0},100, nullptr); // test adding charge to existing pixel
 
     if (hitMap.GetCharge({0,0}) != 101) {
       std::cout << " - FAILED " << std::endl << " | -> Expected charge 101 at (0,0), got " << hitMap.GetCharge({0,0}) << std::endl;
@@ -466,25 +459,25 @@ bool ToolTest() {
     }
 
     try {
-      hitMap.FillCharge({-1,0},1);
+      hitMap.FillCharge({-1,0},1, nullptr);
       std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (-1,0)" << std::endl;
       passedInternal = false;
     }
     catch (const std::runtime_error& e) {}
     try {
-      hitMap.FillCharge({0,-1},1);
+      hitMap.FillCharge({0,-1},1, nullptr);
       std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (0,-1)" << std::endl;
       passedInternal = false;
     }
     catch (const std::runtime_error& e) {}
     try {
-      hitMap.FillCharge({10,0},1);
+      hitMap.FillCharge({10,0},1, nullptr);
       std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (10,0)" << std::endl;
       passedInternal = false;
     }
     catch (const std::runtime_error& e) {}
     try {
-      hitMap.FillCharge({0,10},1);
+      hitMap.FillCharge({0,10},1,nullptr);
       std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (0,10)" << std::endl;
       passedInternal = false;
     }

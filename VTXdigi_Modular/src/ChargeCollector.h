@@ -19,13 +19,13 @@ struct Path;
 class ChargeCollector_SinglePixel : public IChargeCollector {
 public:
   explicit ChargeCollector_SinglePixel(const VTXdigi_Modular& digitizer);
-  void FillHit(const SimHitWrapper& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+  void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
 };
 
 class ChargeCollector_Debug : public IChargeCollector {
 public:
   explicit ChargeCollector_Debug(const VTXdigi_Modular& digitizer);
-  void FillHit(const SimHitWrapper& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+  void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
 };
 
 
@@ -34,7 +34,7 @@ public:
 class ChargeCollector_LUT : public IChargeCollector {
 public:
   explicit ChargeCollector_LUT(const VTXdigi_Modular& digitizer);
-  void FillHit(const SimHitWrapper& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+  void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
 };
 
 /* -- Charge collector algorithm: Propagation-based -- */
@@ -42,10 +42,10 @@ public:
 class ChargeCollector_Drift : public IChargeCollector {
 public:
   explicit ChargeCollector_Drift(const VTXdigi_Modular& digitizer);
-  void FillHit(const SimHitWrapper& hit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+  void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
 };
 
 
-Path ComputePath(const dd4hep::rec::ISurface& surface, const edm4hep::SimTrackerHit& simHit);
+Path ComputePath(const dd4hep::rec::ISurface& surface, const edm4hep::SimTrackerHit& simTrackerHit);
 
 } // namespace VTXdigi_tools
