@@ -173,7 +173,7 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
   return {j_u, j_v, j_w};
 } // ComputeInPixelIndices()
 
-dd4hep::rec::Vector3D ComputePixelPos_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter) {
+dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
   
   float u = (static_cast<float>(pixelIndex.first) + 0.5f) * pixelPitch.first - 0.5f * sensorLength.first; // in mm
@@ -183,11 +183,11 @@ dd4hep::rec::Vector3D ComputePixelPos_local(const std::pair<int, int> pixelIndex
   return dd4hep::rec::Vector3D(u, v, w); 
 }
 
-dd4hep::rec::Vector3D ComputePixelPos_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch) {
-  return ComputePixelPos_local(pixelIndex, sensorLength, pixelPitch, 0.f);
+dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch) {
+  return ComputePosFromPixIndex_local(pixelIndex, sensorLength, pixelPitch, 0.f);
 }
 
-dd4hep::rec::Vector3D ComputePos_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter) {
+dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
   
   float u = (index.first + 0.5f) * pixelPitch.first - 0.5f * sensorLength.first; // in mm. Add 0.5*pixelPitch to shift from pixel edge to center, since index 0 is defined as the center of the pixel.
@@ -197,8 +197,8 @@ dd4hep::rec::Vector3D ComputePos_local(const std::pair<float, float> index, cons
   return dd4hep::rec::Vector3D(u, v, w); 
 }
 
-dd4hep::rec::Vector3D ComputePos_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch) {
-  return ComputePos_local(index, sensorLength, pixelPitch, 0.f);
+dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch) {
+  return ComputePosFromPixIndex_local(index, sensorLength, pixelPitch, 0.f);
 }
 
 
@@ -237,18 +237,6 @@ float HitMap::GetTotalCharge() const {
     totalCharge += pixHit.charge;
   }
   return totalCharge;
-}
-
-std::unordered_map<std::pair<int, int>, Pixel, PairHash>& HitMap::Hits() {
-  return m_pixels;
-}
-
-inline int HitMap::GetTotalPixelsWithCharge() const {
-  return m_pixels.size();
-}
-
-inline void HitMap::Reset() {
-  m_pixels.clear();
 }
 
 inline bool HitMap::_OutOfBounds(std::pair<int, int> i_uv) const { 
@@ -337,32 +325,81 @@ bool ToolTest() {
     passed = passed && passedInternal;
   }
 
-  std::cout << " | VTXdigi_tools::ComputePos_local()";
+  std::cout << " | VTXdigi_tools::ComputePosFromPixIndex_local(std::pair<int,int>)";
+  {
+    bool passedInternal = true;
+
+    const std::pair<float, float> sensorLength = { 10.0, 20.0 }; // 10 x 10 pixels
+    const std::pair<float, float> pixelPitch = { 1.0, 2.0 };
+
+    std::array<std::pair<int, int>, 6> inputs = {{{0, 0}}};
+    inputs = {{
+      {0, 0},
+      {4, 4},
+      {5, 5},
+      {9, 9},
+      {-1, -1}, // out of bounds test
+      {10, 10},
+    }};
+    std::array<dd4hep::rec::Vector3D, inputs.size()> expectedOutputs = {{dd4hep::rec::Vector3D(0.f, 0.f, 0.f)}};
+    expectedOutputs = {{
+      dd4hep::rec::Vector3D( -4.5, -9.0, 0.0 ),
+      dd4hep::rec::Vector3D( -0.5, -1.0, 0.0 ),
+      dd4hep::rec::Vector3D( 0.5, 1.0, 0.0 ),
+      dd4hep::rec::Vector3D( 4.5, 9.0, 0.0 ),
+      dd4hep::rec::Vector3D( -5.5, -11.0, 0.0 ),
+      dd4hep::rec::Vector3D( 5.5, 11.0, 0.0 ),
+    }};
+    
+    for (size_t i = 0; i < inputs.size(); ++i) {
+      dd4hep::rec::Vector3D result = ComputePosFromPixIndex_local(inputs.at(i), sensorLength, pixelPitch);
+      if (std::abs(result.x() - expectedOutputs[i].x()) > 1e-6 || std::abs(result.y() - expectedOutputs[i].y()) > 1e-6) {
+        if (passedInternal)
+        std::cout << " - FAILED " << std::endl;
+        std::cout << " | -> Expected local position (" << expectedOutputs[i].x() << ", " << expectedOutputs[i].y() << ") for index (i_u,i_v)=(" << inputs.at(i).first << ", " << inputs.at(i).second << "), got (" << result.x() << ", " << result.y() << ")" << std::endl;
+        passedInternal = false;
+      }
+    }
+
+    if (passedInternal)
+      std::cout << " - PASSED" << std::endl;
+    passed = passed && passedInternal;
+  }
+
+  std::cout << " | VTXdigi_tools::ComputePosFromPixIndex_local(std::pair<float,float>)";
   {
     bool passedInternal = true;
 
     const std::pair<float, float> pixelPitch = { 1.0, 2.0 };
     const std::pair<float, float> sensorLength = { 10.0, 20.0 }; // 10 x 10 pixels
 
-    std::array<std::pair<float, float>, 5> inputs = {{{0., 0.}}};
+    std::array<std::pair<float, float>, 9> inputs = {{{0., 0.}}};
     inputs = {{
       {0., 0.},
+      {4., 4.},
       {4.5, 4.5},
+      {5., 5.},
       {9.0, 9.0},
       {-0.5, -0.5},
       {9.5, 9.5},
+      {-1., -1.}, // expect out of bounds to not be treated at all (done elsewhere)
+      {10., 10.},
     }};
     std::array<dd4hep::rec::Vector3D, inputs.size()> expectedOutputs = {{dd4hep::rec::Vector3D(0.f, 0.f, 0.f)}};
     expectedOutputs = {{
       dd4hep::rec::Vector3D( -4.5, -9.0, 0.0 ),
+      dd4hep::rec::Vector3D( -0.5, -1.0, 0.0 ),
       dd4hep::rec::Vector3D( 0., 0., 0. ),
+      dd4hep::rec::Vector3D( 0.5, 1.0, 0.0 ),
       dd4hep::rec::Vector3D( 4.5, 9.0, 0.0 ),
       dd4hep::rec::Vector3D( -5.0, -10.0, 0.0 ),
       dd4hep::rec::Vector3D( 5.0, 10.0, 0.0 ),
+      dd4hep::rec::Vector3D( -5.5, -11.0, 0.0 ),
+      dd4hep::rec::Vector3D( 5.5, 11.0, 0.0 ),
     }};
     
     for (size_t i = 0; i < inputs.size(); ++i) {
-      dd4hep::rec::Vector3D result = ComputePos_local(inputs.at(i), sensorLength, pixelPitch);
+      dd4hep::rec::Vector3D result = ComputePosFromPixIndex_local(inputs.at(i), sensorLength, pixelPitch);
       if (std::abs(result.x() - expectedOutputs[i].x()) > 1e-6 || std::abs(result.y() - expectedOutputs[i].y()) > 1e-6) {
         if (passedInternal)
         std::cout << " - FAILED " << std::endl;

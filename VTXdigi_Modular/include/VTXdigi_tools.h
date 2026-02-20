@@ -97,9 +97,9 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
  * 
  * @note The w coordinate is set to depletedRegionDepthCenter. 0 for center, +25 for sensor surface, +20 for TPSCo 65nm maps.
 */
-dd4hep::rec::Vector3D ComputePixelPos_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter);
+dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter);
 /** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,0) */
-dd4hep::rec::Vector3D ComputePixelPos_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch);
+dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch);
 
 
 /** @brief Compute the position of a given (pixel-)index (i_u,i_v) in sensor-local coordinates (u,v,0) .
@@ -107,19 +107,18 @@ dd4hep::rec::Vector3D ComputePixelPos_local(const std::pair<int, int> pixelIndex
  * @note Does not check if the position is within the sensor bounds!
  * @note The w coordinate is set to depletedRegionDepthCenter. 0 for center, +25 for sensor surface, +20 for TPSCo 65nm maps.
  */
-dd4hep::rec::Vector3D ComputePos_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter);
+dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter);
 /** @brief Compute the position of a given (pixel-)index (i_u,i_v) in sensor-local coordinates (u,v,0) .
  * @note index 0 indicates the center of the pixel, index -0.5 the lower edge and +0.5 the upper edge.  
  * @note Does not check if the position is within the sensor bounds!
  */
-dd4hep::rec::Vector3D ComputePos_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch);
+dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch);
 
 
 struct Pixel {
   float charge;
   std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>> simTrackerHits;
   std::pair<int, int> index; // This info is saved in (a) the map key, and (b) here inside the Pixel object. This is inefficient. But it makes the code a bit nicer not having to pass the index around separately.
-
 
   Pixel(std::pair<int, int> pix) : charge(0.f), index(pix) {
     simTrackerHits.reserve(2); // avoid too many reallocations, will rarely see more than 2 simTrackerHits contributing to the same pixel
@@ -147,9 +146,9 @@ public:
   void FillCharge(std::pair<int, int> i_uv, float charge, std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit);
   float GetCharge(std::pair<int, int> i_uv) const;
   float GetTotalCharge() const;
-  std::unordered_map<std::pair<int, int>, Pixel, PairHash>& Hits();
-  inline int GetTotalPixelsWithCharge() const;
-  inline void Reset();
+  inline const std::unordered_map<std::pair<int, int>, Pixel, PairHash>& Hits() const { return m_pixels; };
+  inline int GetTotalPixelsWithCharge() const { return m_pixels.size(); };
+  inline void Reset() { m_pixels.clear(); };
 
 private:
   inline bool _OutOfBounds(std::pair<int, int> i_uv) const;

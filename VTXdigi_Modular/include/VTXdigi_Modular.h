@@ -53,6 +53,18 @@ namespace VTXdigi_tools {
   class ChargeCollector_Debug;
 }
 
+struct Cluster {
+  std::vector<VTXdigi_tools::Pixel> pixels;
+  std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>> simTrackerHits;
+  float charge = 0.f;
+};
+
+std::pair<float, float> ComputeClusterPos_Weighted(const Cluster& cluster);
+
+std::vector<Cluster> Clusterize_BFS(VTXdigi_tools::HitMap& hitMap);
+
+std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
+
 struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> (const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
 
   VTXdigi_Modular(const std::string& name, ISvcLocator* svcLoc);
@@ -79,6 +91,12 @@ private:
   bool CheckEventSetup(const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const;
 
   bool CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const;
+
+  edm4hep::TrackerHitPlane CreateDigiHit(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pixelHit, const TGeoHMatrix& trafoMatrix) const; // for single-pix hits
+  edm4hep::TrackerHitPlane CreateDigiHit(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const Cluster& cluster, const TGeoHMatrix& trafoMatrix) const; // for clusters
+  edm4hep::TrackerHitPlane CreateDigiHit(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>>& simTrackerHits, const float charge, const dd4hep::rec::Vector3D& pos) const; // based on global pos, this is the underlying version
+
+  
 
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
   void FillHistograms_perPixel(const int layer, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
@@ -220,8 +238,4 @@ private:
   > m_hist2d;
 
 }; // class VTXdigi_Modular
-
-std::pair<float, float> ComputeClusterPos_Weighted(const std::vector<VTXdigi_tools::Pixel>& clusterPixs, const float clusterCharge);
-
-std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
 
