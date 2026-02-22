@@ -1,32 +1,30 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
-//=== Standard Library ===
 #include <cmath>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
 
-//=== DD4hep / DDRec ===
 #include "DD4hep/DetElement.h"
 #include "DD4hep/DetType.h"
 #include "DD4hep/Detector.h"
 #include "DD4hep/DetectorSelector.h"
 #include <DDRec/DetectorData.h>
 
-//=== edm4hep ===
 #include "edm4hep/TrackState.h"
 #include "edm4hep/MutableTrack.h"
 #include "edm4hep/TrackCollection.h"
 
-//=== Others ===
 #include <Objects/Helix.h>
 #include <TMatrixDSym.h>
 #include <TVector3.h>
 #include <TVectorD.h>
 #include <marlinutil/HelixClass_double.h>
 #include <torch/torch.h>
+#include <TMatrixDSymEigen.h>
+#include <TDecompChol.h>
 
 /////////////////////////////////
 /// Track propagation to Ecal ///
@@ -91,14 +89,13 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
  * @param edm4hep_track MutableTrack object to be updated with calorimeter extrapolation.
  * @param m_Bz Magnetic field component along the z-axis.
  * @param charge Electric charge of the particle track.
- * @param a Conversion constant relating curvature to momentum (e.g., 0.299792458 GeV/(T*m)).
  * @param m_eCalBarrelInnerR Inner radius of the barrel calorimeter.
  * @param m_eCalBarrelMaxZ Maximum half-length (z) of the barrel calorimeter.
  * @param m_eCalEndCapInnerR Inner radius of the endcap calorimeter.
  * @param m_eCalEndCapOuterR Outer radius of the endcap calorimeter.
  * @param m_eCalEndCapInnerZ z-position of the inner surface of the endcap calorimeter.
  */
-void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double m_Bz, int charge, double a,
+void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double m_Bz, int charge,
                                            double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
                                            double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
                                            double m_eCalEndCapInnerZ);
@@ -141,5 +138,28 @@ torch::Tensor find_condpoints(const torch::Tensor& betas, const torch::Tensor& u
  *         Points assigned to cluster 0 are considered unclustered.
  */
 torch::Tensor get_clustering(const std::vector<float>& output_vector, int num_rows, float tbeta, float td);
+
+/////////////////////
+/// Miscellaneous ///
+/////////////////////
+
+/**
+ * @brief Checks if a symmetric matrix is positive semi-definite (PSD) within a given tolerance.
+ *
+ * This function determines whether the input symmetric matrix `M` is positive semi-definite by
+ * computing its eigenvalues and verifying that none of them are significantly negative. A matrix
+ * is considered positive semi-definite if all its eigenvalues are non-negative.
+ *
+ * @param M   The symmetric matrix to check (TMatrixDSym).
+ * @param tol A small tolerance value to account for numerical inaccuracies. Eigenvalues 
+ *            greater than -tol are considered non-negative.
+ *
+ * @return true if the matrix is positive semi-definite within the specified tolerance; 
+ *         false otherwise.
+ *
+ * @note This function uses `TMatrixDSymEigen` from ROOT to compute the eigenvalues.
+ */
+bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol);
+
 
 #endif // UTILS_HPP

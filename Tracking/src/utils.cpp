@@ -78,11 +78,14 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
   return trackState_AtCalorimeter;
 }
 
-void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double m_Bz, int charge, double a,
+void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double m_Bz, int charge,
                                            double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
                                            double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
                                            double m_eCalEndCapInnerZ) {
-
+  
+  double c_mm_s = 2.998e11;
+  double a = 1e-15 * c_mm_s;    
+                                        
   auto trackStateLastHit = edm4hep_track.getTrackStates()[2];
   double omega_lastHit = trackStateLastHit.omega;
   double pt_lasthit = a * m_Bz / abs(omega_lastHit);
@@ -218,4 +221,16 @@ torch::Tensor get_clustering(const std::vector<float>& output_vector, int num_ro
   }
 
   return clustering;
+}
+
+bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol)
+{
+    TMatrixDSymEigen eig(M);
+    TVectorD eigenValues = eig.GetEigenValues();
+
+    for (int i = 0; i < eigenValues.GetNrows(); ++i) {
+        if (eigenValues[i] < -tol)
+            return false;
+    }
+    return true;
 }

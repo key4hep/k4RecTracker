@@ -337,8 +337,6 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
       // Loop through each unique track ID
       for (int i = 0; i < numTracks; ++i) {
 
-      
-
         // Create a new track in the output collection and set its type to the current track ID
         auto outputTrack = outputTracks.create();
         outputTrack.setType(1);
