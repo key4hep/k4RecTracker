@@ -261,7 +261,7 @@ std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>&
 
 std::pair<float, float> ComputeClusterPos_Weighted(const Cluster& cluster) {
   std::pair<float, float> pos{0.f, 0.f};
-  for (const std::shared_ptr<const Pixel>& pix : cluster.pixels) {
+  for (const std::shared_ptr<Pixel>& pix : cluster.pixels) {
     pos.first += pix->index.first * pix->charge;
     pos.second += pix->index.second * pix->charge;
   }

@@ -3,6 +3,8 @@
 #include <memory>
 #include "DDRec/SurfaceManager.h"
 
+#include "edm4hep/SimTrackerHit.h"
+
 struct VTXdigi_Modular;
 
 
@@ -22,6 +24,7 @@ protected:
   explicit IChargeCollector(const VTXdigi_Modular& digitizer) : m_digitizer(digitizer) {}
 
   const VTXdigi_Modular& m_digitizer;
+
 };
 
 std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& digitizer, const std::string& algorithm);

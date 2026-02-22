@@ -18,7 +18,7 @@ DECLARE_COMPONENT(VTXdigi_Modular)
  *             - z along beamline
  *        - local sensor frame: (u,v,w)
  *             - u,v span sensor plane, (for ARCADIA in barrel: v along z)
- *             - w normal to sensor plane
+ *             - w (called n in dd4hep) normal to sensor plane
  * - Energies in keV, but deposited energy is always converted to the electron charge equivalent [e-], 3.65 eV per eh-pair
  * - Charges are given as either 
  *        - "raw charge" (as given by Geant4/Allpix2, before thresholding and noise) or 
@@ -461,6 +461,8 @@ void VTXdigi_Modular::InitHistograms() {
     static_cast<unsigned int>(m_pixelCount.second),
     -0.5f,
     static_cast<float>(m_pixelCount.second+0.5)};
+
+  Gaudi::Accumulators::Axis<float> axis_pathLength{500, 0.f, m_sensorThickness*1000.f*10.f};
     
   /* Fill histograms per layer */
   for (int layer : m_layers.value()) {
@@ -597,6 +599,8 @@ void VTXdigi_Modular::InitHistograms() {
 
     m_hist1d.emplace(layer, std::move(hist1d));
 
+    /* -- 2d-hist -- */
+
     std::array< std::unique_ptr< Gaudi::Accumulators::StaticHistogram< 2, Gaudi::Accumulators::atomicity::full, float > >, hist2dArrayLen>  hist2d;
 
     hist2d.at(hist2d_hitMap_simHits).reset(
@@ -643,6 +647,31 @@ void VTXdigi_Modular::InitHistograms() {
     m_hist2d.emplace(layer, std::move(hist2d));
 
   } /* loop over layers */
+
+  /* global (eg covering all layers) histograms */
+
+  m_hist1dglobal.at(hist1dglobal_pathLength).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Global/simHit_pathLength",
+        "Path length in sensor active volume, as computed by VTXdigi_tools reconstruction;Path length [um];Entries",
+        axis_pathLength
+      }
+    );
+  m_hist1dglobal.at(hist1dglobal_pathLength_Geant4).reset(
+    new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+      "Global/simHit_pathLength_Geant4",
+      "Path length in sensor active volume, as given by Geant4;Path length [um];Entries",
+      axis_pathLength
+    }
+  );
+  m_hist1dglobal.at(hist1dglobal_pathLength_ratio).reset(
+    new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+      "Global/simHit_pathLength_ratio",
+      "Path length in sensor active volume divided by path length given by Geant4;Path length / path length Geant4;Entries",
+      {500, 0.f, 2.f}
+    }
+  );
+
 }
 
 /* ---- Eventloop functions ---- */
@@ -750,6 +779,14 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<std::sh
   }
 }
 
-/* TODO: add */
+void VTXdigi_Modular::FillHistograms_fromChargeCollector_perSimHit(const float pathLength, const float pathLength_Geant4) const {
+  ++(*m_hist1dglobal.at(hist1dglobal_pathLength))[pathLength*1000.f]; // convert from mm to um
+  ++(*m_hist1dglobal.at(hist1dglobal_pathLength_Geant4))[pathLength_Geant4*1000.f];
+  if (pathLength_Geant4 != 0.f) {
+    ++(*m_hist1dglobal.at(hist1dglobal_pathLength_ratio))[pathLength / pathLength_Geant4];
+  }
+}
+  
+  /* TODO: add */
 // hist1d_digiHitsPerSimHit,
 // hist2d_clusterSize_vs_module_z,

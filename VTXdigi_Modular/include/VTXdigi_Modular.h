@@ -48,8 +48,6 @@
 /* -- Forward declarations -- */
 namespace VTXdigi_tools {
   class IChargeCollector;
-  class ChargeCollector_SinglePixel;
-  class ChargeCollector_Debug;
 }
 
 struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> (const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
@@ -62,10 +60,6 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
   std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> operator() (const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const override;
 
 private: 
-
-  // friend class VTXdigi_tools::IChargeCollector;
-  friend class VTXdigi_tools::ChargeCollector_SinglePixel;
-  friend class VTXdigi_tools::ChargeCollector_Debug;
 
   /* ---- Initialization & finalization functions ---- */
 
@@ -167,7 +161,7 @@ private:
     hist1d_pixelDistToClusterCenterU,
     hist1d_pixelDistToClusterCenterV,
     hist1dArrayLen
-  }; // all other hists have an individual instance per layer
+  }; 
   mutable std::unordered_map<
     int, // layer number
     std::array<
@@ -181,6 +175,23 @@ private:
       hist1dArrayLen
     >
   > m_hist1d;
+
+  enum { 
+    hist1dglobal_pathLength,
+    hist1dglobal_pathLength_Geant4,
+    hist1dglobal_pathLength_ratio,
+    hist1dglobalArrayLen
+  };
+  std::array<
+    std::unique_ptr<
+      Gaudi::Accumulators::StaticHistogram<
+        1, 
+        Gaudi::Accumulators::atomicity::full,
+        float
+      >
+    >,
+    hist1dglobalArrayLen
+  > m_hist1dglobal;
 
   // enum{
   //   histProfile1d_clusterSize_vs_hit_z,
@@ -221,6 +232,17 @@ private:
       hist2dArrayLen
     >
   > m_hist2d;
+
+public:
+
+  inline std::array<float, 3> SensorDimensions() const { return {m_sensorLength.first, m_sensorLength.second, m_sensorThickness}; }
+
+  inline std::pair<float, float> PixelPitch() const { return m_pixelPitch; }
+
+  inline std::pair<size_t, size_t> PixelCount() const { return m_pixelCount; }
+
+  /** @brief Increment histograms. To be called from the charge collector, once per simHit */
+  void FillHistograms_fromChargeCollector_perSimHit(const float pathLength, const float pathLength_Geant4) const;
 
 }; // class VTXdigi_Modular
 

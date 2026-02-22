@@ -11,7 +11,29 @@ class HitMap;
 using ::VTXdigi_Modular;
 
 /** @brief Holds position & information about path through the sensor */
-struct Path;
+struct Path {
+  Path(const std::shared_ptr<edm4hep::SimTrackerHit> simTrackerHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer);
+  Path() = default;
+
+  dd4hep::rec::Vector3D entry;
+  dd4hep::rec::Vector3D travel;
+  dd4hep::rec::Vector3D simPos;
+
+  float length; // in mm
+  float lengthG4;
+  int nSegments;
+  float charge;
+};
+
+std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, const float entry_ax, const float travel_ax, const float sensorLength_ax, const VTXdigi_Modular& digitizer);
+
+/* -- Charge collector algorithm: LUT-based -- */
+
+class ChargeCollector_LUT : public IChargeCollector {
+public:
+  explicit ChargeCollector_LUT(const VTXdigi_Modular& digitizer);
+  void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+};
 
 
 /* -- Charge collector algorithms for debugging -- */
@@ -29,13 +51,6 @@ public:
 };
 
 
-/* -- Charge collector algorithm: LUT-based -- */
-
-class ChargeCollector_LUT : public IChargeCollector {
-public:
-  explicit ChargeCollector_LUT(const VTXdigi_Modular& digitizer);
-  void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
-};
 
 /* -- Charge collector algorithm: Propagation-based -- */
 
@@ -44,8 +59,5 @@ public:
   explicit ChargeCollector_Drift(const VTXdigi_Modular& digitizer);
   void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
 };
-
-
-Path ComputePath(const dd4hep::rec::ISurface& surface, const edm4hep::SimTrackerHit& simTrackerHit);
 
 } // namespace VTXdigi_tools
