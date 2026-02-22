@@ -28,7 +28,6 @@
 #include <string> // added by Jona
 #include <vector>
 #include <cmath> // for std::fmod
-#include <queue>
 #include <typeinfo>
 
 // for debugging-csv
@@ -52,18 +51,6 @@ namespace VTXdigi_tools {
   class ChargeCollector_SinglePixel;
   class ChargeCollector_Debug;
 }
-
-struct Cluster {
-  std::vector<VTXdigi_tools::Pixel> pixels;
-  std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>> simTrackerHits;
-  float charge = 0.f;
-};
-
-std::pair<float, float> ComputeClusterPos_Weighted(const Cluster& cluster);
-
-std::vector<Cluster> Clusterize_BFS(VTXdigi_tools::HitMap& hitMap);
-
-std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
 
 struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> (const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
 
@@ -92,14 +79,12 @@ private:
 
   bool CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const;
 
-  edm4hep::TrackerHitPlane CreateDigiHit(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pixelHit, const TGeoHMatrix& trafoMatrix) const; // for single-pix hits
-  edm4hep::TrackerHitPlane CreateDigiHit(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const Cluster& cluster, const TGeoHMatrix& trafoMatrix) const; // for clusters
-  edm4hep::TrackerHitPlane CreateDigiHit(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>>& simTrackerHits, const float charge, const dd4hep::rec::Vector3D& pos) const; // based on global pos, this is the underlying version
+  std::vector<VTXdigi_tools::Cluster> Clusterize(const VTXdigi_tools::HitMap& hitMap) const;
 
+  void CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const;
   
-
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
-  void FillHistograms_perPixel(const int layer, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
+  void FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
   void FillHistograms_perDigiHit(const std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>>& simTrackerHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const;
   
   /* -- Properties -- */

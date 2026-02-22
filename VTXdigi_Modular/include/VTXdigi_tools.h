@@ -22,7 +22,7 @@
 #include "edm4hep/TrackerHitPlaneCollection.h"
 #include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
 
-
+#include <queue>
 
 namespace VTXdigi_tools {
 
@@ -59,6 +59,7 @@ public:
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
+
 /* -- helpers -- */
 
 void CreateDigiHit(const edm4hep::SimTrackerHit& simTrackerHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const float charge);
@@ -77,7 +78,6 @@ dd4hep::DDSegmentation::CellID GetCellID_short(const dd4hep::DDSegmentation::Cel
 
 int GetLayer(const dd4hep::DDSegmentation::CellID& cellID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
 int GetLayer(const edm4hep::SimTrackerHit& simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
-
 
 /* -- Binning tools -- */
 
@@ -115,6 +115,8 @@ dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float>
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch);
 
 
+/* -- HitMap (and everything we need for it to work) -- */
+
 struct Pixel {
   float charge;
   std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>> simTrackerHits;
@@ -128,16 +130,18 @@ struct Pixel {
   }
 };
 
-
 struct PairHash {
   size_t operator()(const std::pair<int,int>& i_uv) const noexcept {
     return (static_cast<uint64_t>(i_uv.first) << 32) ^ static_cast<uint32_t>(i_uv.second);
   }
 };
 
+using PixelMap = std::unordered_map<std::pair<int, int>, std::shared_ptr<Pixel>, PairHash>;
+
 class HitMap {
   /* I tried implementing a vector that contains every pixel, but for large pixel counts this is very memory-inefficient. Instead, this class uses a std::map to only store pixels that have charge. This is more memory efficient for sparse hits, with O(1) simHit/sensor/event this is at least a factor 100 faster that the vector approach. Maybe not the case to ttbar run with O(0.1%) pixel occupancy. */
-  std::unordered_map<std::pair<int, int>, Pixel, PairHash> m_pixels; // map of pixel indices (i_u, i_v) to charge. std::array<int,2> is not hashable, so we need an index
+  
+  PixelMap m_pixels;
   std::pair<size_t, size_t> m_pixCount; // number of pixels in u and v direction
 
 public:
@@ -146,7 +150,9 @@ public:
   void FillCharge(std::pair<int, int> i_uv, float charge, std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit);
   float GetCharge(std::pair<int, int> i_uv) const;
   float GetTotalCharge() const;
-  inline const std::unordered_map<std::pair<int, int>, Pixel, PairHash>& Hits() const { return m_pixels; };
+  // inline const std::unordered_map<std::pair<int, int>, Pixel, PairHash>& Hits() const { return m_pixels; };
+  // inline std::shared_ptr<const std::unordered_map<std::pair<int, int>, Pixel, PairHash>> HitsPtr() const { return std::make_shared<const std::unordered_map<std::pair<int, int>, Pixel, PairHash>>(m_pixels); };
+  inline const PixelMap& Hits() const { return m_pixels; };
   inline int GetTotalPixelsWithCharge() const { return m_pixels.size(); };
   inline void Reset() { m_pixels.clear(); };
 
@@ -154,6 +160,20 @@ private:
   inline bool _OutOfBounds(std::pair<int, int> i_uv) const;
 }; // class HitMap
 
+/* -- Clusterization -- */
 
+struct Cluster {
+  std::vector<std::shared_ptr<Pixel>> pixels;
+  std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>> simTrackerHits;
+  float charge = 0.f;
+};
+
+std::pair<float, float> ComputeClusterPos_Weighted(const Cluster& cluster);
+
+std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
+
+std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap);
+
+std::vector<Cluster> Clusterize_NoClustering(const HitMap& hitMap);
 
 } // namespace VTXdigi_tools

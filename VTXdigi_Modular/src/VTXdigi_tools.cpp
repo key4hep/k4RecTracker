@@ -216,9 +216,9 @@ void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, std::shared_ptr<
     throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(i_uv.first) + ", " + std::to_string(i_uv.second) + ") out of range");
   }
 
-  m_pixels.try_emplace(i_uv, i_uv); // does nothing if pixel already exists, otherwise creates it with default charge 0
-  m_pixels[i_uv].charge += charge;
-  m_pixels[i_uv].simTrackerHits.insert(simTrackerHit); 
+  m_pixels.try_emplace(i_uv, std::make_shared<Pixel>(i_uv)); // does nothing if pixel already exists, otherwise creates it with default charge 0
+  m_pixels[i_uv]->charge += charge;
+  m_pixels[i_uv]->simTrackerHits.insert(simTrackerHit); 
 }
 
 float HitMap::GetCharge(std::pair<int, int> i_uv) const {
@@ -228,13 +228,13 @@ float HitMap::GetCharge(std::pair<int, int> i_uv) const {
   auto it = m_pixels.find(i_uv);
   if (it == m_pixels.end())
     return 0.f; // if pixel not found, charge is 0
-  return it->second.charge;
+  return it->second->charge;
 }
 
 float HitMap::GetTotalCharge() const {
   float totalCharge = 0.f;
   for (const auto& [i_uv, pixHit] : m_pixels) {
-    totalCharge += pixHit.charge;
+    totalCharge += pixHit->charge;
   }
   return totalCharge;
 }
@@ -248,7 +248,90 @@ inline bool HitMap::_OutOfBounds(std::pair<int, int> i_uv) const {
   );
 }
 
+/* -- Clusterization -- */
 
+std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv) {
+  return {{
+    {i_uv.first - 1, i_uv.second}, // left
+    {i_uv.first + 1, i_uv.second}, // right
+    {i_uv.first, i_uv.second - 1}, // down
+    {i_uv.first, i_uv.second + 1}  // up
+  }};
+}
+
+std::pair<float, float> ComputeClusterPos_Weighted(const Cluster& cluster) {
+  std::pair<float, float> pos{0.f, 0.f};
+  for (const std::shared_ptr<const Pixel>& pix : cluster.pixels) {
+    pos.first += pix->index.first * pix->charge;
+    pos.second += pix->index.second * pix->charge;
+  }
+  pos.first /= cluster.charge;
+  pos.second /= cluster.charge;
+  return pos;
+}
+
+std::vector<Cluster> Clusterize_NoClustering(const HitMap& hitMap) {
+  std::vector<Cluster> clusters;
+
+  for (const auto& p : hitMap.Hits()) {
+    const std::shared_ptr<Pixel>& pixHit = p.second;
+
+    clusters.emplace_back();
+    clusters.back().pixels.push_back(pixHit);
+    clusters.back().charge = pixHit->charge;
+    for (std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit : pixHit->simTrackerHits) {
+      clusters.back().simTrackerHits.insert(simTrackerHit);
+    }
+  } // loop over pixelHits
+
+  return clusters;
+}
+
+std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
+  /* Breadth First Search (BFS) implementation for clustering */
+
+  std::vector<Cluster> clusters;
+  std::unordered_set<std::pair<int,int>, PairHash> visited;
+  
+  const PixelMap& pixelMap = hitMap.Hits();
+
+  /* TODO: thresholding (eg. mark pixels<threshold as visited) */
+  
+  for (const auto& p : pixelMap) {
+    const std::pair<int,int> seed_uv = p.first;
+    if (visited.contains(seed_uv))
+      continue;
+
+    clusters.emplace_back(); // create new cluster
+    clusters.back().pixels.reserve(10); // 10 should include >90% of clusters. i guess.
+    
+    std::queue<std::pair<int,int>> queue;
+    queue.push(seed_uv);
+
+    while (!queue.empty()) {
+      const std::pair<int,int> current_uv = queue.front();
+      queue.pop();
+      
+      /* Add pixl to cluster */
+      visited.insert(current_uv);
+      clusters.back().pixels.push_back(pixelMap.at(current_uv));
+      clusters.back().charge += pixelMap.at(current_uv)->charge;
+      for (std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit : pixelMap.at(current_uv)->simTrackerHits) {
+        clusters.back().simTrackerHits.insert(simTrackerHit);
+      }
+      /* Add all neighboring pixels to queue */
+      for (const auto& neighbor_uv : GetDirectNeighbors(current_uv)) {
+        if (!pixelMap.contains(neighbor_uv))
+          continue;
+        if (visited.contains(neighbor_uv))
+          continue;
+        queue.push(neighbor_uv);
+      }
+    } // loop over queue
+  } // loop over cluster-seeds
+
+  return clusters;
+}
 
 /* -- Tool tests -- */
 

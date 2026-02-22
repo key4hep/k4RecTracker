@@ -72,20 +72,18 @@ StatusCode VTXdigi_Modular::finalize() {
 
 std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> VTXdigi_Modular::operator()
   (const edm4hep::SimTrackerHitCollection& simTrackerHits, const edm4hep::EventHeaderCollection& headers) const {
-  if (!CheckEventSetup(simTrackerHits, headers))
+  if (!CheckEventSetup(simTrackerHits, headers)) {
     return std::make_tuple(edm4hep::TrackerHitPlaneCollection(), edm4hep::TrackerHitSimTrackerHitLinkCollection());
+  }
+
+  /* TODO: Impletement FAST charge collection method (simply smear simHit position)
+  * this makes a lot of the init etc unnecessary, so maybe have a separate class for that? ~ Jona 2026-02 */
 
   std::unordered_map<dd4hep::DDSegmentation::CellID, std::vector<VTXdigi_tools::SimHitWrapper>> sensorSimHits; // map from sensor (shortened cellID) to hits
   for (const auto& simTrackerHit : simTrackerHits) {
     if (CheckSimhitLayer(simTrackerHit)){
       const dd4hep::DDSegmentation::CellID cellID = VTXdigi_tools::GetCellID_short(simTrackerHit);
-      sensorSimHits[cellID].emplace_back(simTrackerHit, m_surfaceMap, m_cellIdDecoder);
-      /* This copies each simTrackerHit into the hit container. 
-      Because simTrackerHits are const references (rvalues), we cannot store references (pointers) to them directly in the Hit objects.
-      I can't think of a significantly better way to handle this where we can delete select hits without invalidating references. 
-      Hit could contain a index i that refers to the i-th simTrackerHit (instead of the simTrackerHit itself), but that would make the code too complicated (for now).
-      I hope linking digiHits to simTrackerHits still works after copying the simTrackerHits. If not, we need to rethink the approach, maybe use simTrackerHitIndex in Hit.
-      This is very similar to what is done in DCHdigi, so it's probably fine. ~ Jona 2026-02 */
+      sensorSimHits[cellID].emplace_back(simTrackerHit, m_surfaceMap, m_cellIdDecoder); // simTrackerHits are copied here. Pointers to these are passed around (eg. in hit/pixel/cluster objects).
       if (m_debugHistograms.value())
         FillHistograms_perSimHit(sensorSimHits[cellID].back());
     }
@@ -100,179 +98,86 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
   for (const auto& [cellID, simHits] : sensorSimHits) {
     debug() << "   - Processing sensor with cellID " << cellID << " (layer " << simHits.back().layer() << "). Has " << simHits.size() << " simHits." << endmsg;
   
-    TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation); // transformation from global to local sensor coordinates
-    VTXdigi_tools::HitMap hitMap(m_pixelCount); // (integer) matrix to hold charge collected in this sensor, to be digitized at the end
+    TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation); // transformation from global detector to local sensor frame
+    VTXdigi_tools::HitMap hitMap(m_pixelCount);
 
-    /* loop over hits on this sensor, deposit charges into hitMap */
     for (const VTXdigi_tools::SimHitWrapper& simHit : simHits) {
-      m_chargeCollector->FillHit(simHit, hitMap, trafoMatrix); // use the chosen charge collection method
+      m_chargeCollector->FillHit(simHit, hitMap, trafoMatrix); // uses the selected charge collection method
     }
 
-    /* Create digiHits from the hitMap */
-    if (!m_clusterize.value()) {
-      /* Simply create a digiHit per pixel that collects charge */
-      for (const auto& [key, pixelHit] : hitMap.Hits()) {
+    std::vector<VTXdigi_tools::Cluster> clusters = Clusterize(hitMap);
 
-        /* TODO: thresholding */
-
-        const auto digiHit = CreateDigiHit(digiHits, digiHitLinks, cellID, pixelHit, trafoMatrix);
-        /* TODO: get cellID with segmentation from global position, instead of using the short cellID (that only encodes the sensor) */
-
-        if (m_debugHistograms.value()) {
-          FillHistograms_perPixel(simHits.back().layer(), pixelHit, pixelHit.index);
-          FillHistograms_perDigiHit(pixelHit.simTrackerHits, digiHit, trafoMatrix, 1); // cluster size 1
-        }
-      } /* loop over firing pixels */
-    } /* if not clusterising */
-
-    else { /* Clusterize */
-      debug() << "     - Clusterizing hits..." << endmsg;
-
-      std::vector<Cluster> clusters = Clusterize_BFS(hitMap);
-
-      for (auto& cluster : clusters) {
-        if (cluster.charge <= 0)
-          throw std::runtime_error("Cluster with non-positive charge found, cannot compute cluster position");
-
-        const std::pair<float, float> clusterPos_index = ComputeClusterPos_Weighted(cluster);
-        
-        debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_index.first << ", " << clusterPos_index.second << "). Has " << cluster.simTrackerHits.size() << " contributing simTrackerHits." << endmsg;
-
-        const auto digiHit = CreateDigiHit(digiHits, digiHitLinks, cellID, cluster, trafoMatrix);
-        /* TODO: get cellID with segmentation from global position, instead of using the short cellID (that only encodes the sensor) */
-
-        if (m_debugHistograms.value()) {
-          FillHistograms_perDigiHit(cluster.simTrackerHits, digiHit, trafoMatrix, cluster.pixels.size());
-          for (const VTXdigi_tools::Pixel& pix : cluster.pixels)
-            FillHistograms_perPixel(simHits.back().layer(), pix, clusterPos_index);
-        } /* debug histograms */
-
-      } /* loop over clusters */
-    } /* if clusterizing */
+    CreateDigiHits(digiHits, digiHitLinks, cellID, trafoMatrix, clusters);
   } /* loop over sensors */
-
-  /* TODO: Impletement FAST charge collection method (simply smear simHit position)
-  * I would simply create a function that returns digiHits and digiHitLinks directly from simHits, to be returned here.
-  * this makes a lot of the init etc unnecessary, so maybe have a separate class for that? ~ Jona 2026-02 */
-
+  
   debug() << " - Finished digitization. Created " << digiHits.size() << " digiHits from " << simTrackerHits.size() << " simTrackerHits." << endmsg;
   return std::make_tuple(std::move(digiHits), std::move(digiHitLinks));
 } // operator()
 
 
-std::pair<float, float> ComputeClusterPos_Weighted(const Cluster& cluster) {
-  std::pair<float, float> pos{0.f, 0.f};
-  for (const auto& pix : cluster.pixels) {
-    pos.first += pix.index.first * pix.charge;
-    pos.second += pix.index.second * pix.charge;
+std::vector<VTXdigi_tools::Cluster> VTXdigi_Modular::Clusterize(const VTXdigi_tools::HitMap& hitMap) const {
+  if (!hitMap.Hits().size()) {
+    debug() << "     - No pixels with charge found on this sensor." << endmsg;
+    return {};
   }
-  pos.first /= cluster.charge;
-  pos.second /= cluster.charge;
-  return pos;
+
+  if (m_clusterize.value()) {
+    debug() << "     - Clusterizing hits..." << endmsg;
+    return VTXdigi_tools::Clusterize_NextNeighbors(hitMap);
+  }
+  else {
+    return VTXdigi_tools::Clusterize_NoClustering(hitMap);
+  }
 }
 
-std::vector<Cluster> Clusterize_BFS(const VTXdigi_tools::HitMap& hitMap) {
-  /* Breadth First Search (BFS) implementation for clustering */
+void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const {
 
-  std::vector<Cluster> clusters;
-  std::unordered_set<std::pair<int,int>, VTXdigi_tools::PairHash> visited;
-  
-  /* TODO: thresholding (eg. mark pixels<threshold as visited) */
-  
-  for (const auto& [seed_uv, seed_pix] : hitMap.Hits()) {
-    if (visited.contains(seed_uv))
+  for (auto& cluster : clusters) {
+    if (cluster.charge <= 0)
+      throw std::runtime_error("Cluster with non-positive charge found, cannot compute cluster position");
+
+    const std::pair<float, float> clusterPos_index = VTXdigi_tools::ComputeClusterPos_Weighted(cluster);
+    
+    debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_index.first << ", " << clusterPos_index.second << "). Has " << cluster.simTrackerHits.size() << " contributing simTrackerHits." << endmsg;
+
+    /* TODO: get cellID with segmentation from global position, instead of using the short cellID (that only encodes the sensor) */
+    if (cluster.simTrackerHits.empty()) {
+      error() << "Cannot create digiHit without any contributing simTrackerHits" << endmsg;
       continue;
+    }
+
+    /* Actually create digiHit */
+    const std::pair<float, float> pos_index = VTXdigi_tools::ComputeClusterPos_Weighted(cluster);
+    const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::ComputePosFromPixIndex_local(pos_index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
+    const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::LocalToGlobal(pos_local, trafoMatrix);
+
+    edm4hep::MutableTrackerHitPlane digiHit = digiHits.create();
     
-    clusters.emplace_back(); // create new cluster
-    clusters.back().pixels.reserve(10); // 10 should include >90% of clusters. i guess.
-    
-    std::queue<std::pair<int,int>> queue;
-    queue.push(seed_uv);
+    digiHit.setEDep(cluster.charge / m_chargePerkeV);
+    digiHit.setPosition(VTXdigi_tools::ConvertVector(pos_global));
 
-    /* BFS: Add all neighboring pixels to the cluster */
-    while (!queue.empty()) {
-      const std::pair<int,int> current_uv = queue.front();
-      queue.pop();
+    digiHit.setCellID(cellID);
 
-      visited.insert(current_uv);
-      clusters.back().pixels.push_back(hitMap.Hits().at(current_uv));
-      for (std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit : hitMap.Hits().at(current_uv).simTrackerHits) {
-        clusters.back().simTrackerHits.insert(simTrackerHit);
-      }
-      clusters.back().charge += hitMap.Hits().at(current_uv).charge;
+    float timeStamp = 0.f;      
+    for (const auto& simTrackerHit : cluster.simTrackerHits) {
+      auto link = digiHitLinks.create();
+      link.setFrom(digiHit);
+      link.setTo(*simTrackerHit);
 
-      for (const auto& neighbor_uv : GetDirectNeighbors(current_uv)) {
-        if (!hitMap.Hits().contains(neighbor_uv))
-          continue;
-        if (visited.contains(neighbor_uv))
-          continue;
-        queue.push(neighbor_uv);
-      }
-    } // loop over queue
-  } // loop over cluster-seeds
+      timeStamp += simTrackerHit->getTime();
+    }
+    timeStamp /= cluster.simTrackerHits.size();
+    digiHit.setTime(timeStamp); // TODO: think of proper way to do timestamping for clusters. Maybe use earliest hit? averaging is not physical at all. ~ Jona 2026-02
 
-  return clusters;
+    /* TODO: estimate uncertainty from pitch/sqrt(12), or from cluster size in u/v*/
+
+    if (m_debugHistograms.value()) {
+      FillHistograms_perDigiHit(cluster.simTrackerHits, digiHit, trafoMatrix, cluster.pixels.size());
+      for (std::shared_ptr<const VTXdigi_tools::Pixel> pix : cluster.pixels)
+        FillHistograms_perPixel(cellID, *pix, clusterPos_index);
+    }
+  } /* loop over clusters */
 }
-
-std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv) {
-  return {{
-    {i_uv.first - 1, i_uv.second}, // left
-    {i_uv.first + 1, i_uv.second}, // right
-    {i_uv.first, i_uv.second - 1}, // down
-    {i_uv.first, i_uv.second + 1}  // up
-  }};
-}
-
-
-edm4hep::TrackerHitPlane VTXdigi_Modular::CreateDigiHit(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pixelHit, const TGeoHMatrix& trafoMatrix) const {
-
-  const float charge = pixelHit.charge;
-  const std::pair<int, int> pos_index = pixelHit.index;
-  const std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>> simTrackerHits = pixelHit.simTrackerHits;
-  
-  const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::ComputePosFromPixIndex_local(pos_index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
-  const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::LocalToGlobal(pos_local, trafoMatrix);
-  return CreateDigiHit(digiHits, digiHitLinks, cellID, simTrackerHits, charge, pos_global);
-}
-
-edm4hep::TrackerHitPlane VTXdigi_Modular::CreateDigiHit(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const Cluster& cluster, const TGeoHMatrix& trafoMatrix) const {
-
-  const std::pair<float, float> pos_index = ComputeClusterPos_Weighted(cluster);
-  const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::ComputePosFromPixIndex_local(pos_index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
-  const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::LocalToGlobal(pos_local, trafoMatrix);
-
-  return CreateDigiHit(digiHits, digiHitLinks, cellID, cluster.simTrackerHits, cluster.charge, pos_global);
-}
-
-edm4hep::TrackerHitPlane VTXdigi_Modular::CreateDigiHit(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>>& simTrackerHits, const float charge, const dd4hep::rec::Vector3D& pos) const {
-
-  if (simTrackerHits.empty())
-    error() << "Cannot create digiHit without any contributing simTrackerHits" << endmsg;
-
-  edm4hep::MutableTrackerHitPlane digiHit = digiHits.create();
-  
-  digiHit.setEDep(charge / m_chargePerkeV);
-  digiHit.setPosition(VTXdigi_tools::ConvertVector(pos));
-
-  digiHit.setCellID(cellID);
-
-  float timeStamp = 0.f;      
-  for (const auto& simTrackerHit : simTrackerHits) {
-    auto link = digiHitLinks.create();
-    link.setFrom(digiHit);
-    link.setTo(*simTrackerHit);
-
-    timeStamp += simTrackerHit->getTime();
-  }
-  timeStamp /= simTrackerHits.size();
-  digiHit.setTime(timeStamp); // TODO: think of proper way to do timestamping for clusters. Maybe use earliest hit? averaging is not physical at all. ~ Jona 2026-02
-
-  /* TODO: estimate uncertainty from pitch/sqrt(12), or from cluster size in u/v*/
-
-  return digiHit;
-}
-
-
 
 /* ---- Initialization & finalization functions ---- */
 
@@ -795,9 +700,10 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits))[{i_uv.first, i_uv.second}];
 }
 
-void VTXdigi_Modular::FillHistograms_perPixel(const int layer, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const {
+void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const {
   /* executed once for each pixel */
 
+  const int layer = VTXdigi_tools::GetLayer(cellID, m_cellIdDecoder);
   const std::pair<int, int> i_uv = pix.index;
 
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_pixelHits))[{i_uv.first, i_uv.second}];
