@@ -170,12 +170,6 @@ void LookupTable::SetAllMatrices(const std::vector<float>& weights) {
 }
 
 const std::vector<float>& LookupTable::GetMatrix(const Index_inPix& j_uvw) const {
-  if (j_uvw.at(0) < 0 || j_uvw.at(0) >= m_binCount.at(0))
-    throw std::runtime_error("VTXdigi_tools::LookupTable::GetMatrix: j_u (= " + std::to_string(j_uvw.at(0)) + ") out of range");
-  if (j_uvw.at(1) < 0 || j_uvw.at(1) >= m_binCount.at(1))
-    throw std::runtime_error("VTXdigi_tools::LookupTable::GetMatrix: j_v (= " + std::to_string(j_uvw.at(1)) + ") out of range");
-  if (j_uvw.at(2) < 0 || j_uvw.at(2) >= m_binCount.at(2))
-    throw std::runtime_error("VTXdigi_tools::LookupTable::GetMatrix: j_w (= " + std::to_string(j_uvw.at(2)) + ") out of range");
   return m_matrices[_FindIndex(j_uvw)];
 }
 
@@ -184,8 +178,8 @@ float LookupTable::GetWeight(const Index_inPix& j_uvw, const int col, const int 
     throw std::runtime_error("VTXdigi_tools::LookupTable::GetWeight: col (=" + std::to_string(col) + ") out of range of matrix size.");
   if (abs(row) > (m_matrixSize-1)/2)
     throw std::runtime_error("VTXdigi_tools::LookupTable::GetWeight: row (=" + std::to_string(row) + ") out of range of matrix size.");
-  const auto& matrix = GetMatrix(j_uvw);
-  return matrix[(col + (m_matrixSize-1)/2) * m_matrixSize + (row + (m_matrixSize-1)/2)];
+
+  return m_matrices[_FindIndex(j_uvw)][(col + (m_matrixSize-1)/2) * m_matrixSize + (row + (m_matrixSize-1)/2)];
 }
 
 int LookupTable::_FindIndex (const Index_inPix& j_uvw) const {
@@ -339,21 +333,91 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   digitizer.info() << " - Loaded lookup table from file. Contains " << (lineNumber - headerLines) << " matrices. " << matricesEntrySum*100 << " percent of charge deposited in the sensor volume is collected by the pixels (the rest is lost, eg. due to being outside of depletion or due to trapping)." << endmsg;
 }
 
-
-ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer), m_LUT(digitizer.LutFileName(), digitizer) {
+ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer), m_LUT(digitizer.LutFileName(), digitizer), m_stepLength(digitizer.LutStepLength()) {
   /* LUT is constructed in place (from file) */
+
   m_digitizer.info() << " - ChargeCollector_LUT constructed successfully." << endmsg;
 }
 
+
+
 void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
+  // m_digitizer.FillHistograms_fromChargeCollector_perSimHit(path.length, path.lengthG4);
+  
+  /* ToDo: implement voxel-traversal instead of numerically splitting the charge. 
+  I would start from the simple algo here: https://www.redblobgames.com/grids/line-drawing.html */
 
   Path path(simHit.hitPtr(), trafoMatrix, m_digitizer);
 
-  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(path.length, path.lengthG4);
+  const int stepCount = std::max(1, static_cast<int>(std::ceil(path.length / m_stepLength)));
+  const float segmentCharge = simHit.charge() / stepCount;
 
-  m_digitizer.debug() << "     - Filling hit map with simHit charge " << simHit.charge() << " e, path entry at (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, travel (" << path.travel.x() << ", " << path.travel.y() << ", " << path.travel.z() << ") mm." << endmsg;
+  m_digitizer.verbose() << "     - Filling hit map with simHit charge " << simHit.charge() << " e, path entry at (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, travel (" << path.travel.x() << ", " << path.travel.y() << ", " << path.travel.z() << ") mm." << endmsg;
+
+  Index_segment nextSeg, seg = ComputeSegmentIndices(0, stepCount, path);
+  int segmentsInBin = 1;
+
+  for (int i_next = 1; i_next < stepCount; ++i_next) {
+    nextSeg = ComputeSegmentIndices(i_next, stepCount, path);
+
+    /* collect segments in same bin */
+    if (seg == nextSeg) {
+      m_digitizer.verbose() << "     - Segment lies in the same pixel and in-pixel bin as previous segment, continuing." << endmsg;
+      ++segmentsInBin;
+      continue;
+    } 
+    else {
+      m_digitizer.verbose() << "     - Crossed bin-boundary wrt. last segment. Sharing " << segmentCharge*segmentsInBin << " e- from " << segmentsInBin << " segments. The last segment of these has nextSegmentIndex " << i_next-1 << "." << endmsg;
+      DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit.hitPtr()); 
+      seg = nextSeg;
+      segmentsInBin = 1;
+    }
+  } // loop over segments
+
+  m_digitizer.verbose() << "     - Final segment in bin. Sharing " << segmentCharge*segmentsInBin << " e- from " << segmentsInBin << " segments." << endmsg;
+  DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit.hitPtr());
 }
 
+Index_segment ChargeCollector_LUT::ComputeSegmentIndices(const int step, const int stepCount, const Path& path) const {
+  if (step < 0 || step >= stepCount)
+    throw std::runtime_error("VTXdigi_tools::ChargeCollector_LUT::ComputeSegmentIndices: step (=" + std::to_string(step) + ") out of range [0, " + std::to_string(stepCount-1) + "].");\
+
+  Index_segment seg;
+  float t = (step + 0.5f) / stepCount; // +0.5 to get center of segment
+  const dd4hep::rec::Vector3D pos = path.entry + t * path.travel;
+
+  seg.i = ComputePixelIndices(pos, m_digitizer.PixelPitch(), m_digitizer.PixelCount());
+
+  seg.j = ComputeInPixelIndices(pos, m_LUT.GetBinCount(), m_digitizer.PixelPitch(), m_digitizer.SensorDimensions());
+
+  return seg;
+}
+
+void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float charge, const int segmentsInBin, std::shared_ptr<edm4hep::SimTrackerHit> m_simTrackerHit) const {
+  
+  /* TODO: optimise this? Or does the compiler solve the inefficiency? */
+
+  m_digitizer.verbose() << "       - Distributing charge for segment in pixel (" << i_seg.i.first << ", " << i_seg.i.second << ") and in-pixel bin (" << i_seg.j.at(0) << ", " << i_seg.j.at(1) << ", " << i_seg.j.at(2) << ") with charge " << charge*segmentsInBin << " e-." << endmsg;
+
+  for (int col = -(m_LUT.GetSize()-1)/2; col <= (m_LUT.GetSize()-1)/2; ++col) {
+    const int i_u = i_seg.i.first + col;
+    if (i_u < 0 || i_u >= static_cast<int>(m_digitizer.PixelCount().first))
+      continue;
+
+    for (int row = -(m_LUT.GetSize()-1)/2; row <= (m_LUT.GetSize()-1)/2; ++row) {
+      const int i_v = i_seg.i.second + row;
+      if (i_v < 0 || i_v >= static_cast<int>(m_digitizer.PixelCount().second))
+        continue;
+
+      const float chargeToAdd = m_LUT.GetWeight(i_seg.j, col, row) * charge * segmentsInBin;
+      if (chargeToAdd < 1e-5f) // skip very small contributions to avoid 
+        continue;
+    
+      m_digitizer.verbose() << "         - Adding charge " << chargeToAdd << " e- to pixel (" << i_u << ", " << i_v << ") with weight " << m_LUT.GetWeight(i_seg.j, col, row) << " and " << segmentsInBin << " segments in this bin." << endmsg;
+      hitMap.FillCharge({i_u, i_v}, chargeToAdd, m_simTrackerHit);
+    }
+  }
+}
 
 /* -- Single pixel approach -- */
 

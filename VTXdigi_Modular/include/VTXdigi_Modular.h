@@ -102,12 +102,13 @@ private:
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
   Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0 mm. Used for the digitised hit position."};
   
-  /* LUT */
-  Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
-
-
+  
   Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false, "Flag to create and fill debug histograms. Not recommended for multithreading, might lead to crashes. Default is false."};
   Gaudi::Property<int> m_infoPrintInterval{this, "InfoPrintInterval", 100, "Interval for printing information during processing."};
+
+  /* LUT */
+  Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
+  Gaudi::Property<float> m_LUT_stepLength{this, "LookupTableSegmentStepLength", 0.0001f, "Length of the segments that a particle path through the sensor is split into. The deposited charge is distributed evenly over the segments, and each segments charge is distributed according to the in-pixel bin the segment center falls into. In mm. Defaults to 0.0001 mm."};
   
   /* -- Services, geometry variables -- */
   
@@ -247,6 +248,7 @@ public:
   void FillHistograms_fromChargeCollector_perSimHit(const float pathLength, const float pathLength_Geant4) const;
 
   inline std::string LutFileName() const { return m_LUT_FileName; }
+  inline float LutStepLength() const { return m_LUT_stepLength; }
 
 }; // class VTXdigi_Modular
 

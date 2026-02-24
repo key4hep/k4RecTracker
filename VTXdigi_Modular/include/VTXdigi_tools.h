@@ -152,7 +152,7 @@ std::pair<int, int> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const 
 
 /** @brief Compute the in-pixel indices (j_u, j_v, j_w) for a given (local) position inside the pixel and layer index
  *  @note Assumption: each layer has only 1 type if sensor */
-std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<size_t, 3> binCount, const std::pair<float, float> pixelPitch, const std::pair<float, float> sensorLength, const float sensorThickness);
+std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<int, 3>& binCount, const std::pair<float, float>& pixelPitch, const std::array<float, 3>& sensorDimensions);
 
 /** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,w) 
  * 
@@ -161,7 +161,6 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter);
 /** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,0) */
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch);
-
 
 /** @brief Compute the position of a given (pixel-)index (i_u,i_v) in sensor-local coordinates (u,v,0) .
  * @note index 0 indicates the center of the pixel, index -0.5 the lower edge and +0.5 the upper edge.  
@@ -174,8 +173,5 @@ dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float>
  * @note Does not check if the position is within the sensor bounds!
  */
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch);
-
-
-
 
 } // namespace VTXdigi_tools

@@ -10,8 +10,14 @@ class HitMap;
 
 using ::VTXdigi_Modular;
 
+using Index_pix = std::pair<int, int>;
+using Index_inPix = std::array<int, 3>;
+
 /** @brief Holds position & information about path through the sensor */
 struct Path {
+
+  /** @brief Construct path information from a simHit and the sensor's transformation matrix 
+   * @note Only returns paths inside the sensor volume */
   Path(const std::shared_ptr<edm4hep::SimTrackerHit> simTrackerHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer);
   Path() = default;
 
@@ -27,10 +33,34 @@ struct Path {
 
 std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, const float entry_ax, const float travel_ax, const float sensorLength_ax, const VTXdigi_Modular& digitizer);
 
+struct Index_segment {
+  Index_pix i;
+  Index_inPix j;
+
+  inline bool operator==(const Index_segment& other) const {
+    return (i == other.i) && (j == other.j);
+  }
+};
+
 /* -- Charge collector algorithm: LUT-based -- */
 
-using Index_pix = std::pair<int, int>;
-using Index_inPix = std::array<int, 3>;
+struct VoxelHit { 
+  Index_pix i;
+  Index_inPix j;
+
+  float t0, t1;
+  float len;
+
+  VoxelHit(Index_pix i_, Index_inPix j_, float len_) : i(i_), j(j_), len(len_) {}
+};
+
+inline float safe_div(float a, float b) {
+  if (b == 0.f) {
+    return std::numeric_limits<float>::infinity();
+  }
+  return a/b;
+}
+
 
 class LookupTable {
   Index_inPix m_binCount;
@@ -40,6 +70,8 @@ class LookupTable {
 
 public:
 
+  /** @brief Construct lookup table from a file
+   * @note Checks that parameters from the LUT file match those in the digitiser */
   LookupTable(const std::string& lutFileName, const VTXdigi_Modular& digitizer); // load weights from file
   LookupTable() = default;
 
@@ -60,10 +92,9 @@ public:
   float GetWeight(const Index_inPix& j_uvw, const int col, const int row) const;
 
   inline int GetSize() const { return m_matrixSize; }
-  inline int GetBinCountU() const { return m_binCount.at(0); }
-  inline int GetBinCountV() const { return m_binCount.at(1); }
-  inline int GetBinCountW() const { return m_binCount.at(2); }
 
+  inline int GetBinCount(int i) const { return m_binCount.at(i); }
+  inline Index_inPix GetBinCount() const { return m_binCount; }
 private:
 
   int _FindIndex (const Index_inPix& j_uvw) const;
@@ -73,10 +104,17 @@ private:
 class ChargeCollector_LUT : public IChargeCollector {
 
   LookupTable m_LUT;
+  const float m_stepLength; // in mm
 
 public:
+
   explicit ChargeCollector_LUT(const VTXdigi_Modular& digitizer);
   void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+
+private:
+
+  Index_segment ComputeSegmentIndices(const int step, const int stepCount, const Path& path) const;
+  void DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float charge, const int segmentsInBin, std::shared_ptr<edm4hep::SimTrackerHit> m_simTrackerHit) const;
 };
 
 

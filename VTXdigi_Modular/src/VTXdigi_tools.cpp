@@ -125,7 +125,6 @@ int ComputeBinIndex(float x, float binX0, float binWidth, int binN) {
 } // ComputeBinIndex()
 
 std::pair<int, int> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const std::pair<float, float> pixelPitch, const std::pair<size_t, size_t> pixelCount) {
-  
   const float length_u_half = 0.5 * pixelPitch.first * pixelCount.first;
   int i_u = ComputeBinIndex(
     pos.x(),
@@ -143,35 +142,66 @@ std::pair<int, int> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const 
   return {i_u, i_v};
 } // ComputePixelIndices()
 
-std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<size_t, 3> binCount, const std::pair<float, float> pixelPitch, const std::pair<float, float> sensorLength, const float sensorThickness) {
-  int j_u, j_v, j_w;
+std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<int, 3>& binCount, const std::pair<float, float>& pixelPitch, const std::array<float, 3>& sensorDimensions) {
+  std::array<int, 3> indices;
 
-  const float posShifted_u = pos.x() + 0.5 * sensorLength.first; // shift to [0, length_u]
-  if (posShifted_u < 0.0 || posShifted_u > sensorLength.first) {
-    j_u = -1; // out of bounds
+  const float posShifted_u = pos.x() + 0.5 * sensorDimensions[0]; // shift to [0, length_u]
+  if (posShifted_u < 0.0 || posShifted_u > sensorDimensions[0]) {
+    indices[0] = -1; // out of bounds
   }
   else {
     float posInPixel_u = std::fmod(posShifted_u,  pixelPitch.first);
     if (posInPixel_u < 0.0) posInPixel_u +=  pixelPitch.first; // ensure positive remainder
-    j_u = ComputeBinIndex(posInPixel_u, 0.0,  pixelPitch.first / binCount[0], binCount[0]);
+    indices[0] = ComputeBinIndex(posInPixel_u, 0.0,  pixelPitch.first / binCount[0], binCount[0]);
   }
 
-  const float posShifted_v = pos.y() + 0.5 * sensorLength.second;
-  if (posShifted_v < 0.0 || posShifted_v > sensorLength.second) {
-    j_v = -1; // out of bounds
+  const float posShifted_v = pos.y() + 0.5 * sensorDimensions[1];
+  if (posShifted_v < 0.0 || posShifted_v > sensorDimensions[1]) {
+    indices[1] = -1; // out of bounds
   }
   else {
     float posInPixel_v = std::fmod(posShifted_v, pixelPitch.second);
     if (posInPixel_v < 0.0) posInPixel_v += pixelPitch.second;
-    j_v = ComputeBinIndex(posInPixel_v, 0.0, pixelPitch.second / binCount[1], binCount[1]);
+    indices[1] = ComputeBinIndex(posInPixel_v, 0.0, pixelPitch.second / binCount[1], binCount[1]);
   }
 
   // vertical (w) binning: shift to [0, thickness]
-  const float posShifted_w = pos.z() + 0.5 * sensorThickness;
-  j_w = ComputeBinIndex(posShifted_w, 0.0, sensorThickness / binCount[2], binCount[2]); // no fmod, so out-of-bounds is caught
+  const float posShifted_w = pos.z() + 0.5 * sensorDimensions[2];
+  indices[2] = ComputeBinIndex(posShifted_w, 0.0, sensorDimensions[2] / binCount[2], binCount[2]); // no fmod, so out-of-bounds is caught
 
-  return {j_u, j_v, j_w};
+  return indices;
 } // ComputeInPixelIndices()
+
+
+// std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<size_t, 3> binCount, const std::pair<float, float> pixelPitch, const std::pair<float, float> sensorLength, const float sensorThickness) {
+//   int j_u, j_v, j_w;
+
+//   const float posShifted_u = pos.x() + 0.5 * sensorLength.first; // shift to [0, length_u]
+//   if (posShifted_u < 0.0 || posShifted_u > sensorLength.first) {
+//     j_u = -1; // out of bounds
+//   }
+//   else {
+//     float posInPixel_u = std::fmod(posShifted_u,  pixelPitch.first);
+//     if (posInPixel_u < 0.0) posInPixel_u +=  pixelPitch.first; // ensure positive remainder
+//     j_u = ComputeBinIndex(posInPixel_u, 0.0,  pixelPitch.first / binCount[0], binCount[0]);
+//   }
+
+//   const float posShifted_v = pos.y() + 0.5 * sensorLength.second;
+//   if (posShifted_v < 0.0 || posShifted_v > sensorLength.second) {
+//     j_v = -1; // out of bounds
+//   }
+//   else {
+//     float posInPixel_v = std::fmod(posShifted_v, pixelPitch.second);
+//     if (posInPixel_v < 0.0) posInPixel_v += pixelPitch.second;
+//     j_v = ComputeBinIndex(posInPixel_v, 0.0, pixelPitch.second / binCount[1], binCount[1]);
+//   }
+
+//   // vertical (w) binning: shift to [0, thickness]
+//   const float posShifted_w = pos.z() + 0.5 * sensorThickness;
+//   j_w = ComputeBinIndex(posShifted_w, 0.0, sensorThickness / binCount[2], binCount[2]); // no fmod, so out-of-bounds is caught
+
+//   return {j_u, j_v, j_w};
+// } // ComputeInPixelIndices()
 
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
@@ -307,13 +337,13 @@ std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
     
     std::queue<std::pair<int,int>> queue;
     queue.push(seed_uv);
+    visited.insert(seed_uv);
 
     while (!queue.empty()) {
       const std::pair<int,int> current_uv = queue.front();
       queue.pop();
       
       /* Add pixl to cluster */
-      visited.insert(current_uv);
       clusters.back().pixels.push_back(pixelMap.at(current_uv));
       clusters.back().charge += pixelMap.at(current_uv)->charge;
       for (std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit : pixelMap.at(current_uv)->simTrackerHits) {
@@ -326,10 +356,11 @@ std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
         if (visited.contains(neighbor_uv))
           continue;
         queue.push(neighbor_uv);
+        visited.insert(neighbor_uv);
       }
+
     } // loop over queue
   } // loop over cluster-seeds
-
   return clusters;
 }
 
@@ -500,10 +531,10 @@ bool ToolTest() {
   {
     bool passedInternal = true;
 
-    const std::array<size_t, 3> binCount = { 4, 4, 4 };
+    const std::array<int, 3> binCount = { 4, 4, 4 };
     const std::pair<float, float> pixelPitch = { 1.0f, 2.0f }; // bin-width is 0.25 
-    const std::pair<float, float> sensorLength = { 10.0f, 20.0f };
-    const float sensorThickness = 1.f;
+
+    const std::array<float, 3> sensorDimensions = { 10.0f, 20.0f, 1.0f };
 
     std::array<dd4hep::rec::Vector3D, 10> inputs = {{dd4hep::rec::Vector3D(0.f, 0.f, 0.f)}};
     inputs = {
@@ -533,7 +564,7 @@ bool ToolTest() {
     }};
 
     for (size_t i = 0; i < inputs.size(); ++i) {
-      std::array<int, 3> result = ComputeInPixelIndices(inputs.at(i), binCount, pixelPitch, sensorLength, sensorThickness);
+      std::array<int, 3> result = ComputeInPixelIndices(inputs.at(i), binCount, pixelPitch, sensorDimensions);
       if (result != expectedOutputs[i]) {
         std::cout << " - FAILED " << std::endl << " | -> Expected in-pixel indices (" << expectedOutputs[i][0] << ", " << expectedOutputs[i][1] << ", " << expectedOutputs[i][2] << ") for (u,v,w)=(" << inputs.at(i).x() << ", " << inputs.at(i).y() << ", " << inputs.at(i).z() << "), got (" << result[0] << ", " << result[1] << ", " << result[2] << ")" << std::endl;
         passedInternal = false;

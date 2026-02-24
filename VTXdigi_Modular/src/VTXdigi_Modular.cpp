@@ -122,7 +122,7 @@ std::vector<VTXdigi_tools::Cluster> VTXdigi_Modular::Clusterize(const VTXdigi_to
   }
 
   if (m_clusterize.value()) {
-    debug() << "     - Clusterizing hits..." << endmsg;
+    debug() << "     - Clusterizing " << hitMap.Hits().size() << " hits with a total charge of " << hitMap.GetTotalCharge() << " e." << endmsg;
     return VTXdigi_tools::Clusterize_NextNeighbors(hitMap);
   }
   else {
