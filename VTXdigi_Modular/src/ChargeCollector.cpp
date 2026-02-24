@@ -111,7 +111,7 @@ std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, con
     else
       t.second = std::min(t.second, 1-t_clip);
 
-    digitizer.debug() << "       - SimHitPath extends outside sensor on NEG. side, in " << (positiveDir ? "POS" : "NEG") << ". direction. (min at " << minPos << " mm, edge at " << -0.5*sensorLength_ax << " mm) => " << -0.5*sensorLength_ax - minPos << "mm outside of the sensor, " << t_clip*100 << " percent of the path length. Clipping to [" << t.first << ", " << t.second << "]" << endmsg;
+    // digitizer.debug() << "       - SimHitPath extends outside sensor on NEG. side, in " << (positiveDir ? "POS" : "NEG") << ". direction. (min at " << minPos << " mm, edge at " << -0.5*sensorLength_ax << " mm) => " << -0.5*sensorLength_ax - minPos << "mm outside of the sensor, " << t_clip*100 << " percent of the path length. Clipping to [" << t.first << ", " << t.second << "]" << endmsg;
   }
 
   const float maxPos = std::max(entry_ax, entry_ax + travel_ax);
@@ -123,7 +123,7 @@ std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, con
     else
       t.first = std::max(t.first, t_clip);
 
-    digitizer.debug() << "       - SimHitPath extends outside sensor on POS. side, in " << (positiveDir ? "POS" : "NEG") << ". direction. (max at " << maxPos << " mm, edge at " << 0.5*sensorLength_ax << " mm) => " << maxPos - 0.5*sensorLength_ax << "mm outside of the sensor, " << t_clip*100 << " percent of the path length. Clipping to [" << t.first << ", " << t.second << "]" << endmsg;
+    // digitizer.debug() << "       - SimHitPath extends outside sensor on POS. side, in " << (positiveDir ? "POS" : "NEG") << ". direction. (max at " << maxPos << " mm, edge at " << 0.5*sensorLength_ax << " mm) => " << maxPos - 0.5*sensorLength_ax << "mm outside of the sensor, " << t_clip*100 << " percent of the path length. Clipping to [" << t.first << ", " << t.second << "]" << endmsg;
   }
 
   return t;
@@ -132,66 +132,6 @@ std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, con
 
 
 /* -- LUT approach -- */
-
-void LookupTable::SetMatrix(const Index_inPix& j_uvw, const std::vector<float>& weights) {
-  if (static_cast<int>(weights.size()) != m_matrixSize*m_matrixSize)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: weights size (" + std::to_string(weights.size()) + ") does not match matrix size (" + std::to_string(m_matrixSize*m_matrixSize) + ")");
-
-  /* check if matrix is valid */
-  float sum = 0.f;
-  for (int row = 0; row < m_matrixSize; ++row) {
-    for (int col = 0; col < m_matrixSize; ++col) {
-      sum += weights.at(row*m_matrixSize + col);
-    }
-  }
-  if (std::isnan(sum))
-    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") contains NaN values.");
-  if (sum < 0 || sum > 1.f + 1.e-5f)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") has a weight sum of " + std::to_string(sum) + ", but needs to lie in [0,1].");
-
-  const int index = _FindIndex(j_uvw);
-  for (int row = 0; row < m_matrixSize; ++row) {
-    for (int col = 0; col < m_matrixSize; ++col) {
-      /* weights are given in row-major order, starting at top left. 
-        * We store charge sharing matrices in col-major order, starting at bottom left (lowest bin index) */
-      m_matrices.at(index).at(col * m_matrixSize + row) = weights.at((m_matrixSize-1-row)*m_matrixSize + col);
-    }
-  }
-}
-
-void LookupTable::SetAllMatrices(const std::vector<float>& weights) {
-  for (int j_u = 0; j_u < m_binCount.at(0); ++j_u) {
-    for (int j_v = 0; j_v < m_binCount.at(1); ++j_v) {
-      for (int j_w = 0; j_w < m_binCount.at(2); ++j_w) {
-        SetMatrix({j_u, j_v, j_w}, weights);
-      }
-    }
-  }
-}
-
-const std::vector<float>& LookupTable::GetMatrix(const Index_inPix& j_uvw) const {
-  return m_matrices[_FindIndex(j_uvw)];
-}
-
-float LookupTable::GetWeight(const Index_inPix& j_uvw, const int col, const int row) const {
-  if (abs(col) > (m_matrixSize-1)/2)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::GetWeight: col (=" + std::to_string(col) + ") out of range of matrix size.");
-  if (abs(row) > (m_matrixSize-1)/2)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::GetWeight: row (=" + std::to_string(row) + ") out of range of matrix size.");
-
-  return m_matrices[_FindIndex(j_uvw)][(col + (m_matrixSize-1)/2) * m_matrixSize + (row + (m_matrixSize-1)/2)];
-}
-
-int LookupTable::_FindIndex (const Index_inPix& j_uvw) const {
-  if (j_uvw.at(0) < 0 || j_uvw.at(0) >= m_binCount.at(0))
-    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: j_u (= " + std::to_string(j_uvw.at(0)) + ") out of range");
-  if (j_uvw.at(1) < 0 || j_uvw.at(1) >= m_binCount.at(1))
-    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: j_v (= " + std::to_string(j_uvw.at(1)) + ") out of range");
-  if (j_uvw.at(2) < 0 || j_uvw.at(2) >= m_binCount.at(2))
-    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: j_w (= " + std::to_string(j_uvw.at(2)) + ") out of range");
-
-  return j_uvw.at(0) + m_binCount.at(0) * (j_uvw.at(1) + m_binCount.at(1) * j_uvw.at(2)); 
-}
 
 LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& digitizer) {
   digitizer.debug() << " - Constructing LUT from file \"" << lutFileName << "\"." << endmsg;
@@ -253,14 +193,12 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not read first line after header in LUT file: " + digitizer.LutFileName());
   }
   if (m_matrixSize < 3 || m_matrixSize % 2 == 0)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".");
+  throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".");
+  m_matrixSize_half = (m_matrixSize - 1) / 2;
   digitizer.debug() << "   - Inferred matrix size of " << m_matrixSize << " from first line." << endmsg;
 
   /* Set up the matrix vector */
-  m_matrices.resize(m_binCount.at(0) * m_binCount.at(1) * m_binCount.at(2));
-  for (auto& matrix : m_matrices) {
-    matrix.resize(m_matrixSize*m_matrixSize, 0.f);
-  }
+  m_matrices.resize(m_binCount.at(0) * m_binCount.at(1) * m_binCount.at(2) * m_matrixSize * m_matrixSize, 0.f);
 
   /* set up mapping from Allpix2 LUT format
   *   (row-major, starts on bottom left)
@@ -333,13 +271,61 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   digitizer.info() << " - Loaded lookup table from file. Contains " << (lineNumber - headerLines) << " matrices. " << matricesEntrySum*100 << " percent of charge deposited in the sensor volume is collected by the pixels (the rest is lost, eg. due to being outside of depletion or due to trapping)." << endmsg;
 }
 
+void LookupTable::SetMatrix(const Index_inPix& j_uvw, const std::vector<float>& weights) {
+  if (static_cast<int>(weights.size()) != m_matrixSize*m_matrixSize)
+    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: weights size (" + std::to_string(weights.size()) + ") does not match matrix size (" + std::to_string(m_matrixSize*m_matrixSize) + ")");
+
+  /* check if matrix is valid */
+  float sum = 0.f;
+  for (int row = 0; row < m_matrixSize; ++row) {
+    for (int col = 0; col < m_matrixSize; ++col) {
+      sum += weights.at(row*m_matrixSize + col);
+    }
+  }
+  if (std::isnan(sum))
+    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") contains NaN values.");
+  if (sum < 0 || sum > 1.f + 1.e-5f)
+    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") has a weight sum of " + std::to_string(sum) + ", but needs to lie in [0,1].");
+
+  for (int row = 0; row < m_matrixSize; ++row) {
+    for (int col = 0; col < m_matrixSize; ++col) {
+      /* weights are given in row-major order, starting at top left. 
+        * We store charge sharing matrices in col-major order, starting at bottom left (lowest bin index) */
+      m_matrices.at(_FindIndex(j_uvw, col, row)) = weights.at((m_matrixSize-1-row)*m_matrixSize + col);
+    }
+  }
+}
+
+void LookupTable::SetAllMatrices(const std::vector<float>& weights) {
+  for (int j_u = 0; j_u < m_binCount.at(0); ++j_u) {
+    for (int j_v = 0; j_v < m_binCount.at(1); ++j_v) {
+      for (int j_w = 0; j_w < m_binCount.at(2); ++j_w) {
+        SetMatrix({j_u, j_v, j_w}, weights);
+      }
+    }
+  }
+}
+
+int LookupTable::_FindIndex (const Index_inPix& j, const int col, const int row) const {
+  if (j[0] < 0 || j[0] >= m_binCount[0] 
+    || j[1] < 0 || j[1] >= m_binCount[1]
+    || j[2] < 0 || j[2] >= m_binCount[2] ) [[unlikely]] {
+    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: index out of range");
+  }
+  if (col < 0 || col >= m_matrixSize || row < 0 || row >= m_matrixSize) [[unlikely]] {
+    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: col or row out of range");
+  }
+
+  int index_matrix = j[0] + m_binCount[0] * (j[1] + m_binCount[1] * j[2]);
+  int index_element = col * m_matrixSize + row;
+  return index_matrix * m_matrixSize * m_matrixSize + index_element;
+}
+
 ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer), m_LUT(digitizer.LutFileName(), digitizer), m_stepLength(digitizer.LutStepLength()) {
   /* LUT is constructed in place (from file) */
 
   m_digitizer.info() << " - ChargeCollector_LUT constructed successfully." << endmsg;
 }
-
-
 
 void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
   // m_digitizer.FillHistograms_fromChargeCollector_perSimHit(path.length, path.lengthG4);
@@ -352,29 +338,31 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
   const int stepCount = std::max(1, static_cast<int>(std::ceil(path.length / m_stepLength)));
   const float segmentCharge = simHit.charge() / stepCount;
 
-  m_digitizer.verbose() << "     - Filling hit map with simHit charge " << simHit.charge() << " e, path entry at (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, travel (" << path.travel.x() << ", " << path.travel.y() << ", " << path.travel.z() << ") mm." << endmsg;
+  // m_digitizer.verbose() << "     - Filling hit map with simHit charge " << simHit.charge() << " e, path entry at (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, travel (" << path.travel.x() << ", " << path.travel.y() << ", " << path.travel.z() << ") mm." << endmsg;
 
   Index_segment nextSeg, seg = ComputeSegmentIndices(0, stepCount, path);
   int segmentsInBin = 1;
+
+  /* TODO: currently, DistributeSegmentCharge is THE bottleneck. Optimise this by collecting all entries from each vector in a local size x size matrix, and copy that to m_LUT once all segments in a pixel have been filled. */
 
   for (int i_next = 1; i_next < stepCount; ++i_next) {
     nextSeg = ComputeSegmentIndices(i_next, stepCount, path);
 
     /* collect segments in same bin */
     if (seg == nextSeg) {
-      m_digitizer.verbose() << "     - Segment lies in the same pixel and in-pixel bin as previous segment, continuing." << endmsg;
+      // m_digitizer.verbose() << "     - Segment lies in the same pixel and in-pixel bin as previous segment, continuing." << endmsg;
       ++segmentsInBin;
       continue;
     } 
     else {
-      m_digitizer.verbose() << "     - Crossed bin-boundary wrt. last segment. Sharing " << segmentCharge*segmentsInBin << " e- from " << segmentsInBin << " segments. The last segment of these has nextSegmentIndex " << i_next-1 << "." << endmsg;
+      // m_digitizer.verbose() << "     - Crossed bin-boundary wrt. last segment. Sharing " << segmentCharge*segmentsInBin << " e- from " << segmentsInBin << " segments. The last segment of these has nextSegmentIndex " << i_next-1 << "." << endmsg;
       DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit.hitPtr()); 
       seg = nextSeg;
       segmentsInBin = 1;
     }
   } // loop over segments
 
-  m_digitizer.verbose() << "     - Final segment in bin. Sharing " << segmentCharge*segmentsInBin << " e- from " << segmentsInBin << " segments." << endmsg;
+  // m_digitizer.verbose() << "     - Final segment in bin. Sharing " << segmentCharge*segmentsInBin << " e- from " << segmentsInBin << " segments." << endmsg;
   DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit.hitPtr());
 }
 
@@ -393,27 +381,31 @@ Index_segment ChargeCollector_LUT::ComputeSegmentIndices(const int step, const i
   return seg;
 }
 
-void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float charge, const int segmentsInBin, std::shared_ptr<edm4hep::SimTrackerHit> m_simTrackerHit) const {
+void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float segmentCharge, const int segmentsInBin, std::shared_ptr<edm4hep::SimTrackerHit> m_simTrackerHit) const {
   
   /* TODO: optimise this? Or does the compiler solve the inefficiency? */
 
-  m_digitizer.verbose() << "       - Distributing charge for segment in pixel (" << i_seg.i.first << ", " << i_seg.i.second << ") and in-pixel bin (" << i_seg.j.at(0) << ", " << i_seg.j.at(1) << ", " << i_seg.j.at(2) << ") with charge " << charge*segmentsInBin << " e-." << endmsg;
+  int lutSize = m_LUT.GetSize();
+  int i_u_origin = i_seg.i.first - m_LUT.GetSizeHalf(); // pix index of leftmost pixel in LUT matrix
+  int i_v_origin = i_seg.i.second - m_LUT.GetSizeHalf();
+  int pixelCount_u = static_cast<int>(m_digitizer.PixelCount().first);
+  int pixelCount_v = static_cast<int>(m_digitizer.PixelCount().second);
+  float charge = segmentCharge * segmentsInBin;
 
-  for (int col = -(m_LUT.GetSize()-1)/2; col <= (m_LUT.GetSize()-1)/2; ++col) {
-    const int i_u = i_seg.i.first + col;
-    if (i_u < 0 || i_u >= static_cast<int>(m_digitizer.PixelCount().first))
+  for (int col = 0; col < lutSize; ++col) {
+    const int i_u = i_u_origin + col; // convert from col in [0, matrixSize) to pixel offset in [-matrixSize_half, matrixSize_half]. Note size_half = (size-1)/2
+    if (i_u < 0 || i_u >= pixelCount_u)
       continue;
 
-    for (int row = -(m_LUT.GetSize()-1)/2; row <= (m_LUT.GetSize()-1)/2; ++row) {
-      const int i_v = i_seg.i.second + row;
-      if (i_v < 0 || i_v >= static_cast<int>(m_digitizer.PixelCount().second))
+    for (int row = 0; row < lutSize; ++row) {
+      const int i_v = i_v_origin + row;
+      if (i_v < 0 || i_v >= pixelCount_v)
         continue;
-
-      const float chargeToAdd = m_LUT.GetWeight(i_seg.j, col, row) * charge * segmentsInBin;
+        
+      const float chargeToAdd = m_LUT.GetWeight(i_seg.j, col, row) * charge;
       if (chargeToAdd < 1e-5f) // skip very small contributions to avoid 
         continue;
-    
-      m_digitizer.verbose() << "         - Adding charge " << chargeToAdd << " e- to pixel (" << i_u << ", " << i_v << ") with weight " << m_LUT.GetWeight(i_seg.j, col, row) << " and " << segmentsInBin << " segments in this bin." << endmsg;
+
       hitMap.FillCharge({i_u, i_v}, chargeToAdd, m_simTrackerHit);
     }
   }

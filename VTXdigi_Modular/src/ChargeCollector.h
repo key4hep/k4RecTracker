@@ -65,7 +65,9 @@ inline float safe_div(float a, float b) {
 class LookupTable {
   Index_inPix m_binCount;
   int m_matrixSize;
-  std::vector<std::vector<float>> m_matrices; // charge sharing matrices, one per in-pixel bin
+  int m_matrixSize_half; // (matrixSize-1)/2
+  // std::vector<std::vector<float>> m_matrices; // charge sharing matrices, one per in-pixel bin
+  std::vector<float> m_matrices; // charge sharing matrices, one per in-pixel bin
   /* TODO: improve performance by completely flattening the m_matrices vector? Propably not the bottleneck though... */
 
 public:
@@ -87,17 +89,19 @@ public:
   const std::vector<float>& GetMatrix(const Index_inPix& j_uvw) const;
 
   /** @brief Access a specific weight in a charge sharing matrix
-   * @param i_uv {i_u, i_v} In-pixel indices
-   * @param j_uvw {j_u, j_v, j_w} Column and row of the matrix entry to access (go from -(matrixSize-1)/2 to +(matrixSize-1)/2) */
-  float GetWeight(const Index_inPix& j_uvw, const int col, const int row) const;
+   * @note this seems to bottleneck the digitizer a lot */
+  inline float GetWeight(const Index_inPix& j_uvw, const int col, const int row) const {
+    return m_matrices[_FindIndex(j_uvw, col, row)];
+  }; 
 
   inline int GetSize() const { return m_matrixSize; }
+  inline int GetSizeHalf() const { return m_matrixSize_half; }
 
   inline int GetBinCount(int i) const { return m_binCount.at(i); }
   inline Index_inPix GetBinCount() const { return m_binCount; }
 private:
 
-  int _FindIndex (const Index_inPix& j_uvw) const;
+  int _FindIndex (const Index_inPix& j, const int col, const int row) const;
 }; // class LookupTable
 
 

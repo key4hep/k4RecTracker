@@ -133,8 +133,8 @@ std::vector<VTXdigi_tools::Cluster> VTXdigi_Modular::Clusterize(const VTXdigi_to
 void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const {
 
   for (auto& cluster : clusters) {
-    if (cluster.charge <= 0)
-      throw std::runtime_error("Cluster with non-positive charge found, cannot compute cluster position");
+    if (cluster.charge <= 0)  
+      error() << "Cluster with non-positive charge found, cannot compute cluster position" << endmsg;
 
     const std::pair<float, float> clusterPos_index = VTXdigi_tools::ComputeClusterPos_Weighted(cluster);
     
@@ -696,13 +696,13 @@ bool VTXdigi_Modular::CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) con
   const int layer = m_cellIdDecoder->get(simHit.getCellID(), "layer");
   if (m_layers.value().size()>0) { 
     if (std::find(m_layers.value().begin(), m_layers.value().end(),  layer) == m_layers.value().end()) {
-      verbose() << " - Dismissing simHit in layer " << layer << ". (not in the list of layers to digitize)" << endmsg;
+      // verbose() << " - Dismissing simHit in layer " << layer << ". (not in the list of layers to digitize)" << endmsg;
       ++m_counter_simHitsRejected_LayerNotToBeDigitized;
       return false;
     }
   }
   else {
-    verbose() << " - All layers are to be digitized, as property \"LayersToDigitize\" is not set ." << endmsg;
+    // verbose() << " - All layers are to be digitized, as property \"LayersToDigitize\" is not set ." << endmsg;
   }
 
   ++m_counter_simHitsAccepted;
