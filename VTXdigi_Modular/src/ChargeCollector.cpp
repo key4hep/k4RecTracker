@@ -133,8 +133,216 @@ std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, con
 
 /* -- LUT approach -- */
 
-ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer) {
-  m_digitizer.debug() << "ChargeCollector_LUT constructed." << endmsg;
+void LookupTable::SetMatrix(const Index_inPix& j_uvw, const std::vector<float>& weights) {
+  if (static_cast<int>(weights.size()) != m_matrixSize*m_matrixSize)
+    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: weights size (" + std::to_string(weights.size()) + ") does not match matrix size (" + std::to_string(m_matrixSize*m_matrixSize) + ")");
+
+  /* check if matrix is valid */
+  float sum = 0.f;
+  for (int row = 0; row < m_matrixSize; ++row) {
+    for (int col = 0; col < m_matrixSize; ++col) {
+      sum += weights.at(row*m_matrixSize + col);
+    }
+  }
+  if (std::isnan(sum))
+    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") contains NaN values.");
+  if (sum < 0 || sum > 1.f + 1.e-5f)
+    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") has a weight sum of " + std::to_string(sum) + ", but needs to lie in [0,1].");
+
+  const int index = _FindIndex(j_uvw);
+  for (int row = 0; row < m_matrixSize; ++row) {
+    for (int col = 0; col < m_matrixSize; ++col) {
+      /* weights are given in row-major order, starting at top left. 
+        * We store charge sharing matrices in col-major order, starting at bottom left (lowest bin index) */
+      m_matrices.at(index).at(col * m_matrixSize + row) = weights.at((m_matrixSize-1-row)*m_matrixSize + col);
+    }
+  }
+}
+
+void LookupTable::SetAllMatrices(const std::vector<float>& weights) {
+  for (int j_u = 0; j_u < m_binCount.at(0); ++j_u) {
+    for (int j_v = 0; j_v < m_binCount.at(1); ++j_v) {
+      for (int j_w = 0; j_w < m_binCount.at(2); ++j_w) {
+        SetMatrix({j_u, j_v, j_w}, weights);
+      }
+    }
+  }
+}
+
+const std::vector<float>& LookupTable::GetMatrix(const Index_inPix& j_uvw) const {
+  if (j_uvw.at(0) < 0 || j_uvw.at(0) >= m_binCount.at(0))
+    throw std::runtime_error("VTXdigi_tools::LookupTable::GetMatrix: j_u (= " + std::to_string(j_uvw.at(0)) + ") out of range");
+  if (j_uvw.at(1) < 0 || j_uvw.at(1) >= m_binCount.at(1))
+    throw std::runtime_error("VTXdigi_tools::LookupTable::GetMatrix: j_v (= " + std::to_string(j_uvw.at(1)) + ") out of range");
+  if (j_uvw.at(2) < 0 || j_uvw.at(2) >= m_binCount.at(2))
+    throw std::runtime_error("VTXdigi_tools::LookupTable::GetMatrix: j_w (= " + std::to_string(j_uvw.at(2)) + ") out of range");
+  return m_matrices[_FindIndex(j_uvw)];
+}
+
+float LookupTable::GetWeight(const Index_inPix& j_uvw, const int col, const int row) const {
+  if (abs(col) > (m_matrixSize-1)/2)
+    throw std::runtime_error("VTXdigi_tools::LookupTable::GetWeight: col (=" + std::to_string(col) + ") out of range of matrix size.");
+  if (abs(row) > (m_matrixSize-1)/2)
+    throw std::runtime_error("VTXdigi_tools::LookupTable::GetWeight: row (=" + std::to_string(row) + ") out of range of matrix size.");
+  const auto& matrix = GetMatrix(j_uvw);
+  return matrix[(col + (m_matrixSize-1)/2) * m_matrixSize + (row + (m_matrixSize-1)/2)];
+}
+
+int LookupTable::_FindIndex (const Index_inPix& j_uvw) const {
+  if (j_uvw.at(0) < 0 || j_uvw.at(0) >= m_binCount.at(0))
+    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: j_u (= " + std::to_string(j_uvw.at(0)) + ") out of range");
+  if (j_uvw.at(1) < 0 || j_uvw.at(1) >= m_binCount.at(1))
+    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: j_v (= " + std::to_string(j_uvw.at(1)) + ") out of range");
+  if (j_uvw.at(2) < 0 || j_uvw.at(2) >= m_binCount.at(2))
+    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: j_w (= " + std::to_string(j_uvw.at(2)) + ") out of range");
+
+  return j_uvw.at(0) + m_binCount.at(0) * (j_uvw.at(1) + m_binCount.at(1) * j_uvw.at(2)); 
+}
+
+LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& digitizer) {
+  digitizer.debug() << " - Constructing LUT from file \"" << lutFileName << "\"." << endmsg;
+
+  /* This implements parsing the default Allpix2 LUT file format.
+  * See https://indico.cern.ch/event/1489052/contributions/6475539/attachments/3063712/5418424/Allpix_workshop_Lemoine.pdf (slide 10) for more info on fields in the LUT file */
+
+  if (lutFileName.empty())
+    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): LUT file name is empty. A LUT file must be given to load the lookup table.");
+  
+  const int headerLines = 5;
+
+  digitizer.debug() << "   - Opening LUT file \"" << lutFileName << "\"." << endmsg;
+  std::ifstream lutFile(lutFileName);
+  if (!lutFile.is_open())
+    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not open LUT file \"" + lutFileName + "\".");
+
+  std::string line;
+  int lineNumber = 0;
+
+  /* Parse pixel-pitch, thickness, in-pixel bin count from header (all in 5th line) */
+  for (; lineNumber < 5; ++lineNumber)
+    std::getline(lutFile, line);
+  std::istringstream headerStringStream(line);
+  std::string headerEntry;
+  std::vector<std::string> headerLineEntries;
+
+  while (std::getline(headerStringStream, headerEntry, ' ')) {
+    if (!headerEntry.empty())
+      headerLineEntries.push_back(headerEntry);
+  }
+
+  if (headerLineEntries.size() != 11)
+    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Invalid number of entries in LUT file in 5th header line: found " + std::to_string(headerLineEntries.size()) + " entries, expected 11.");
+
+  for (int j=0; j<3; j++) {
+    m_binCount.at(j) = std::stoi(headerLineEntries.at(7+j));
+  }
+  digitizer.debug() << "   - found in-pixel bin count of (" << m_binCount.at(0) << ", " << m_binCount.at(1) << ", " << m_binCount.at(2) << ") from LUT file header." << endmsg;
+
+  /* -> compare the values we just parsed to the values retrieved from the detector geometry */
+  const float eps = 1e-7f; // reasonable for number O(0.01) (like sensor thickness in mm) with float precision
+
+  const float sensorThickness = std::stof(headerLineEntries.at(0)) / 1000.f; // convert from um to mm
+  if (std::abs(sensorThickness - digitizer.SensorDimensions().at(2)) > eps) 
+    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.SensorDimensions().at(2)) + " mm.");
+
+  const std::pair<float, float> pitch = {std::stof(headerLineEntries.at(1)) / 1000.f, std::stof(headerLineEntries.at(2)) / 1000.f};
+  if (std::abs(pitch.first - digitizer.PixelPitch().first) > eps || std::abs(pitch.second - digitizer.PixelPitch().second) > eps) 
+    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Pixel pitch mismatch between LUT file and detector geometry: LUT file specifies (" + std::to_string(pitch.first) + ", " + std::to_string(pitch.second) + ") mm, but geometry has (" + std::to_string(digitizer.PixelPitch().first) + ", " + std::to_string(digitizer.PixelPitch().second) + ") mm.");
+
+  digitizer.debug() << "   - Found matching pixel pitch and sensor thickness in LUT file." << endmsg;
+
+  /* Get matrix size (5x5, 7x7, ...) from the length of the first line after the header */
+  if (std::getline(lutFile, line)) {
+    m_matrixSize = static_cast<int>(std::sqrt(std::count(line.begin(), line.end(), ' ') - 2)); // not very robust, but works for valid Allpix2 files. first 3 entries are bin indices
+  }
+  else {
+    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not read first line after header in LUT file: " + digitizer.LutFileName());
+  }
+  if (m_matrixSize < 3 || m_matrixSize % 2 == 0)
+    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".");
+  digitizer.debug() << "   - Inferred matrix size of " << m_matrixSize << " from first line." << endmsg;
+
+  /* Set up the matrix vector */
+  m_matrices.resize(m_binCount.at(0) * m_binCount.at(1) * m_binCount.at(2));
+  for (auto& matrix : m_matrices) {
+    matrix.resize(m_matrixSize*m_matrixSize, 0.f);
+  }
+
+  /* set up mapping from Allpix2 LUT format
+  *   (row-major, starts on bottom left)
+  * to the format expected by the LookupTable class 
+  *   (row-major, starts on top-left) */
+  std::unordered_map<int, int> indexMapping; // i: index in local format; indexMapping[i]: index in Allpix2 format
+  for (int i_u = 0; i_u < m_matrixSize; i_u++) {
+    for (int i_v = 0; i_v < m_matrixSize; i_v++) {
+      const int i_AP2 = i_u + (m_matrixSize - 1 - i_v) * m_matrixSize;
+      int i_VTXdigi = i_u + i_v * m_matrixSize;
+      indexMapping[i_VTXdigi] = i_AP2;
+    }
+  }
+
+  /* Now we can finally start parsing the matrix values */
+  lutFile.clear();
+  lutFile.seekg(0, std::ios::beg);
+  for (int i=0; i<headerLines; ++i) // advance past header again
+  std::getline(lutFile, line);
+  
+  digitizer.debug() << "   - Parsing LUT file, filling into lookup table." << endmsg;
+
+  float matricesEntrySum = 0.f;
+  lineNumber = headerLines + 1;
+  while (std::getline(lutFile, line)) {
+    if (line.empty() || line[0] == '#')
+      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " + std::to_string(lineNumber+1) + ". All lines (past the 5 header lines) must contain valid matrix data.");
+    
+    std::istringstream stringStream(line);
+    std::vector<std::string> lineEntries;
+    std::string entryString;
+
+    /* read the line & do sanity checks */
+    while (std::getline(stringStream, entryString, ' ')) {
+      if (!entryString.empty())
+        lineEntries.push_back(entryString);
+    }
+
+    if (static_cast<int>(lineEntries.size()) != 3 + m_matrixSize*m_matrixSize)
+      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Invalid number of entries in LUT file at line " + std::to_string(lineNumber+1) + ": found " + std::to_string(lineEntries.size()) + " entries, but expected " + std::to_string(3 + m_matrixSize*m_matrixSize) + " (3 for bin indices, " + std::to_string(m_matrixSize*m_matrixSize) + " for matrix values).");
+
+    /* First 3 lines are in-pixel binning indices */
+    Index_inPix j_uvw({std::stoi(lineEntries[0])-1, std::stoi(lineEntries[1])-1, std::stoi(lineEntries[2])-1});// Allpix2 input is 1-indexed. Insane, I know.
+
+    if (j_uvw.at(0) < 0 || j_uvw.at(0) >= m_binCount[0] ||
+        j_uvw.at(1) < 0 || j_uvw.at(1) >= m_binCount[1] ||
+        j_uvw.at(2) < 0 || j_uvw.at(2) >= m_binCount[2]) {
+      throw std::runtime_error("Invalid in-pixel bin indices in LUT file at line " + std::to_string(lineNumber+1) + ": got (" + std::to_string(j_uvw.at(0)) + ", " + std::to_string(j_uvw.at(1)) + ", " + std::to_string(j_uvw.at(2)) + "), but expected ranges are [0, " + std::to_string(m_binCount[0]-1) + "], [0, " + std::to_string(m_binCount[1]-1) + "], [0, " + std::to_string(m_binCount[2]-1) + "].");
+    }
+
+    /* Parse matrix values & set it */
+    std::vector<float> matrixEntries(m_matrixSize*m_matrixSize, 0.);
+    float matrixEntrySum = 0.f;
+    for (int i = 0; i < m_matrixSize*m_matrixSize; i++) {
+      float entry = std::stof(lineEntries[3 + indexMapping[i]]); // NaN check done on sum
+      matrixEntries[i] = entry;
+      matrixEntrySum += entry;
+    } 
+    digitizer.verbose() << "   - Parsed matrix for in-pixel bin (" << j_uvw.at(0) << ", " << j_uvw.at(1) << ", " << j_uvw.at(2) << "), entry sum " << std::to_string(matrixEntrySum) << ", setting it now..." << endmsg;
+    matricesEntrySum += matrixEntrySum;
+    SetMatrix(j_uvw, matrixEntries);
+
+    lineNumber++;
+  } // loop over lines containing a matrix each
+
+  if (lineNumber - (headerLines+1) != m_binCount[0] * m_binCount[1] * m_binCount[2])
+    throw std::runtime_error("Invalid number of matrices loaded from file: expected " + std::to_string(m_binCount[0] * m_binCount[1] * m_binCount[2]) + " matrices (inferred from bin count in header) but found " + std::to_string(lineNumber - headerLines) + " lines.");
+
+  matricesEntrySum /= static_cast<float>(lineNumber - headerLines);
+  digitizer.info() << " - Loaded lookup table from file. Contains " << (lineNumber - headerLines) << " matrices. " << matricesEntrySum*100 << " percent of charge deposited in the sensor volume is collected by the pixels (the rest is lost, eg. due to being outside of depletion or due to trapping)." << endmsg;
+}
+
+
+ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer), m_LUT(digitizer.LutFileName(), digitizer) {
+  /* LUT is constructed in place (from file) */
+  m_digitizer.info() << " - ChargeCollector_LUT constructed successfully." << endmsg;
 }
 
 void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {

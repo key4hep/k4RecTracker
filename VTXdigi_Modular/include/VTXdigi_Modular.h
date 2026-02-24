@@ -101,7 +101,9 @@ private:
 
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
   Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0 mm. Used for the digitised hit position."};
-
+  
+  /* LUT */
+  Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
 
 
   Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false, "Flag to create and fill debug histograms. Not recommended for multithreading, might lead to crashes. Default is false."};
@@ -243,6 +245,8 @@ public:
 
   /** @brief Increment histograms. To be called from the charge collector, once per simHit */
   void FillHistograms_fromChargeCollector_perSimHit(const float pathLength, const float pathLength_Geant4) const;
+
+  inline std::string LutFileName() const { return m_LUT_FileName; }
 
 }; // class VTXdigi_Modular
 
