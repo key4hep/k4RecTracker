@@ -79,7 +79,7 @@ private:
   
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
   void FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
-  void FillHistograms_perDigiHit(const std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>>& simTrackerHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const;
+  void FillHistograms_perDigiHit(const std::unordered_set<const edm4hep::SimTrackerHit*>& simTrackerHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const;
   
   /* -- Properties -- */
 

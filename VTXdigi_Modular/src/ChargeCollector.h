@@ -13,12 +13,21 @@ using ::VTXdigi_Modular;
 using Index_pix = std::pair<int, int>;
 using Index_inPix = std::array<int, 3>;
 
+struct Index_segment {
+  Index_pix i;
+  Index_inPix j;
+
+  inline bool operator==(const Index_segment& other) const {
+    return (i == other.i) && (j == other.j);
+  }
+};
+
 /** @brief Holds position & information about path through the sensor */
 struct Path {
 
   /** @brief Construct path information from a simHit and the sensor's transformation matrix 
    * @note Only returns paths inside the sensor volume */
-  Path(const std::shared_ptr<edm4hep::SimTrackerHit> simTrackerHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer);
+  Path(const edm4hep::SimTrackerHit* simTrackerHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer);
   Path() = default;
 
   dd4hep::rec::Vector3D entry;
@@ -33,14 +42,7 @@ struct Path {
 
 std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, const float entry_ax, const float travel_ax, const float sensorLength_ax, const VTXdigi_Modular& digitizer);
 
-struct Index_segment {
-  Index_pix i;
-  Index_inPix j;
 
-  inline bool operator==(const Index_segment& other) const {
-    return (i == other.i) && (j == other.j);
-  }
-};
 
 /* -- Charge collector algorithm: LUT-based -- */
 
@@ -118,7 +120,7 @@ public:
 private:
 
   Index_segment ComputeSegmentIndices(const int step, const int stepCount, const Path& path) const;
-  void DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float charge, const int segmentsInBin, std::shared_ptr<edm4hep::SimTrackerHit> m_simTrackerHit) const;
+  void DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float charge, const int segmentsInBin, const edm4hep::SimTrackerHit* m_simTrackerHit) const;
 };
 
 

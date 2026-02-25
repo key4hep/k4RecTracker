@@ -4,16 +4,15 @@
 namespace VTXdigi_tools {
 
 
-SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simTrackerHit(std::make_shared<edm4hep::SimTrackerHit>(simTrackerHit)) {
-  m_cellID = GetCellID_short(*m_simTrackerHit);
+SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simTrackerHit(simTrackerHit) {
+  m_cellID = GetCellID_short(m_simTrackerHit);
   const auto surfaceIt = surfaceMap->find(m_cellID);
   if (surfaceIt == surfaceMap->end())
     throw std::runtime_error("VTXdigi_Allpix2::HitInfo constructor: Could not find SimSurface for this hit's (reduced) cellID: " + std::to_string(m_cellID));
-  // m_surface = std::make_shared<dd4hep::rec::ISurface>(surfaceIt->second);
   m_surface = surfaceIt->second;
 
   const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
-  m_charge = static_cast<float>(m_simTrackerHit->getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
+  m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
 
   m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
 } // Hit::Hit()
@@ -241,14 +240,14 @@ HitMap::HitMap(std::pair<size_t, size_t> pixelCount) : m_pixCount(pixelCount) {
   m_pixels.reserve(pixelCount.first * pixelCount.second / inverseOccupancy); // avoid too many reallocations
 }
 
-void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit) {
+void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, const edm4hep::SimTrackerHit* simTrackerHit) {
   if (_OutOfBounds(i_uv)) {
     throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(i_uv.first) + ", " + std::to_string(i_uv.second) + ") out of range");
   }
 
-  m_pixels.try_emplace(i_uv, std::make_shared<Pixel>(i_uv)); // does nothing if pixel already exists, otherwise creates it with default charge 0
-  m_pixels[i_uv]->charge += charge;
-  m_pixels[i_uv]->simTrackerHits.insert(simTrackerHit); 
+  m_pixels.try_emplace(i_uv, Pixel(i_uv)); // does nothing if pixel already exists, otherwise creates it with default charge 0
+  m_pixels[i_uv].charge += charge;
+  m_pixels[i_uv].simTrackerHits.insert(simTrackerHit); 
 }
 
 float HitMap::GetCharge(std::pair<int, int> i_uv) const {
@@ -258,13 +257,13 @@ float HitMap::GetCharge(std::pair<int, int> i_uv) const {
   auto it = m_pixels.find(i_uv);
   if (it == m_pixels.end())
     return 0.f; // if pixel not found, charge is 0
-  return it->second->charge;
+  return it->second.charge;
 }
 
 float HitMap::GetTotalCharge() const {
   float totalCharge = 0.f;
   for (const auto& [i_uv, pixHit] : m_pixels) {
-    totalCharge += pixHit->charge;
+    totalCharge += pixHit.charge;
   }
   return totalCharge;
 }
@@ -291,7 +290,7 @@ std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>&
 
 std::pair<float, float> ComputeClusterPos_Weighted(const Cluster& cluster) {
   std::pair<float, float> pos{0.f, 0.f};
-  for (const std::shared_ptr<Pixel>& pix : cluster.pixels) {
+  for (const Pixel* pix : cluster.pixels) {
     pos.first += pix->index.first * pix->charge;
     pos.second += pix->index.second * pix->charge;
   }
@@ -304,12 +303,12 @@ std::vector<Cluster> Clusterize_NoClustering(const HitMap& hitMap) {
   std::vector<Cluster> clusters;
 
   for (const auto& p : hitMap.Hits()) {
-    const std::shared_ptr<Pixel>& pixHit = p.second;
+    const Pixel* pixel = &(p.second); // cluster stores pointers to pixels (pixels are stored in HitMap as values)
 
     clusters.emplace_back();
-    clusters.back().pixels.push_back(pixHit);
-    clusters.back().charge = pixHit->charge;
-    for (std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit : pixHit->simTrackerHits) {
+    clusters.back().pixels.push_back(pixel);
+    clusters.back().charge = pixel->charge;
+    for (const edm4hep::SimTrackerHit* simTrackerHit : pixel->simTrackerHits) {
       clusters.back().simTrackerHits.insert(simTrackerHit);
     }
   } // loop over pixelHits
@@ -323,7 +322,7 @@ std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
   std::vector<Cluster> clusters;
   std::unordered_set<std::pair<int,int>, PairHash> visited;
   
-  const PixelMap& pixelMap = hitMap.Hits();
+  const PixelMap& pixelMap = hitMap.Hits(); // std::unordered_map<std::pair<int, int>, Pixel, PairHash>
 
   /* TODO: thresholding (eg. mark pixels<threshold as visited) */
   
@@ -344,9 +343,10 @@ std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
       queue.pop();
       
       /* Add pixl to cluster */
-      clusters.back().pixels.push_back(pixelMap.at(current_uv));
-      clusters.back().charge += pixelMap.at(current_uv)->charge;
-      for (std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit : pixelMap.at(current_uv)->simTrackerHits) {
+      const Pixel* pixel = &(pixelMap.at(current_uv)); // get pixel pointer from map
+      clusters.back().pixels.push_back(pixel);
+      clusters.back().charge += pixel->charge;
+      for (const edm4hep::SimTrackerHit* simTrackerHit : pixel->simTrackerHits) {
         clusters.back().simTrackerHits.insert(simTrackerHit);
       }
       /* Add all neighboring pixels to queue */

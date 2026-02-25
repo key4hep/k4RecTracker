@@ -26,7 +26,7 @@
 
 namespace VTXdigi_tools {
 
-
+using SimTrackerHitPtr = edm4hep::SimTrackerHit*;
 
 /* -- Tool tests -- */
 
@@ -37,7 +37,7 @@ bool ToolTest();
 
 class SimHitWrapper {
   /* any member that is added needs to be added to swap, too! */
-  std::shared_ptr<edm4hep::SimTrackerHit> m_simTrackerHit;
+  edm4hep::SimTrackerHit m_simTrackerHit;
   dd4hep::rec::ISurface* m_surface;
   
   dd4hep::DDSegmentation::CellID m_cellID; // cellID (without segmentation bits)
@@ -50,7 +50,7 @@ public:
   SimHitWrapper(SimHitWrapper&& other) = default;
 
   friend void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
-  inline const std::shared_ptr<edm4hep::SimTrackerHit> hitPtr() const { return m_simTrackerHit; }
+  inline const edm4hep::SimTrackerHit* hitPtr() const { return &m_simTrackerHit; }
   inline dd4hep::rec::ISurface* surface() const { return m_surface; }
 
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
@@ -64,7 +64,7 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
 
 struct Pixel {
   float charge;
-  std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>> simTrackerHits;
+  std::unordered_set<const edm4hep::SimTrackerHit*> simTrackerHits;
   std::pair<int, int> index; // This info is saved in (a) the map key, and (b) here inside the Pixel object. This is inefficient. But it makes the code a bit nicer not having to pass the index around separately.
 
   Pixel(std::pair<int, int> pix) : charge(0.f), index(pix) {
@@ -81,7 +81,7 @@ struct PairHash {
   }
 };
 
-using PixelMap = std::unordered_map<std::pair<int, int>, std::shared_ptr<Pixel>, PairHash>;
+using PixelMap = std::unordered_map<std::pair<int, int>, Pixel, PairHash>;
 
 class HitMap {
   /* I tried implementing a vector that contains every pixel, but for large pixel counts this is very memory-inefficient. Instead, this class uses a std::map to only store pixels that have charge. This is more memory efficient for sparse hits, with O(1) simHit/sensor/event this is at least a factor 100 faster that the vector approach. Maybe not the case to ttbar run with O(0.1%) pixel occupancy. */
@@ -92,11 +92,9 @@ class HitMap {
 public:
   HitMap(std::pair<size_t, size_t> pixCount);
 
-  void FillCharge(std::pair<int, int> i_uv, float charge, std::shared_ptr<const edm4hep::SimTrackerHit> simTrackerHit);
+  void FillCharge(std::pair<int, int> i_uv, float charge, const edm4hep::SimTrackerHit* simTrackerHit);
   float GetCharge(std::pair<int, int> i_uv) const;
   float GetTotalCharge() const;
-  // inline const std::unordered_map<std::pair<int, int>, Pixel, PairHash>& Hits() const { return m_pixels; };
-  // inline std::shared_ptr<const std::unordered_map<std::pair<int, int>, Pixel, PairHash>> HitsPtr() const { return std::make_shared<const std::unordered_map<std::pair<int, int>, Pixel, PairHash>>(m_pixels); };
   inline const PixelMap& Hits() const { return m_pixels; };
   inline int GetTotalPixelsWithCharge() const { return m_pixels.size(); };
   inline void Reset() { m_pixels.clear(); };
@@ -108,8 +106,8 @@ private:
 /* -- Clusterization -- */
 
 struct Cluster {
-  std::vector<std::shared_ptr<Pixel>> pixels;
-  std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>> simTrackerHits;
+  std::vector<const Pixel*> pixels;
+  std::unordered_set<const edm4hep::SimTrackerHit*> simTrackerHits;
   float charge = 0.f;
 };
 

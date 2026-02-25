@@ -22,7 +22,7 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
   throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
 }
 
-Path::Path(const std::shared_ptr<edm4hep::SimTrackerHit> simTrackerHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer) {
+Path::Path(const edm4hep::SimTrackerHit* simTrackerHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer) {
   const dd4hep::rec::Vector3D simPos_global = ConvertVector(simTrackerHit->getPosition());
   simPos = GlobalToLocal(simPos_global, trafoMatrix);
 
@@ -381,7 +381,7 @@ Index_segment ChargeCollector_LUT::ComputeSegmentIndices(const int step, const i
   return seg;
 }
 
-void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float segmentCharge, const int segmentsInBin, std::shared_ptr<edm4hep::SimTrackerHit> m_simTrackerHit) const {
+void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float segmentCharge, const int segmentsInBin, const edm4hep::SimTrackerHit* m_simTrackerHit) const {
   
   /* TODO: optimise this? Or does the compiler solve the inefficiency? */
 

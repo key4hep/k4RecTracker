@@ -173,7 +173,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
 
     if (m_debugHistograms.value()) {
       FillHistograms_perDigiHit(cluster.simTrackerHits, digiHit, trafoMatrix, cluster.pixels.size());
-      for (std::shared_ptr<const VTXdigi_tools::Pixel> pix : cluster.pixels)
+      for (const VTXdigi_tools::Pixel* pix : cluster.pixels)
         FillHistograms_perPixel(cellID, *pix, clusterPos_index);
     }
   } /* loop over clusters */
@@ -747,7 +747,7 @@ void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::Cell
   }
 }
 
-void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<std::shared_ptr<const edm4hep::SimTrackerHit>>& simTrackerHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const {
+void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const edm4hep::SimTrackerHit*>& simTrackerHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const {
   /* executed once for each digiHit */
   const int layer = VTXdigi_tools::GetLayer(digiHit.getCellID(), m_cellIdDecoder);
   const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(digiHit.getPosition());
