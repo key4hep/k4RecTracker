@@ -700,7 +700,7 @@ struct GenfitTrackFitter final :
         
 
 
-        Gaudi::Property<int> m_debug_lvl{this, "debug_lvl", 0, "Debug level: Genfit - 0: none, 1: hit info, 2: + fitter info, 3: + material effects info"}; 
+        Gaudi::Property<int> m_debug_lvl{this, "debug_lvl", 0, "Debug level"}; 
 
 };
 
