@@ -410,7 +410,14 @@ struct GenfitTrackFitter final :
                     if (m_debug_lvl > 1) debug_track = 1;
                     track_interface.CreateGenFitTrack(pdgCode, debug_track);   
         
-                    bool _ = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_debug_lvl);
+                    bool isFit = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_debug_lvl);
+
+                    // Extra check
+                    if (!isFit)
+                    {
+                        std::cerr << "Error: track fitting failed unexpectedly." << std::endl;
+                        std::exit(EXIT_FAILURE);
+                    }
 
                     auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
@@ -592,7 +599,14 @@ struct GenfitTrackFitter final :
                         track_interface.CreateGenFitTrack(pdgCode, debug_track);   
             
 
-                        bool _ = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_debug_lvl);
+                        bool isFit = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_debug_lvl);
+
+                        // Extra check
+                        if (!isFit)
+                        {
+                            std::cerr << "Error: track fitting failed unexpectedly." << std::endl;
+                            std::exit(EXIT_FAILURE);
+                        }
 
                         auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
