@@ -43,6 +43,7 @@ gaudi_add_module(${PackageName}
   DD4hep::DDRec
   DD4hep::DDCore
   GenFit::genfit2
+  Eigen3::Eigen
   ${DELPHES_LIBRARIES}
 )
 
