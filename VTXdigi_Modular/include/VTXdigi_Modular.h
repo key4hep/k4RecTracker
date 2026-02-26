@@ -69,17 +69,22 @@ private:
 
   /* ---- Core algorithm functions ---- */
 
+  /** @brief Check the event before starting digitization (eg. if there even are any simHits) */
   bool CheckEventSetup(const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const;
 
+  /** @brief Check if a simHit is in a layer that is configured for digitization */
   bool CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const;
-
+  
+  /** @brief Clusterize all pixelHits on a hitMap
+   * @note Uses either next-neightbor clustering or no clustering, depending on the value of the Gaudi property "Clusterize" */
   std::vector<VTXdigi_tools::Cluster> Clusterize(const VTXdigi_tools::HitMap& hitMap) const;
 
+  /** @brief Create a digiHit per cluster */
   void CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const;
   
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
   void FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
-  void FillHistograms_perDigiHit(const std::unordered_set<const edm4hep::SimTrackerHit*>& simTrackerHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const;
+  void FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const;
   
   /* -- Properties -- */
 
@@ -100,7 +105,7 @@ private:
   /* -- Properties and members related to the various charge collection algorithms-- */
 
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
-  Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0 mm. Used for the digitised hit position."};
+  Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0 mm. ONLY used for plotting the resdiuals, does not change the output collections in any way."};
   
   
   Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false, "Flag to create and fill debug histograms. Not recommended for multithreading, might lead to crashes. Default is false."};
@@ -243,6 +248,8 @@ public:
   inline std::pair<float, float> PixelPitch() const { return m_pixelPitch; }
 
   inline std::pair<size_t, size_t> PixelCount() const { return m_pixelCount; }
+
+  inline float DepletedRegionDepthCenter() const { return m_depletedRegionDepthCenter; }
 
   /** @brief Increment histograms. To be called from the charge collector, once per simHit */
   void FillHistograms_fromChargeCollector_perSimHit(const float pathLength, const float pathLength_Geant4) const;

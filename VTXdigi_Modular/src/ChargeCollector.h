@@ -13,6 +13,7 @@ using ::VTXdigi_Modular;
 using Index_pix = std::pair<int, int>;
 using Index_inPix = std::array<int, 3>;
 
+/** @brief holds pixel indices i and in-pixel bin indices j (eg. for a segment) */
 struct Index_segment {
   Index_pix i;
   Index_inPix j;
@@ -22,12 +23,12 @@ struct Index_segment {
   }
 };
 
-/** @brief Holds position & information about path through the sensor */
+/** @brief Computes & then holds position & information about a simHits path through the sensor */
 struct Path {
 
   /** @brief Construct path information from a simHit and the sensor's transformation matrix 
    * @note Only returns paths inside the sensor volume */
-  Path(const edm4hep::SimTrackerHit* simTrackerHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer);
+  Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer);
   Path() = default;
 
   dd4hep::rec::Vector3D entry;
@@ -40,37 +41,16 @@ struct Path {
   float charge;
 };
 
-std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, const float entry_ax, const float travel_ax, const float sensorLength_ax, const VTXdigi_Modular& digitizer);
-
-
+/** @brief Compute the factors by which to clip a path along a given axis (to clip it to the sensor volume) */
+std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, const float entry_ax, const float travel_ax, const float sensorLength_ax);
 
 /* -- Charge collector algorithm: LUT-based -- */
-
-struct VoxelHit { 
-  Index_pix i;
-  Index_inPix j;
-
-  float t0, t1;
-  float len;
-
-  VoxelHit(Index_pix i_, Index_inPix j_, float len_) : i(i_), j(j_), len(len_) {}
-};
-
-inline float safe_div(float a, float b) {
-  if (b == 0.f) {
-    return std::numeric_limits<float>::infinity();
-  }
-  return a/b;
-}
-
 
 class LookupTable {
   Index_inPix m_binCount;
   int m_matrixSize;
-  int m_matrixSize_half; // (matrixSize-1)/2
-  // std::vector<std::vector<float>> m_matrices; // charge sharing matrices, one per in-pixel bin
-  std::vector<float> m_matrices; // charge sharing matrices, one per in-pixel bin
-  /* TODO: improve performance by completely flattening the m_matrices vector? Propably not the bottleneck though... */
+  int m_matrixSize_half; // =(matrixSize-1)/2 (for better performance in hot loop)
+  std::vector<float> m_matrices; // charge sharing matrices, one per in-pixel bin (flattened for better performance)
 
 public:
 
@@ -80,18 +60,16 @@ public:
   LookupTable() = default;
 
   /** @brief Set the charge sharing matrix for a specific in-pixel bin 
-   * @param weights A flat vector containing the matrix weights in row-major order (ie. row-by-row) (length must be matrixSize*matrixSize)
-   */
+   * @param weights A flat vector containing the matrix weights in row-major order (ie. row-by-row) (length must be matrixSize*matrixSize) */
   void SetMatrix(const Index_inPix& j_uvw, const std::vector<float>& weights);
 
-  /** @brief Set all charge sharing matrices to the same values  */
+  /** @brief Set all charge sharing matrices to the same values */
   void SetAllMatrices(const std::vector<float>& weights);
 
   /** @brief Access matrix as const reference */
   const std::vector<float>& GetMatrix(const Index_inPix& j_uvw) const;
 
-  /** @brief Access a specific weight in a charge sharing matrix
-   * @note this seems to bottleneck the digitizer a lot */
+  /** @brief Access a specific weight in a charge sharing matrix */
   inline float GetWeight(const Index_inPix& j_uvw, const int col, const int row) const {
     return m_matrices[_FindIndex(j_uvw, col, row)];
   }; 
@@ -103,9 +81,9 @@ public:
   inline Index_inPix GetBinCount() const { return m_binCount; }
 private:
 
+  /** @brief Convert 3D in-pixel bin indices and a matrix row/column to a flat index for m_matrices */
   int _FindIndex (const Index_inPix& j, const int col, const int row) const;
 }; // class LookupTable
-
 
 class ChargeCollector_LUT : public IChargeCollector {
 
@@ -119,8 +97,16 @@ public:
 
 private:
 
+  /** @brief Compute the pixel- and in-pixel bin indices for a given segment in a path */
   Index_segment ComputeSegmentIndices(const int step, const int stepCount, const Path& path) const;
-  void DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float charge, const int segmentsInBin, const edm4hep::SimTrackerHit* m_simTrackerHit) const;
+
+  /** @brief Fill charge into the hitmap, according to a in-pixel bin's charge sharing weights */
+  void DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float charge, const int segmentsInBin, const SimHitWrapper& simHit) const;
+  
+  /** @brief Move the truth position in the simHitWrapper along the computed path to the depleted region center (as defined by the digitizer Gaudi property) 
+   * @note Only used for plotting the residuals, does not change the output collections in any way.
+   * @note If the path does not reach the depleted region center, the truth position is moved to the path end closest to the depleted region center */
+  void MoveTruthPosition(SimHitWrapper& simHit, const Path& path) const;
 };
 
 

@@ -102,6 +102,9 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
     VTXdigi_tools::HitMap hitMap(m_pixelCount);
 
     for (const VTXdigi_tools::SimHitWrapper& simHit : simHits) {
+      const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getPosition());
+      simHit.truthPos() = VTXdigi_tools::GlobalToLocal(pos_global, trafoMatrix); // do this only now to reduce the times we have to compute the trafo matrix. This might be shifted by the charge collection algorithm later.
+
       m_chargeCollector->FillHit(simHit, hitMap, trafoMatrix); // uses the selected charge collection method
     }
 
@@ -138,11 +141,11 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
 
     const std::pair<float, float> clusterPos_index = VTXdigi_tools::ComputeClusterPos_Weighted(cluster);
     
-    debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_index.first << ", " << clusterPos_index.second << "). Has " << cluster.simTrackerHits.size() << " contributing simTrackerHits." << endmsg;
+    debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_index.first << ", " << clusterPos_index.second << "). Has " << cluster.simHits.size() << " contributing simHits." << endmsg;
 
     /* TODO: get cellID with segmentation from global position, instead of using the short cellID (that only encodes the sensor) */
-    if (cluster.simTrackerHits.empty()) {
-      error() << "Cannot create digiHit without any contributing simTrackerHits" << endmsg;
+    if (cluster.simHits.empty()) {
+      error() << "Cannot create digiHit without any contributing simHits" << endmsg;
       continue;
     }
 
@@ -159,20 +162,20 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     digiHit.setCellID(cellID);
 
     float timeStamp = 0.f;      
-    for (const auto& simTrackerHit : cluster.simTrackerHits) {
+    for (const auto& simHit : cluster.simHits) {
       auto link = digiHitLinks.create();
       link.setFrom(digiHit);
-      link.setTo(*simTrackerHit);
+      link.setTo(*(simHit->hitPtr()));
 
-      timeStamp += simTrackerHit->getTime();
+      timeStamp += simHit->hitPtr()->getTime();
     }
-    timeStamp /= cluster.simTrackerHits.size();
+    timeStamp /= cluster.simHits.size();
     digiHit.setTime(timeStamp); // TODO: think of proper way to do timestamping for clusters. Maybe use earliest hit? averaging is not physical at all. ~ Jona 2026-02
 
     /* TODO: estimate uncertainty from pitch/sqrt(12), or from cluster size in u/v*/
 
     if (m_debugHistograms.value()) {
-      FillHistograms_perDigiHit(cluster.simTrackerHits, digiHit, trafoMatrix, cluster.pixels.size());
+      FillHistograms_perDigiHit(cluster.simHits, digiHit, trafoMatrix, cluster.pixels.size());
       for (const VTXdigi_tools::Pixel* pix : cluster.pixels)
         FillHistograms_perPixel(cellID, *pix, clusterPos_index);
     }
@@ -747,7 +750,7 @@ void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::Cell
   }
 }
 
-void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const edm4hep::SimTrackerHit*>& simTrackerHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const {
+void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const {
   /* executed once for each digiHit */
   const int layer = VTXdigi_tools::GetLayer(digiHit.getCellID(), m_cellIdDecoder);
   const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(digiHit.getPosition());
@@ -758,9 +761,8 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const e
   ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_hit_z))[{pos_global.z(), clusterSize}];
 
   /* per simhit that is connected to this digiHit (cluster) */
-  for (const auto& simTrackerHit : simTrackerHits) {
-    const dd4hep::rec::Vector3D simHitPos_global = VTXdigi_tools::ConvertVector(simTrackerHit->getPosition());
-    const dd4hep::rec::Vector3D simHitPos_local = VTXdigi_tools::GlobalToLocal(simHitPos_global, trafoMatrix);
+  for (const auto& simHit : simHits) {
+    const dd4hep::rec::Vector3D simHitPos_local = simHit->truthPos();
     const dd4hep::rec::Vector3D residual_local = pos_local - simHitPos_local; // residual = observed - predicted
     
     ++(*m_hist1d.at(layer).at(hist1d_residualU))[residual_local.x() * 1000.f]; // convert from mm to um
@@ -768,7 +770,7 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const e
     ++(*m_hist1d.at(layer).at(hist1d_residualW))[residual_local.z() * 1000.f];
     ++(*m_hist1d.at(layer).at(hist1d_residualR))[residual_local.r() * 1000.f];
 
-    if (simTrackerHit->getParticle().isCreatedInSimulation()) {
+    if (simHit->hitPtr()->getParticle().isCreatedInSimulation()) {
       ++(*m_hist1d.at(layer).at(hist1d_clusterSize_createdInSimulation))[clusterSize];
       ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_hit_z_createdInSim))[{pos_global.z(), clusterSize}];
     }

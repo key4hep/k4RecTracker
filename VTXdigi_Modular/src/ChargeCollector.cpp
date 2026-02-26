@@ -22,16 +22,15 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
   throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
 }
 
-Path::Path(const edm4hep::SimTrackerHit* simTrackerHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer) {
-  const dd4hep::rec::Vector3D simPos_global = ConvertVector(simTrackerHit->getPosition());
-  simPos = GlobalToLocal(simPos_global, trafoMatrix);
+Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer) {
+  simPos = simHit.truthPos();
 
   const float eps = 1e-6f; // reasonable for number O(0.01) (like sensor thickness in mm) with float precision
 
   double momentum_global[3] = {
-    static_cast<double>(simTrackerHit->getMomentum().x), 
-    static_cast<double>(simTrackerHit->getMomentum().y), 
-    static_cast<double>(simTrackerHit->getMomentum().z)
+    static_cast<double>(simHit.hitPtr()->getMomentum().x), 
+    static_cast<double>(simHit.hitPtr()->getMomentum().y), 
+    static_cast<double>(simHit.hitPtr()->getMomentum().z)
   };
   double momentum_local[3];
   trafoMatrix.MasterToLocalVect(momentum_global, momentum_local);
@@ -54,7 +53,7 @@ Path::Path(const edm4hep::SimTrackerHit* simTrackerHit, const TGeoHMatrix& trafo
   entry = simPos - scaleFactor_entry * travel;
 
   /* Step 3 -check that path is not much longer than the length it had in Geant4 */
-  lengthG4 = simTrackerHit->getPathLength();
+  lengthG4 = simHit.hitPtr()->getPathLength();
   if (travel.r() > 1.05f * lengthG4) {
     digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*1000) << " um to " << static_cast<int>(lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
 
@@ -73,8 +72,8 @@ Path::Path(const edm4hep::SimTrackerHit* simTrackerHit, const TGeoHMatrix& trafo
 
   /* Step 4 - clip path to sensor edges (in u/v) */
   std::pair<float, float> t = std::make_pair(0.f, 1.f); // parametrize path as entry + t*travel; t in [0,1]
-  t = ComputePathClippingFactors(t, entry.x(), travel.x(), digitizer.SensorDimensions().at(0), digitizer);
-  t = ComputePathClippingFactors(t, entry.y(), travel.y(), digitizer.SensorDimensions().at(1), digitizer);
+  t = ComputePathClippingFactors(t, entry.x(), travel.x(), digitizer.SensorDimensions().at(0));
+  t = ComputePathClippingFactors(t, entry.y(), travel.y(), digitizer.SensorDimensions().at(1));
   if (t.first != 0.f || t.second != 1.f) { 
     if (0.f <= t.first && t.first < t.second && t.second <= 1.f) {
       /* valid clipping */
@@ -83,11 +82,11 @@ Path::Path(const edm4hep::SimTrackerHit* simTrackerHit, const TGeoHMatrix& trafo
       entry = entry + t.first * travel;
       travel = (t.second - t.first) * travel;
     }
-    else {
+    else [[unlikely]] {
       /* invalid clipping, shouldn't happen */
       digitizer.warning() << "VTXdigi_tools::Path::Path() - invalid clipping factors t = [" << t.first << ", " << t.second << "]. Path might lie completely outside the sensor." << endmsg;
       digitizer.debug() << " -> entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, sensor dim. (+-" << digitizer.SensorDimensions().at(0)/2 << ", +-" << digitizer.SensorDimensions().at(1)/2 << ") mm" << endmsg;
-      digitizer.debug() << " -> Path length " << static_cast<int>(travel.r()*1000) << " um, in G4 " << static_cast<int>(simTrackerHit->getPathLength()*1000) << " um" << endmsg;
+      digitizer.debug() << " -> Path length " << static_cast<int>(travel.r()*1000) << " um, in G4 " << static_cast<int>(simHit.hitPtr()->getPathLength()*1000) << " um" << endmsg;
     }
   }
 
@@ -96,9 +95,8 @@ Path::Path(const edm4hep::SimTrackerHit* simTrackerHit, const TGeoHMatrix& trafo
   digitizer.debug() << "       - Constructed path, length " << travel.r()*1000 << " um (G4-length " << lengthG4*1000 << " um), entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, " << endmsg;
 }
 
-std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, const float entry_ax, const float travel_ax, const float sensorLength_ax, const VTXdigi_Modular& digitizer) {
+std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, const float entry_ax, const float travel_ax, const float sensorLength_ax) {
   /* only need the components that are parallel to the axis (u/v) that we are clipping */
-
   const bool positiveDir = travel_ax >= 0.f; // false -> path points in negative direction along this axis
 
   const float minPos = std::min(entry_ax, entry_ax + travel_ax);
@@ -110,8 +108,6 @@ std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, con
       t.first = std::max(t.first, t_clip);
     else
       t.second = std::min(t.second, 1-t_clip);
-
-    // digitizer.debug() << "       - SimHitPath extends outside sensor on NEG. side, in " << (positiveDir ? "POS" : "NEG") << ". direction. (min at " << minPos << " mm, edge at " << -0.5*sensorLength_ax << " mm) => " << -0.5*sensorLength_ax - minPos << "mm outside of the sensor, " << t_clip*100 << " percent of the path length. Clipping to [" << t.first << ", " << t.second << "]" << endmsg;
   }
 
   const float maxPos = std::max(entry_ax, entry_ax + travel_ax);
@@ -122,8 +118,6 @@ std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, con
       t.second = std::min(t.second, 1-t_clip);
     else
       t.first = std::max(t.first, t_clip);
-
-    // digitizer.debug() << "       - SimHitPath extends outside sensor on POS. side, in " << (positiveDir ? "POS" : "NEG") << ". direction. (max at " << maxPos << " mm, edge at " << 0.5*sensorLength_ax << " mm) => " << maxPos - 0.5*sensorLength_ax << "mm outside of the sensor, " << t_clip*100 << " percent of the path length. Clipping to [" << t.first << ", " << t.second << "]" << endmsg;
   }
 
   return t;
@@ -254,10 +248,15 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     float matrixEntrySum = 0.f;
     for (int i = 0; i < m_matrixSize*m_matrixSize; i++) {
       float entry = std::stof(lineEntries[3 + indexMapping[i]]); // NaN check done on sum
+      if (entry < 1.e-5f)
+        entry = 0.f; // avoid very small entries for performace
       matrixEntries[i] = entry;
       matrixEntrySum += entry;
     } 
     digitizer.verbose() << "   - Parsed matrix for in-pixel bin (" << j_uvw.at(0) << ", " << j_uvw.at(1) << ", " << j_uvw.at(2) << "), entry sum " << std::to_string(matrixEntrySum) << ", setting it now..." << endmsg;
+    if (std::isnan(matrixEntrySum))
+      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") contains NaN values (sum of entries is NaN).");
+    
     matricesEntrySum += matrixEntrySum;
     SetMatrix(j_uvw, matrixEntries);
 
@@ -330,15 +329,14 @@ ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : ICh
 void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
   // m_digitizer.FillHistograms_fromChargeCollector_perSimHit(path.length, path.lengthG4);
   
-  /* ToDo: implement voxel-traversal instead of numerically splitting the charge. 
+  /* TODO: implement voxel-traversal instead of numerically splitting the charge. 
   I would start from the simple algo here: https://www.redblobgames.com/grids/line-drawing.html */
 
-  Path path(simHit.hitPtr(), trafoMatrix, m_digitizer);
+  Path path(simHit, trafoMatrix, m_digitizer);
 
   const int stepCount = std::max(1, static_cast<int>(std::ceil(path.length / m_stepLength)));
   const float segmentCharge = simHit.charge() / stepCount;
 
-  // m_digitizer.verbose() << "     - Filling hit map with simHit charge " << simHit.charge() << " e, path entry at (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, travel (" << path.travel.x() << ", " << path.travel.y() << ", " << path.travel.z() << ") mm." << endmsg;
 
   Index_segment nextSeg, seg = ComputeSegmentIndices(0, stepCount, path);
   int segmentsInBin = 1;
@@ -355,15 +353,13 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
       continue;
     } 
     else {
-      // m_digitizer.verbose() << "     - Crossed bin-boundary wrt. last segment. Sharing " << segmentCharge*segmentsInBin << " e- from " << segmentsInBin << " segments. The last segment of these has nextSegmentIndex " << i_next-1 << "." << endmsg;
-      DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit.hitPtr()); 
+      DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit); 
       seg = nextSeg;
       segmentsInBin = 1;
     }
   } // loop over segments
 
-  // m_digitizer.verbose() << "     - Final segment in bin. Sharing " << segmentCharge*segmentsInBin << " e- from " << segmentsInBin << " segments." << endmsg;
-  DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit.hitPtr());
+  DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit);
 }
 
 Index_segment ChargeCollector_LUT::ComputeSegmentIndices(const int step, const int stepCount, const Path& path) const {
@@ -381,7 +377,7 @@ Index_segment ChargeCollector_LUT::ComputeSegmentIndices(const int step, const i
   return seg;
 }
 
-void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float segmentCharge, const int segmentsInBin, const edm4hep::SimTrackerHit* m_simTrackerHit) const {
+void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float segmentCharge, const int segmentsInBin, const SimHitWrapper& simHit) const {
   
   /* TODO: optimise this? Or does the compiler solve the inefficiency? */
 
@@ -406,9 +402,25 @@ void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_se
       if (chargeToAdd < 1e-5f) // skip very small contributions to avoid 
         continue;
 
-      hitMap.FillCharge({i_u, i_v}, chargeToAdd, m_simTrackerHit);
+      hitMap.FillCharge({i_u, i_v}, chargeToAdd, simHit);
     }
   }
+}
+
+void ChargeCollector_LUT::MoveTruthPosition(SimHitWrapper& simHit, const Path& path) const {
+  const float w_target = m_digitizer.DepletedRegionDepthCenter(); 
+
+  /* shift the sim hit position along the path to the depth that is closest to the target w (ie. target depth) */
+
+  float t = (w_target - path.entry.z()) / path.travel.z(); // how far along the path do we need to go to get to the target depth? 
+  // t in [0,1] means it's within the path, otherwise it's outside of the path and we will shift to the closest end (entry or exit)
+
+  if (t < 0.f)
+    t = 0.f;
+  else if (t > 1.f)
+    t = 1.f;
+
+  simHit.truthPos() = path.entry + t * path.travel;
 }
 
 /* -- Single pixel approach -- */
@@ -418,12 +430,12 @@ ChargeCollector_SinglePixel::ChargeCollector_SinglePixel(const VTXdigi_Modular& 
 }
 
 void ChargeCollector_SinglePixel::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
-  const dd4hep::rec::Vector3D pos_global = ConvertVector(simHit.hitPtr()->getPosition());
-  const dd4hep::rec::Vector3D pos_local = GlobalToLocal(pos_global, trafoMatrix);
-  const std::pair<int, int> i_uv = ComputePixelIndices(pos_local, m_digitizer.PixelPitch(), m_digitizer.PixelCount());
+  (void) trafoMatrix; // Not used in this approach, but we need to keep it as argument to conform to the interface. Silences the unused parameter warning.
+
+  const std::pair<int, int> i_uv = ComputePixelIndices(simHit.truthPos(), m_digitizer.PixelPitch(), m_digitizer.PixelCount());
 
   if (!(i_uv.first == -1 || i_uv.second == -1 || i_uv.first >= static_cast<int>(m_digitizer.PixelCount().first) || i_uv.second >= static_cast<int>(m_digitizer.PixelCount().second)))
-    hitMap.FillCharge(i_uv, simHit.charge(), simHit.hitPtr());
+    hitMap.FillCharge(i_uv, simHit.charge(), simHit);
 }
 
 /* -- Debug approach -- */
@@ -433,27 +445,27 @@ ChargeCollector_Debug::ChargeCollector_Debug(const VTXdigi_Modular& digitizer) :
 }
 
 void ChargeCollector_Debug::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
-  const dd4hep::rec::Vector3D pos_global = ConvertVector(simHit.hitPtr()->getPosition());
-  const dd4hep::rec::Vector3D pos_local = GlobalToLocal(pos_global, trafoMatrix);
+  (void) trafoMatrix; // Not used in this approach, but we need to keep it as argument to conform to the interface. Silences the unused parameter warning.
+
+  const dd4hep::rec::Vector3D pos_local = simHit.truthPos();
   const float charge = simHit.charge();
   const std::pair<int, int> i_uv = ComputePixelIndices(pos_local, m_digitizer.PixelPitch(), m_digitizer.PixelCount());
 
-  m_digitizer.verbose() << "     - SimHit at global position       (" << pos_global.x() << ", " << pos_global.y() << ", " << pos_global.z() << ")" << endmsg;
-  m_digitizer.verbose() << "       - corresponds to local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ")" << endmsg;
-  m_digitizer.verbose() << "       - and pixel indices             (" << i_uv.first << ", " << i_uv.second << ")" << endmsg;
+  m_digitizer.verbose() << "     - SimHit at local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ")" << endmsg;
+  m_digitizer.verbose() << "       - and pixel indices      (" << i_uv.first << ", " << i_uv.second << ")" << endmsg;
   if (i_uv.first == -1 || i_uv.second == -1 || i_uv.first >= static_cast<int>(m_digitizer.PixelCount().first) || i_uv.second >= static_cast<int>(m_digitizer.PixelCount().second)) {
     m_digitizer.warning() << "simHit local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ") is out of sensor bounds U: [" << -m_digitizer.SensorDimensions().at(0)/2 << ", " << m_digitizer.SensorDimensions().at(0)/2 << "], V: [" << -m_digitizer.SensorDimensions().at(1)/2 << ", " << m_digitizer.SensorDimensions().at(1)/2 << "]. This simHit will be skipped." << endmsg;
   }
   else {
     m_digitizer.verbose() << "       - Filling charge " << simHit.charge() << " e." << endmsg;
 
-    hitMap.FillCharge(i_uv, 0.5*charge, simHit.hitPtr());
+    hitMap.FillCharge(i_uv, 0.5*charge, simHit);
     if (i_uv.first + 1 < static_cast<int>(m_digitizer.PixelCount().first))
-      hitMap.FillCharge({i_uv.first + 1, i_uv.second}, 0.2*charge, simHit.hitPtr()); 
+      hitMap.FillCharge({i_uv.first + 1, i_uv.second}, 0.2*charge, simHit); 
     if (i_uv.first + 2 < static_cast<int>(m_digitizer.PixelCount().first))
-      hitMap.FillCharge({i_uv.first + 2, i_uv.second}, 0.2*charge, simHit.hitPtr());
+      hitMap.FillCharge({i_uv.first + 2, i_uv.second}, 0.2*charge, simHit);
     if (i_uv.second + 1 < static_cast<int>(m_digitizer.PixelCount().second))
-      hitMap.FillCharge({i_uv.first, i_uv.second + 1}, 0.1*charge, simHit.hitPtr());
+      hitMap.FillCharge({i_uv.first, i_uv.second + 1}, 0.1*charge, simHit);
       
     m_digitizer.verbose() << "       - Total charge collected in hitMap: " << hitMap.GetTotalCharge() << " e." << endmsg;
   }

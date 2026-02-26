@@ -9,7 +9,7 @@ SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const dd4hep:
   const auto surfaceIt = surfaceMap->find(m_cellID);
   if (surfaceIt == surfaceMap->end())
     throw std::runtime_error("VTXdigi_Allpix2::HitInfo constructor: Could not find SimSurface for this hit's (reduced) cellID: " + std::to_string(m_cellID));
-  m_surface = surfaceIt->second;
+  dd4hep::rec::ISurface* surface = surfaceIt->second;
 
   const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
   m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
@@ -23,7 +23,6 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 
   using std::swap;
   swap(a.m_simTrackerHit, b.m_simTrackerHit);
-  swap(a.m_surface, b.m_surface);
   swap(a.m_cellID, b.m_cellID);
   swap(a.m_charge, b.m_charge);
   swap(a.m_layerNumber, b.m_layerNumber);
@@ -31,19 +30,19 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 
 /* -- helpers -- */
 
-void CreateDigiHit(const edm4hep::SimTrackerHit& simTrackerHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const float charge) {
+void CreateDigiHit(const SimHitWrapper& simHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const float charge) {
   const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
 
   auto digiHit = digiHits.create();
 
-  digiHit.setCellID(simTrackerHit.getCellID());
+  digiHit.setCellID(simHit.hitPtr()->getCellID());
   digiHit.setEDep(charge / chargePerkeV); // convert e- to keV
   digiHit.setPosition(ConvertVector(position));
-  digiHit.setTime(simTrackerHit.getTime());
+  digiHit.setTime(simHit.hitPtr()->getTime());
   
   auto digiHitLink = digiHitLinks.create();
   digiHitLink.setFrom(digiHit);
-  digiHitLink.setTo(simTrackerHit);
+  digiHitLink.setTo(*simHit.hitPtr());
 }
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
@@ -240,14 +239,14 @@ HitMap::HitMap(std::pair<size_t, size_t> pixelCount) : m_pixCount(pixelCount) {
   m_pixels.reserve(pixelCount.first * pixelCount.second / inverseOccupancy); // avoid too many reallocations
 }
 
-void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, const edm4hep::SimTrackerHit* simTrackerHit) {
+void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, const SimHitWrapper& simHitWrapper) {
   if (_OutOfBounds(i_uv)) {
     throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(i_uv.first) + ", " + std::to_string(i_uv.second) + ") out of range");
   }
 
   m_pixels.try_emplace(i_uv, Pixel(i_uv)); // does nothing if pixel already exists, otherwise creates it with default charge 0
   m_pixels[i_uv].charge += charge;
-  m_pixels[i_uv].simTrackerHits.insert(simTrackerHit); 
+  m_pixels[i_uv].simHits.insert(&simHitWrapper); 
 }
 
 float HitMap::GetCharge(std::pair<int, int> i_uv) const {
@@ -308,8 +307,8 @@ std::vector<Cluster> Clusterize_NoClustering(const HitMap& hitMap) {
     clusters.emplace_back();
     clusters.back().pixels.push_back(pixel);
     clusters.back().charge = pixel->charge;
-    for (const edm4hep::SimTrackerHit* simTrackerHit : pixel->simTrackerHits) {
-      clusters.back().simTrackerHits.insert(simTrackerHit);
+    for (const SimHitWrapper* simHitWrapper : pixel->simHits) {
+      clusters.back().simHits.insert(simHitWrapper);
     }
   } // loop over pixelHits
 
@@ -320,9 +319,9 @@ std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
   /* Breadth First Search (BFS) implementation for clustering */
 
   std::vector<Cluster> clusters;
-  std::unordered_set<std::pair<int,int>, PairHash> visited;
+  std::unordered_set<std::pair<int,int>, Hash_PairInt> visited;
   
-  const PixelMap& pixelMap = hitMap.Hits(); // std::unordered_map<std::pair<int, int>, Pixel, PairHash>
+  const PixelMap& pixelMap = hitMap.Hits(); // std::unordered_map<std::pair<int, int>, Pixel>
 
   /* TODO: thresholding (eg. mark pixels<threshold as visited) */
   
@@ -346,8 +345,8 @@ std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
       const Pixel* pixel = &(pixelMap.at(current_uv)); // get pixel pointer from map
       clusters.back().pixels.push_back(pixel);
       clusters.back().charge += pixel->charge;
-      for (const edm4hep::SimTrackerHit* simTrackerHit : pixel->simTrackerHits) {
-        clusters.back().simTrackerHits.insert(simTrackerHit);
+      for (const SimHitWrapper* simHitWrapper : pixel->simHits) {
+        clusters.back().simHits.insert(simHitWrapper);
       }
       /* Add all neighboring pixels to queue */
       for (const auto& neighbor_uv : GetDirectNeighbors(current_uv)) {
@@ -580,10 +579,12 @@ bool ToolTest() {
   {
     bool passedInternal = true;
 
+    SimHitWrapper simHitWrapper; // not used, just need something to pass to FillCharge()
+
     HitMap hitMap({10,10});
 
-    hitMap.FillCharge({0,0},1, nullptr);
-    hitMap.FillCharge({1,1},2, nullptr);
+    hitMap.FillCharge({0,0},1, simHitWrapper);
+    hitMap.FillCharge({1,1},2, simHitWrapper);
 
     if (hitMap.GetCharge({0,0}) != 1) {
       std::cout << " - FAILED " << std::endl << " | -> Expected charge 1 at (0,0), got " << hitMap.GetCharge({0,0}) << std::endl;
@@ -598,7 +599,7 @@ bool ToolTest() {
       passedInternal = false;
     }
 
-    hitMap.FillCharge({0,0},100, nullptr); // test adding charge to existing pixel
+    hitMap.FillCharge({0,0},100, simHitWrapper); // test adding charge to existing pixel
 
     if (hitMap.GetCharge({0,0}) != 101) {
       std::cout << " - FAILED " << std::endl << " | -> Expected charge 101 at (0,0), got " << hitMap.GetCharge({0,0}) << std::endl;
@@ -610,25 +611,25 @@ bool ToolTest() {
     }
 
     try {
-      hitMap.FillCharge({-1,0},1, nullptr);
+      hitMap.FillCharge({-1,0},1, simHitWrapper);
       std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (-1,0)" << std::endl;
       passedInternal = false;
     }
     catch (const std::runtime_error& e) {}
     try {
-      hitMap.FillCharge({0,-1},1, nullptr);
+      hitMap.FillCharge({0,-1},1, simHitWrapper);
       std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (0,-1)" << std::endl;
       passedInternal = false;
     }
     catch (const std::runtime_error& e) {}
     try {
-      hitMap.FillCharge({10,0},1, nullptr);
+      hitMap.FillCharge({10,0},1, simHitWrapper);
       std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (10,0)" << std::endl;
       passedInternal = false;
     }
     catch (const std::runtime_error& e) {}
     try {
-      hitMap.FillCharge({0,10},1,nullptr);
+      hitMap.FillCharge({0,10},1, simHitWrapper);
       std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (0,10)" << std::endl;
       passedInternal = false;
     }
