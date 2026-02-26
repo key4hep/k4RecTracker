@@ -38,6 +38,10 @@
 #include <TEveManager.h>
 #include <TGeoManager.h>
 #include <TVector3.h>
+#include "TCanvas.h"
+#include "TGraph.h"
+#include "TAxis.h"
+#include "TFile.h"
 #include <cxxabi.h>
 #include <Eigen/Dense>
 
@@ -108,10 +112,6 @@
 #include "utils.h"
 #include "FastCircleSeed.h"
 
-#include "TCanvas.h"
-#include "TGraph.h"
-#include "TAxis.h"
-#include "TFile.h"
 
 
 /** @struct GenfitTrackFitter

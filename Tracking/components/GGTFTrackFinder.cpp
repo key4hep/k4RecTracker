@@ -319,8 +319,8 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
       /////////////////////////////////
 
       // NB: In this implementation, for each track the flag "type" is defined as follows:
-      //     0 → unclustered
-      //     1 → clustered
+      //     0 : unclustered
+      //     1 : clustered
       //
       // Here, "unclustered" refers to hits that are not associated with any reconstructed track.
       // This may occur either because the hit originates from background activity or due to
