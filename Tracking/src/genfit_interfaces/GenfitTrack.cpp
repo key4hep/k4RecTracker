@@ -95,66 +95,6 @@ namespace GenfitInterface {
         const auto hits = track.getTrackerHits();
         std::vector<std::pair<float, std::size_t>> distIndex;
 
-        // // Track endpoints in z
-        // double zMin =   std::numeric_limits<double>::max();
-        // double zMax = - std::numeric_limits<double>::max();
-
-        // double xAtZMin = 0., yAtZMin = 0.;
-        // double xAtZMax = 0., yAtZMax = 0.;
-
-        // // Find hits with minimum and maximum z
-        // for (const auto& hit : hits) {
-
-        //     const auto p = hit.getPosition();
-
-        //     if (std::abs(p.z) < std::abs(zMin)) {
-        //         zMin = p.z;
-        //         xAtZMin = p.x;
-        //         yAtZMin = p.y;
-
-        //     }
-        //     if (std::abs(p.z) > std::abs(zMax)) {
-        //         zMax = p.z;
-        //         xAtZMax = p.x;
-        //         yAtZMax = p.y;
-
-        //     }
-
-        // }
-
-        // // Choose the starting point:
-        // // - by default, the hit closer to z = 0
-        // double firstX = xAtZMin;
-        // double firstY = yAtZMin;
-        // double firstZ = zMin;
-
-        // // Estimate track inclination in the yz-plane
-        // const double dy = std::abs(yAtZMax - yAtZMin);
-        // const double dz = std::abs(zMax    - zMin);
-        // const double cosTheta = dz / std::hypot(dy, dz);
-
-        // // If the track is almost perpendicular to z,
-        // // fall back to the hit with smaller radius
-        // if (std::abs(cosTheta) < 0.01) {
-
-        //     const double rMin = std::hypot(xAtZMin, yAtZMin, zMin);
-        //     const double rMax = std::hypot(xAtZMax, yAtZMax, zMax);
-
-        //     if (rMin < rMax)
-        //     {
-        //         firstX = xAtZMin;
-        //         firstY = yAtZMin;
-        //         firstZ = zMin;
-        //     }
-        //     else
-        //     {   
-        //         firstX = xAtZMax;
-        //         firstY = yAtZMax;
-        //         firstZ = zMax;
-        //     }
-
-        // }
-
         // Track endpoints in cylindrical radius
         double rMin = std::numeric_limits<double>::max();
         double firstX = 0., firstY = 0., firstZ = 0.;
@@ -517,7 +457,6 @@ namespace GenfitInterface {
             points_xy.push_back(Point2D_xy(p.x, p.y));
         }
 
-        // FIT CIRCLE TO XY PROJECTION
         FastCircleFit circle(points_xy);
         Point2D_xy closestPoint = circle.closestPointTo(points_xy[0]);
         Point2D_xy tangent_xy = circle.tangentAtPCA(closestPoint, points_xy[1]);
@@ -527,7 +466,7 @@ namespace GenfitInterface {
 
         TVector3 init_mom = TVector3(tangent_xy.x * init_pT, tangent_xy.y * init_pT, 0);
         
-        // FIT Z (TODO: fix PCA_z)
+        // FIT Z
         double pZ = 0;
 
         size_t N = points.size();
@@ -558,7 +497,6 @@ namespace GenfitInterface {
         pZ = numerator / denominator * init_pT;
         init_mom.SetZ(pZ);
 
-        // find z_PCA
         double a = numerator / denominator;
         sumZ = 0.0;
         for (const auto& p : points_Rz) sumZ += p.y;
@@ -566,7 +504,7 @@ namespace GenfitInterface {
 
         double z_PCA = b;
 
-        // charge
+        // CHARGEs
         double x0_ = circle.x0();
         double y0_ = circle.y0();
         TVector3 B_field = TVector3(0., 0., 2.);
@@ -581,6 +519,7 @@ namespace GenfitInterface {
 
         int charge = (lorentzDir.Dot(curvDir) > 0) ? +1 : -1;
 
+        // Fill helpers
         HelperInitialization helper;
         helper.Position = TVector3(closestPoint.x * dd4hep::mm, closestPoint.y * dd4hep::mm, z_PCA * dd4hep::mm);
         helper.Momentum = init_mom;
@@ -657,8 +596,6 @@ namespace GenfitInterface {
         {
 
             auto cellID0 = hit.getCellID();
-           
-
             if (hit.isA<edm4hep::TrackerHitPlane>())
             {
                 
@@ -735,9 +672,9 @@ namespace GenfitInterface {
             TVector3 gen_position, gen_momentum;
             TMatrixDSym covariancePosMom(6);
             
-            double x_PCA;
-            double y_PCA;
-            double z_PCA; 
+            double x_ref;
+            double y_ref;
+            double z_ref; 
 
             double pz;  
             double pt;
@@ -761,9 +698,9 @@ namespace GenfitInterface {
                 auto stateVecFirstHit = fittedState.getState();
                 
                 edm4hep::TrackState trackStateFirstHit;
-                x_PCA = gen_position.X();     // cm
-                y_PCA = gen_position.Y();     // cm
-                z_PCA = gen_position.Z();     // cm
+                x_ref = gen_position.X();     // cm
+                y_ref = gen_position.Y();     // cm
+                z_ref = gen_position.Z();     // cm
                 pz = gen_momentum.Z();        // gev
                 pt = gen_momentum.Perp();     // gev
                 
@@ -785,7 +722,7 @@ namespace GenfitInterface {
                 trackStateFirstHit.tanLambda = tanLambda;
                 trackStateFirstHit.time = 0.;
 
-                trackStateFirstHit.referencePoint = edm4hep::Vector3f(x_PCA / dd4hep::mm, y_PCA / dd4hep::mm, z_PCA / dd4hep::mm);
+                trackStateFirstHit.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
                 trackStateFirstHit.location = edm4hep::TrackState::AtFirstHit;
 
                 // trackState lastHit
@@ -794,9 +731,9 @@ namespace GenfitInterface {
                 auto stateVecLastHit = fittedState.getState();
                 
                 edm4hep::TrackState trackStateLastHit;
-                x_PCA = gen_position.X();       // cm
-                y_PCA = gen_position.Y();       // cm
-                z_PCA = gen_position.Z();       // cm
+                x_ref = gen_position.X();       // cm
+                y_ref = gen_position.Y();       // cm
+                z_ref = gen_position.Z();       // cm
                 pz = gen_momentum.Z();          // gev
                 pt = gen_momentum.Perp();       // gev
 
@@ -818,11 +755,9 @@ namespace GenfitInterface {
                 trackStateLastHit.tanLambda = tanLambda;
                 trackStateLastHit.time = 0.;
 
-                trackStateLastHit.referencePoint = edm4hep::Vector3f(x_PCA / dd4hep::mm, y_PCA / dd4hep::mm, z_PCA / dd4hep::mm);
+                trackStateLastHit.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
                 trackStateLastHit.location = edm4hep::TrackState::AtLastHit;
 
-                
-                
                 //take first fitted point
                 genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
                 if (tp == NULL) {std::cout << "Track has no TrackPoint with fitterInfo! (but fitstatus ok?)"<<std::endl;}
@@ -842,9 +777,9 @@ namespace GenfitInterface {
                     gen_momentum.SetZ(-gen_momentum.Z());
                     
                     edm4hep::TrackState trackStateIP;
-                    x_PCA = gen_position.X();       // cm
-                    y_PCA = gen_position.Y();       // cm
-                    z_PCA = gen_position.Z();       // cm
+                    x_ref = gen_position.X();       // cm
+                    y_ref = gen_position.Y();       // cm
+                    z_ref = gen_position.Z();       // cm
                     pz = gen_momentum.Z();          // gev
                     pt = gen_momentum.Perp();       // gev
 
@@ -866,7 +801,7 @@ namespace GenfitInterface {
                     trackStateIP.tanLambda = tanLambda;
                     trackStateIP.time = 0.;
 
-                    trackStateIP.referencePoint = edm4hep::Vector3f(x_PCA / dd4hep::mm, y_PCA / dd4hep::mm, z_PCA / dd4hep::mm);
+                    trackStateIP.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
                     trackStateIP.location = edm4hep::TrackState::AtIP;
 
                     if (debug_lvl > 0)
@@ -987,7 +922,7 @@ namespace GenfitInterface {
 
         double d0 = - (RefPoint_cm.X() - x_PCA) * sin(phi0) + (RefPoint_cm.Y() - y_PCA) * cos(phi0); // cm                                            // rad
         double tanLambda = pz / pt;                                                                  
-        double omega = (std::abs(a * Bz / pt)) * dd4hep::mm;                                         // 1 / cm
+        double omega = (std::abs(a * Bz / pt)) * dd4hep::mm;                                         // cm-1
 
         // Jacobian J[row][col] = d(cartesian variable) / d(helix parameter)
         // rows:    0=x, 1=y, 2=z, 3=px, 4=py, 5=pz
@@ -1144,7 +1079,7 @@ namespace GenfitInterface {
     * The procedure is as follows:
     * 1. Compute the transverse momentum `pt` and check it is non-zero.
     * 2. Calculate the radius `R` of the helix in the transverse plane using 
-    *    R = pt / (0.3 * |q| * Bz) (pt in GeV/c, Bz in Tesla, R in cm).
+    *    R = pt / (0.3 * |q| * Bz) * 100 (pt in GeV/c, Bz in Tesla, R in cm).
     * 3. Determine the center of the circular projection of the helix in the XY plane.
     * 4. Find the unit vector pointing from the circle center to the reference point.
     * 5. Compute the closest point on the circle to the reference point in XY.
