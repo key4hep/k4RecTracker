@@ -30,20 +30,7 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 
 /* -- helpers -- */
 
-void CreateDigiHit(const SimHitWrapper& simHit, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const float charge) {
-  const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
 
-  auto digiHit = digiHits.create();
-
-  digiHit.setCellID(simHit.hitPtr()->getCellID());
-  digiHit.setEDep(charge / chargePerkeV); // convert e- to keV
-  digiHit.setPosition(ConvertVector(position));
-  digiHit.setTime(simHit.hitPtr()->getTime());
-  
-  auto digiHitLink = digiHitLinks.create();
-  digiHitLink.setFrom(digiHit);
-  digiHitLink.setTo(*simHit.hitPtr());
-}
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
   return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
@@ -247,6 +234,25 @@ void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, const SimHitWrap
   m_pixels.try_emplace(i_uv, Pixel(i_uv)); // does nothing if pixel already exists, otherwise creates it with default charge 0
   m_pixels[i_uv].charge += charge;
   m_pixels[i_uv].simHits.insert(&simHitWrapper); 
+}
+
+void HitMap::ApplyChargeSmearing(Rndm::Numbers& rndm_charge) {
+  auto hitIter = m_pixels.begin();
+  while (hitIter != m_pixels.end()) {
+    hitIter->second.charge = std::max(hitIter->second.charge + static_cast<float>(rndm_charge()), 0.f); // don't allow negative charge after smearing
+    ++hitIter;
+  }
+}
+
+void HitMap::ApplyThreshold(const float threshold) {
+  auto hitIter = m_pixels.begin();
+
+  while (hitIter != m_pixels.end()) {
+    if (hitIter->second.charge < threshold)
+      hitIter = m_pixels.erase(hitIter); // erase returns the iterator to the next element, so this is safe to do while iterating
+    else
+      ++hitIter;
+  }
 }
 
 float HitMap::GetCharge(std::pair<int, int> i_uv) const {

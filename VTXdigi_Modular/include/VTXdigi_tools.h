@@ -5,8 +5,8 @@
 #include <tuple>
 
 #include "Gaudi/Property.h"
+#include "GaudiKernel/RndmGenerators.h"
 
-// #include "DDRec/ISurface.h"
 #include "DDRec/SurfaceManager.h"
 #include "DDRec/Surface.h"
 
@@ -17,8 +17,6 @@
 #include "DD4hep/Shapes.h"
 #include "DD4hep/DetElement.h"
 
-// #include "edm4hep/SimTrackerHitCollection.h"
-// #include "edm4hep/EventHeaderCollection.h" 
 #include "edm4hep/TrackerHitPlaneCollection.h"
 #include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
 
@@ -49,12 +47,13 @@ public:
   SimHitWrapper(SimHitWrapper&& other) = default;
   SimHitWrapper() = default;
 
+  inline void SetTruthPos(const dd4hep::rec::Vector3D& pos) const { m_truthPos = pos; } // only used for histogramming after filling the hits, so not really a problem that this is mutable
+
   friend void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
   inline const edm4hep::SimTrackerHit* hitPtr() const { return &m_simTrackerHit; }
   /** @brief Access the truth position of the simHit in local coordinates
-   * @note might have been adjusted by ChargeCollector::FillHit() to account for charge collection effects.
-   * @note is mutable */
-  inline dd4hep::rec::Vector3D truthPos() const { return m_truthPos; }
+   * @note might have been adjusted by ChargeCollector::FillHit() to account for charge collection effects. */
+  inline const dd4hep::rec::Vector3D truthPos() const { return m_truthPos; }
 
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
   inline float charge() const { return m_charge; }
@@ -101,6 +100,9 @@ public:
   /** @brief Add charge and a simHit to a pixel */
   void FillCharge(std::pair<int, int> i_uv, float charge, const SimHitWrapper& simHitWrapper);
 
+  void ApplyChargeSmearing(Rndm::Numbers& rndm_charge);
+  void ApplyThreshold(const float threshold);
+
   /** @brief Get one pixel's collected charge */
   float GetCharge(std::pair<int, int> i_uv) const;
 
@@ -142,10 +144,6 @@ std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap);
 std::vector<Cluster> Clusterize_NoClustering(const HitMap& hitMap);
 
 /* -- helpers -- */
-
-/** @brief Create a digiHit with correct hitLinks from a SimHitWrapper
- * @note Creates the digiHit and corresponding links in the correct collections */
-void CreateDigiHit(const SimHitWrapper& simHitWrapper, edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::rec::Vector3D& position, const float charge);
 
 /** @brief Convert a dd4hep::rec::Vector3D to edm4hep::Vector3d and vice-versa */
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);

@@ -106,7 +106,7 @@ private:
   /** @brief Move the truth position in the simHitWrapper along the computed path to the depleted region center (as defined by the digitizer Gaudi property) 
    * @note Only used for plotting the residuals, does not change the output collections in any way.
    * @note If the path does not reach the depleted region center, the truth position is moved to the path end closest to the depleted region center */
-  void MoveTruthPosition(SimHitWrapper& simHit, const Path& path) const;
+  void MoveTruthPosition(const SimHitWrapper& simHit, const Path& path) const;
 };
 
 

@@ -1,4 +1,5 @@
 #pragma once
+// VTXdigi_Modular/include/IChargeCollector.h
 
 #include <memory>
 #include "DDRec/SurfaceManager.h"
@@ -7,10 +8,7 @@
 
 struct VTXdigi_Modular;
 
-
 namespace VTXdigi_tools {
-  
-  using ::VTXdigi_Modular; 
   
   class SimHitWrapper; // forward-declare things in include/VTXdigi_tools.h
   class HitMap;

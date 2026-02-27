@@ -333,6 +333,7 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
   I would start from the simple algo here: https://www.redblobgames.com/grids/line-drawing.html */
 
   Path path(simHit, trafoMatrix, m_digitizer);
+  MoveTruthPosition(simHit, path); // shifts the sim hit position to the depth in the sensor where most charge is collected, to get useful residual plots
 
   const int stepCount = std::max(1, static_cast<int>(std::ceil(path.length / m_stepLength)));
   const float segmentCharge = simHit.charge() / stepCount;
@@ -407,8 +408,10 @@ void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_se
   }
 }
 
-void ChargeCollector_LUT::MoveTruthPosition(SimHitWrapper& simHit, const Path& path) const {
+void ChargeCollector_LUT::MoveTruthPosition(const SimHitWrapper& simHit, const Path& path) const {
   const float w_target = m_digitizer.DepletedRegionDepthCenter(); 
+  if (w_target == 0.f) 
+    return;
 
   /* shift the sim hit position along the path to the depth that is closest to the target w (ie. target depth) */
 
@@ -420,7 +423,7 @@ void ChargeCollector_LUT::MoveTruthPosition(SimHitWrapper& simHit, const Path& p
   else if (t > 1.f)
     t = 1.f;
 
-  simHit.truthPos() = path.entry + t * path.travel;
+  simHit.SetTruthPos(path.entry + t * path.travel);
 }
 
 /* -- Single pixel approach -- */
