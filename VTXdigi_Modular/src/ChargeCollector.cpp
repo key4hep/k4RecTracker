@@ -309,7 +309,7 @@ int LookupTable::_FindIndex (const Index_inPix& j, const int col, const int row)
   if (j[0] < 0 || j[0] >= m_binCount[0] 
     || j[1] < 0 || j[1] >= m_binCount[1]
     || j[2] < 0 || j[2] >= m_binCount[2] ) [[unlikely]] {
-    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: index out of range");
+    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: in-pix bin out of range");
   }
   if (col < 0 || col >= m_matrixSize || row < 0 || row >= m_matrixSize) [[unlikely]] {
     throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: col or row out of range");
@@ -360,6 +360,8 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
     }
   } // loop over segments
 
+  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(path.length, path.lengthG4);
+
   DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit);
 }
 
@@ -395,7 +397,7 @@ void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_se
   const int row_max = std::min(lutSize, pixelCount_v - i_v_origin);
 
   for (int col = col_min; col < col_max; ++col) {
-    const int i_u = (i_u_origin) + col; // convert from col in [0, matrixSize) to pixel offset in [-matrixSize_half, matrixSize_half]. Note size_half = (size-1)/2
+    const int i_u = i_u_origin + col; // convert from col in [0, matrixSize) to pixel offset in [-matrixSize_half, matrixSize_half]. Note size_half = (size-1)/2
 
     for (int row = row_min; row < row_max; ++row) {
       const int i_v = i_v_origin + row;

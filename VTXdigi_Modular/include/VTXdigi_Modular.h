@@ -122,7 +122,7 @@ private:
 
   /* LUT */
   Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
-  Gaudi::Property<float> m_LUT_stepLength{this, "LookupTableSegmentStepLength", 0.0001f, "Length of the segments that a particle path through the sensor is split into. The deposited charge is distributed evenly over the segments, and each segments charge is distributed according to the in-pixel bin the segment center falls into. In mm. Defaults to 0.0004 mm."};
+  Gaudi::Property<float> m_LUT_stepLength{this, "LookupTableSegmentStepLength", 0.0004f, "Length of the segments that a particle path through the sensor is split into. The deposited charge is distributed evenly over the segments, and each segments charge is distributed according to the in-pixel bin the segment center falls into. In mm. Defaults to 0.0004 mm."};
   
   /* -- Services, geometry variables -- */
   
@@ -145,7 +145,7 @@ private:
 
   std::pair<size_t, size_t> m_pixelCount = {0, 0}; 
   std::pair<float, float> m_pixelPitch = {0.0f, 0.0f};
-  float m_sensorThickness = 0.0f;
+  float m_sensorThickness = 0.0f; // also in mm
   std::pair<float, float> m_sensorLength = {0.0f, 0.0f};
   TGeoRotation m_sensorNormalRotation = TGeoRotation("sensorNormalRotation"); // rotation to rotate the sensor local coordinate system. Initialised to unit matrix.
 
