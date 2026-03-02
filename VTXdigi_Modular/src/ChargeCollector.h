@@ -46,7 +46,10 @@ std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, con
 
 /* -- Charge collector algorithm: LUT-based -- */
 
+
 class LookupTable {
+  /* TODO: use sparse storage (instead of storing ALL lut entries, even though ~80% are empty (for TPSCo 65nm CIS)). Make sure to keep each matrix contiguous, because we iterate over those. (maybe even move to iterator over matrix instead of getting each weight individually). This will also improve performance in HitMap::FillCharge() because ~80% less operations have to be performed. */
+
   Index_inPix m_binCount;
   int m_matrixSize;
   int m_matrixSize_half; // =(matrixSize-1)/2 (for better performance in hot loop)

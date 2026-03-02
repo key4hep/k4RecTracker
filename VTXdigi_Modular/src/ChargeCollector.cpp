@@ -379,30 +379,28 @@ Index_segment ChargeCollector_LUT::ComputeSegmentIndices(const int step, const i
 }
 
 void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float segmentCharge, const int segmentsInBin, const SimHitWrapper& simHit) const {
-  
-  /* TODO: optimise this? Or does the compiler solve the inefficiency? */
 
-  int lutSize = m_LUT.GetSize();
-  int i_u_origin = i_seg.i.first - m_LUT.GetSizeHalf(); // pix index of leftmost pixel in LUT matrix
-  int i_v_origin = i_seg.i.second - m_LUT.GetSizeHalf();
-  int pixelCount_u = static_cast<int>(m_digitizer.PixelCount().first);
-  int pixelCount_v = static_cast<int>(m_digitizer.PixelCount().second);
-  float charge = segmentCharge * segmentsInBin;
+  /* cache things, this is the hottest loop */
+  const int lutSize = m_LUT.GetSize();
+  const int i_u_origin = i_seg.i.first - m_LUT.GetSizeHalf(); // pix index of leftmost pixel in LUT matrix
+  const int i_v_origin = i_seg.i.second - m_LUT.GetSizeHalf();
+  const int pixelCount_u = static_cast<int>(m_digitizer.PixelCount().first);
+  const int pixelCount_v = static_cast<int>(m_digitizer.PixelCount().second);
+  const float charge = segmentCharge * segmentsInBin;
 
-  for (int col = 0; col < lutSize; ++col) {
-    const int i_u = i_u_origin + col; // convert from col in [0, matrixSize) to pixel offset in [-matrixSize_half, matrixSize_half]. Note size_half = (size-1)/2
-    if (i_u < 0 || i_u >= pixelCount_u)
-      continue;
+  const int col_min = std::max(0, -i_u_origin);
+  const int col_max = std::min(lutSize, pixelCount_u - i_u_origin);
 
-    for (int row = 0; row < lutSize; ++row) {
+  const int row_min = std::max(0, -i_v_origin);
+  const int row_max = std::min(lutSize, pixelCount_v - i_v_origin);
+
+  for (int col = col_min; col < col_max; ++col) {
+    const int i_u = (i_u_origin) + col; // convert from col in [0, matrixSize) to pixel offset in [-matrixSize_half, matrixSize_half]. Note size_half = (size-1)/2
+
+    for (int row = row_min; row < row_max; ++row) {
       const int i_v = i_v_origin + row;
-      if (i_v < 0 || i_v >= pixelCount_v)
-        continue;
         
       const float chargeToAdd = m_LUT.GetWeight(i_seg.j, col, row) * charge;
-      if (chargeToAdd < 1e-5f) // skip very small contributions to avoid 
-        continue;
-
       hitMap.FillCharge({i_u, i_v}, chargeToAdd, simHit);
     }
   }

@@ -223,13 +223,14 @@ HitMap::HitMap(std::pair<size_t, size_t> pixelCount) : m_pixCount(pixelCount) {
 }
 
 void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, const SimHitWrapper& simHitWrapper) {
-  if (_OutOfBounds(i_uv)) {
+  if (charge < 1.e-3f)
+    return; // skip very small charge additions for performance (this is NECESSARY)
+  if (_OutOfBounds(i_uv)) [[unlikely]]
     throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(i_uv.first) + ", " + std::to_string(i_uv.second) + ") out of range");
-  }
 
-  m_pixels.try_emplace(i_uv, Pixel(i_uv)); // does nothing if pixel already exists, otherwise creates it with default charge 0
-  m_pixels[i_uv].charge += charge;
-  m_pixels[i_uv].simHits.insert(&simHitWrapper); 
+  auto [iter, inserted] = m_pixels.try_emplace(i_uv, Pixel(i_uv));
+  iter->second.charge += charge;
+  iter->second.simHits.insert(&simHitWrapper); 
 }
 
 void HitMap::ApplyChargeSmearing(const Rndm::Numbers& rndm_charge) {
@@ -252,7 +253,7 @@ void HitMap::ApplyThreshold(const float threshold) {
 }
 
 float HitMap::GetCharge(std::pair<int, int> i_uv) const {
-  if (_OutOfBounds(i_uv)) {
+  if (_OutOfBounds(i_uv)) [[unlikely]] {
     throw std::runtime_error("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(i_uv.first) + ", " + std::to_string(i_uv.second) + ") out of range");
   }
   auto it = m_pixels.find(i_uv);
