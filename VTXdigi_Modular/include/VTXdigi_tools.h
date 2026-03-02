@@ -42,7 +42,7 @@ class SimHitWrapper {
   mutable dd4hep::rec::Vector3D m_truthPos; // truth position of the simHit, in local coordinates. Can be adjusted by the charge collection algorithm. Only used for histogramming after filling the hits
 
 public:
-  SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
+  SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
   SimHitWrapper(const SimHitWrapper& other) = default;
   SimHitWrapper(SimHitWrapper&& other) = default;
   SimHitWrapper() = default;
@@ -100,7 +100,7 @@ public:
   /** @brief Add charge and a simHit to a pixel */
   void FillCharge(std::pair<int, int> i_uv, float charge, const SimHitWrapper& simHitWrapper);
 
-  void ApplyChargeSmearing(Rndm::Numbers& rndm_charge);
+  void ApplyChargeSmearing(const Rndm::Numbers& rndm_charge);
   void ApplyThreshold(const float threshold);
 
   /** @brief Get one pixel's collected charge */

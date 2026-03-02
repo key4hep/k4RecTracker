@@ -149,8 +149,8 @@ private:
   std::pair<float, float> m_sensorLength = {0.0f, 0.0f};
   TGeoRotation m_sensorNormalRotation = TGeoRotation("sensorNormalRotation"); // rotation to rotate the sensor local coordinate system. Initialised to unit matrix.
 
-  mutable Rndm::Numbers m_rndm_charge; // TODO: Is this multithreading safe?
-  mutable Rndm::Numbers m_rndm_time;
+  Rndm::Numbers m_rndm_charge; // TODO: Is this multithreading safe?
+  Rndm::Numbers m_rndm_time;
 
   /* -- Counters -- */
 

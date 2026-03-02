@@ -4,12 +4,8 @@
 namespace VTXdigi_tools {
 
 
-SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const dd4hep::rec::SurfaceMap* surfaceMap, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simTrackerHit(simTrackerHit) {
+SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simTrackerHit(simTrackerHit) {
   m_cellID = GetCellID_short(m_simTrackerHit);
-  const auto surfaceIt = surfaceMap->find(m_cellID);
-  if (surfaceIt == surfaceMap->end())
-    throw std::runtime_error("VTXdigi_Allpix2::HitInfo constructor: Could not find SimSurface for this hit's (reduced) cellID: " + std::to_string(m_cellID));
-  dd4hep::rec::ISurface* surface = surfaceIt->second;
 
   const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
   m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
@@ -236,7 +232,7 @@ void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, const SimHitWrap
   m_pixels[i_uv].simHits.insert(&simHitWrapper); 
 }
 
-void HitMap::ApplyChargeSmearing(Rndm::Numbers& rndm_charge) {
+void HitMap::ApplyChargeSmearing(const Rndm::Numbers& rndm_charge) {
   auto hitIter = m_pixels.begin();
   while (hitIter != m_pixels.end()) {
     hitIter->second.charge = std::max(hitIter->second.charge + static_cast<float>(rndm_charge()), 0.f); // don't allow negative charge after smearing

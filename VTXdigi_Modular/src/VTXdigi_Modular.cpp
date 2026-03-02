@@ -83,7 +83,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
   for (const auto& simTrackerHit : simTrackerHits) {
     if (CheckSimhitLayer(simTrackerHit)){
       const dd4hep::DDSegmentation::CellID cellID = VTXdigi_tools::GetCellID_short(simTrackerHit);
-      sensorSimHits[cellID].emplace_back(simTrackerHit, m_surfaceMap, m_cellIdDecoder); // simTrackerHits are copied here. Pointers to these are passed around (eg. in hit/pixel/cluster objects).
+      sensorSimHits[cellID].emplace_back(simTrackerHit, m_cellIdDecoder); // simTrackerHits are copied here. Pointers to these are passed around (eg. in hit/pixel/cluster objects).
       if (m_debugHistograms.value())
         FillHistograms_perSimHit(sensorSimHits[cellID].back());
     }
@@ -110,9 +110,9 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
       m_chargeCollector->FillHit(simHit, hitMap, trafoMatrix); // uses the selected charge collection method
     }
 
-    // if (m_smearing_charge.value() > 0.f)
-    //   hitMap.ApplyChargeSmearing(*this);
-      /* TODO charge smearing currently causes a crash, because apparently passing Rnmd:Numbers via reference is not a thing. Workarounds require some restructuring (eg. adding HitMap as friend to VTXdigi_modular and accessing m_rndm_charge directly), but I cannot be assed to do this now. */
+    
+    if (m_smearing_charge.value() > 0.f) 
+      hitMap.ApplyChargeSmearing(m_rndm_charge);
     if (m_threshold.value() > 0.f)
       hitMap.ApplyThreshold(m_threshold.value());
 
@@ -141,9 +141,6 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     throw GaudiException("Threshold " + std::to_string(m_threshold.value()) + " e- is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
   if (m_smearing_charge.value() < 0.f)
     throw GaudiException("Charge smearing sigma " + std::to_string(m_smearing_charge.value()) + " e- is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-
-  if (m_smearing_charge.value() != 0.f)
-    throw GaudiException("Charge smearing is currently broken and will reliably lead to a crash later on. Set ChargeSmearing = 0 for now.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE); // TODO: fix. (see comment in operator())
 
   if (m_threshold.value() <= 5 * m_smearing_charge.value())
     warning() << "Threshold " << m_threshold.value() << " e- is less than 5 times the charge smearing sigma " << m_smearing_charge.value() << " e-. This digitiser does only apply smearing to pixels that collect any charge from simHits, so it cannot simulate random firing pixels. (doing this by drawing a noise for every pixel in the detector for every event would be INCREDIBLY slow. A work-around to simulate random pixels firing might be implemented in the future)." << endmsg;
