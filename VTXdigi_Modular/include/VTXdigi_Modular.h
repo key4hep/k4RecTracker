@@ -1,45 +1,29 @@
-#pragma once
 // VTXdigi_Modular/include/VTXdigi_Modular.h
+#pragma once
 
 #include "IChargeCollector.h" 
 #include "VTXdigi_tools.h"
 
+// GAUDI
+#include "GAUDI_VERSION.h"
 #include "Gaudi/Property.h"
-
-#include "Gaudi/Accumulators/RootHistogram.h"
 #include "Gaudi/Accumulators/Histogram.h"
-
 #include "GaudiKernel/IRndmGenSvc.h"
-#include "GaudiKernel/RndmGenerators.h"
-
-#include "edm4hep/SimTrackerHitCollection.h"
-#include "edm4hep/EventHeaderCollection.h"
-#include "edm4hep/TrackerHitPlaneCollection.h"
-#include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
 
 // K4FWCORE
 #include "k4Interface/IGeoSvc.h"
 #include "k4FWCore/Transformer.h"
 #include "k4Interface/IUniqueIDGenSvc.h"
 
+// EDM4HEP
+#include "edm4hep/SimTrackerHitCollection.h"
+#include "edm4hep/EventHeaderCollection.h"
+#include "edm4hep/TrackerHitPlaneCollection.h"
+#include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
+
 // DD4HEP
 #include "DDRec/SurfaceManager.h"
 
-// ROOT
-#include "TRandom2.h"
-
-// C++ std
-#include <string>
-#include <vector>
-#include <cmath> // for std::fmod
-#include <typeinfo>
-
-// for debugging-csv
-#include <iostream>
-#include <fstream>  // for std::ofstream
-#include <sstream>
-
-#include "GAUDI_VERSION.h"
 
 /** @class VTXdigi_Modular
  *
@@ -63,6 +47,26 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
 
   std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> operator() (const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const override;
 
+  /** @brief Increment histograms. To be called from the charge collector, once per simHit */
+  void FillHistograms_fromChargeCollector_perSimHit(const float pathLength, const float pathLength_Geant4) const;
+
+  /* -- Accessors for charge collector -- */
+
+  inline std::array<float, 3> SensorDimensions() const { return {m_sensorLength.first, m_sensorLength.second, m_sensorThickness}; }
+
+  inline std::pair<float, float> PixelPitch() const { return m_pixelPitch; }
+
+  inline std::pair<size_t, size_t> PixelCount() const { return m_pixelCount; }
+
+  inline float DepletedRegionDepthCenter() const { return m_depletedRegionDepthCenter; }
+
+  inline float Threshold() const { return m_threshold; }
+  
+  inline float DrawChargeSmearingNumber() const { return static_cast<float>(m_rndm_charge()); }
+
+  inline std::string LutFileName() const { return m_LUT_FileName; }
+  inline float LutStepLength() const { return m_LUT_stepLength; }
+
 private: 
 
   /* ---- Initialization & finalization functions ---- */
@@ -70,6 +74,8 @@ private:
   void InitServicesAndGeometry();
   void InitLayersAndSensors();
   void InitHistograms();
+
+  void PrintCountersSummary() const;
 
   /* ---- Core algorithm functions ---- */
 
@@ -157,9 +163,12 @@ private:
   mutable Gaudi::Accumulators::Counter<> m_counter_eventsRead{this, "Events read"};
   mutable Gaudi::Accumulators::Counter<> m_counter_eventsRejected_noSimHits{this, "Events rejected (no simHits)"};
   mutable Gaudi::Accumulators::Counter<> m_counter_eventsAccepted{this, "Events accepted"};
+
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRead{this, "SimTrackerHits read"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRejected_LayerNotToBeDigitized{this, "SimTrackerHits rejected (layer not to be digitized)"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsAccepted{this, "SimTrackerHits accepted"};
+
+  mutable Gaudi::Accumulators::Counter<> m_counter_digiHitsCreated{this, "Digi hits created"};
 
   /* -- Histograms -- */
 
@@ -197,7 +206,6 @@ private:
     >
   > m_hist1d;
 
-
   enum{
     histProfile1d_clusterSize_vs_hit_z,
     histProfile1d_residual_u_vs_hit_z,
@@ -217,7 +225,6 @@ private:
       histProfile1dArrayLen
     >
   > m_histProfile1d;
-
 
   enum { 
     hist2d_hitMap_simHits,
@@ -244,7 +251,6 @@ private:
     >
   > m_hist2d;
 
-
   enum { 
     hist1dglobal_pathLength,
     hist1dglobal_pathLength_Geant4,
@@ -261,26 +267,5 @@ private:
     >,
     hist1dglobalArrayLen
   > m_hist1dglobal;
-
-public:
-
-  inline std::array<float, 3> SensorDimensions() const { return {m_sensorLength.first, m_sensorLength.second, m_sensorThickness}; }
-
-  inline std::pair<float, float> PixelPitch() const { return m_pixelPitch; }
-
-  inline std::pair<size_t, size_t> PixelCount() const { return m_pixelCount; }
-
-  inline float DepletedRegionDepthCenter() const { return m_depletedRegionDepthCenter; }
-
-  inline float Threshold() const { return m_threshold; }
-  
-  inline float DrawChargeSmearingNumber() const { return static_cast<float>(m_rndm_charge()); }
-
-  /** @brief Increment histograms. To be called from the charge collector, once per simHit */
-  void FillHistograms_fromChargeCollector_perSimHit(const float pathLength, const float pathLength_Geant4) const;
-
-  inline std::string LutFileName() const { return m_LUT_FileName; }
-  inline float LutStepLength() const { return m_LUT_stepLength; }
-
 }; // class VTXdigi_Modular
 

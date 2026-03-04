@@ -1,3 +1,5 @@
+// VTXdigi_Modular/src/ChargeCollector.cpp
+
 #include "../src/ChargeCollector.h"
 
 namespace VTXdigi_tools {
@@ -52,25 +54,7 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
   const float scaleFactor_entry = shiftDist_w / travel.z();
   entry = simPos - scaleFactor_entry * travel;
 
-  /* Step 3 -check that path is not much longer than the length it had in Geant4 */
-  lengthG4 = simHit.hitPtr()->getPathLength();
-  if (travel.r() > 1.05f * lengthG4) {
-    digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*1000) << " um to " << static_cast<int>(lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
-
-    /* make sure the path stays centred around the simTrackerHit position */
-    const float t_simPos = ( (simPos - entry).dot(travel) ) / (travel.r() * travel.r());
-
-    const float t_length_halved = 0.5f * lengthG4 / travel.r(); // length of the new path in terms of t [0,1] on old path, halved
-    const float t_center = std::max(t_length_halved, std::min(t_simPos, 1.f - t_length_halved)); // center of new path clamped to [t_length_half, 1 - t_length_half] while not exceeding [0,1]
-
-    const float t_min = t_center - t_length_halved;
-    const float t_max = t_center + t_length_halved;
-
-    entry = entry + t_min * travel;
-    travel = (t_max - t_min) * travel;
-  }
-
-  /* Step 4 - clip path to sensor edges (in u/v) */
+  /* Step 3 - clip path to sensor edges (in u/v) */
   std::pair<float, float> t = std::make_pair(0.f, 1.f); // parametrize path as entry + t*travel; t in [0,1]
   t = ComputePathClippingFactors(t, entry.x(), travel.x(), digitizer.SensorDimensions().at(0));
   t = ComputePathClippingFactors(t, entry.y(), travel.y(), digitizer.SensorDimensions().at(1));
@@ -88,6 +72,24 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
       digitizer.debug() << " -> entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, sensor dim. (+-" << digitizer.SensorDimensions().at(0)/2 << ", +-" << digitizer.SensorDimensions().at(1)/2 << ") mm" << endmsg;
       digitizer.debug() << " -> Path length " << static_cast<int>(travel.r()*1000) << " um, in G4 " << static_cast<int>(simHit.hitPtr()->getPathLength()*1000) << " um" << endmsg;
     }
+  }
+
+  /* Step 4 -check that path is not much longer than the length it had in Geant4 */
+  lengthG4 = simHit.hitPtr()->getPathLength();
+  if (travel.r() > 1.05f * lengthG4) {
+    digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*1000) << " um to " << static_cast<int>(lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
+
+    /* make sure the path stays centred around the simTrackerHit position */
+    const float t_simPos = ( (simPos - entry).dot(travel) ) / (travel.r() * travel.r());
+
+    const float t_length_halved = 0.5f * lengthG4 / travel.r(); // length of the new path in terms of t [0,1] on old path, halved
+    const float t_center = std::max(t_length_halved, std::min(t_simPos, 1.f - t_length_halved)); // center of new path clamped to [t_length_half, 1 - t_length_half] while not exceeding [0,1]
+
+    const float t_min = t_center - t_length_halved;
+    const float t_max = t_center + t_length_halved;
+
+    entry = entry + t_min * travel;
+    travel = (t_max - t_min) * travel;
   }
 
   length = travel.r();

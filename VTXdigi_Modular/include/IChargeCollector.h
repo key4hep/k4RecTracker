@@ -1,10 +1,7 @@
-#pragma once
 // VTXdigi_Modular/include/IChargeCollector.h
+#pragma once
 
-#include <memory>
-#include "DDRec/SurfaceManager.h"
-
-#include "edm4hep/SimTrackerHit.h"
+#include "TGeoMatrix.h"
 
 struct VTXdigi_Modular;
 

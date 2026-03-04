@@ -1,26 +1,15 @@
+// VTXdigi_Modular/include/VTXdigi_tools.h
 #pragma once
 
-#include <vector>
-#include <numeric>
-#include <tuple>
-
-#include "Gaudi/Property.h"
+#include "GaudiKernel/GaudiException.h"
 #include "GaudiKernel/RndmGenerators.h"
 
-#include "DDRec/SurfaceManager.h"
 #include "DDRec/Surface.h"
 
-#include "DDRec/Material.h"
-
-#include "DD4hep/Objects.h"
-#include "DD4hep/Volumes.h"
-#include "DD4hep/Shapes.h"
-#include "DD4hep/DetElement.h"
-
-#include "edm4hep/TrackerHitPlaneCollection.h"
-#include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
+#include "edm4hep/SimTrackerHit.h"
 
 #include <queue>
+#include <unordered_set>
 
 namespace VTXdigi_tools {
 
@@ -30,7 +19,6 @@ bool ToolTest();
 
 
 /* -- SimHitWrapper -- */
-
 
 /** @brief Class to contain all information about a simTrackerHit that is needed for the digitization.
  * @note this is where the simTrackerHit is actually stored, everything else (pixelHit / cluster) will store pointers to this. */
@@ -62,7 +50,7 @@ public:
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
 
-/* -- HitMap (and everything we need for it to work) -- */
+/* -- Pixel -- */
 
 /** @brief A pixel in the hit map. Can have multiple contributing simHits */
 struct Pixel {
@@ -83,6 +71,23 @@ struct Hash_PairInt {
     return (static_cast<uint64_t>(i_uv.first) << 32) ^ static_cast<uint32_t>(i_uv.second);
   }
 };
+
+/* -- Cluster -- */
+
+/** @brief Contains a clusters charge, pointers to all pixels in the cluster, and pointers to all contributing simHits */
+struct Cluster {
+  std::vector<const Pixel*> pixels; // pointer to pixels in this cluster (stored by value in HitMap::m_pixels)
+  std::unordered_set<const SimHitWrapper*> simHits;
+  float charge = 0.f;
+
+  /** @brief Compute the center position of a cluster via charge-weighed center of gravity */
+  std::pair<float, float> ComputePos() const;
+};
+
+/** @brief Get the indices of all direct neighbors of a pixel */
+std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
+
+/* -- HitMap -- */
 
 using PixelMap = std::unordered_map<std::pair<int, int>, Pixel, Hash_PairInt>;
 
@@ -115,33 +120,18 @@ public:
   /** @brief Return the number of pixels with charge */
   inline int GetTotalPixelsWithCharge() const { return m_pixels.size(); };
 
+  /** @brief Clusterize hit pixels in the HitMap, using direct neighbors */
+  std::vector<Cluster> ComputeClusters() const;
+
+  /** @brief Return a vector of clusters, where each cluster is a single pixel */
+  std::vector<Cluster> ComputeClusters_singePixels() const;
+
   inline void Reset() { m_pixels.clear(); };
 
 private:
   /** @brief Returns true if the pixel is out of bounds */
   inline bool _OutOfBounds(std::pair<int, int> i_uv) const;
 }; // class HitMap
-
-/* -- Clusterization -- */
-
-/** @brief Contains a clusters charge, pointers to all pixels in the cluster, and pointers to all contributing simHits */
-struct Cluster {
-  std::vector<const Pixel*> pixels; // pointer to pixels in this cluster (stored by value in HitMap::m_pixels)
-  std::unordered_set<const SimHitWrapper*> simHits;
-  float charge = 0.f;
-};
-
-/** @brief Compute the center position of a cluster, computed via charge-weighed center of gravity */
-std::pair<float, float> ComputeClusterPos_Weighted(const Cluster& cluster);
-
-/** @brief Get the indices of all direct neighbors of a pixel */
-std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
-
-/** @brief Clusterize pixels in a HitMap, using direct neighbors */
-std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap);
-
-/** @brief Clusterize pixels in a HitMap, without any clustering (ie. each pixel is its own cluster) */
-std::vector<Cluster> Clusterize_NoClustering(const HitMap& hitMap);
 
 /* -- helpers -- */
 

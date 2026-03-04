@@ -1,3 +1,4 @@
+// VTXdigi_Modular/src/VTXdigi_Modular.cpp
 #include "VTXdigi_Modular.h"
 
 DECLARE_COMPONENT(VTXdigi_Modular)
@@ -63,12 +64,15 @@ StatusCode VTXdigi_Modular::initialize() {
 
 StatusCode VTXdigi_Modular::finalize() {
   info() << "FINALIZING VTXdigi_Modular..." << endmsg;
+
+  PrintCountersSummary();
+
   debug() << " - finalized successfully." << endmsg;
   return StatusCode::SUCCESS;
-} 
+}
 
 
-/* -- Event loop -- */
+/* ---- Event loop ---- */
 
 std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> VTXdigi_Modular::operator()
   (const edm4hep::SimTrackerHitCollection& simTrackerHits, const edm4hep::EventHeaderCollection& headers) const {
@@ -749,10 +753,10 @@ std::vector<VTXdigi_tools::Cluster> VTXdigi_Modular::Clusterize(const VTXdigi_to
 
   if (m_clusterize.value()) {
     debug() << "     - Clusterizing " << hitMap.Hits().size() << " hits with a total charge of " << hitMap.GetTotalCharge() << " e." << endmsg;
-    return VTXdigi_tools::Clusterize_NextNeighbors(hitMap);
+    return hitMap.ComputeClusters();
   }
   else {
-    return VTXdigi_tools::Clusterize_NoClustering(hitMap);
+    return hitMap.ComputeClusters_singePixels();
   }
 }
 
@@ -768,13 +772,14 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
       error() << "Cluster with non-positive charge found, cannot compute cluster position" << endmsg;
     }
     
-    const std::pair<float, float> pos_index = VTXdigi_tools::ComputeClusterPos_Weighted(cluster);
+    const std::pair<float, float> pos_index = cluster.ComputePos();
     const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::ComputePosFromPixIndex_local(pos_index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
     const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::LocalToGlobal(pos_local, trafoMatrix);
     
     debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << pos_index.first << ", " << pos_index.second << "). Has " << cluster.simHits.size() << " contributing simHits." << endmsg;
     
     edm4hep::MutableTrackerHitPlane digiHit = digiHits.create();
+    ++m_counter_digiHitsCreated;
     
     float timeStamp = 0.f;      
     for (const auto& simHit : cluster.simHits) {
@@ -905,5 +910,24 @@ void VTXdigi_Modular::FillHistograms_fromChargeCollector_perSimHit(const float p
 // hist1d_digiHitsPerSimHit,
 // hist2d_clusterSize_vs_module_z,
 
+void VTXdigi_Modular::PrintCountersSummary() const {
+  const int colWidths[] = {65, 10};  
+  info() << " Counters summary: " << endmsg;
+  info() << " | " << std::setw(colWidths[0]) << std::left << "Events read"
+         << " | " << std::setw(colWidths[1]) << std::right << m_counter_eventsRead.value() << " |" << endmsg;
+  info() << " | " << std::setw(colWidths[0]) << std::left << "Events rejected (no simHits)"
+         << " | " << std::setw(colWidths[1]) << std::right << m_counter_eventsRejected_noSimHits.value() << " |" << endmsg;
+  info() << " | " << std::setw(colWidths[0]) << std::left << "Events accepted"
+         << " | " << std::setw(colWidths[1]) << std::right << m_counter_eventsAccepted.value() << " |" << endmsg;
 
+  info() << " | " << std::setw(colWidths[0]) << std::left << "SimTrackerHits read"
+         << " | " << std::setw(colWidths[1]) << std::right << m_counter_simHitsRead.value() << " |" << endmsg;
+  info() << " | " << std::setw(colWidths[0]) << std::left << "SimTrackerHits rejected (layer ignored)"
+         << " | " << std::setw(colWidths[1]) << std::right << m_counter_simHitsRejected_LayerNotToBeDigitized.value() << " |" << endmsg;
+  info() << " | " << std::setw(colWidths[0]) << std::left << "SimTrackerHits accepted"
+         << " | " << std::setw(colWidths[1]) << std::right << m_counter_simHitsAccepted.value() << " |" << endmsg;
+
+  info()	<<	" | "	<<	std::setw(colWidths[0])	<<	std::left	<<	"Digi hits created"
+         << " | " << std::setw(colWidths[1]) << std::right << m_counter_digiHitsCreated.value() << " |" << endmsg;
+}
 

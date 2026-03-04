@@ -1,6 +1,6 @@
+// VTXdigi_Modular/src/ChargeCollector.h
 #pragma once
 
-#include <memory>
 #include "../include/VTXdigi_Modular.h"
 
 namespace VTXdigi_tools {

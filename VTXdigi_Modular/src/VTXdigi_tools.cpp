@@ -1,8 +1,7 @@
+// VTXdigi_Modular/src/VTXdigi_tools.cpp
 #include "VTXdigi_tools.h"
-#include <iostream>
 
 namespace VTXdigi_tools {
-
 
 SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simTrackerHit(simTrackerHit) {
   m_cellID = GetCellID_short(m_simTrackerHit);
@@ -11,7 +10,7 @@ SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::un
   m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
 
   m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
-} // Hit::Hit()
+}
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
   if (&a == &b) 
@@ -25,8 +24,6 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 } // swap(Hit&, Hit&)
 
 /* -- helpers -- */
-
-
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
   return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
@@ -153,37 +150,6 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
   return indices;
 } // ComputeInPixelIndices()
 
-
-// std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<size_t, 3> binCount, const std::pair<float, float> pixelPitch, const std::pair<float, float> sensorLength, const float sensorThickness) {
-//   int j_u, j_v, j_w;
-
-//   const float posShifted_u = pos.x() + 0.5 * sensorLength.first; // shift to [0, length_u]
-//   if (posShifted_u < 0.0 || posShifted_u > sensorLength.first) {
-//     j_u = -1; // out of bounds
-//   }
-//   else {
-//     float posInPixel_u = std::fmod(posShifted_u,  pixelPitch.first);
-//     if (posInPixel_u < 0.0) posInPixel_u +=  pixelPitch.first; // ensure positive remainder
-//     j_u = ComputeBinIndex(posInPixel_u, 0.0,  pixelPitch.first / binCount[0], binCount[0]);
-//   }
-
-//   const float posShifted_v = pos.y() + 0.5 * sensorLength.second;
-//   if (posShifted_v < 0.0 || posShifted_v > sensorLength.second) {
-//     j_v = -1; // out of bounds
-//   }
-//   else {
-//     float posInPixel_v = std::fmod(posShifted_v, pixelPitch.second);
-//     if (posInPixel_v < 0.0) posInPixel_v += pixelPitch.second;
-//     j_v = ComputeBinIndex(posInPixel_v, 0.0, pixelPitch.second / binCount[1], binCount[1]);
-//   }
-
-//   // vertical (w) binning: shift to [0, thickness]
-//   const float posShifted_w = pos.z() + 0.5 * sensorThickness;
-//   j_w = ComputeBinIndex(posShifted_w, 0.0, sensorThickness / binCount[2], binCount[2]); // no fmod, so out-of-bounds is caught
-
-//   return {j_u, j_v, j_w};
-// } // ComputeInPixelIndices()
-
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
   
@@ -212,10 +178,7 @@ dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float>
   return ComputePosFromPixIndex_local(index, sensorLength, pixelPitch, 0.f);
 }
 
-
 /* -- HitMap -- */
-
-
 
 HitMap::HitMap(std::pair<size_t, size_t> pixelCount) : m_pixCount(pixelCount) {
   const int inverseOccupancy = 2000; // assume occupancy, 5e-4 is quite conservative for Z-run
@@ -223,8 +186,8 @@ HitMap::HitMap(std::pair<size_t, size_t> pixelCount) : m_pixCount(pixelCount) {
 }
 
 void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, const SimHitWrapper& simHitWrapper) {
-  if (charge < 1.e-3f)
-    return; // skip very small charge additions for performance (this is NECESSARY)
+  if (charge < 1.e-6f)
+    return; // skip very small charge additions for performance (this is NECESSARY to skip in-pix bins with weight ~0)
   if (_OutOfBounds(i_uv)) [[unlikely]]
     throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(i_uv.first) + ", " + std::to_string(i_uv.second) + ") out of range");
 
@@ -243,7 +206,6 @@ void HitMap::ApplyChargeSmearing(const Rndm::Numbers& rndm_charge) {
 
 void HitMap::ApplyThreshold(const float threshold) {
   auto hitIter = m_pixels.begin();
-
   while (hitIter != m_pixels.end()) {
     if (hitIter->second.charge < threshold)
       hitIter = m_pixels.erase(hitIter); // erase returns the iterator to the next element, so this is safe to do while iterating
@@ -281,6 +243,18 @@ inline bool HitMap::_OutOfBounds(std::pair<int, int> i_uv) const {
 
 /* -- Clusterization -- */
 
+std::pair<float, float> Cluster::ComputePos() const {
+
+  std::pair<float, float> pos{0.f, 0.f};
+  for (const Pixel* pix : pixels) {
+    pos.first += pix->index.first * pix->charge;
+    pos.second += pix->index.second * pix->charge;
+  }
+  pos.first /= charge;
+  pos.second /= charge;
+  return pos;
+}
+
 std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv) {
   return {{
     {i_uv.first - 1, i_uv.second}, // left
@@ -290,21 +264,10 @@ std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>&
   }};
 }
 
-std::pair<float, float> ComputeClusterPos_Weighted(const Cluster& cluster) {
-  std::pair<float, float> pos{0.f, 0.f};
-  for (const Pixel* pix : cluster.pixels) {
-    pos.first += pix->index.first * pix->charge;
-    pos.second += pix->index.second * pix->charge;
-  }
-  pos.first /= cluster.charge;
-  pos.second /= cluster.charge;
-  return pos;
-}
-
-std::vector<Cluster> Clusterize_NoClustering(const HitMap& hitMap) {
+std::vector<Cluster> HitMap::ComputeClusters_singePixels() const {
   std::vector<Cluster> clusters;
 
-  for (const auto& p : hitMap.Hits()) {
+  for (const auto& p : m_pixels) {
     const Pixel* pixel = &(p.second); // cluster stores pointers to pixels (pixels are stored in HitMap as values)
 
     clusters.emplace_back();
@@ -318,17 +281,13 @@ std::vector<Cluster> Clusterize_NoClustering(const HitMap& hitMap) {
   return clusters;
 }
 
-std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
+std::vector<Cluster> HitMap::ComputeClusters() const {
   /* Breadth First Search (BFS) implementation for clustering */
 
   std::vector<Cluster> clusters;
   std::unordered_set<std::pair<int,int>, Hash_PairInt> visited;
   
-  const PixelMap& pixelMap = hitMap.Hits(); // std::unordered_map<std::pair<int, int>, Pixel>
-
-  /* TODO: thresholding (eg. mark pixels<threshold as visited) */
-  
-  for (const auto& p : pixelMap) {
+  for (const auto& p : m_pixels) {
     const std::pair<int,int> seed_uv = p.first;
     if (visited.contains(seed_uv))
       continue;
@@ -345,7 +304,7 @@ std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
       queue.pop();
       
       /* Add pixl to cluster */
-      const Pixel* pixel = &(pixelMap.at(current_uv)); // get pixel pointer from map
+      const Pixel* pixel = &(m_pixels.at(current_uv)); // get pixel pointer from map
       clusters.back().pixels.push_back(pixel);
       clusters.back().charge += pixel->charge;
       for (const SimHitWrapper* simHitWrapper : pixel->simHits) {
@@ -353,7 +312,7 @@ std::vector<Cluster> Clusterize_NextNeighbors(const HitMap& hitMap) {
       }
       /* Add all neighboring pixels to queue */
       for (const auto& neighbor_uv : GetDirectNeighbors(current_uv)) {
-        if (!pixelMap.contains(neighbor_uv))
+        if (!m_pixels.contains(neighbor_uv))
           continue;
         if (visited.contains(neighbor_uv))
           continue;
@@ -649,37 +608,6 @@ bool ToolTest() {
       std::cout << " - PASSED" << std::endl;
     passed = passed && passedInternal;
   }
-
-  // std::cout << " | VTXdigi_tools::ComputePixelCenter_Local()";
-  // {
-  //   bool passedInternal = true;
-
-  //   const double thickness_inner=0.5, thickness_outer=0.5;
-  //   const dd4hep::rec::Vector3D u_val(1,0,0), v_val(0,1,0), n_val(0,0,1), origin_val(0,0,0);
-  //   dd4hep::Box box(0.5,1.0,0.05); // half-lengths in cm
-  //   dd4hep::Material air = dd4hep::Material("Air");
-  //   dd4hep::Volume volume = dd4hep::Volume("dummyVol", box, air);
-  //   const int id_val = 0;
-  //   std::unique_ptr<dd4hep::rec::ISurface> surface = std::make_unique<dd4hep::rec::VolPlaneImpl>(dd4hep::rec::SurfaceType::Plane, thickness_inner, thickness_outer, u_val, v_val , n_val, origin_val, volume, id_val );    
-
-  //   std::cout << "length along u: " << surface->length_along_u() << " mm, length along v: " << surface->length_along_v() << " mm" << std::endl;
-
-  //   const std::pair<float, float> pixelPitch = {1.0f, 2.0f};
-
-  //   std::pair<int, int> pixelIndex = {0,0};
-  //   dd4hep::rec::Vector3D result = ComputePixelCenter_Local(pixelIndex, *surface, pixelPitch, 0.f);
-  //   dd4hep::rec::Vector3D expected( -4.5f, -9.0f, 0.f );
-  //   if (result != expected) {
-  //     std::cout << " - FAILED " << std::endl << " | -> Expected pixel center at (" << expected.x() << ", " << expected.y() << ", " << expected.z() << "), got (" << result.x() << ", " << result.y() << ", " << result.z() << ")" << std::endl;
-  //     passedInternal = false;
-  //   }
-
-    // delete surface;
-
-  //   if (passedInternal)
-  //     std::cout << " - PASSED" << std::endl;
-  //   passed = passed && passedInternal;
-  // }
 
   if (passed)
     std::cout << " | All tests passed." << std::endl;
