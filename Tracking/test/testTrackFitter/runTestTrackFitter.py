@@ -34,12 +34,13 @@ trackFitter = GenfitTrackFitter(
     OutputLevel=DEBUG,
 )
 
-trackFitter.Beta_init = args.Beta_init
-trackFitter.Beta_final = args.Beta_final
-trackFitter.Beta_steps = args.Beta_steps
-trackFitter.skip_background = False
+trackFitter.BetaInit = args.Beta_init
+trackFitter.BetaFinal = args.Beta_final
+trackFitter.BetaSteps = args.Beta_steps
+trackFitter.SkipUnmatchedTracks = False
+trackFitter.RunSingleEvaluation = True
 trackFitter.debug_lvl = 0
-trackFitter.single_evaluation = True
+
 
 # ################ Detector geometry
 from Configurables import GeoSvc

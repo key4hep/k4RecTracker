@@ -702,7 +702,7 @@ struct GenfitTrackFitter final :
         Gaudi::Property<bool> m_skip_unmatchedTracks{this, "SkipUnmatchedTracks", true, "Skip unmatched tracks (track.type = 0) from fitting"};
         Gaudi::Property<bool> m_singleEvaluation{
             this,
-            "single_evaluation",
+            "RunSingleEvaluation",
             false,
             "Evaluation mode: if true, the fit is performed only once using the first particle hypothesis in std::vector<int> m_particleHypothesis (single evaluation mode)."
             "If false, the algorithm scans all particle hypotheses in the vector and selects the one that provides the best fit in terms of chi2/ndf."
