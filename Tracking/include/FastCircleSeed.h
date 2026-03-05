@@ -13,11 +13,6 @@ struct Point2D_xy {
     double y;
 };
 
-// Simple error structure: angular error sigma_phi
-struct HitError {
-    double sigma_phi; 
-};
-
 /*
  * Generic version of the CMS FastCircleFit.
  * Fits a circle to a set of weighted 2D hits using the method
@@ -101,9 +96,6 @@ public:
 private:
 
     template <typename C>
-    // void calculate(const std::vector<Point2D_xy>& pts,
-    //                const std::vector<HitError>& errs,
-    //                C& x, C& y, C& z, C& weight)
     void calculate(const std::vector<Point2D_xy>& pts, C& x, C& y, C& z, C& weight)
     {
         const size_t N = pts.size();
@@ -114,10 +106,7 @@ private:
             y[i] = pts[i].y;
             z[i] = pts[i].x * pts[i].x + pts[i].y * pts[i].y;  // artificial third coordinate
 
-            // Weight = 1 / (r^2 * sigma_phi^2)
             double r2 = x[i] * x[i] + y[i] * y[i];
-            // float sigma_phi2 = errs[i].sigma_phi * errs[i].sigma_phi;
-            // weight[i] = 1.0f / (r2 * sigma_phi2);
             weight[i] = 1.0f / (r2);
         }
 
