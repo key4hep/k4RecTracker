@@ -163,7 +163,7 @@ struct GenfitTrackFitter final :
     StatusCode initialize() {     
         
         if (!gGeoManager) {
-            std::cerr << "Error: TGeoManager is not initialized!" << std::endl;
+            error() << "Error: TGeoManager is not initialized!" << endmsg;
             return StatusCode::FAILURE;
         }
         
@@ -175,13 +175,19 @@ struct GenfitTrackFitter final :
         m_fieldManager = genfit::FieldManager::getInstance();
         m_fieldManager->init(m_genfitField);
 
-        m_geoMaterial=GenfitInterface::GenfitMaterialInterface::getInstance(m_detector);      
-        // genfit::MaterialEffects::getInstance()->setEnergyLossBrems(true);
-        // genfit::MaterialEffects::getInstance()->setNoiseBrems(true);
-        // genfit::MaterialEffects::getInstance()->setMscModel("Highland");
-
-        genfit::MaterialEffects::getInstance()->setEnergyLossBrems(false);
-        genfit::MaterialEffects::getInstance()->setNoiseBrems(false);   
+        m_geoMaterial=GenfitInterface::GenfitMaterialInterface::getInstance(m_detector);  
+        
+        if (m_useBrems)
+        {
+            genfit::MaterialEffects::getInstance()->setEnergyLossBrems(true);
+            genfit::MaterialEffects::getInstance()->setNoiseBrems(true);
+            genfit::MaterialEffects::getInstance()->setMscModel("Highland");
+        }
+        else
+        {
+            genfit::MaterialEffects::getInstance()->setEnergyLossBrems(false);
+            genfit::MaterialEffects::getInstance()->setNoiseBrems(false);   
+        } 
 
         int debug_lvl_material = 0;
         if (m_debug_lvl >= 4)
@@ -267,13 +273,13 @@ struct GenfitTrackFitter final :
 
             num_tracks  +=1;
 
-            // Skip background tracks if the option is enabled
-            // Consider background tracks those with type = 0
-            if (m_skip_background && track.getType() == 0) 
+            // Skip unmatched tracks if the option is enabled
+            // Consider unmatched tracks those with type = 0
+            if (m_skip_unmatchedTracks && track.getType() == 0) 
             {
                 num_skip += 1;
-                warning() << "Track " << num_tracks - 1 << ": background track (type = 0), skipping fit.\n" << endmsg;
-                continue;        // skip background        
+                warning() << "Track " << num_tracks - 1 << ": unmatched track (type = 0), skipping fit.\n" << endmsg;
+                continue;        // skip unmatched tracks        
             } 
             
             if (track.getTrackerHits().size() <= 3) 
@@ -339,14 +345,14 @@ struct GenfitTrackFitter final :
                             }
                         }
 
-                        std::cout << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << std::endl;
-                        std::cout << "  D0: " << trackStateCalo.D0 << " mm" << std::endl;
-                        std::cout << "  Z0: " << trackStateCalo.Z0 << " mm" << std::endl;
-                        std::cout << "  phi: " << trackStateCalo.phi << " rad" << std::endl;
-                        std::cout << "  omega: " << trackStateCalo.omega << " 1/mm" << std::endl;
-                        std::cout << "  tanLambda: " << trackStateCalo.tanLambda << std::endl;
-                        std::cout << "  location: " << trackStateCalo.location << std::endl;
-                        std::cout << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << std::endl;
+                        debug() << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << endmsg;
+                        debug() << "  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+                        debug() << "  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+                        debug() << "  phi: " << trackStateCalo.phi << " rad" << endmsg;
+                        debug() << "  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
+                        debug() << "  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+                        debug() << "  location: " << trackStateCalo.location << endmsg;
+                        debug() << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << endmsg;
                         
                     }
 
@@ -410,15 +416,7 @@ struct GenfitTrackFitter final :
                     if (m_debug_lvl > 1) debug_track = 1;
                     track_interface.CreateGenFitTrack(pdgCode, debug_track);   
         
-                    bool isFit = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_debug_lvl);
-
-                    // Extra check
-                    if (!isFit)
-                    {
-                        std::cerr << "Error: track fitting failed unexpectedly." << std::endl;
-                        std::exit(EXIT_FAILURE);
-                    }
-
+                    track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_debug_lvl);
                     auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
                     // Propagate to calorimeter and store the state at calorimeter
@@ -438,14 +436,14 @@ struct GenfitTrackFitter final :
                             }
                         }
 
-                        std::cout << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << std::endl;
-                        std::cout << "  D0: " << trackStateCalo.D0 << " mm" << std::endl;
-                        std::cout << "  Z0: " << trackStateCalo.Z0 << " mm" << std::endl;
-                        std::cout << "  phi: " << trackStateCalo.phi << " rad" << std::endl;
-                        std::cout << "  omega: " << trackStateCalo.omega << " a.u." << std::endl;
-                        std::cout << "  tanLambda: " << trackStateCalo.tanLambda << std::endl;
-                        std::cout << "  location: " << trackStateCalo.location << std::endl;
-                        std::cout << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << std::endl;
+                        debug() << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << endmsg;
+                        debug() << "  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+                        debug() << "  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+                        debug() << "  phi: " << trackStateCalo.phi << " rad" << endmsg;
+                        debug() << "  omega: " << trackStateCalo.omega << " a.u." << endmsg;
+                        debug() << "  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+                        debug() << "  location: " << trackStateCalo.location << endmsg;
+                        debug() << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << endmsg;
                             
                     }
                     
@@ -509,14 +507,14 @@ struct GenfitTrackFitter final :
                                 }
                             }
 
-                            std::cout << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << std::endl;
-                            std::cout << "  D0: " << trackStateCalo.D0 << " mm" << std::endl;
-                            std::cout << "  Z0: " << trackStateCalo.Z0 << " mm" << std::endl;
-                            std::cout << "  phi: " << trackStateCalo.phi << " rad" << std::endl;
-                            std::cout << "  omega: " << trackStateCalo.omega << " 1/mm" << std::endl;
-                            std::cout << "  tanLambda: " << trackStateCalo.tanLambda << std::endl;
-                            std::cout << "  location: " << trackStateCalo.location << std::endl;
-                            std::cout << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << std::endl;
+                            debug() << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << endmsg;
+                            debug() << "  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+                            debug() << "  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+                            debug() << "  phi: " << trackStateCalo.phi << " rad" << endmsg;
+                            debug() << "  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
+                            debug() << "  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+                            debug() << "  location: " << trackStateCalo.location << endmsg;
+                            debug() << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << endmsg;
                             
                         }
 
@@ -599,15 +597,7 @@ struct GenfitTrackFitter final :
                         track_interface.CreateGenFitTrack(pdgCode, debug_track);   
             
 
-                        bool isFit = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_debug_lvl);
-
-                        // Extra check
-                        if (!isFit)
-                        {
-                            std::cerr << "Error: track fitting failed unexpectedly." << std::endl;
-                            std::exit(EXIT_FAILURE);
-                        }
-
+                        track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_debug_lvl);
                         auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
                         // Propagate to calorimeter and store the state at calorimeter
@@ -628,14 +618,14 @@ struct GenfitTrackFitter final :
                                 }
                             }
 
-                            std::cout << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << std::endl;
-                            std::cout << "  D0: " << trackStateCalo.D0 << " mm" << std::endl;
-                            std::cout << "  Z0: " << trackStateCalo.Z0 << " mm" << std::endl;
-                            std::cout << "  phi: " << trackStateCalo.phi << " rad" << std::endl;
-                            std::cout << "  omega: " << trackStateCalo.omega << " a.u." << std::endl;
-                            std::cout << "  tanLambda: " << trackStateCalo.tanLambda << std::endl;
-                            std::cout << "  location: " << trackStateCalo.location << std::endl;
-                            std::cout << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << std::endl;
+                            debug() << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << endmsg;
+                            debug() << "  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+                            debug() << "  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+                            debug() << "  phi: " << trackStateCalo.phi << " rad" << endmsg;
+                            debug() << "  omega: " << trackStateCalo.omega << " a.u." << endmsg;
+                            debug() << "  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+                            debug() << "  location: " << trackStateCalo.location << endmsg;
+                            debug() << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << endmsg;
                                 
                         }
                         
@@ -677,8 +667,6 @@ struct GenfitTrackFitter final :
 
     private:
 
-        
-
         ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
         dd4hep::Detector* m_detector{nullptr};  // Detector instance
         dd4hep::OverlayedField m_field;         // Magnetic field
@@ -702,17 +690,23 @@ struct GenfitTrackFitter final :
         double m_eCalEndCapInnerZ;
         double m_eCalEndCapOuterZ;
 
-        std::vector<int> m_particleHypotesis = {211};   // {11,13,211,321,2212} -> e, mu, pi, K, p
+        Gaudi::Property<std::vector<int>> m_particleHypotesis{this, "ParticleHypotesisList", {211}, "List of particle hypotheses to consider: {11,13,211,321,2212} -> e, mu, pi, K, p"};
 
-        Gaudi::Property<double> m_Beta_init{this, "Beta_init", 100, "Beta Initial value"};
-        Gaudi::Property<double> m_Beta_final{this, "Beta_final", 0.05, "Beta Final value"};
-        Gaudi::Property<int> m_Beta_steps{this, "Beta_steps", 15, "Beta number of Steps"};
+        Gaudi::Property<bool> m_useBrems{this, "UseBrems", false, "Use Bremsstrahlung energy loss and noise in the fit"};
+
+        Gaudi::Property<double> m_Beta_init{this, "BetaInit", 100, "Beta Initial value"};
+        Gaudi::Property<double> m_Beta_final{this, "BetaFinal", 0.05, "Beta Final value"};
+        Gaudi::Property<int> m_Beta_steps{this, "BetaSteps", 15, "Beta number of Steps"};
 
 
-        Gaudi::Property<bool> m_skip_background{this, "skip_background", true, "Skip background track"};
-        Gaudi::Property<bool> m_singleEvaluation{this, "single_evaluation", false, "Single evaluation mode"};
-        
-
+        Gaudi::Property<bool> m_skip_unmatchedTracks{this, "SkipUnmatchedTracks", true, "Skip unmatched tracks (track.type = 0) from fitting"};
+        Gaudi::Property<bool> m_singleEvaluation{
+            this,
+            "single_evaluation",
+            false,
+            "Evaluation mode: if true, the fit is performed only once using the first particle hypothesis in std::vector<int> m_particleHypothesis (single evaluation mode)."
+            "If false, the algorithm scans all particle hypotheses in the vector and selects the one that provides the best fit in terms of chi2/ndf."
+        };
 
         Gaudi::Property<int> m_debug_lvl{this, "debug_lvl", 0, "Debug level"}; 
 
