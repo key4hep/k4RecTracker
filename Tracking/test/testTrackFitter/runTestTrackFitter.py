@@ -29,7 +29,7 @@ from Configurables import GenfitTrackFitter
 trackFitter = GenfitTrackFitter(
     "GenfitTrackFitter",
     
-    InputTracks=["PerfectTracks"],
+    InputTracks=["GGTFTracks"],
     OutputFittedTracks=["FittedTracks"],
     OutputLevel=DEBUG,
 )
