@@ -29,17 +29,22 @@ from Configurables import GenfitTrackFitter
 trackFitter = GenfitTrackFitter(
     "GenfitTrackFitter",
     
-    InputTracks=["GGTFTracks"],
-     OutputFittedTracks=["FittedTracks"],
+    InputTracks=["PerfectTracks"],
+    OutputFittedTracks=["FittedTracks"],
     OutputLevel=DEBUG,
 )
+
+trackFitter.RunSingleEvaluation = True
+trackFitter.UseBrems = False
 
 trackFitter.BetaInit = args.Beta_init
 trackFitter.BetaFinal = args.Beta_final
 trackFitter.BetaSteps = args.Beta_steps
+
+trackFitter.InitializationType = 1
+trackFitter.SkipTrackOrdering = False
 trackFitter.SkipUnmatchedTracks = False
-trackFitter.RunSingleEvaluation = True
-trackFitter.debug_lvl = 0
+trackFitter.DebugLevel = 0
 
 
 # ################ Detector geometry

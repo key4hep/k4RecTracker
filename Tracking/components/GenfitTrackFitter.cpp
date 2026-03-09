@@ -133,16 +133,6 @@
  *
 */
 
-/*
-* Debug levels:
-* - 0 no debug
-* - 1 show trackStates
-* - 2 show measurements and trackStates
-* - 3 show measurements, trackStates and debugLevel=1 fitter
-* - 4 show measurements, trackStates, debugLevel=1 fitter and materialEffects = 1
-*
-*/
-
 struct GenfitTrackFitter final : 
         k4FWCore::MultiTransformer< std::tuple< edm4hep::TrackCollection>(const edm4hep::TrackCollection&)>                                                                         
 {
@@ -296,8 +286,11 @@ struct GenfitTrackFitter final :
             {
 
                 
-                GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_dch_info, m_dc_decoder);
-                track_interface.InitializeTrack(m_Bz, false, 1, std::nullopt, std::nullopt, std::nullopt, std::nullopt);  
+                GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+
+                TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
+                TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
+                track_interface.InitializeTrack(m_Bz, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
                 
                 auto track_init = track_interface.GetInitialization();
                 if (m_debug_lvl > 0)
@@ -345,15 +338,15 @@ struct GenfitTrackFitter final :
                             }
                         }
 
-                        debug() << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << endmsg;
-                        debug() << "  D0: " << trackStateCalo.D0 << " mm" << endmsg;
-                        debug() << "  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
-                        debug() << "  phi: " << trackStateCalo.phi << " rad" << endmsg;
-                        debug() << "  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
-                        debug() << "  tanLambda: " << trackStateCalo.tanLambda << endmsg;
-                        debug() << "  location: " << trackStateCalo.location << endmsg;
-                        debug() << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << endmsg;
-                        
+                        debug() << ": TrackState at Calo: " << endmsg;
+                        debug() << ":  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+                        debug() << ":  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+                        debug() << ":  phi: " << trackStateCalo.phi << " rad" << endmsg;
+                        debug() << ":  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
+                        debug() << ":  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+                        debug() << ":  location: " << trackStateCalo.location << endmsg;
+                        debug() << ":  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm\n" << endmsg;
+
                     }
 
                     // Add the fitted track to the output collection
@@ -370,8 +363,11 @@ struct GenfitTrackFitter final :
                 for (int pdgCode : m_particleHypotesis)
                 {
 
-                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_dch_info, m_dc_decoder);
-                    track_interface.InitializeTrack(m_Bz, false, 1, std::nullopt, std::nullopt, std::nullopt, std::nullopt);   
+                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+
+                    TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
+                    TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
+                    track_interface.InitializeTrack(m_Bz, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
 
                     track_interface.CreateGenFitTrack(pdgCode, 0);   
 
@@ -405,12 +401,14 @@ struct GenfitTrackFitter final :
                 {
 
                     isSuccess = 1;
-                    debug() << "Track " << num_tracks - 1 << ": winning hypothesis is " << winning_hypothesis << " with chi2 / ndf = " << winning_chi2_ndf << endmsg;
+                    info() << "Track " << num_tracks - 1 << ": winning hypothesis is " << winning_hypothesis << " with chi2 / ndf = " << winning_chi2_ndf << endmsg;
                     int pdgCode = winning_hypothesis;
 
-                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_dch_info, m_dc_decoder);
-           
-                    track_interface.InitializeTrack(m_Bz, false, 1, std::nullopt, std::nullopt, std::nullopt, std::nullopt);   
+                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+
+                    TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
+                    TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
+                    track_interface.InitializeTrack(m_Bz, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
 
                     int debug_track = 0;
                     if (m_debug_lvl > 1) debug_track = 1;
@@ -436,14 +434,14 @@ struct GenfitTrackFitter final :
                             }
                         }
 
-                        debug() << "GenfitTrackFitter    DEBUG : TrackState at Calo: " << endmsg;
-                        debug() << "  D0: " << trackStateCalo.D0 << " mm" << endmsg;
-                        debug() << "  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
-                        debug() << "  phi: " << trackStateCalo.phi << " rad" << endmsg;
-                        debug() << "  omega: " << trackStateCalo.omega << " a.u." << endmsg;
-                        debug() << "  tanLambda: " << trackStateCalo.tanLambda << endmsg;
-                        debug() << "  location: " << trackStateCalo.location << endmsg;
-                        debug() << "  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm" << endmsg;
+                        debug() << ": TrackState at Calo: " << endmsg;
+                        debug() << ":  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+                        debug() << ":  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+                        debug() << ":  phi: " << trackStateCalo.phi << " rad" << endmsg;
+                        debug() << ":  omega: " << trackStateCalo.omega << " a.u." << endmsg;
+                        debug() << ":  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+                        debug() << ":  location: " << trackStateCalo.location << endmsg;
+                        debug() << ":  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm\n" << endmsg;
                             
                     }
                     
@@ -458,8 +456,11 @@ struct GenfitTrackFitter final :
             {
                 if (m_singleEvaluation)
                 {
-                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_dch_info, m_dc_decoder);
-                    track_interface.InitializeTrack(m_Bz, true, 1, std::nullopt, std::nullopt, 0.05, 3);  
+                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+
+                    TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
+                    TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
+                    track_interface.InitializeTrack(m_Bz, true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
                 
                     auto track_init = track_interface.GetInitialization();
                     if (m_debug_lvl > 0)
@@ -544,8 +545,11 @@ struct GenfitTrackFitter final :
                     for (int pdgCode : m_particleHypotesis)
                     {
 
-                        GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_dch_info, m_dc_decoder);
-                        track_interface.InitializeTrack(m_Bz, true, 1, std::nullopt, std::nullopt, 0.05, 3);   
+                        GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+
+                        TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
+                        TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
+                        track_interface.InitializeTrack(m_Bz, true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());    
 
                         track_interface.CreateGenFitTrack(pdgCode, 0);   
 
@@ -588,9 +592,11 @@ struct GenfitTrackFitter final :
                         debug() << "Track " << num_tracks - 1 << ": winning hypothesis is " << winning_hypothesis << " with chi2 / ndf = " << winning_chi2_ndf << endmsg;
                         int pdgCode = winning_hypothesis;
 
-                        GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_dch_info, m_dc_decoder);
-            
-                        track_interface.InitializeTrack(m_Bz, false, 1, std::nullopt, std::nullopt, std::nullopt, std::nullopt);   
+                        GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+
+                        TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
+                        TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
+                        track_interface.InitializeTrack(m_Bz, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
 
                         int debug_track = 0;
                         if (m_debug_lvl > 1) debug_track = 1;
@@ -698,7 +704,56 @@ struct GenfitTrackFitter final :
         Gaudi::Property<double> m_Beta_final{this, "BetaFinal", 0.05, "Beta Final value"};
         Gaudi::Property<int> m_Beta_steps{this, "BetaSteps", 15, "Beta number of Steps"};
 
+        Gaudi::Property<int> m_initializationType{
+            this,
+            "InitializationType",
+            1,
+            "Method used to initialize the track parameters before the fit. "
+            "0: use first two hits (position from first hit, momentum from direction between first and second hit); "
+            "1: refined initialization using ComputeInitialParameters(Bz); "
+            "2: initialize from a track state (position from reference point, momentum from helix parameters); "
+            "3: use user-provided Init_position and Init_momentum."
+        };
 
+        Gaudi::Property<int> m_trackStateLocation{
+            this,
+            "TrackStateLocation",
+            edm4hep::TrackState::AtFirstHit,
+            "Location of the track state used for initialization when InitializationType = 2. "
+            "This should correspond to the location of the track state where the reference point and helix parameters are defined."
+        };
+        Gaudi::Property<std::vector<double>> m_init_position{
+            this,
+            "InitPosition",
+            {0., 0., 0.},
+            "Initial track position used for initialization when InitializationType = 3."
+        };
+
+        Gaudi::Property<std::vector<double>> m_init_momentum{
+            this,
+            "InitMomentum",
+            {0., 0., 0.},
+            "Initial track momentum used for initialization when InitializationType = 3."
+        };
+
+        Gaudi::Property<double> m_epsilon{
+            this,
+            "Epsilon",
+            1e-4,
+            "Threshold used during track initialization to detect sign changes in the first derivative "
+            "computed between consecutive hits. This is used to identify and select hits "
+            "from the first round of the looper."
+        };
+
+        Gaudi::Property<int> m_smoothWindow{
+            this,
+            "SmoothWindow",
+            5,
+            "Number of hits used in the smoothing step during track initialization. "
+            "Hits are smoothed before computing the first derivative."
+        };
+
+        Gaudi::Property<bool> m_skipTrackOrdering{this, "SkipTrackOrdering", false, "Skip track ordering before fitting"};
         Gaudi::Property<bool> m_skip_unmatchedTracks{this, "SkipUnmatchedTracks", true, "Skip unmatched tracks (track.type = 0) from fitting"};
         Gaudi::Property<bool> m_singleEvaluation{
             this,
@@ -708,7 +763,17 @@ struct GenfitTrackFitter final :
             "If false, the algorithm scans all particle hypotheses in the vector and selects the one that provides the best fit in terms of chi2/ndf."
         };
 
-        Gaudi::Property<int> m_debug_lvl{this, "debug_lvl", 0, "Debug level"}; 
+        Gaudi::Property<int> m_debug_lvl{
+            this,
+            "DebugLevel",
+            0,
+            "Debug level: "
+            "0 = no debug; "
+            "1 = show trackStates; "
+            "2 = show measurements and trackStates; "
+            "3 = show measurements, trackStates and debugLevel=1 fitter; "
+            "4 = show measurements, trackStates, debugLevel=1 fitter and materialEffects=1"
+        };
 
 };
 

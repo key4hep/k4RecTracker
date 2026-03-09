@@ -83,13 +83,14 @@ namespace GenfitInterface {
 
        GenfitTrack(
                     const edm4hep::Track& track,
+                    const bool skipTrackOrdering = false,
                     const dd4hep::rec::DCH_info* dch_info = nullptr,
                     const dd4hep::DDSegmentation::BitFieldCoder* decoder = nullptr
                 );
 
         ~GenfitTrack();
 
-        void InitializeTrack(double Bz, bool LimitHits, int InitializationType, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window);
+        void InitializeTrack(double Bz, bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window);
 
         void CreateGenFitTrack(int particle_hypotesis, int debug_lvl);
         bool Fit(double Beta_init, double Beta_final, double Beta_steps, double Bz, int debug_lvl);
@@ -129,6 +130,8 @@ namespace GenfitInterface {
 
     private:
 
+        edm4hep::Track m_originalTrack;  // Store the original track for reference and debugging
+
         struct PCAInfoHelper
         {
             TVector3 PCA;
@@ -136,7 +139,7 @@ namespace GenfitInterface {
         };
         
         void CheckInitialization();
-        void OrderHits(const edm4hep::Track& track);
+        void OrderHits(const edm4hep::Track& track, bool skipTrackOrdering);
         void LimitNumberHits(double epsilon, int smoothWindow);  
 
         std::array<double, 36> CovarianceMatrixHelixToCartesian(const std::array<double,25>& C_helix, 

@@ -26,15 +26,18 @@
 namespace GenfitInterface {
 
     GenfitTrack::GenfitTrack(   const edm4hep::Track& track,
+                                const bool skipTrackOrdering,
                                 const dd4hep::rec::DCH_info* dch_info, const dd4hep::DDSegmentation::BitFieldCoder* decoder)
 
-        :   m_posInit(0., 0., 0.), 
+        :   
+            m_originalTrack(track),
+            m_posInit(0., 0., 0.), 
             m_momInit(0., 0., 0.), 
             m_covInit(6),
             m_genfitTrackRep(nullptr), 
             m_genfitTrack(nullptr), 
             m_edm4hepTrack(),
-
+        
             m_dch_info(dch_info),
             m_dc_decoder(decoder)
 
@@ -42,7 +45,7 @@ namespace GenfitInterface {
     {   
 
         CheckInitialization();
-        OrderHits(track);
+        OrderHits(track, skipTrackOrdering);
 
     }
 
@@ -89,8 +92,18 @@ namespace GenfitInterface {
     * subsequent processing (e.g. track fitting).
     *
     * @param track The input track whose tracker hits must be reordered.
+    * @param skipTrackOrdering If true, skip the track ordering step.
     */
-    void GenfitTrack::OrderHits(const edm4hep::Track& track) {   
+    void GenfitTrack::OrderHits(const edm4hep::Track& track, bool skipTrackOrdering) {   
+
+        if (skipTrackOrdering) {
+            
+            for (const auto& hit : track.getTrackerHits()) {
+                
+                m_edm4hepTrack.addToTrackerHits(hit);
+            }
+            return;
+        }
 
         const auto hits = track.getTrackerHits();
         std::vector<std::pair<float, std::size_t>> distIndex;
@@ -163,31 +176,34 @@ namespace GenfitInterface {
     *          estimates of the initial position and momentum.
     *        - The covariance matrix is computed accordingly.
     *
-    *    - InitializationType == 2 (custom):
+    *    - InitializationType == 2 (track state):
+    *        - Extracts initial parameters from a specified track state location.
+    *        - The position is taken from the track state's reference point.
+    *        - The momentum is computed from the track state's helix parameters
+    *          using the magnetic field Bz and physical constants.
+    *
+    *    - InitializationType == 3 (custom):
     *        - Uses user-provided Init_position and Init_momentum.
     *        - Both parameters must be specified.
     *        - The covariance matrix is computed accordingly.
-    *
-    * 3. Covariance initialization:
-    *    - In all cases, the initial covariance matrix (m_covInit) is computed
-    *      using the magnetic field Bz and a scaling factor derived from
-    *      physical constants.
     *
     * @param Bz Magnetic field component along the z-axis.
     * @param LimitHits If true, reduces the number of hits used for initialization.
     * @param InitializationType Defines the initialization strategy:
     *        0 = default (first two hits),
     *        1 = refined (computed parameters),
-    *        2 = custom (user-defined position and momentum).
-    * @param Init_position Optional custom initial position (required if InitializationType == 2).
-    * @param Init_momentum Optional custom initial momentum (required if InitializationType == 2).
+    *        2 = track state (parameters from a specific track state location),
+    *        3 = custom (user-defined position and momentum).
+    * @param TrackStateLocation Required if InitializationType == 2; specifies the track state location to extract parameters from.
+    * @param Init_position Optional custom initial position (required if InitializationType == 3).
+    * @param Init_momentum Optional custom initial momentum (required if InitializationType == 3).
     * @param Epsilon Optional parameter for hit limiting (required if LimitHits == true).
     * @param Window Optional parameter for hit limiting (required if LimitHits == true).
     *
     * @note The method terminates execution if required parameters are missing
     *       or if an unknown InitializationType is specified.
     */
-    void GenfitTrack::InitializeTrack(double Bz, bool LimitHits, int InitializationType, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window) {
+    void GenfitTrack::InitializeTrack(double Bz, bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window) {
 
         double c_mm_s = 2.998e11;
         double a = 1e-15 * c_mm_s;
@@ -250,7 +266,59 @@ namespace GenfitInterface {
 
 
         }
-        else if (InitializationType == 2) // custom 
+        else if (InitializationType == 2) // take from trackState
+        {
+
+            if (TrackStateLocation.has_value())
+            {
+            
+
+                auto trackState = m_originalTrack.getTrackStates();
+                for (auto ts : trackState) {
+
+                    if (ts.location == TrackStateLocation.value())
+                    {   
+                        m_VP_referencePoint = TVector3(ts.referencePoint.x * dd4hep::mm, ts.referencePoint.y * dd4hep::mm, ts.referencePoint.z * dd4hep::mm ); // cm
+                        
+                        double pT = a * std::abs(Bz) / std::abs(ts.omega);  // GeV/c
+                        double px = pT * std::cos(ts.phi);
+                        double py = pT * std::sin(ts.phi);
+                        double pz = pT * ts.tanLambda;
+
+                        m_posInit = m_VP_referencePoint; // cm
+                        m_momInit = TVector3(px, py, pz); // GeV/c
+
+                        auto covMatrixHelix = ts.covMatrix;
+                        std::array<double,25> covMatrixHelix_array{};
+                        for (int i = 0; i < 5; ++i) {
+                            for (int j = 0; j < 5; ++j) {
+                                covMatrixHelix_array[i*5 + j] = static_cast<double>(covMatrixHelix[i*6 + j]);
+                            }
+                        }
+                        auto covMatrixCartesian_array = CovarianceMatrixHelixToCartesian(covMatrixHelix_array, m_posInit, m_momInit, m_VP_referencePoint, Bz);
+                        TMatrixDSym covMatrixCartesian(6);
+                        for (int i = 0; i < 6; ++i) {
+                            for (int j = 0; j <= i; ++j) {
+                                covMatrixCartesian(i, j) = covMatrixCartesian_array[i*6 + j];
+                                if (i != j) {
+                                    covMatrixCartesian(j, i) = covMatrixCartesian_array[i*6 + j]; // Symmetric
+                                }
+                            }
+                        }
+                        m_covInit = covMatrixCartesian; 
+
+                        break;
+                    }
+
+                }
+            }
+            else
+            {
+                std::cerr << "Missing Value for TrackStateLocation!" << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+        }
+        else if (InitializationType == 3) // custom 
         {
 
             if (Init_position.has_value() && Init_momentum.has_value())  
@@ -808,43 +876,31 @@ namespace GenfitInterface {
                     {
 
                         std::cout << "GenfitTrackFitter    DEBUG : TrackState at IP: " << std::endl;
-                        std::cout << "  D0: " << trackStateIP.D0 << " mm" << std::endl;
-                        std::cout << "  Z0: " << trackStateIP.Z0 << " mm" << std::endl;
-                        std::cout << "  phi: " << trackStateIP.phi << " rad" << std::endl;
-                        std::cout << "  omega: " << trackStateIP.omega << " 1/mm" << std::endl;
-                        std::cout << "  tanLambda: " << trackStateIP.tanLambda << std::endl;
-
-                        std::cout << "  momentum: " << gen_momentum.X() << " " << gen_momentum.Y() << " " << gen_momentum.Z() << " GeV/c" << std::endl;
-
-                        std::cout << "  location: " << trackStateIP.location << std::endl;
-                        std::cout << "  reference point: (" << trackStateIP.referencePoint.x << ", " << trackStateIP.referencePoint.y << ", " << trackStateIP.referencePoint.z << ") mm" << std::endl;
-                        std::cout << "  PCA point: (" << infoComputeD0Z0_IP.PCA.X() << ", " << infoComputeD0Z0_IP.PCA.Y() << ", " << infoComputeD0Z0_lastHit.PCA.Z() << ") mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  D0: " << trackStateIP.D0 << " mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  Z0: " << trackStateIP.Z0 << " mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  phi: " << trackStateIP.phi << " rad" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  omega: " << trackStateIP.omega << " 1/mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  tanLambda: " << trackStateIP.tanLambda << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  location: " << trackStateIP.location << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  reference point: (" << trackStateIP.referencePoint.x << ", " << trackStateIP.referencePoint.y << ", " << trackStateIP.referencePoint.z << ") mm" << std::endl;
                         
                         std::cout << "\nGenfitTrackFitter    DEBUG : TrackState at First Hit: " << std::endl;
-                        std::cout << "  D0: " << trackStateFirstHit.D0 << " mm" << std::endl;
-                        std::cout << "  Z0: " << trackStateFirstHit.Z0 << " mm" << std::endl;
-                        std::cout << "  phi: " << trackStateFirstHit.phi << " rad" << std::endl;
-                        std::cout << "  omega: " << trackStateFirstHit.omega << " 1/mm" << std::endl;
-                        std::cout << "  tanLambda: " << trackStateFirstHit.tanLambda << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  D0: " << trackStateFirstHit.D0 << " mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  Z0: " << trackStateFirstHit.Z0 << " mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  phi: " << trackStateFirstHit.phi << " rad" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  omega: " << trackStateFirstHit.omega << " 1/mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  tanLambda: " << trackStateFirstHit.tanLambda << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  location: " << trackStateFirstHit.location << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  reference point: (" << trackStateFirstHit.referencePoint.x << ", " << trackStateFirstHit.referencePoint.y << ", " << trackStateFirstHit.referencePoint.z << ") mm" << std::endl;
 
-                        std::cout << "  momentum: " << gen_momentum.X() << " " << gen_momentum.Y() << " " << gen_momentum.Z() << " GeV/c" << std::endl;
-
-                        std::cout << "  location: " << trackStateFirstHit.location << std::endl;
-                        std::cout << "  reference point: (" << trackStateFirstHit.referencePoint.x << ", " << trackStateFirstHit.referencePoint.y << ", " << trackStateFirstHit.referencePoint.z << ") mm" << std::endl;
-                        std::cout << "  PCA point: (" << infoComputeD0Z0_firstHit.PCA.X() << ", " << infoComputeD0Z0_firstHit.PCA.Y() << ", " << infoComputeD0Z0_firstHit.PCA.Z() << ") mm" << std::endl;
-                        
                         std::cout << "\nGenfitTrackFitter    DEBUG : TrackState at Last Hit: " << std::endl;
-                        std::cout << "  D0: " << trackStateLastHit.D0 << " mm" << std::endl;
-                        std::cout << "  Z0: " << trackStateLastHit.Z0 << " mm" << std::endl;
-                        std::cout << "  phi: " << trackStateLastHit.phi << " rad" << std::endl;
-                        std::cout << "  omega: " << trackStateLastHit.omega << " 1/mm" << std::endl;
-                        std::cout << "  tanLambda: " << trackStateLastHit.tanLambda << std::endl;
-
-                        std::cout << "  momentum: " << gen_momentum.X() << " " << gen_momentum.Y() << " " << gen_momentum.Z() << " GeV/c" << std::endl;
-
-                        std::cout << "  location: " << trackStateLastHit.location << std::endl;
-                        std::cout << "  reference point: (" << trackStateLastHit.referencePoint.x << ", " << trackStateLastHit.referencePoint.y << ", " << trackStateLastHit.referencePoint.z << ") mm" << std::endl;
-                        std::cout << "  PCA point: (" << infoComputeD0Z0_lastHit.PCA.X() << ", " << infoComputeD0Z0_lastHit.PCA.Y() << ", " << infoComputeD0Z0_lastHit.PCA.Z() << ") mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  D0: " << trackStateLastHit.D0 << " mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  Z0: " << trackStateLastHit.Z0 << " mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  phi: " << trackStateLastHit.phi << " rad" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  omega: " << trackStateLastHit.omega << " 1/mm" << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  tanLambda: " << trackStateLastHit.tanLambda << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  location: " << trackStateLastHit.location << std::endl;
+                        std::cout << "GenfitTrackFitter    DEBUG :  reference point: (" << trackStateLastHit.referencePoint.x << ", " << trackStateLastHit.referencePoint.y << ", " << trackStateLastHit.referencePoint.z << ") mm\n" << std::endl;
 
                     }   
 
