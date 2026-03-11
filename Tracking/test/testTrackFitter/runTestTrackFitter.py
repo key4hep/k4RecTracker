@@ -44,8 +44,6 @@ trackFitter.BetaSteps = args.Beta_steps
 trackFitter.InitializationType = 1
 trackFitter.SkipTrackOrdering = False
 trackFitter.SkipUnmatchedTracks = False
-trackFitter.DebugLevel = 0
-
 
 # ################ Detector geometry
 from Configurables import GeoSvc

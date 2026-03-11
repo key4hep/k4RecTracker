@@ -726,8 +726,8 @@ namespace GenfitInterface {
             m_genfitFitter->setProbCut(1e-5);
             m_genfitFitter->setConvergenceDeltaWeight(1e-2); 
 
-            int debug_lvl_fit = 0;
-            if (debug_lvl > 2) debug_lvl_fit = 1;
+            int debug_lvl_fit = debug_lvl;
+            if (debug_lvl > 1) debug_lvl_fit = 0;
             m_genfitFitter->setDebugLvl(debug_lvl_fit);
 
             // Process track
@@ -872,7 +872,7 @@ namespace GenfitInterface {
                     trackStateIP.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
                     trackStateIP.location = edm4hep::TrackState::AtIP;
 
-                    if (debug_lvl > 0)
+                    if (debug_lvl == 2)
                     {
 
                         std::cout << "GenfitTrackFitter    DEBUG : TrackState at IP: " << std::endl;
