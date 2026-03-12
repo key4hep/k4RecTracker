@@ -20,20 +20,16 @@
 #ifndef PLANAR_MEASUREMENT_H
 #define PLANAR_MEASUREMENT_H
 
-// standard 
 #include <iostream>
 
-// ROOT
 #include <TVectorD.h>
 #include <TMatrixDSym.h>
 #include <TMatrixD.h>
 #include "TDecompSVD.h"
 
-// GENFIT
 #include <PlanarMeasurement.h>
 #include <TrackPoint.h>
 
-// EDM4hep and DDRec
 #include "edm4hep/TrackerHitPlane.h"
 #include "DDRec/Vector3D.h" 
 #include "DDRec/Vector2D.h"

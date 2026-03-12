@@ -18,10 +18,6 @@
 */
 
 #include "GenfitTrack.h"
-#include "KalmanFitterInfo.h"
-#include "AbsFitterInfo.h"
-#include "EventDisplay.h"
-
 
 namespace GenfitInterface {
 
@@ -58,9 +54,6 @@ namespace GenfitInterface {
     * and `genfit::MaterialEffects` have been initialized. These components are essential
     * for tracking operations in the Genfit framework. 
     * 
-    * If either component is not initialized, an error message is printed to `std::cerr` 
-    * and the program exits with `EXIT_FAILURE`.
-    * 
     * @note This method should be called before performing any tracking-related operations 
     * that depend on magnetic field or material effects.
     */
@@ -68,12 +61,10 @@ namespace GenfitInterface {
 
         if (!genfit::FieldManager::getInstance()->isInitialized()) {
             std::cerr << "Error: FieldManager is not initialized!" << std::endl;
-            std::exit(EXIT_FAILURE);
         }
 
         if (!genfit::MaterialEffects::getInstance()->isInitialized()) {
             std::cerr << "Error: MaterialEffects is not initialized!" << std::endl;
-            std::exit(EXIT_FAILURE);
         }
 
     }
@@ -82,9 +73,7 @@ namespace GenfitInterface {
     * @brief Orders the tracker hits of a track according to their spatial progression.
     *
     * This method determines a suitable starting point among the track hits,
-    * typically the one closest to the interaction region (|z| minimum).
-    * In case of nearly transverse tracks (almost perpendicular to the z axis),
-    * a fallback criterion based on spatial radius is applied.
+    * typically the one closest to the interaction region (|r| minimum).
     *
     * All hits are then sorted according to their 3D distance from the chosen
     * starting point, ensuring a consistent ordering along the track trajectory.
@@ -181,6 +170,7 @@ namespace GenfitInterface {
     *        - The position is taken from the track state's reference point.
     *        - The momentum is computed from the track state's helix parameters
     *          using the magnetic field Bz and physical constants.
+    *        - The covariance matrix is computed accordingly.
     *
     *    - InitializationType == 3 (custom):
     *        - Uses user-provided Init_position and Init_momentum.
@@ -194,14 +184,16 @@ namespace GenfitInterface {
     *        1 = refined (computed parameters),
     *        2 = track state (parameters from a specific track state location),
     *        3 = custom (user-defined position and momentum).
-    * @param TrackStateLocation Required if InitializationType == 2; specifies the track state location to extract parameters from.
+    * @param TrackStateLocation Required if InitializationType == 2; specifies the track state location to extract parameters from:
+    *        0 = edm4hep::TrackState::AtOther
+    *        1 = edm4hep::TrackState::AtFirstHit
+    *        2 = edm4hep::TrackState::AtLastHit
+    *        3 = edm4hep::TrackState::AtCalorimeter
     * @param Init_position Optional custom initial position (required if InitializationType == 3).
     * @param Init_momentum Optional custom initial momentum (required if InitializationType == 3).
     * @param Epsilon Optional parameter for hit limiting (required if LimitHits == true).
     * @param Window Optional parameter for hit limiting (required if LimitHits == true).
     *
-    * @note The method terminates execution if required parameters are missing
-    *       or if an unknown InitializationType is specified.
     */
     void GenfitTrack::InitializeTrack(double Bz, bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window) {
 
@@ -217,7 +209,6 @@ namespace GenfitInterface {
             else
             {
                 std::cerr << "Missing Values for Epsilon or Window!" << std::endl;
-                std::exit(EXIT_FAILURE);
             }
         }
 
@@ -337,7 +328,6 @@ namespace GenfitInterface {
         else
         {   
             std::cerr << "Unknown InitializationType!" << std::endl;
-            std::exit(EXIT_FAILURE);
         }
 
     }
@@ -706,10 +696,11 @@ namespace GenfitInterface {
     * @param Beta_steps Number of steps in the annealing schedule.
     * @param Bz         Value of z-component of the magnetic field at the center of the detector
     * @param debug_lvl  debug level: output if > 0
+    * @param FilterHits If true, applies hit filtering based on measurement weights after fitting.
     * 
     * @return true if the fit was successful, false otherwise.
     */
-    bool GenfitTrack::Fit(double Beta_init = 100., double Beta_final=0.1, double Beta_steps=10, double Bz = 2.0, int debug_lvl = 0) {
+    bool GenfitTrack::Fit(double Beta_init = 100., double Beta_final=0.1, double Beta_steps=10, double Bz = 2.0, int debug_lvl = 0, bool FilterHits = true) {
 
         edm4hep::Track Track_temp = m_edm4hepTrack;
         for (size_t i = 0; i < Track_temp.trackStates_size(); ++i) {
@@ -720,20 +711,20 @@ namespace GenfitInterface {
         try{
 
             // Initialize the genfit fitter
-            genfit::DAF* m_genfitFitter = new genfit::DAF(true, 1e-3,1e-3);
+            genfit::DAF* genfitFitter = new genfit::DAF(true, 1e-3,1e-3);
 
-            m_genfitFitter->setAnnealingScheme(Beta_init,Beta_final,Beta_steps);
-            m_genfitFitter->setProbCut(1e-5);
-            m_genfitFitter->setConvergenceDeltaWeight(1e-2); 
+            genfitFitter->setAnnealingScheme(Beta_init,Beta_final,Beta_steps);
+            genfitFitter->setProbCut(1e-5);
+            genfitFitter->setConvergenceDeltaWeight(1e-2); 
 
             int debug_lvl_fit = debug_lvl;
             if (debug_lvl > 1) debug_lvl_fit = 0;
-            m_genfitFitter->setDebugLvl(debug_lvl_fit);
+            genfitFitter->setDebugLvl(debug_lvl_fit);
 
             // Process track
             genfit::Track genfitTrack = *m_genfitTrack;
             genfit::AbsTrackRep* trackRep = genfitTrack.getTrackRep(0);
-            m_genfitFitter->processTrackWithRep(&genfitTrack, trackRep);
+            genfitFitter->processTrackWithRep(&genfitTrack, trackRep);
 
             // Update edm4hep track state
             genfit::MeasuredStateOnPlane fittedState;
@@ -756,10 +747,133 @@ namespace GenfitInterface {
             double c_mm_s = 2.998e11;
             double a = 1e-15 * c_mm_s;
             
-            if (m_genfitFitter->isTrackFitted(&genfitTrack, trackRep))
+            if (genfitFitter->isTrackFitted(&genfitTrack, trackRep))
             {
 
-            
+                if (FilterHits)
+                {
+                    // Hit Filtering based on measurement weights
+                    int numPoints = genfitTrack.getNumPoints();
+                    for (int idx = 0; idx < numPoints; idx++)
+                    {
+
+                        auto point_track = genfitTrack.getPoint(idx);
+                        auto fitterInfo = point_track->getFitterInfo(trackRep);
+                        genfit::KalmanFitterInfo* kfi = static_cast<genfit::KalmanFitterInfo*>(fitterInfo);
+                                                        
+                        unsigned int nMeas = kfi->getNumMeasurements();
+                        bool isAccepted = false;
+                        for(unsigned int j=0; j<nMeas; j++) {
+                                            
+                            genfit::MeasurementOnPlane *mop = kfi->getMeasurementOnPlane(j);
+
+                            double weight = mop->getWeight();
+                            if (weight > 1e-5) 
+                            {
+                                isAccepted = true;
+                                break;
+                            }
+
+                        }
+                                    
+                        if (isAccepted) 
+                        {
+                            
+                            genfit::StateOnPlane state = kfi->getFittedState();
+                            genfit::MeasuredStateOnPlane measState = kfi->getFittedState();
+
+                            TVector3 pos = state.getPos();
+
+                            auto planeMeas = state.getPlane();
+                            auto U = planeMeas->getU();
+                            auto V = planeMeas->getV();
+                            auto O = planeMeas->getO();
+
+                            TVector3 measPos = measState.getPos();
+                            TMatrixDSym covMatrix_cm_gev = measState.get6DCov();
+
+                            TMatrixDSym covMatrix = covMatrix_cm_gev;
+                            for (int i = 0; i < 6; ++i) {
+                                for (int j = 0; j < 6; ++j) {
+
+                                    double scale = 1.0;
+
+                                    bool pos_i = (i < 3);
+                                    bool pos_j = (j < 3);
+
+                                    if (pos_i && pos_j) {
+                                        scale = 100.0;
+                                    }
+                                    else if (pos_i || pos_j) {
+                                        scale = 10.0;
+                                    }
+
+                                    covMatrix(i,j) *= scale;
+                                }
+                            }
+
+                            TMatrixDSym covXYZ(3);
+                            for (int i = 0; i < 3; i++) {
+                                for (int j = 0; j < 3; j++) {
+                                    covXYZ(i,j) = covMatrix(i,j);
+                                }
+                            }
+
+
+                            TVector3 u(U.X(), U.Y(), U.Z());
+                            TVector3 v(V.X(), V.Y(), V.Z());
+
+                            TVectorD uVec(3);
+                            uVec[0] = U.X();
+                            uVec[1] = U.Y();
+                            uVec[2] = U.Z();
+
+                            TVectorD vVec(3);
+                            vVec[0] = V.X();
+                            vVec[1] = V.Y();
+                            vVec[2] = V.Z();
+
+                            double var_u = covXYZ.Similarity(uVec);
+                            double var_v = covXYZ.Similarity(vVec);
+
+                            double err_u = std::sqrt(var_u);
+                            double err_v = std::sqrt(var_v);
+
+
+                            auto hit3D = m_fittedHits.create();
+                            hit3D.setPosition(edm4hep::Vector3d(pos.X()/dd4hep::mm, pos.Y()/dd4hep::mm, pos.Z()/dd4hep::mm));
+
+                            hit3D.setCovMatrix({
+                                static_cast<float>(covXYZ(0,0)),  // xx
+                                static_cast<float>(covXYZ(1,0)),  // yx
+                                static_cast<float>(covXYZ(1,1)),  // yy
+                                static_cast<float>(covXYZ(2,0)),  // zx
+                                static_cast<float>(covXYZ(2,1)),  // zy
+                                static_cast<float>(covXYZ(2,2))   // zz
+                            });
+
+                            hit3D.setDu(err_u);
+                            hit3D.setDv(err_v);
+                            edm4hep::Vector2f edm4hepU = {static_cast<float>(u.X()), static_cast<float>(u.Y())};
+                            edm4hep::Vector2f edm4hepV = {static_cast<float>(v.X()), static_cast<float>(v.Y())};
+
+                            hit3D.setU(edm4hepU);
+                            hit3D.setV(edm4hepV);
+                            hit3D.setType(1); // Accepted hit
+                            m_trackWithFit.addToTrackerHits(hit3D);
+
+                        
+                        }
+                        else
+                        {
+                            auto hit3D = m_fittedHits.create();
+                            hit3D.setType(0); // Rejected hit
+                        }
+                    }
+                }
+                
+                
+
                 // trackState First Hit
                 fittedState = genfitTrack.getFittedState();
                 fittedState.getPosMomCov(gen_position, gen_momentum, covariancePosMom);
@@ -907,17 +1021,24 @@ namespace GenfitInterface {
                     m_edm4hepTrack.addToTrackStates(trackStateIP);
                     m_edm4hepTrack.addToTrackStates(trackStateFirstHit);
                     m_edm4hepTrack.addToTrackStates(trackStateLastHit);
+
+                    m_trackWithFit.addToTrackStates(trackStateIP);
+                    m_trackWithFit.addToTrackStates(trackStateFirstHit);
+                    m_trackWithFit.addToTrackStates(trackStateLastHit);
                     
                 }catch(...){
 
                     return false;
                 }
 
-                if (m_genfitFitter->isTrackFitted(&genfitTrack, trackRep))
+                if (genfitFitter->isTrackFitted(&genfitTrack, trackRep))
                 {
                     
                     m_edm4hepTrack.setChi2(genfitTrack.getFitStatus()->getChi2());
                     m_edm4hepTrack.setNdf(genfitTrack.getFitStatus()->getNdf());
+
+                    m_trackWithFit.setChi2(genfitTrack.getFitStatus()->getChi2());
+                    m_trackWithFit.setNdf(genfitTrack.getFitStatus()->getNdf());
 
                 }
                 else
@@ -925,6 +1046,10 @@ namespace GenfitInterface {
 
                     m_edm4hepTrack.setChi2(-1);
                     m_edm4hepTrack.setNdf(-1);
+
+                    m_trackWithFit.setChi2(-1);
+                    m_trackWithFit.setNdf(-1);
+
                     return false;
 
                 }
@@ -935,11 +1060,15 @@ namespace GenfitInterface {
 
                 m_edm4hepTrack.setChi2(-1);
                 m_edm4hepTrack.setNdf(-1);
+
+                m_trackWithFit.setChi2(-1);
+                m_trackWithFit.setNdf(-1);
+
                 return false;
 
             }
 
-            return m_genfitFitter->isTrackFitted(&genfitTrack, trackRep);
+            return genfitFitter->isTrackFitted(&genfitTrack, trackRep);
             
         }
         catch(...)

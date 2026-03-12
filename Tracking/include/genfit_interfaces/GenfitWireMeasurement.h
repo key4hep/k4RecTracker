@@ -20,22 +20,20 @@
 #ifndef WIRE_MEASUREMENT_H
 #define WIRE_MEASUREMENT_H
 
-// Standard
 #include <iostream>
 
-// ROOT
+#include <TDecompSVD.h>
 #include <TMatrixD.h>
 #include <TMatrixDSym.h>
 #include <TVectorD.h>
 
-// GenFit
 #include <TrackPoint.h>
 #include <WirePointMeasurement.h>
 
-// EDM4hep
-#include "edm4hep/SenseWireHitCollection.h"
-#include "DDSegmentation/BitFieldCoder.h"
 #include "DDRec/DCH_info.h"
+#include "DDSegmentation/BitFieldCoder.h"
+
+#include "edm4hep/SenseWireHitCollection.h"
 
 /** @class WireMeasurement
  *

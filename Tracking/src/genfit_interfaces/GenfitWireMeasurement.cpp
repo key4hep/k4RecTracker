@@ -18,7 +18,6 @@
 */
 
 #include "GenfitWireMeasurement.h"
-#include "TDecompSVD.h"
 
 namespace GenfitInterface {
 

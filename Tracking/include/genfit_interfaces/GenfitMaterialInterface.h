@@ -20,23 +20,19 @@
 #ifndef GENFIT_MATERIALINTERFACE_H
 #define GENFIT_MATERIALINTERFACE_H
 
-// GenFit
 #include "AbsMaterialInterface.h"
 #include "Exception.h"
 #include "MaterialEffects.h"
 
-// ROOT
 #include "TGeoManager.h"
 #include "TGeoNode.h"
 #include "TGeoMedium.h"
 #include "TGeoMaterial.h"
 
-// Gaudi
 #include "GaudiKernel/Bootstrap.h"
 #include "GaudiKernel/SmartIF.h"
 #include "GaudiKernel/ISvcLocator.h"
 
-// DD4hep
 #include "DD4hep/Detector.h"
 
 /** @class GenfitMaterialInterface

@@ -20,40 +20,38 @@
 #ifndef GENFIT_TRACK_H
 #define GENFIT_TRACK_H
 
-// Standard Library
 #include <memory>
+#include <ranges>
 #include <stdexcept>
 #include <string>
 #include <vector>
-#include<ranges>
 
-// ROOT
 #include <TVector3.h>
 
-// GenFit
 #include <AbsBField.h>
 #include <AbsTrackRep.h>
 #include <DAF.h>
+#include <EventDisplay.h>
 #include <FieldManager.h>
+#include <GenfitTrack.h>
+#include <KalmanFitterInfo.h>
+#include <MaterialEffects.h>
 #include <RKTrackRep.h>
 #include <Track.h>
-#include <MaterialEffects.h>
+#include <AbsFitterInfo.h>
 
-#include "GenfitPlanarMeasurement.h"
-#include "GenfitWireMeasurement.h"
-
-// DD4hep
 #include "DD4hep/Detector.h"
 #include "DD4hep/Fields.h"
 #include "DDRec/Vector3D.h"
 #include "DDSegmentation/BitFieldCoder.h"
 
-// EDM4hep
 #include "edm4hep/MutableTrack.h"
 #include "edm4hep/TrackCollection.h"
 
-#include "utils.h"
 #include "FastCircleSeed.h"
+#include "GenfitPlanarMeasurement.h"
+#include "GenfitWireMeasurement.h"
+#include "utils.h"
 
 /** @class GenfitTrack
  *
@@ -93,12 +91,16 @@ namespace GenfitInterface {
         void InitializeTrack(double Bz, bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window);
 
         void CreateGenFitTrack(int particle_hypotesis, int debug_lvl);
-        bool Fit(double Beta_init, double Beta_final, double Beta_steps, double Bz, int debug_lvl);
+        bool Fit(double Beta_init, double Beta_final, double Beta_steps, double Bz, int debug_lvl, bool FilterHits);
 
         genfit::Track* GetTrack_genfit() { return m_genfitTrack; }
         genfit::AbsTrackRep* GetRep_genfit() { return m_genfitTrackRep; }
         edm4hep::MutableTrack& GetTrack_edm4hep() { return m_edm4hepTrack; }
+        edm4hep::MutableTrack& GetTrackWithFit_edm4hep() { return m_trackWithFit; }
+        edm4hep::TrackerHitPlaneCollection& GetFittedHits() { return m_fittedHits;}
+
         int GetCharge() {return m_charge_hypothesis;}
+        
         void PrintTrack_init() { 
 
             std::cout << "GENFIT Initial position: (" << m_posInit.X() << ", " << m_posInit.Y() << ", " << m_posInit.Z() << ")" << std::endl;
@@ -161,6 +163,8 @@ namespace GenfitInterface {
         genfit::AbsTrackRep* m_genfitTrackRep;    
         genfit::Track* m_genfitTrack;
         edm4hep::MutableTrack m_edm4hepTrack;  
+        edm4hep::MutableTrack m_trackWithFit;
+        edm4hep::TrackerHitPlaneCollection m_fittedHits;
 
         TVector3 m_VP_referencePoint{0., 0., 0.};
 

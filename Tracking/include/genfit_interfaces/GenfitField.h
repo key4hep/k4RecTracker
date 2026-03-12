@@ -21,11 +21,9 @@
 #ifndef GENFIT_FIELD_H
 #define GENFIT_FIELD_H
 
-// DD4hep
 #include "DD4hep/Fields.h"
 #include "DD4hep/DD4hepUnits.h"
 
-//genfit
 #include "FieldManager.h"
 #include "ConstField.h"
 #include "AbsBField.h"

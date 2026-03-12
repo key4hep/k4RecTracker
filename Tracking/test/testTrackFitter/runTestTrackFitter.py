@@ -45,6 +45,8 @@ trackFitter.InitializationType = 1
 trackFitter.SkipTrackOrdering = False
 trackFitter.SkipUnmatchedTracks = False
 
+trackFitter.FilterTrackHits = True
+
 # ################ Detector geometry
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
