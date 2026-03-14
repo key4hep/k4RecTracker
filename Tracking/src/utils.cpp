@@ -1,4 +1,4 @@
-#include "utils.hpp"
+#include "utils.h"
 
 dd4hep::rec::LayeredCalorimeterData* getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
 
@@ -78,11 +78,14 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
   return trackState_AtCalorimeter;
 }
 
-void FillTrackWithCalorimeterExtrapolation(extension::MutableTrack& edm4hep_track, double m_Bz, int charge, double a,
+void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double m_Bz, int charge,
                                            double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
                                            double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
                                            double m_eCalEndCapInnerZ) {
-
+  
+  double c_mm_s = 2.998e11;
+  double a = 1e-15 * c_mm_s;    
+                                        
   auto trackStateLastHit = edm4hep_track.getTrackStates()[2];
   double omega_lastHit = trackStateLastHit.omega;
   double pt_lasthit = a * m_Bz / abs(omega_lastHit);
@@ -220,136 +223,14 @@ torch::Tensor get_clustering(const std::vector<float>& output_vector, int num_ro
   return clustering;
 }
 
-int getHypotesisCharge(int pdg) {
-  switch (pdg) {
-  case 11:
-    return -1; // electron
-  case -11:
-    return 1; // positron
-  case 13:
-    return -1; // muon
-  case -13:
-    return 1; // anti-muon
-  case 211:
-    return 1; // pion+
-  case -211:
-    return -1; // pion-
-  case 321:
-    return 1; // kaon+
-  case -321:
-    return -1; // kaon-
-  case 2212:
-    return 1; // proton
-  case -2212:
-    return -1; // anti-proton
-  default:
-    return 0; // unknown particle
-  }
-}
+bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol)
+{
+    TMatrixDSymEigen eig(M);
+    TVectorD eigenValues = eig.GetEigenValues();
 
-TMatrixDSym computeTrackStateCovMatrix(TVectorD stateTrack, TVectorD params, TVector3 referencePoint, double timeError,
-                                       TMatrixDSym statecovMatrix) {
-
-  // NB: we should give to the matrix the following units:
-  //      - positions: mm
-  //      - momentum: GeV
-  //      - time: ns
-
-  TVector3 pos_0(stateTrack[0], stateTrack[1], stateTrack[2]);
-  TVector3 mom(stateTrack[3], stateTrack[4], stateTrack[5]);
-
-  double pt = mom.Pt();
-  double omega = params[0];
-  double phi0 = params[1];
-  double tanLambda = params[5];
-
-  TMatrixD J(5, 6);
-
-  double dOmega_dX = 0;
-  double dOmega_dY = 0;
-  double dOmega_dZ = 0;
-  double dOmega_dPx = -omega * pt / pow(pt, 3) * mom.X();
-  double dOmega_dPy = -omega * pt / pow(pt, 3) * mom.Y();
-  double dOmega_dPz = 0;
-
-  J(0, 0) = dOmega_dX;
-  J(0, 1) = dOmega_dY;
-  J(0, 2) = dOmega_dZ;
-  J(0, 3) = dOmega_dPx;
-  J(0, 4) = dOmega_dPy;
-  J(0, 5) = dOmega_dPz;
-
-  double dPhi0_dX = 0;
-  double dPhi0_dY = 0;
-  double dPhi0_dZ = 0;
-  double dPhi0_dPx = -mom.Y() / pow(pt, 2);
-  double dPhi0_dPy = mom.X() / pow(pt, 2);
-  double dPhi0_dPz = 0;
-
-  J(1, 0) = dPhi0_dX;
-  J(1, 1) = dPhi0_dY;
-  J(1, 2) = dPhi0_dZ;
-  J(1, 3) = dPhi0_dPx;
-  J(1, 4) = dPhi0_dPy;
-  J(1, 5) = dPhi0_dPz;
-
-  double dD0_dX = sin(phi0);
-  double dD0_dY = -cos(phi0);
-  double dD0_dZ = 0;
-  double dD0_dPx = -(referencePoint.X() - pos_0.X()) * sin(phi0) * dPhi0_dPx -
-                   (referencePoint.Y() - pos_0.Y()) * cos(phi0) * dPhi0_dPx;
-  double dD0_dPy = -(referencePoint.X() - pos_0.X()) * sin(phi0) * dPhi0_dPy -
-                   (referencePoint.Y() - pos_0.Y()) * cos(phi0) * dPhi0_dPy;
-  double dD0_dPz = 0;
-
-  J(2, 0) = dD0_dX;
-  J(2, 1) = dD0_dY;
-  J(2, 2) = dD0_dZ;
-  J(2, 3) = dD0_dPx;
-  J(2, 4) = dD0_dPy;
-  J(2, 5) = dD0_dPz;
-
-  double dZ0_dX = 0;
-  double dZ0_dY = 0;
-  double dZ0_dZ = 1;
-  double dZ0_dPx = 0;
-  double dZ0_dPy = 0;
-  double dZ0_dPz = 0;
-
-  J(3, 0) = dZ0_dX;
-  J(3, 1) = dZ0_dY;
-  J(3, 2) = dZ0_dZ;
-  J(3, 3) = dZ0_dPx;
-  J(3, 4) = dZ0_dPy;
-  J(3, 5) = dZ0_dPz;
-
-  double dTanLambda_dX = 0;
-  double dTanLambda_dY = 0;
-  double dTanLambda_dZ = 0;
-  double dTanLambda_dPx = -tanLambda * pt / pow(pt, 3) * mom.X();
-  double dTanLambda_dPy = -tanLambda * pt / pow(pt, 3) * mom.Y();
-  double dTanLambda_dPz = 1 / pt;
-
-  J(4, 0) = dTanLambda_dX;
-  J(4, 1) = dTanLambda_dY;
-  J(4, 2) = dTanLambda_dZ;
-  J(4, 3) = dTanLambda_dPx;
-  J(4, 4) = dTanLambda_dPy;
-  J(4, 5) = dTanLambda_dPz;
-
-  TMatrixDSym covarianceTrack_temp(5);
-  covarianceTrack_temp = statecovMatrix.Similarity(J);
-
-  TMatrixDSym covarianceTrackState(6);
-  for (int i = 0; i < 5; ++i) {
-    for (int j = 0; j <= i; ++j) {
-      double val = covarianceTrack_temp(i, j);
-      covarianceTrackState(i, j) = val;
-      covarianceTrackState(j, i) = val;
+    for (int i = 0; i < eigenValues.GetNrows(); ++i) {
+        if (eigenValues[i] < -tol)
+            return false;
     }
-  }
-
-  covarianceTrackState(5, 5) = timeError * timeError;
-
-  return covarianceTrackState;
+    return true;
 }

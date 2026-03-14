@@ -2,7 +2,7 @@
 
 This subfolder contains the implementation of several Tracking tools for FCC-ee detectors using the key4hep framework:
 
-* GGTF_tracking
+* GGTFTrackFinder
 * PlotTrackHitResiduals
 * TrackdNdxDelphesBased
 * TracksFromGenParticles
@@ -19,7 +19,7 @@ In our end-to-end pipeline, hits from all tracking components are directly proce
 
 ### Technical Implementation
 
-We implemented a **Geometric Graph Track Finder (GGTF)** in `k4RecTracker/Tracking/components/GGTF_tracking.cpp`.
+We implemented a **Geometric Graph Track Finder (GGTF)** in `k4RecTracker/Tracking/components/GGTFTrackFinder.cpp`.
 Its workflow can be summarized as follows:
 
 1. **Input Extraction**
@@ -77,3 +77,97 @@ It is recommended to re-train the model if:
 * you wish to include additional physics processes (e.g., background).
 
 To proceed, you need to clone [this repository](https://github.com/andread3vita/Tracking_DC/tree/devBranch), which provides the Python implementation of the model along with instructions for re-training it and converting the resulting checkpoint file (`.ckpt`) into an **ONNX** file. The ONNX file can then be used to load the model for inference.
+
+## Genfit Track Fitter
+
+**Genfit Track Fitter** is a Gaudi MultiTransformer algorithm developed within the Key4hep framework. It refines reconstructed tracks using the GENFIT tracking toolkit.
+
+The algorithm performs a full track fit including:
+
+- Magnetic field propagation
+- Material effects handling
+- Drift chamber and planar measurement support
+
+It outputs a new edm4hep::TrackCollection containing fitted tracks with updated track states and fit quality information.
+
+### Technical Implementation
+
+The **GenFit-based Track Fitter** has been integrated into the reconstruction chain by developing a dedicated interface layer between **EDM4hep/Key4hep** data structures and the **GenFit** tracking framework.
+
+The main fitting algorithm is implemented in:
+
+- `components/GenfitTrackFitter.cpp`
+
+while the interface layer connecting EDM4hep and GenFit is located in:
+
+- `include/genfit_interfaces/`
+- `src/genfit_interfaces/`
+
+#### 1. EDM4hep - GenFit Interface Layer
+
+To ensure a clean separation between the experiment data model and the fitting engine, dedicated wrapper classes were implemented.
+
+##### Implemented Interfaces
+
+- `GenfitTrack.{h,cpp}`  
+  Converts an `edm4hep::Track` into a GenFit track object and back.
+
+- `GenfitPlanarMeasurement.{h,cpp}`  
+  Wraps silicon planar hits into GenFit `PlanarMeasurement` objects.
+
+- `GenfitWireMeasurement.{h,cpp}`  
+  Converts drift chamber hits into GenFit `WireMeasurement` objects.
+
+- `GenfitField.{h,cpp}`  
+  Provides the magnetic field interface required by GenFit.
+
+- `GenfitMaterialInterface.{h,cpp}`  
+  Connects detector material effects (energy loss, multiple scattering) to GenFit.
+
+This modular structure ensures:
+- EDM4hep objects remain unchanged.
+- GenFit operates with its native abstractions.
+- All conversion logic is centralized and reusable.
+
+#### 2. Track Preparation
+
+Inside `GenfitTrackFitter.cpp`, the workflow proceeds as follows:
+
+1. Read the input `edm4hep::TrackCollection`.
+2. Extract associated tracker hits.
+3. Convert hits into:
+   - `GenfitPlanarMeasurement` (silicon detectors),
+   - `GenfitWireMeasurement` (drift chamber).
+4. Build a `GenfitTrack` object containing all measurements.
+
+#### 3. Magnetic Field and Material Setup
+
+Before running the fit, GenFit requires:
+
+- A magnetic field instance provided by `GenfitField`
+- A material effects interface provided by `GenfitMaterialInterface`
+
+These are initialized and registered within GenFit’s global environment.
+
+#### 4. Track Fitting
+
+The fitting procedure consists of:
+
+1. Instantiating a Kalman-based fitter (e.g. `KalmanFitterRefTrack`).
+2. Executing the fit on the `GenfitTrack`.
+3. Extracting fitted parameters:
+   - Position
+   - Momentum
+   - Covariance matrix
+   - $\chi^2$ and fit quality indicators
+
+#### 5. GenFit - EDM4hep Conversion
+
+After the fit:
+
+1. Fitted parameters are converted back to EDM4hep format.
+2. A new `edm4hep::Track` is created.
+3. Track states and covariance matrices are stored.
+4. The results are written to the output collection.
+
+

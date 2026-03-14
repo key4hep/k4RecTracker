@@ -1,32 +1,30 @@
 #ifndef UTILS_HPP
 #define UTILS_HPP
 
-//=== Standard Library ===
 #include <cmath>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
 
-//=== DD4hep / DDRec ===
 #include "DD4hep/DetElement.h"
 #include "DD4hep/DetType.h"
 #include "DD4hep/Detector.h"
 #include "DD4hep/DetectorSelector.h"
 #include <DDRec/DetectorData.h>
 
-//=== edm4hep ===
 #include "edm4hep/TrackState.h"
-#include "extension/MutableTrack.h"
-#include "extension/TrackCollection.h"
+#include "edm4hep/MutableTrack.h"
+#include "edm4hep/TrackCollection.h"
 
-//=== Others ===
 #include <Objects/Helix.h>
 #include <TMatrixDSym.h>
 #include <TVector3.h>
 #include <TVectorD.h>
 #include <marlinutil/HelixClass_double.h>
 #include <torch/torch.h>
+#include <TMatrixDSymEigen.h>
+#include <TDecompChol.h>
 
 /////////////////////////////////
 /// Track propagation to Ecal ///
@@ -91,14 +89,13 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
  * @param edm4hep_track MutableTrack object to be updated with calorimeter extrapolation.
  * @param m_Bz Magnetic field component along the z-axis.
  * @param charge Electric charge of the particle track.
- * @param a Conversion constant relating curvature to momentum (e.g., 0.299792458 GeV/(T*m)).
  * @param m_eCalBarrelInnerR Inner radius of the barrel calorimeter.
  * @param m_eCalBarrelMaxZ Maximum half-length (z) of the barrel calorimeter.
  * @param m_eCalEndCapInnerR Inner radius of the endcap calorimeter.
  * @param m_eCalEndCapOuterR Outer radius of the endcap calorimeter.
  * @param m_eCalEndCapInnerZ z-position of the inner surface of the endcap calorimeter.
  */
-void FillTrackWithCalorimeterExtrapolation(extension::MutableTrack& edm4hep_track, double m_Bz, int charge, double a,
+void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double m_Bz, int charge,
                                            double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
                                            double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
                                            double m_eCalEndCapInnerZ);
@@ -142,51 +139,27 @@ torch::Tensor find_condpoints(const torch::Tensor& betas, const torch::Tensor& u
  */
 torch::Tensor get_clustering(const std::vector<float>& output_vector, int num_rows, float tbeta, float td);
 
-///////////////////////////////////////
-/// Miscellaneous Utility Functions ///
-///////////////////////////////////////
+/////////////////////
+/// Miscellaneous ///
+/////////////////////
 
 /**
- * @brief Returns the hypothesized charge for a given PDG code.
+ * @brief Checks if a symmetric matrix is positive semi-definite (PSD) within a given tolerance.
  *
- * Maps common particle PDG codes to their charge:
- * - Electrons (11): -1
- * - Positrons (-11): +1
- * - Muons (13): -1
- * - Anti-muons (-13): +1
- * - Charged pions (211, -211): ±1
- * - Charged kaons (321, -321): ±1
- * - Protons (2212): +1
- * - Anti-protons (-2212): -1
+ * This function determines whether the input symmetric matrix `M` is positive semi-definite by
+ * computing its eigenvalues and verifying that none of them are significantly negative. A matrix
+ * is considered positive semi-definite if all its eigenvalues are non-negative.
  *
- * Returns 0 if the PDG code is not recognized.
+ * @param M   The symmetric matrix to check (TMatrixDSym).
+ * @param tol A small tolerance value to account for numerical inaccuracies. Eigenvalues 
+ *            greater than -tol are considered non-negative.
  *
- * @param pdg Particle Data Group (PDG) code of the particle.
- * @return int Hypothesized electric charge of the particle.
+ * @return true if the matrix is positive semi-definite within the specified tolerance; 
+ *         false otherwise.
+ *
+ * @note This function uses `TMatrixDSymEigen` from ROOT to compute the eigenvalues.
  */
-int getHypotesisCharge(int pdg);
+bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol);
 
-/**
- * @brief Computes the covariance matrix of the track state parameters.
- *
- * The state parameters are converted from Cartesian coordinates (position, momentum, time)
- * to track parameters (omega, phi0, d0, z0, tanLambda, time), and their covariance is propagated
- * through the Jacobian matrix J.
- *
- * Units expected:
- * - positions in mm
- * - momentum in GeV
- * - time in ns
- *
- * @param stateTrack 6D state vector: (x, y, z, px, py, pz)
- * @param params 6D vector of track parameters: (omega, phi0, d0, z0, tanLambda, time)
- * @param referencePoint 3D point for impact parameter calculation - see
- * https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
- * @param timeError uncertainty on the time parameter (ns)
- * @param statecovMatrix covariance matrix of the original state vector (6x6)
- * @return TMatrixDSym covariance matrix of the track parameters + time (6x6)
- */
-TMatrixDSym computeTrackStateCovMatrix(TVectorD stateTrack, TVectorD params, TVector3 referencePoint, double timeError,
-                                       TMatrixDSym statecovMatrix);
 
 #endif // UTILS_HPP

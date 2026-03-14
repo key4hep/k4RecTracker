@@ -31,6 +31,7 @@ find_package(Gaudi REQUIRED)
 find_package(Delphes REQUIRED)
 find_package(GSL REQUIRED)
 find_package(PandoraSDK REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 find_package(onnxruntime REQUIRED)
 find_package(Torch REQUIRED)
