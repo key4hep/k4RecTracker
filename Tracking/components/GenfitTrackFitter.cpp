@@ -117,6 +117,8 @@
  *
  *  output:
  *    - fitted track collection : edm4hep::TrackCollection
+ *    - fitted track collection with filtered hits (without L/R ambiguity if drift chamber is present): edm4hep::TrackCollection
+ *    - filtered hit collection : edm4hep::TrackerHitPlaneCollection
  *
  *  @author Andrea De Vita
  *  @date   2026-02
@@ -269,10 +271,10 @@ struct GenfitTrackFitter final :
                 continue;        // skip unmatched tracks        
             } 
             
-            if (track.getTrackerHits().size() <= 3) 
+            if (track.getTrackerHits().size() < 4) 
             {   
                 num_skip += 1;
-                warning() << "Track " << num_tracks - 1 << ": less than 3 hits, skipping fit.\n" << endmsg;
+                warning() << "Track " << num_tracks - 1 << ": less than 4 hits, skipping fit.\n" << endmsg;
                 continue;        // skip tracks with less then 3 hits (seed initialization needs 3 hits)
             }
 
@@ -305,7 +307,7 @@ struct GenfitTrackFitter final :
                 int pdgCode = m_particleHypotesis[0];    
                 track_interface.CreateGenFitTrack(pdgCode, debug_track);   
     
-                bool isFit = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_printoutLevel, m_filterTrackHits);  
+                bool isFit = track_interface.Fit(m_Fitter_type.value(), m_Bz, m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);  
                 if (isFit)
                 {
 
@@ -378,7 +380,7 @@ struct GenfitTrackFitter final :
 
                     track_interface.CreateGenFitTrack(pdgCode, 0);   
 
-                    bool isFit = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, 0, false);  
+                    bool isFit = track_interface.Fit(m_Fitter_type.value(), m_Bz, 0, m_Beta_init, m_Beta_final, m_Beta_steps, false);  
                     if (isFit)
                     {
 
@@ -420,7 +422,7 @@ struct GenfitTrackFitter final :
                     if (m_printoutLevel == uint(MSG::DEBUG)) debug_track = 1;  
                     track_interface.CreateGenFitTrack(pdgCode, debug_track);  
         
-                    track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_printoutLevel, m_filterTrackHits);
+                    track_interface.Fit(m_Fitter_type.value(), m_Bz, m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);
 
                     auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
@@ -499,7 +501,7 @@ struct GenfitTrackFitter final :
                     int pdgCode = m_particleHypotesis[0];    
                     track_interface.CreateGenFitTrack(pdgCode, debug_track);    
         
-                    bool isFit = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_printoutLevel, m_filterTrackHits);  
+                    bool isFit = track_interface.Fit(m_Fitter_type.value(), m_Bz, m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);  
                     if (isFit)
                     {
 
@@ -584,7 +586,7 @@ struct GenfitTrackFitter final :
 
                         track_interface.CreateGenFitTrack(pdgCode, 0);   
 
-                        bool isFit = track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, 0, false);  
+                        bool isFit = track_interface.Fit(m_Fitter_type.value(), m_Bz, 0, m_Beta_init, m_Beta_final, m_Beta_steps, false);  
                         if (isFit)
                         {
 
@@ -633,7 +635,7 @@ struct GenfitTrackFitter final :
                         track_interface.CreateGenFitTrack(pdgCode, debug_track);   
             
 
-                        track_interface.Fit(m_Beta_init, m_Beta_final, m_Beta_steps, m_Bz, m_printoutLevel, m_filterTrackHits);
+                        track_interface.Fit(m_Fitter_type.value(), m_Bz, m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);
 
                         auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
@@ -752,9 +754,10 @@ struct GenfitTrackFitter final :
 
         Gaudi::Property<bool> m_useBrems{this, "UseBrems", false, "Use Bremsstrahlung energy loss and noise in the fit"};
 
-        Gaudi::Property<double> m_Beta_init{this, "BetaInit", 100, "Beta Initial value"};
-        Gaudi::Property<double> m_Beta_final{this, "BetaFinal", 0.05, "Beta Final value"};
-        Gaudi::Property<int> m_Beta_steps{this, "BetaSteps", 15, "Beta number of Steps"};
+        Gaudi::Property<std::string> m_Fitter_type{this, "FitterType", "DAF", "Choose which fitter to use among 'DAF', 'KALMAN', 'KALMAN_REF' "};
+        Gaudi::Property<double> m_Beta_init{this, "BetaInit", 100, "Beta Initial value (if m_Fitter_type == 'DAF')"};
+        Gaudi::Property<double> m_Beta_final{this, "BetaFinal", 0.05, "Beta Final value (if m_Fitter_type == 'DAF')"};
+        Gaudi::Property<int> m_Beta_steps{this, "BetaSteps", 15, "Beta number of Steps (if m_Fitter_type == 'DAF')"};
 
         Gaudi::Property<int> m_initializationType{
             this,

@@ -74,15 +74,9 @@ namespace GenfitInterface {
         rawHitCov(0,1) = 0.0;
         rawHitCov(1,0) = 0.0;
         rawHitCov(1,1) = sigmaV * sigmaV;  // cm^2
-        
-        // Create genfit::PlanarMeasurement
-        m_genfitHit = new genfit::PlanarMeasurement(rawHitCoords, rawHitCov, det_idx, hit_idx, nullptr);
 
-        // Add plane
         auto cellID0 = hit.getCellID();
-        genfit::SharedPlanePtr plane(new genfit::DetPlane(Origin,U,V));
-        m_genfitHit->setPlane(plane, cellID0);
-
+        
         if (debug_lvl > 0) {
 
             std::cout << "\n========== Planar Measurement Debug ==========\n";
@@ -120,7 +114,13 @@ namespace GenfitInterface {
 
             std::cout << "==============================================\n\n";
         }
+        
+        // Create genfit::PlanarMeasurement
+        m_genfitHit = new genfit::PlanarMeasurement(rawHitCoords, rawHitCov, det_idx, hit_idx, nullptr);
+        genfit::SharedPlanePtr plane(new genfit::DetPlane(Origin,U,V));
 
+        // Add plane
+        m_genfitHit->setPlane(plane, cellID0);
 
     }
 

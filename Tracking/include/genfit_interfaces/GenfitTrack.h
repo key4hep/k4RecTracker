@@ -31,6 +31,8 @@
 #include <AbsBField.h>
 #include <AbsTrackRep.h>
 #include <DAF.h>
+#include <KalmanFitter.h>
+#include <KalmanFitterRefTrack.h>
 #include <EventDisplay.h>
 #include <FieldManager.h>
 #include <GenfitTrack.h>
@@ -91,7 +93,7 @@ namespace GenfitInterface {
         void InitializeTrack(double Bz, bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window);
 
         void CreateGenFitTrack(int particle_hypotesis, int debug_lvl);
-        bool Fit(double Beta_init, double Beta_final, double Beta_steps, double Bz, int debug_lvl, bool FilterHits);
+        bool Fit(std::string FitterType, double Bz, int debug_lvl, std::optional<double> Beta_init, std::optional<double> Beta_final, std::optional<int> Beta_steps, std::optional<bool> FilterHits);
 
         genfit::Track* GetTrack_genfit() { return m_genfitTrack; }
         genfit::AbsTrackRep* GetRep_genfit() { return m_genfitTrackRep; }

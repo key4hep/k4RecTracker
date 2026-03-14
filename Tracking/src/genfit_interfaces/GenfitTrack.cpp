@@ -278,24 +278,35 @@ namespace GenfitInterface {
 
                         m_posInit = m_VP_referencePoint; // cm
                         m_momInit = TVector3(px, py, pz); // GeV/c
+                        
+                        auto& covMatrixHelix = ts.covMatrix;
 
-                        auto covMatrixHelix = ts.covMatrix;
-                        std::array<double,25> covMatrixHelix_array{};
+                        std::array<double, 25> covMatrixHelix_array{};
+                        int index = 0;
                         for (int i = 0; i < 5; ++i) {
                             for (int j = 0; j < 5; ++j) {
-                                covMatrixHelix_array[i*5 + j] = static_cast<double>(covMatrixHelix[i*6 + j]);
+                                if (j <= i) {
+                                    covMatrixHelix_array[i*5 + j] = covMatrixHelix[index++];
+                                } else {
+                                    covMatrixHelix_array[i*5 + j] = covMatrixHelix_array[j*5 + i]; 
+                                }
                             }
                         }
-                        auto covMatrixCartesian_array = CovarianceMatrixHelixToCartesian(covMatrixHelix_array, m_posInit, m_momInit, m_VP_referencePoint, Bz);
+
+                        // Convert to Cartesian
+                        auto covMatrixCartesian_array = CovarianceMatrixHelixToCartesian(
+                            covMatrixHelix_array, m_posInit, m_momInit, m_VP_referencePoint, Bz
+                        );
+
+                        // Fill 6x6 symmetric TMatrixDSym
                         TMatrixDSym covMatrixCartesian(6);
                         for (int i = 0; i < 6; ++i) {
                             for (int j = 0; j <= i; ++j) {
                                 covMatrixCartesian(i, j) = covMatrixCartesian_array[i*6 + j];
-                                if (i != j) {
-                                    covMatrixCartesian(j, i) = covMatrixCartesian_array[i*6 + j]; // Symmetric
-                                }
+                                if (i != j) covMatrixCartesian(j, i) = covMatrixCartesian_array[i*6 + j];
                             }
                         }
+
                         m_covInit = covMatrixCartesian; 
 
                         break;
@@ -691,16 +702,17 @@ namespace GenfitInterface {
     * This function performs a forward and backward track fit using the Genfit DAF algorithm,
     * and populates the EDM4hep track states at the IP, first hit, and last hit positions.
     * 
-    * @param Beta_init  Initial annealing parameter (temperature).
-    * @param Beta_final Final annealing parameter.
-    * @param Beta_steps Number of steps in the annealing schedule.
+    * @param FitterType Fitting strategy: DAF, KALMAN, KALMAN_REF
     * @param Bz         Value of z-component of the magnetic field at the center of the detector
     * @param debug_lvl  debug level: output if > 0
-    * @param FilterHits If true, applies hit filtering based on measurement weights after fitting.
+    * @param Beta_init  Initial annealing parameter (if DAF is enabled)
+    * @param Beta_final Final annealing parameter (if DAF is enabled)
+    * @param Beta_steps Number of steps in the annealing schedule (if DAF is enabled)
+    * @param FilterHits If true, applies hit filtering based on measurement weights after fitting (if DAF is enabled)
     * 
     * @return true if the fit was successful, false otherwise.
     */
-    bool GenfitTrack::Fit(double Beta_init = 100., double Beta_final=0.1, double Beta_steps=10, double Bz = 2.0, int debug_lvl = 0, bool FilterHits = true) {
+    bool GenfitTrack::Fit(std::string FitterType = "DAF", double Bz = 2.0, int debug_lvl = 0, std::optional<double> Beta_init = 100., std::optional<double> Beta_final=0.1, std::optional<int> Beta_steps=10, std::optional<bool> FilterHits = true) {
 
         edm4hep::Track Track_temp = m_edm4hepTrack;
         for (size_t i = 0; i < Track_temp.trackStates_size(); ++i) {
@@ -711,11 +723,35 @@ namespace GenfitInterface {
         try{
 
             // Initialize the genfit fitter
-            genfit::DAF* genfitFitter = new genfit::DAF(true, 1e-3,1e-3);
+            genfit::AbsKalmanFitter* genfitFitter = nullptr;
 
-            genfitFitter->setAnnealingScheme(Beta_init,Beta_final,Beta_steps);
-            genfitFitter->setProbCut(1e-5);
-            genfitFitter->setConvergenceDeltaWeight(1e-2); 
+            if (FitterType == "DAF") {
+                
+                genfit::DAF* daf = new genfit::DAF(true, 1e-3, 1e-3);
+                daf->setAnnealingScheme(Beta_init.value(), Beta_final.value(), Beta_steps.value());
+                daf->setProbCut(1e-5);
+                daf->setConvergenceDeltaWeight(1e-2);
+
+                genfitFitter = daf;
+
+            }
+            else if (FitterType == "KALMAN") {
+
+                genfitFitter = new genfit::KalmanFitter();
+
+            }
+            else if (FitterType == "KALMAN_REF") {
+
+                genfitFitter = new genfit::KalmanFitterRefTrack();
+
+            }
+            else {
+
+                std::cerr << "Unknown fit method: " << FitterType << std::endl;
+                return false;
+            }
+
+            
 
             int debug_lvl_fit = debug_lvl;
             if (debug_lvl > 1) debug_lvl_fit = 0;
@@ -750,7 +786,7 @@ namespace GenfitInterface {
             if (genfitFitter->isTrackFitted(&genfitTrack, trackRep))
             {
 
-                if (FilterHits)
+                if (FilterHits.value() && FitterType == "DAF")
                 {
                     // Hit Filtering based on measurement weights
                     int numPoints = genfitTrack.getNumPoints();
