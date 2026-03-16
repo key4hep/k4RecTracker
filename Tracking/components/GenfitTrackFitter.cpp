@@ -102,8 +102,6 @@
 #include "FastCircleSeed.h"
 #include "utils.h"
 
-
-
 /** @struct GenfitTrackFitter
  *
  *  Gaudi MultiTransformer that refines the parameters of the reconstructed tracks using the GENFIT library.  
@@ -271,10 +269,10 @@ struct GenfitTrackFitter final :
                 continue;        // skip unmatched tracks        
             } 
             
-            if (track.getTrackerHits().size() < 4) 
+            if (track.getTrackerHits().size() < 3) 
             {   
                 num_skip += 1;
-                warning() << "Track " << num_tracks - 1 << ": less than 4 hits, skipping fit.\n" << endmsg;
+                warning() << "Track " << num_tracks - 1 << ": less than 3 hits, skipping fit.\n" << endmsg;
                 continue;        // skip tracks with less then 3 hits (seed initialization needs 3 hits)
             }
 
@@ -345,6 +343,7 @@ struct GenfitTrackFitter final :
                     }
 
                     // Add the fitted track to the output collection
+                    info() << "Fit chi2/ndf = " << edm4hep_track.getChi2() << " / " << edm4hep_track.getNdf() << " = " << edm4hep_track.getChi2() / (edm4hep_track.getNdf() * 1.) << endmsg;
                     FittedTracks.push_back(edm4hep_track);
 
                     if (m_filterTrackHits)
@@ -480,6 +479,8 @@ struct GenfitTrackFitter final :
             {
                 if (m_singleEvaluation)
                 {
+
+
                     GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
 
                     TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
@@ -539,6 +540,7 @@ struct GenfitTrackFitter final :
                         }
 
                         // Add the fitted track to the output collection
+                        info() << "Fit chi2/ndf = " << edm4hep_track.getChi2() << " / " << edm4hep_track.getNdf() << " = " << edm4hep_track.getChi2() / (edm4hep_track.getNdf() * 1.) << endmsg;
                         FittedTracks.push_back(edm4hep_track);
 
                         if (m_filterTrackHits)
@@ -621,7 +623,7 @@ struct GenfitTrackFitter final :
                     else
                     {
 
-                        debug() << "Track " << num_tracks - 1 << ": winning hypothesis is " << winning_hypothesis << " with chi2 / ndf = " << winning_chi2_ndf << endmsg;
+                        info() << "Track " << num_tracks - 1 << ": winning hypothesis is " << winning_hypothesis << " with chi2 / ndf = " << winning_chi2_ndf << endmsg;
                         int pdgCode = winning_hypothesis;
 
                         GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);

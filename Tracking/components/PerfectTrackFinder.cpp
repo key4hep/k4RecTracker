@@ -17,55 +17,18 @@
  * limitations under the License.
  */
 
-// Standard Library
 #include <algorithm>
-#include <cmath>
-#include <cstdlib>    // For getenv
-#include <filesystem> // For std::filesystem::path
-#include <fstream>    // For std::ifstream
-#include <iostream>
-#include <iterator> // For std::istreambuf_iterator
-#include <map>
-#include <memory>
-#include <numeric>
-#include <queue>
-#include <random>
-#include <sstream>
-#include <string>
-#include <typeinfo>
+#include <tuple>
+#include <utility>
 #include <vector>
 
-// ONNX & Torch
-#include "onnxruntime_cxx_api.h"
-#include "onnxruntime_run_options_config_keys.h"
-#include <ATen/ATen.h>
-#include <torch/torch.h>
-
-// ROOT
-#include "TVector3.h"
-
-// === Gaudi Framework ===
 #include "Gaudi/Algorithm.h"
-#include "Gaudi/Property.h"
 
-// === k4FWCore / k4Interface ===
-#include "k4FWCore/DataHandle.h"
 #include "k4FWCore/Transformer.h"
-#include "k4Interface/IGeoSvc.h"
-#include "k4Interface/IUniqueIDGenSvc.h"
 
-// === EDM4HEP & PODIO ===
 #include "edm4hep/MCParticleCollection.h"
-#include "edm4hep/SimTrackerHitCollection.h"
 #include "edm4hep/TrackCollection.h"
-#include "edm4hep/SenseWireHitCollection.h"
-#include "edm4hep/TrackerHitPlaneCollection.h"
-
 #include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
-#include "edm4hep/TrackCollection.h"
-
-// === Project-specific ===
-#include "utils.h"
 
 /** @struct PerfectTrackFinder
  *
@@ -100,6 +63,9 @@
  *
  *  Outputs:
  *   - OutputPerfectTracks: edm4hep::TrackCollection containing one MC-truth-based track per MCParticle
+ *
+ *  @author Andrea De Vita
+ *  @date   2026-03
  *
  */
 
@@ -143,13 +109,16 @@ struct PerfectTrackFinder final : k4FWCore::MultiTransformer< std::tuple<edm4hep
 
     // Create a new TrackCollection for storing the output tracks
     edm4hep::TrackCollection outputTracks;
+
     // Loop over MCParticles to create perfect tracks
     for (const auto& mcParticle : mcParticles) {
 
         auto edm4hep_track = outputTracks.create();
         auto mcParticleObjectId = mcParticle.getObjectID();
-                
-        // Loop over planar hit link collections
+
+        std::vector<std::pair<float, edm4hep::TrackerHit>> hitsWithTime;
+
+        // Planar hits
         for (const auto& planarHitLinkCollection : planarHitLinks) {
             for (const auto& hitLink : *planarHitLinkCollection) {
 
@@ -157,26 +126,37 @@ struct PerfectTrackFinder final : k4FWCore::MultiTransformer< std::tuple<edm4hep
                 auto digiHit = hitLink.getFrom();
 
                 if (simHit.getParticle().getObjectID() == mcParticleObjectId) {
-                    edm4hep_track.addToTrackerHits(digiHit);
+                    hitsWithTime.emplace_back(simHit.getTime(), digiHit);
                 }
             }
         }
 
-        // Loop over wire hit link collections
+        // Wire hits
         for (const auto& wireHitLinkCollection : wireHitLinks) {
-            for (const auto& hitLink : *wireHitLinkCollection) {    
-                
+            for (const auto& hitLink : *wireHitLinkCollection) {
+
                 auto simHit = hitLink.getTo();
                 auto digiHit = hitLink.getFrom();
 
                 if (simHit.getParticle().getObjectID() == mcParticleObjectId) {
-                    edm4hep_track.addToTrackerHits(digiHit);
+                    hitsWithTime.emplace_back(simHit.getTime(), digiHit);
                 }
-            }   
+            }
+        }
+
+        std::sort(
+            hitsWithTime.begin(),
+            hitsWithTime.end(),
+            [](const auto& a, const auto& b) {
+                return a.first < b.first;
+            }
+        );
+
+        for (const auto& [time, hit] : hitsWithTime) {
+            edm4hep_track.addToTrackerHits(hit);
         }
 
         edm4hep_track.setType(1);
-
     }
 
     // Return the output collections as a tuple
