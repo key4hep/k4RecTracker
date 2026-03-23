@@ -87,7 +87,7 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
  * provided track object.
  *
  * @param edm4hep_track MutableTrack object to be updated with calorimeter extrapolation.
- * @param m_Bz Magnetic field component along the z-axis.
+ * @param Bz Magnetic field component along the z-axis (Tesla).
  * @param charge Electric charge of the particle track.
  * @param m_eCalBarrelInnerR Inner radius of the barrel calorimeter.
  * @param m_eCalBarrelMaxZ Maximum half-length (z) of the barrel calorimeter.
@@ -95,7 +95,7 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
  * @param m_eCalEndCapOuterR Outer radius of the endcap calorimeter.
  * @param m_eCalEndCapInnerZ z-position of the inner surface of the endcap calorimeter.
  */
-void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double m_Bz, int charge,
+void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double Bz /* Tesla */, int charge,
                                            double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
                                            double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
                                            double m_eCalEndCapInnerZ);

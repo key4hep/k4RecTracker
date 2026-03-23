@@ -154,8 +154,8 @@ struct GenfitTrackFitter final :
         
         // Initialize the Genfit: FieldManager and MaterialEffects
         m_detector = m_geoSvc->getDetector();
-        m_field = m_detector->field();
-        m_genfitField=new GenfitInterface::GenfitField(m_field);
+        auto fieldMap = m_detector->field();
+        m_genfitField=new GenfitInterface::GenfitField(fieldMap);
 
         m_fieldManager = genfit::FieldManager::getInstance();
         m_fieldManager->init(m_genfitField);
@@ -232,14 +232,6 @@ struct GenfitTrackFitter final :
             m_eCalEndCapOuterZ = eCalEndCapExtension->extent[3] / dd4hep::mm;
         }
 
-        // N.B. we are assuming that the magnetic field is uniform and along the z direction
-        // Z-component of the magnetic field at the center of the detector
-        // This component is used to propagate the track to the calorimeter surface, but it is also necessary to
-        // compute the pt component given omega
-        dd4hep::Position center(0, 0, 0);
-        dd4hep::Direction bfield = m_field.magneticField(center);
-        m_Bz = bfield.z() / dd4hep::tesla;
-
         return StatusCode::SUCCESS;
 
     }
@@ -283,11 +275,11 @@ struct GenfitTrackFitter final :
             {
 
                 
-                GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+                GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder, m_genfitField);
 
                 TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                 TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                track_interface.InitializeTrack(m_Bz, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                track_interface.InitializeTrack(false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
                 
                 auto track_init = track_interface.GetInitialization();
                 
@@ -305,7 +297,7 @@ struct GenfitTrackFitter final :
                 int pdgCode = m_particleHypotesis[0];    
                 track_interface.CreateGenFitTrack(pdgCode, debug_track);   
     
-                bool isFit = track_interface.Fit(m_Fitter_type.value(), m_Bz, m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);  
+                bool isFit = track_interface.Fit(m_Fitter_type.value(), m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);  
                 if (isFit)
                 {
 
@@ -313,14 +305,26 @@ struct GenfitTrackFitter final :
 
                     auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
+                    auto trackStates = edm4hep_track.getTrackStates();
+                    double Bz = 0.;
+                    for (auto ts : trackStates) {
+
+                        if (ts.location == edm4hep::TrackState::AtLastHit)
+                        {
+                            auto refPos_lastHit = ts.referencePoint;
+                            Bz = m_genfitField->getBz(TVector3(refPos_lastHit.x * dd4hep::mm, refPos_lastHit.y * dd4hep::mm, refPos_lastHit.z * dd4hep::mm)) / 10.; // Tesla
+                        }
+                            
+                    }
+
                     // Propagate to calorimeter and store the state at calorimeter
-                    FillTrackWithCalorimeterExtrapolation(  edm4hep_track, m_Bz, track_interface.GetCharge(), 
+                    FillTrackWithCalorimeterExtrapolation(  edm4hep_track, Bz, track_interface.GetCharge(), 
                                                             m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
 
 
                     if (m_printoutLevel == uint(MSG::DEBUG))
                     {   
-                        auto trackStates = edm4hep_track.getTrackStates();
+                        trackStates = edm4hep_track.getTrackStates();
                         edm4hep::TrackState trackStateCalo;
                         for (const auto& ts : trackStates)
                         {
@@ -351,7 +355,7 @@ struct GenfitTrackFitter final :
 
                         auto edm4hep_track_with_fit = track_interface.GetTrackWithFit_edm4hep();
 
-                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, m_Bz, track_interface.GetCharge(), 
+                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, Bz, track_interface.GetCharge(), 
                                                             m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ); 
 
 
@@ -371,15 +375,15 @@ struct GenfitTrackFitter final :
                 for (int pdgCode : m_particleHypotesis)
                 {
 
-                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder, m_genfitField);
 
                     TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                     TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                    track_interface.InitializeTrack(m_Bz, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                    track_interface.InitializeTrack(false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
 
                     track_interface.CreateGenFitTrack(pdgCode, 0);   
 
-                    bool isFit = track_interface.Fit(m_Fitter_type.value(), m_Bz, 0, m_Beta_init, m_Beta_final, m_Beta_steps, false);  
+                    bool isFit = track_interface.Fit(m_Fitter_type.value(), 0, m_Beta_init, m_Beta_final, m_Beta_steps, false);  
                     if (isFit)
                     {
 
@@ -411,28 +415,40 @@ struct GenfitTrackFitter final :
                     info() << "Track " << num_tracks - 1 << ": winning hypothesis is " << winning_hypothesis << " with chi2 / ndf = " << winning_chi2_ndf << endmsg;
                     int pdgCode = winning_hypothesis;
 
-                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder, m_genfitField);
 
                     TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                     TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                    track_interface.InitializeTrack(m_Bz, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                    track_interface.InitializeTrack(false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
 
                     int debug_track = 0;
                     if (m_printoutLevel == uint(MSG::DEBUG)) debug_track = 1;  
                     track_interface.CreateGenFitTrack(pdgCode, debug_track);  
         
-                    track_interface.Fit(m_Fitter_type.value(), m_Bz, m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);
+                    track_interface.Fit(m_Fitter_type.value(), m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);
 
                     auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
+                    auto trackStates = edm4hep_track.getTrackStates();
+                    double Bz = 0.;
+                    for (auto ts : trackStates) {
+
+                        if (ts.location == edm4hep::TrackState::AtLastHit)
+                        {
+                            auto refPos_lastHit = ts.referencePoint;
+                            Bz = m_genfitField->getBz(TVector3(refPos_lastHit.x * dd4hep::mm, refPos_lastHit.y * dd4hep::mm, refPos_lastHit.z * dd4hep::mm)) / 10.; // Tesla
+                        }
+                            
+                    }
+
                     // Propagate to calorimeter and store the state at calorimeter
-                    FillTrackWithCalorimeterExtrapolation(  edm4hep_track, m_Bz, track_interface.GetCharge(), 
+                    FillTrackWithCalorimeterExtrapolation(  edm4hep_track, Bz, track_interface.GetCharge(), 
                                                             m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
 
 
                     if (m_printoutLevel == uint(MSG::DEBUG))
                     {   
-                        auto trackStates = edm4hep_track.getTrackStates();
+                        trackStates = edm4hep_track.getTrackStates();
                         edm4hep::TrackState trackStateCalo;
                         for (const auto& ts : trackStates)
                         {
@@ -462,7 +478,7 @@ struct GenfitTrackFitter final :
 
                         auto edm4hep_track_with_fit = track_interface.GetTrackWithFit_edm4hep();
 
-                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, m_Bz, track_interface.GetCharge(), 
+                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, Bz, track_interface.GetCharge(), 
                                                             m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ); 
 
                         FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);
@@ -481,11 +497,11 @@ struct GenfitTrackFitter final :
                 {
 
 
-                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+                    GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder, m_genfitField);
 
                     TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                     TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                    track_interface.InitializeTrack(m_Bz, true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                    track_interface.InitializeTrack(true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
                 
                     auto track_init = track_interface.GetInitialization();
                     debug() << "Track " << num_tracks - 1 << " with " << track.getTrackerHits().size() << " hits: initial seed for track fit:" << endmsg;
@@ -502,7 +518,7 @@ struct GenfitTrackFitter final :
                     int pdgCode = m_particleHypotesis[0];    
                     track_interface.CreateGenFitTrack(pdgCode, debug_track);    
         
-                    bool isFit = track_interface.Fit(m_Fitter_type.value(), m_Bz, m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);  
+                    bool isFit = track_interface.Fit(m_Fitter_type.value(), m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);  
                     if (isFit)
                     {
 
@@ -510,14 +526,26 @@ struct GenfitTrackFitter final :
 
                         auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
+                        auto trackStates = edm4hep_track.getTrackStates();
+                        double Bz = 0.;
+                        for (auto ts : trackStates) {
+
+                            if (ts.location == edm4hep::TrackState::AtLastHit)
+                            {
+                                auto refPos_lastHit = ts.referencePoint;
+                                Bz = m_genfitField->getBz(TVector3(refPos_lastHit.x * dd4hep::mm, refPos_lastHit.y * dd4hep::mm, refPos_lastHit.z * dd4hep::mm)) / 10.; // Tesla
+                            }
+                                
+                        }
+
                         // Propagate to calorimeter and store the state at calorimeter
-                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track, m_Bz, track_interface.GetCharge(), 
+                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track, Bz, track_interface.GetCharge(), 
                                                                 m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
 
 
                         if (m_printoutLevel == uint(MSG::DEBUG))
                         {   
-                            auto trackStates = edm4hep_track.getTrackStates();
+                            trackStates = edm4hep_track.getTrackStates();
                             edm4hep::TrackState trackStateCalo;
                             for (const auto& ts : trackStates)
                             {
@@ -548,7 +576,7 @@ struct GenfitTrackFitter final :
 
                             auto edm4hep_track_with_fit = track_interface.GetTrackWithFit_edm4hep();
 
-                            FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, m_Bz, track_interface.GetCharge(), 
+                            FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, Bz, track_interface.GetCharge(), 
                                                                 m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ); 
 
                             FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);
@@ -580,15 +608,15 @@ struct GenfitTrackFitter final :
                     for (int pdgCode : m_particleHypotesis)
                     {
 
-                        GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+                        GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder, m_genfitField);
 
                         TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                         TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                        track_interface.InitializeTrack(m_Bz, true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());    
+                        track_interface.InitializeTrack(true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());    
 
                         track_interface.CreateGenFitTrack(pdgCode, 0);   
 
-                        bool isFit = track_interface.Fit(m_Fitter_type.value(), m_Bz, 0, m_Beta_init, m_Beta_final, m_Beta_steps, false);  
+                        bool isFit = track_interface.Fit(m_Fitter_type.value(), 0, m_Beta_init, m_Beta_final, m_Beta_steps, false);  
                         if (isFit)
                         {
 
@@ -626,29 +654,42 @@ struct GenfitTrackFitter final :
                         info() << "Track " << num_tracks - 1 << ": winning hypothesis is " << winning_hypothesis << " with chi2 / ndf = " << winning_chi2_ndf << endmsg;
                         int pdgCode = winning_hypothesis;
 
-                        GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder);
+                        GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder, m_genfitField);
 
                         TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                         TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                        track_interface.InitializeTrack(m_Bz, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                        track_interface.InitializeTrack(false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
 
                         int debug_track = 0;
                         if (m_printoutLevel == uint(MSG::DEBUG)) debug_track = 1;
                         track_interface.CreateGenFitTrack(pdgCode, debug_track);   
             
 
-                        track_interface.Fit(m_Fitter_type.value(), m_Bz, m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);
+                        track_interface.Fit(m_Fitter_type.value(), m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps, m_filterTrackHits);
 
                         auto edm4hep_track = track_interface.GetTrack_edm4hep();
 
+                        auto trackStates = edm4hep_track.getTrackStates();
+                        double Bz = 0.;
+                        for (auto ts : trackStates) {
+
+                            if (ts.location == edm4hep::TrackState::AtLastHit)
+                            {
+                                auto refPos_lastHit = ts.referencePoint;
+                                Bz = m_genfitField->getBz(TVector3(refPos_lastHit.x * dd4hep::mm, refPos_lastHit.y * dd4hep::mm, refPos_lastHit.z * dd4hep::mm)) / 10.; // Tesla
+                            }
+                                
+                        }
+
+
                         // Propagate to calorimeter and store the state at calorimeter
-                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track, m_Bz, track_interface.GetCharge(), 
+                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track, Bz, track_interface.GetCharge(), 
                                                                 m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
 
 
                         if (m_printoutLevel == uint(MSG::DEBUG))
                         {   
-                            auto trackStates = edm4hep_track.getTrackStates();
+                            trackStates = edm4hep_track.getTrackStates();
                             edm4hep::TrackState trackStateCalo;
                             for (const auto& ts : trackStates)
                             {
@@ -678,7 +719,7 @@ struct GenfitTrackFitter final :
 
                             auto edm4hep_track_with_fit = track_interface.GetTrackWithFit_edm4hep();
 
-                            FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, m_Bz, track_interface.GetCharge(), 
+                            FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, Bz, track_interface.GetCharge(), 
                                                                 m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ); 
 
                             FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);
@@ -731,7 +772,6 @@ struct GenfitTrackFitter final :
 
         ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
         dd4hep::Detector* m_detector{nullptr};  // Detector instance
-        dd4hep::OverlayedField m_field;         // Magnetic field
 
         GenfitInterface::GenfitField* m_genfitField;
         genfit::FieldManager* m_fieldManager;
@@ -742,8 +782,6 @@ struct GenfitTrackFitter final :
         dd4hep::rec::SurfaceManager* m_surfMan;
         dd4hep::rec::DCH_info* m_dch_info;
         dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
-
-        double m_Bz;
 
         double m_eCalBarrelInnerR;
         double m_eCalBarrelMaxZ;

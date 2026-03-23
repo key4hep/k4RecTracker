@@ -53,6 +53,7 @@
 #include "FastCircleSeed.h"
 #include "GenfitPlanarMeasurement.h"
 #include "GenfitWireMeasurement.h"
+#include "GenfitField.h"
 #include "utils.h"
 
 /** @class GenfitTrack
@@ -85,15 +86,16 @@ namespace GenfitInterface {
                     const edm4hep::Track& track,
                     const bool skipTrackOrdering = false,
                     const dd4hep::rec::DCH_info* dch_info = nullptr,
-                    const dd4hep::DDSegmentation::BitFieldCoder* decoder = nullptr
+                    const dd4hep::DDSegmentation::BitFieldCoder* decoder = nullptr,
+                    const GenfitInterface::GenfitField* fieldMap = nullptr
                 );
 
         ~GenfitTrack();
 
-        void InitializeTrack(double Bz, bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window);
+        void InitializeTrack(bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window);
 
         void CreateGenFitTrack(int particle_hypotesis, int debug_lvl);
-        bool Fit(std::string FitterType, double Bz, int debug_lvl, std::optional<double> Beta_init, std::optional<double> Beta_final, std::optional<int> Beta_steps, std::optional<bool> FilterHits);
+        bool Fit(std::string FitterType, int debug_lvl, std::optional<double> Beta_init, std::optional<double> Beta_final, std::optional<int> Beta_steps, std::optional<bool> FilterHits);
 
         genfit::Track* GetTrack_genfit() { return m_genfitTrack; }
         genfit::AbsTrackRep* GetRep_genfit() { return m_genfitTrackRep; }
@@ -172,6 +174,7 @@ namespace GenfitInterface {
 
         const dd4hep::rec::DCH_info* m_dch_info;
         const dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
+        const GenfitInterface::GenfitField* m_fieldMap;
 
     };
 

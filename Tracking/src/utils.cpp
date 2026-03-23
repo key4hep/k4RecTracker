@@ -78,7 +78,7 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
   return trackState_AtCalorimeter;
 }
 
-void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double m_Bz, int charge,
+void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double Bz /* Tesla */, int charge,
                                            double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
                                            double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
                                            double m_eCalEndCapInnerZ) {
@@ -88,7 +88,7 @@ void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track,
                                         
   auto trackStateLastHit = edm4hep_track.getTrackStates()[2];
   double omega_lastHit = trackStateLastHit.omega;
-  double pt_lasthit = a * m_Bz / abs(omega_lastHit);
+  double pt_lasthit = a * Bz / abs(omega_lastHit);
   double phi_lasthit = trackStateLastHit.phi;
   double pz_lasthit = trackStateLastHit.tanLambda * pt_lasthit;
   double px_lasthit = pt_lasthit * std::cos(phi_lasthit);
@@ -99,7 +99,7 @@ void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track,
   double posAtLastHit[] = {ref_lastHit[0], ref_lastHit[1], ref_lastHit[2]};
   double momAtLastHit[] = {px_lasthit, py_lasthit, pz_lasthit};
   auto helixAtLastHit = HelixClass_double();
-  helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit, charge, m_Bz);
+  helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit, charge, Bz);
 
   // Propagation to Endcap
   if (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.) {
@@ -114,7 +114,7 @@ void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track,
     pandora::CartesianVector pos_lasthit(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
     pandora::CartesianVector mom_lasthit(momAtLastHit[0], momAtLastHit[1], momAtLastHit[2]);
 
-    const pandora::Helix helix(pos_lasthit, mom_lasthit, charge, m_Bz);
+    const pandora::Helix helix(pos_lasthit, mom_lasthit, charge, Bz);
     const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
     const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
 
@@ -158,7 +158,7 @@ void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track,
     // by default, store extrapolation with lower arrival time
     // get extrapolated position
     edm4hep::TrackState trackState_AtCalorimeter =
-        getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit, m_Bz);
+        getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit, Bz);
 
     // attach the TrackState to the track
     edm4hep_track.addToTrackStates(trackState_AtCalorimeter);

@@ -18,13 +18,14 @@
 */
 
 #include "GenfitTrack.h"
+#include "TRandom3.h"
 
 namespace GenfitInterface {
 
     GenfitTrack::GenfitTrack(   const edm4hep::Track& track,
                                 const bool skipTrackOrdering,
-                                const dd4hep::rec::DCH_info* dch_info, const dd4hep::DDSegmentation::BitFieldCoder* decoder)
-
+                                const dd4hep::rec::DCH_info* dch_info, const dd4hep::DDSegmentation::BitFieldCoder* decoder,
+                                const GenfitInterface::GenfitField* fieldMap)
         :   
             m_originalTrack(track),
             m_posInit(0., 0., 0.), 
@@ -35,7 +36,8 @@ namespace GenfitInterface {
             m_edm4hepTrack(),
         
             m_dch_info(dch_info),
-            m_dc_decoder(decoder)
+            m_dc_decoder(decoder),
+            m_fieldMap(fieldMap)
 
             
     {   
@@ -143,9 +145,6 @@ namespace GenfitInterface {
     * setting the initial position, momentum direction, and covariance matrix
     * according to the selected initialization strategy.
     *
-    * The initialization requires the magnetic field component Bz and supports
-    * optional hit limiting and custom initialization parameters.
-    *
     * The following steps are performed:
     *
     * 1. Optional hit reduction:
@@ -177,7 +176,6 @@ namespace GenfitInterface {
     *        - Both parameters must be specified.
     *        - The covariance matrix is computed accordingly.
     *
-    * @param Bz Magnetic field component along the z-axis.
     * @param LimitHits If true, reduces the number of hits used for initialization.
     * @param InitializationType Defines the initialization strategy:
     *        0 = default (first two hits),
@@ -195,7 +193,7 @@ namespace GenfitInterface {
     * @param Window Optional parameter for hit limiting (required if LimitHits == true).
     *
     */
-    void GenfitTrack::InitializeTrack(double Bz, bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window) {
+    void GenfitTrack::InitializeTrack(bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window) {
 
         double c_mm_s = 2.998e11;
         double a = 1e-15 * c_mm_s;
@@ -211,9 +209,6 @@ namespace GenfitInterface {
                 std::cerr << "Missing Values for Epsilon or Window!" << std::endl;
             }
         }
-
-        HelperInitialization InitInfo = ComputeInitialParameters(Bz);
-        m_charge_hypothesis = InitInfo.Charge;
 
         // Inizialization
         if (InitializationType == 0) // default
@@ -245,14 +240,27 @@ namespace GenfitInterface {
 
             m_posInit = firstHit_referencePoint;                                       // cm
             m_momInit = (secondHit_referencePoint - firstHit_referencePoint).Unit();   // GeV/c
+
+            double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
+            HelperInitialization InitInfo = ComputeInitialParameters(Bz);
+            m_charge_hypothesis = InitInfo.Charge;
+
             m_covInit = ComputeInitialCovarianceMatrix(Bz, a);
             
         }
         else if (InitializationType == 1) // refined 
         {
 
+            auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
+            auto firstHit = hits_for_genfit[0].getPosition();
+
+            double Bz = m_fieldMap->getBz(TVector3(firstHit.x * dd4hep::mm, firstHit.y * dd4hep::mm, firstHit.z * dd4hep::mm)) / 10.; // Tesla
+
+            HelperInitialization InitInfo = ComputeInitialParameters(Bz);
+            m_charge_hypothesis = InitInfo.Charge;
             m_posInit = InitInfo.Position;
             m_momInit = InitInfo.Momentum;
+    
             m_covInit = ComputeInitialCovarianceMatrix(Bz, a);
 
 
@@ -264,19 +272,24 @@ namespace GenfitInterface {
             {
             
 
-                auto trackState = m_originalTrack.getTrackStates();
-                for (auto ts : trackState) {
+                auto trackStates = m_originalTrack.getTrackStates();
+                for (auto ts : trackStates) {
 
                     if (ts.location == TrackStateLocation.value())
                     {   
                         m_VP_referencePoint = TVector3(ts.referencePoint.x * dd4hep::mm, ts.referencePoint.y * dd4hep::mm, ts.referencePoint.z * dd4hep::mm ); // cm
-                        
+                        m_posInit = m_VP_referencePoint; // cm
+
+                        double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
+                        HelperInitialization InitInfo = ComputeInitialParameters(Bz);
+                        m_charge_hypothesis = InitInfo.Charge;
+
                         double pT = a * std::abs(Bz) / std::abs(ts.omega);  // GeV/c
                         double px = pT * std::cos(ts.phi);
                         double py = pT * std::sin(ts.phi);
                         double pz = pT * ts.tanLambda;
 
-                        m_posInit = m_VP_referencePoint; // cm
+                      
                         m_momInit = TVector3(px, py, pz); // GeV/c
                         
                         auto& covMatrixHelix = ts.covMatrix;
@@ -327,7 +340,13 @@ namespace GenfitInterface {
             {
                 m_posInit = Init_position.value();
                 m_momInit = Init_momentum.value();
+
+                double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
+                HelperInitialization InitInfo = ComputeInitialParameters(Bz);
+                m_charge_hypothesis = InitInfo.Charge;
+
                 m_covInit = ComputeInitialCovarianceMatrix(Bz, a);
+
             }
             else
             {
@@ -703,7 +722,6 @@ namespace GenfitInterface {
     * and populates the EDM4hep track states at the IP, first hit, and last hit positions.
     * 
     * @param FitterType Fitting strategy: DAF, KALMAN, KALMAN_REF
-    * @param Bz         Value of z-component of the magnetic field at the center of the detector
     * @param debug_lvl  debug level: output if > 0
     * @param Beta_init  Initial annealing parameter (if DAF is enabled)
     * @param Beta_final Final annealing parameter (if DAF is enabled)
@@ -712,7 +730,7 @@ namespace GenfitInterface {
     * 
     * @return true if the fit was successful, false otherwise.
     */
-    bool GenfitTrack::Fit(std::string FitterType = "DAF", double Bz = 2.0, int debug_lvl = 0, std::optional<double> Beta_init = 100., std::optional<double> Beta_final=0.1, std::optional<int> Beta_steps=10, std::optional<bool> FilterHits = true) {
+    bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::optional<double> Beta_init = 100., std::optional<double> Beta_final=0.1, std::optional<int> Beta_steps=10, std::optional<bool> FilterHits = true) {
 
         edm4hep::Track Track_temp = m_edm4hepTrack;
         for (size_t i = 0; i < Track_temp.trackStates_size(); ++i) {
@@ -922,6 +940,7 @@ namespace GenfitInterface {
                 pz = gen_momentum.Z();        // gev
                 pt = gen_momentum.Perp();     // gev
                 
+                double Bz = m_fieldMap->getBz(gen_position) / 10.; // Tesla
                 auto infoComputeD0Z0_firstHit = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
 
                 d0 = (( - (m_VP_referencePoint.X() - infoComputeD0Z0_firstHit.PCA.X()) ) * sin(infoComputeD0Z0_firstHit.Phi0) + 
@@ -955,6 +974,7 @@ namespace GenfitInterface {
                 pz = gen_momentum.Z();          // gev
                 pt = gen_momentum.Perp();       // gev
 
+                Bz = m_fieldMap->getBz(gen_position) / 10.; // Tesla
                 auto infoComputeD0Z0_lastHit = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
 
                 d0 = (( - (m_VP_referencePoint.X() - infoComputeD0Z0_lastHit.PCA.X()) ) * sin(infoComputeD0Z0_lastHit.Phi0) + 
@@ -1001,6 +1021,7 @@ namespace GenfitInterface {
                     pz = gen_momentum.Z();          // gev
                     pt = gen_momentum.Perp();       // gev
 
+                    Bz = m_fieldMap->getBz(gen_position) / 10.; // Tesla
                     auto infoComputeD0Z0_IP = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
 
                     d0 = (( - (m_VP_referencePoint.X() - infoComputeD0Z0_IP.PCA.X()) ) * sin(infoComputeD0Z0_IP.Phi0) + 
