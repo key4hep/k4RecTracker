@@ -40,10 +40,7 @@ namespace GenfitInterface {
     {
         /// get field from dd4hepField
         const dd4hep::Direction& field=m_dd4hepField.magneticField(
-                dd4hep::Position(
-                posX* dd4hep::mm,
-                posY* dd4hep::mm,
-                posZ* dd4hep::mm));
+                dd4hep::Position( posX, posY, posZ));
 
         Bx=field.X() / dd4hep::kilogauss;
         By=field.Y() / dd4hep::kilogauss;

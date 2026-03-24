@@ -253,7 +253,6 @@ namespace GenfitInterface {
 
             auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
             auto firstHit = hits_for_genfit[0].getPosition();
-
             double Bz = m_fieldMap->getBz(TVector3(firstHit.x * dd4hep::mm, firstHit.y * dd4hep::mm, firstHit.z * dd4hep::mm)) / 10.; // Tesla
 
             HelperInitialization InitInfo = ComputeInitialParameters(Bz);
@@ -281,6 +280,7 @@ namespace GenfitInterface {
                         m_posInit = m_VP_referencePoint; // cm
 
                         double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
+
                         HelperInitialization InitInfo = ComputeInitialParameters(Bz);
                         m_charge_hypothesis = InitInfo.Charge;
 

@@ -317,33 +317,37 @@ struct GenfitTrackFitter final :
                             
                     }
 
-                    // Propagate to calorimeter and store the state at calorimeter
-                    FillTrackWithCalorimeterExtrapolation(  edm4hep_track, Bz, track_interface.GetCharge(), 
+                    if (Bz > 0)
+                    {
+
+                        // Propagate to calorimeter and store the state at calorimeter
+                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track, Bz, track_interface.GetCharge(), 
                                                             m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
 
-
-                    if (m_printoutLevel == uint(MSG::DEBUG))
-                    {   
-                        trackStates = edm4hep_track.getTrackStates();
-                        edm4hep::TrackState trackStateCalo;
-                        for (const auto& ts : trackStates)
-                        {
-                            if (ts.location == edm4hep::TrackState::AtCalorimeter)
+                        if (m_printoutLevel == uint(MSG::DEBUG))
+                        {   
+                            trackStates = edm4hep_track.getTrackStates();
+                            edm4hep::TrackState trackStateCalo;
+                            for (const auto& ts : trackStates)
                             {
-                                trackStateCalo = ts;
-                                break;
+                                if (ts.location == edm4hep::TrackState::AtCalorimeter)
+                                {
+                                    trackStateCalo = ts;
+                                    break;
+                                }
                             }
+
+                            debug() << ": TrackState at Calo: " << endmsg;
+                            debug() << ":  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+                            debug() << ":  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+                            debug() << ":  phi: " << trackStateCalo.phi << " rad" << endmsg;
+                            debug() << ":  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
+                            debug() << ":  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+                            debug() << ":  location: " << trackStateCalo.location << endmsg;
+                            debug() << ":  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm\n" << endmsg;
+
                         }
-
-                        debug() << ": TrackState at Calo: " << endmsg;
-                        debug() << ":  D0: " << trackStateCalo.D0 << " mm" << endmsg;
-                        debug() << ":  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
-                        debug() << ":  phi: " << trackStateCalo.phi << " rad" << endmsg;
-                        debug() << ":  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
-                        debug() << ":  tanLambda: " << trackStateCalo.tanLambda << endmsg;
-                        debug() << ":  location: " << trackStateCalo.location << endmsg;
-                        debug() << ":  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm\n" << endmsg;
-
+                        
                     }
 
                     // Add the fitted track to the output collection
@@ -355,9 +359,11 @@ struct GenfitTrackFitter final :
 
                         auto edm4hep_track_with_fit = track_interface.GetTrackWithFit_edm4hep();
 
-                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, Bz, track_interface.GetCharge(), 
+                        if (Bz > 0)
+                        {
+                            FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, Bz, track_interface.GetCharge(), 
                                                             m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ); 
-
+                        }
 
                         FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);
                         FittedHits = std::move(track_interface.GetFittedHits());
@@ -441,33 +447,37 @@ struct GenfitTrackFitter final :
                             
                     }
 
-                    // Propagate to calorimeter and store the state at calorimeter
-                    FillTrackWithCalorimeterExtrapolation(  edm4hep_track, Bz, track_interface.GetCharge(), 
-                                                            m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
+                    if (Bz > 0)
+                    {
+                        // Propagate to calorimeter and store the state at calorimeter
+                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track, Bz, track_interface.GetCharge(), 
+                                                                m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
 
 
-                    if (m_printoutLevel == uint(MSG::DEBUG))
-                    {   
-                        trackStates = edm4hep_track.getTrackStates();
-                        edm4hep::TrackState trackStateCalo;
-                        for (const auto& ts : trackStates)
-                        {
-                            if (ts.location == edm4hep::TrackState::AtCalorimeter)
+                        if (m_printoutLevel == uint(MSG::DEBUG))
+                        {   
+                            trackStates = edm4hep_track.getTrackStates();
+                            edm4hep::TrackState trackStateCalo;
+                            for (const auto& ts : trackStates)
                             {
-                                trackStateCalo = ts;
-                                break;
+                                if (ts.location == edm4hep::TrackState::AtCalorimeter)
+                                {
+                                    trackStateCalo = ts;
+                                    break;
+                                }
                             }
+
+                            debug() << ": TrackState at Calo: " << endmsg;
+                            debug() << ":  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+                            debug() << ":  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+                            debug() << ":  phi: " << trackStateCalo.phi << " rad" << endmsg;
+                            debug() << ":  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
+                            debug() << ":  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+                            debug() << ":  location: " << trackStateCalo.location << endmsg;
+                            debug() << ":  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm\n" << endmsg;
+
                         }
-
-                        debug() << ": TrackState at Calo: " << endmsg;
-                        debug() << ":  D0: " << trackStateCalo.D0 << " mm" << endmsg;
-                        debug() << ":  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
-                        debug() << ":  phi: " << trackStateCalo.phi << " rad" << endmsg;
-                        debug() << ":  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
-                        debug() << ":  tanLambda: " << trackStateCalo.tanLambda << endmsg;
-                        debug() << ":  location: " << trackStateCalo.location << endmsg;
-                        debug() << ":  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm\n" << endmsg;
-
+                    
                     }
 
                     // Add the fitted track to the output collection
@@ -478,8 +488,11 @@ struct GenfitTrackFitter final :
 
                         auto edm4hep_track_with_fit = track_interface.GetTrackWithFit_edm4hep();
 
-                        FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, Bz, track_interface.GetCharge(), 
-                                                            m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ); 
+                        if (Bz > 0)
+                        {
+                            FillTrackWithCalorimeterExtrapolation(  edm4hep_track_with_fit, Bz, track_interface.GetCharge(), 
+                                                                m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ); 
+                        }
 
                         FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);
                         FittedHits = std::move(track_interface.GetFittedHits());
