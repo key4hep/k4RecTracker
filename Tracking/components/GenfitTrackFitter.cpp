@@ -43,20 +43,10 @@
 #include <TVector3.h>
 #include <cxxabi.h>
 
-#include <ConstField.h>
-#include <DAF.h>
-#include <EventDisplay.h>
 #include <Exception.h>
 #include <FieldManager.h>
-#include <KalmanFitterInfo.h>
-#include <KalmanFitterRefTrack.h>
 #include <MaterialEffects.h>
-#include <PlanarMeasurement.h>
-#include <RKTrackRep.h>
-#include <StateOnPlane.h>
 #include <TGeoMaterialInterface.h>
-#include <Track.h>
-#include <TrackPoint.h>
 
 #include "Gaudi/Property.h"
 #include "k4FWCore/DataHandle.h"
@@ -75,31 +65,18 @@
 #include <DDRec/Vector3D.h>
 #include <DDSegmentation/BitFieldCoder.h>
 
-#include "edm4hep/MCParticleCollection.h"
 #include "edm4hep/SenseWireHitCollection.h"
 #include "edm4hep/TrackCollection.h"
-#include "edm4hep/TrackMCParticleLinkCollection.h"
 #include "edm4hep/TrackState.h"
 #include "edm4hep/TrackerHitPlaneCollection.h"
-#include "edm4hep/TrackerHitSimTrackerHitLinkCollection.h"
-#include "podio/Frame.h"
-#include "podio/ROOTReader.h"
 
 #include "k4Interface/IGeoSvc.h"
 #include "k4Interface/IUniqueIDGenSvc.h"
 
 #include "GenfitField.h"
 #include "GenfitMaterialInterface.h"
-#include "GenfitPlanarMeasurement.h"
 #include "GenfitTrack.h"
-#include "GenfitWireMeasurement.h"
 
-#include <marlinutil/HelixClass_double.h>
-#include <Objects/Helix.h>
-
-#include "podio/UserDataCollection.h"
-
-#include "FastCircleSeed.h"
 #include "utils.h"
 
 /** @struct GenfitTrackFitter
@@ -274,12 +251,11 @@ struct GenfitTrackFitter final :
             if (m_singleEvaluation)
             {
 
-                
                 GenfitInterface::GenfitTrack track_interface = GenfitInterface::GenfitTrack(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder, m_genfitField);
 
                 TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                 TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                track_interface.InitializeTrack(false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
                 
                 auto track_init = track_interface.GetInitialization();
                 
@@ -385,7 +361,7 @@ struct GenfitTrackFitter final :
 
                     TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                     TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                    track_interface.InitializeTrack(false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                    track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
 
                     track_interface.CreateGenFitTrack(pdgCode, 0);   
 
@@ -425,7 +401,7 @@ struct GenfitTrackFitter final :
 
                     TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                     TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                    track_interface.InitializeTrack(false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                    track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
 
                     int debug_track = 0;
                     if (m_printoutLevel == uint(MSG::DEBUG)) debug_track = 1;  
@@ -514,7 +490,7 @@ struct GenfitTrackFitter final :
 
                     TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                     TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                    track_interface.InitializeTrack(true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                    track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
                 
                     auto track_init = track_interface.GetInitialization();
                     debug() << "Track " << num_tracks - 1 << " with " << track.getTrackerHits().size() << " hits: initial seed for track fit:" << endmsg;
@@ -625,7 +601,7 @@ struct GenfitTrackFitter final :
 
                         TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                         TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                        track_interface.InitializeTrack(true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());    
+                        track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, true, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());    
 
                         track_interface.CreateGenFitTrack(pdgCode, 0);   
 
@@ -671,7 +647,7 @@ struct GenfitTrackFitter final :
 
                         TVector3 Init_position = TVector3(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
                         TVector3 Init_momentum = TVector3(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
-                        track_interface.InitializeTrack(false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
+                        track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, false, m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(), m_smoothWindow.value());  
 
                         int debug_track = 0;
                         if (m_printoutLevel == uint(MSG::DEBUG)) debug_track = 1;
@@ -776,13 +752,15 @@ struct GenfitTrackFitter final :
 
     private:
 
-        // Debug level for printouts
-        // - 0: no printouts
-        // - INFO: printout of fit results
-        // - DEBUG: printout of fit results + initial track parameters + track states
-        // - VERBOSE: printout of detailed debug information from the fit
+        // ====================== Debug & Printout ======================
+        // Debug level for track fitting and initialization printouts
+        // 0       : no printouts
+        // INFO    : prints fit results
+        // DEBUG   : prints fit results + initial track parameters + track states
+        // VERBOSE : prints detailed internal fit information
         uint m_printoutLevel; 
 
+        // ====================== Geometry & Detector ======================
         ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
         dd4hep::Detector* m_detector{nullptr};  // Detector instance
 
@@ -796,6 +774,7 @@ struct GenfitTrackFitter final :
         dd4hep::rec::DCH_info* m_dch_info;
         dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
 
+        // ====================== ECAL Geometry Parameters ======================
         double m_eCalBarrelInnerR;
         double m_eCalBarrelMaxZ;
         double m_eCalEndCapInnerR;
@@ -803,79 +782,144 @@ struct GenfitTrackFitter final :
         double m_eCalEndCapInnerZ;
         double m_eCalEndCapOuterZ;
 
-        Gaudi::Property<std::vector<int>> m_particleHypotesis{this, "ParticleHypotesisList", {211}, "List of particle hypotheses to consider: {11,13,211,321,2212} -> e, mu, pi, K, p"};
+        // ====================== Fitter Settings ======================
 
-        Gaudi::Property<bool> m_useBrems{this, "UseBrems", false, "Use Bremsstrahlung energy loss and noise in the fit"};
+        Gaudi::Property<bool> m_useBrems{
+            this,
+            "UseBrems",
+            false,
+            "Include Bremsstrahlung energy loss and noise in the fit"
+        };
 
-        Gaudi::Property<std::string> m_Fitter_type{this, "FitterType", "DAF", "Choose which fitter to use among 'DAF', 'KALMAN', 'KALMAN_REF' "};
-        Gaudi::Property<double> m_Beta_init{this, "BetaInit", 100, "Beta Initial value (if m_Fitter_type == 'DAF')"};
-        Gaudi::Property<double> m_Beta_final{this, "BetaFinal", 0.05, "Beta Final value (if m_Fitter_type == 'DAF')"};
-        Gaudi::Property<int> m_Beta_steps{this, "BetaSteps", 15, "Beta number of Steps (if m_Fitter_type == 'DAF')"};
+        Gaudi::Property<std::string> m_Fitter_type{
+            this,
+            "FitterType",
+            "DAF",
+            "Fitter type to use [https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf]: 'DAF', 'KALMAN', or 'KALMAN_REF'"
+        };
+        Gaudi::Property<double> m_Beta_init{
+            this,
+            "BetaInit",
+            100.,
+            "Initial annealing parameter (if m_Fitter_type == 'DAF') [https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf]"
+        };
+        Gaudi::Property<double> m_Beta_final{
+            this,
+            "BetaFinal",
+            0.05,
+            "Final annealing parameter (if m_Fitter_type == 'DAF') [https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf]"
+        };
+        Gaudi::Property<int> m_Beta_steps{
+            this,
+            "BetaSteps",
+            15,
+            "Number of steps in the annealing schedule (if m_Fitter_type == 'DAF') [https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf]"
+        };
+
+        // ====================== Track Initialization ======================
+        Gaudi::Property<std::vector<int>> m_particleHypotesis{
+            this,
+            "ParticleHypotesisList",
+            {211},
+            "List of particle hypotheses to consider: {11,13,211,321,2212} -> e, mu, pi, K, p"
+        };
+
+        Gaudi::Property<int> m_useFirstHitAsReference{
+            this,
+            "UseFirstHitAsReference",
+            false,
+            "If true, the first hit is used as the reference point for track initialization"
+        };
 
         Gaudi::Property<int> m_initializationType{
             this,
             "InitializationType",
             1,
-            "Method used to initialize the track parameters before the fit. "
-            "0: use first two hits (position from first hit, momentum from direction between first and second hit); "
+            "Method for initializing track parameters before fitting: "
+            "0: first two hits (position from first hit, momentum from direction between first and second hit); "
             "1: refined initialization using ComputeInitialParameters(Bz); "
             "2: initialize from a track state (position from reference point, momentum from helix parameters); "
-            "3: use user-provided Init_position and Init_momentum."
+            "3: use user-provided InitPosition and InitMomentum"
         };
 
         Gaudi::Property<int> m_trackStateLocation{
             this,
             "TrackStateLocation",
             edm4hep::TrackState::AtFirstHit,
-            "Location of the track state used for initialization when InitializationType = 2. "
-            "This should correspond to the location of the track state where the reference point and helix parameters are defined."
+            "TrackState location used for initialization when InitializationType = 2. "
+            "Defines where the reference point and helix parameters are taken from"
         };
+
         Gaudi::Property<std::vector<double>> m_init_position{
             this,
             "InitPosition",
             {0., 0., 0.},
-            "Initial track position used for initialization when InitializationType = 3."
+            "User-defined initial position for InitializationType = 3"
         };
 
         Gaudi::Property<std::vector<double>> m_init_momentum{
             this,
             "InitMomentum",
             {0., 0., 0.},
-            "Initial track momentum used for initialization when InitializationType = 3."
+            "User-defined initial momentum for InitializationType = 3"
         };
 
         Gaudi::Property<double> m_epsilon{
             this,
             "Epsilon",
             1e-4,
-            "Threshold used during track initialization to detect sign changes in the first derivative "
-            "computed between consecutive hits. This is used to identify and select hits "
-            "from the first round of the looper."
+            "Threshold to detect sign changes in the first derivative during track initialization. "
+            "Used to identify hits from the first round of the looper"
         };
 
         Gaudi::Property<int> m_smoothWindow{
             this,
             "SmoothWindow",
             5,
-            "Number of hits used in the smoothing step during track initialization. "
-            "Hits are smoothed before computing the first derivative."
+            "Number of hits used for smoothing before computing the first derivative in track initialization"
         };
 
-        Gaudi::Property<bool> m_skipTrackOrdering{this, "SkipTrackOrdering", false, "Skip track ordering before fitting"};
-        Gaudi::Property<bool> m_skip_unmatchedTracks{this, "SkipUnmatchedTracks", true, "Skip unmatched tracks (track.type = 0) from fitting"};
+        // ====================== Track Filtering & Evaluation ======================
+        Gaudi::Property<bool> m_skipTrackOrdering{
+            this,
+            "SkipTrackOrdering",
+            false,
+            "Skip hit ordering before fitting"
+        };
+
+        Gaudi::Property<bool> m_skip_unmatchedTracks{
+            this,
+            "SkipUnmatchedTracks",
+            true,
+            "Skip tracks with type = 0 (unmatched) from fitting"
+        };
+
         Gaudi::Property<bool> m_singleEvaluation{
             this,
             "RunSingleEvaluation",
             false,
-            "Evaluation mode: if true, the fit is performed only once using the first particle hypothesis in std::vector<int> m_particleHypothesis (single evaluation mode)."
-            "If false, the algorithm scans all particle hypotheses in the vector and selects the one that provides the best fit in terms of chi2/ndf."
+            "If true, only the first particle hypothesis is evaluated. "
+            "If false, all hypotheses are scanned and the best fit is chosen based on chi2/ndf"
         };
+
         Gaudi::Property<bool> m_filterTrackHits{
             this,
             "FilterTrackHits",
             false,
-            "Filter track hits after fitting depending on their quality."
+            "Filter track hits after fitting based on their quality (weights assigned by the fitter). "
+            "This also resolves the left/right ambiguity in drift chamber hits: only the hit with the higher weight is considered."
         };
+
+        // ====================== Track Classification ======================
+        Gaudi::Property<double> m_identifyDisplaced{
+            this,
+            "IdentifyDisplacedRadius",
+            100.,
+            "Radius [mm] defining a spherical region around {0,0,0}: "
+            "tracks produced within this radius are considered prompt; tracks outside are considered displaced"
+        };  
+
+
 
 };
 

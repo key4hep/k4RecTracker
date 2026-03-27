@@ -92,7 +92,7 @@ namespace GenfitInterface {
 
         ~GenfitTrack();
 
-        void InitializeTrack(bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window);
+        void InitializeTrack(double RadiusForDisplacedTracking, bool UseFirstHitAsReference, bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window);
 
         void CreateGenFitTrack(int particle_hypotesis, int debug_lvl);
         bool Fit(std::string FitterType, int debug_lvl, std::optional<double> Beta_init, std::optional<double> Beta_final, std::optional<int> Beta_steps, std::optional<bool> FilterHits);
@@ -136,7 +136,7 @@ namespace GenfitInterface {
 
     private:
 
-        edm4hep::Track m_originalTrack;  // Store the original track for reference and debugging
+        edm4hep::Track m_originalTrack;
 
         struct PCAInfoHelper
         {
@@ -148,11 +148,11 @@ namespace GenfitInterface {
         void OrderHits(const edm4hep::Track& track, bool skipTrackOrdering);
         void LimitNumberHits(double epsilon, int smoothWindow);  
 
-        std::array<double, 36> CovarianceMatrixHelixToCartesian(const std::array<double,25>& C_helix, 
-                                                                TVector3 Position_cm, TVector3 Momentum_gev,  TVector3 RefPoint_cm,
-                                                                double Bz);
+        TMatrixDSym CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_helix, 
+                                                        TVector3 Position_cm, TVector3 Momentum_gev,  TVector3 RefPoint_cm,
+                                                        double Bz);
 
-        TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, double a);
+        TMatrixDSym ComputeInitialCovarianceMatrix(double Bz);
 
         HelperInitialization ComputeInitialParameters(double Bz);
         PCAInfoHelper PCAInfo(TVector3 position, TVector3 momentum, int charge, TVector3 refPoint, double Bz);
@@ -178,6 +178,6 @@ namespace GenfitInterface {
 
     };
 
-}  // namespace GenfitInterface
+}
 
-#endif // GENFIT_TRACK_H
+#endif // GenfitTrack

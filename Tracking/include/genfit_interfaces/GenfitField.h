@@ -23,12 +23,12 @@
 
 #include "DD4hep/Fields.h"
 #include "DD4hep/DD4hepUnits.h"
+#include "DD4hep/Printout.h"
 
 #include "FieldManager.h"
 #include "ConstField.h"
 #include "AbsBField.h"
 
-class TVector3;
 
 
 /** @class GenfitField
@@ -48,6 +48,7 @@ class TVector3;
  *  Author: Andrea De Vita  
  *  Date  : 2025-11
  *
+ * @note: This implementation is inspired by the work of Yao Zhang (zhangyao@ihep.ac.cn), as presented in CEPCSW/Reconstruction/RecGenfitAlg/src/GenfitField.h
  */
 
 
@@ -58,10 +59,8 @@ namespace GenfitInterface {
             GenfitField(dd4hep::OverlayedField dd4hepField);
             virtual ~GenfitField(){;}
 
-            // Get field value from TVector3
             TVector3 get(const TVector3& pos) const override;
 
-            // Get field value from doubles
             void get(const double& posX, const double& posY, const double& posZ,
                     double& Bx, double& By, double& Bz) const override;
 
@@ -76,4 +75,4 @@ namespace GenfitInterface {
     };
 }
 
-#endif
+#endif // GenfitField

@@ -141,225 +141,282 @@ namespace GenfitInterface {
     /**
     * @brief Initialize the GenfitTrack object with configurable initialization strategies.
     *
-    * This method initializes the internal state of the `GenfitTrack` object,
-    * setting the initial position, momentum direction, and covariance matrix
-    * according to the selected initialization strategy.
+    * This method initializes the internal state of the `GenfitTrack` object by defining:
+    * - the initial position (`m_posInit`)
+    * - the initial momentum (`m_momInit`)
+    * - the charge hypothesis (`m_charge_hypothesis`)
+    * - the initial covariance matrix (`m_covInit`)
     *
-    * The following steps are performed:
+    * The initialization procedure depends on the selected strategy and may rely on:
+    * - tracker hits,
+    * - pre-existing track states,
+    * - or user-provided parameters.
+    *
+    * In all cases, the magnetic field at the reference position is evaluated and used
+    * to ensure a consistent initialization of both kinematics and covariance.
+    *
+    * ---
+    * Initialization workflow:
     *
     * 1. Optional hit reduction:
-    *    - If LimitHits is true, the number of tracker hits is reduced using
-    *      the `LimitNumberHits(Epsilon, Window)` method.
+    *    - If `LimitHits` is true, the tracker hits are preprocessed using
+    *      `LimitNumberHits(Epsilon, Window)`.
+    *    - This step is intended to reduce the number of hits, retaining only those associated with the first loop of looping tracks.
     *
-    * 2. Track parameter initialization (controlled by InitializationType):
+    * 2. Definition of initial track parameters (controlled by InitializationType):
     *
-    *    - InitializationType == 0 (default):
-    *        - Uses the first two tracker hits.
-    *        - m_posInit is set to the position of the first hit.
-    *        - m_momInit is set to the unit vector from the first to the second hit.
-    *        - The covariance matrix is computed via `ComputeInitialCovarianceMatrix`.
+    *    - InitializationType == 0 (default: geometric seed from hits):
+    *        - Requires at least two tracker hits.
+    *        - The initial position is set to the first hit.
+    *        - The initial momentum direction is defined as the normalized vector
+    *          from the first to the second hit.
+    *        - The charge hypothesis is estimated via `ComputeInitialParameters(Bz)`.
+    *        - The covariance matrix is computed using `ComputeInitialCovarianceMatrix`.
     *
-    *    - InitializationType == 1 (refined):
-    *        - Calls `ComputeInitialParameters(Bz)` to obtain improved
-    *          estimates of the initial position and momentum.
+    *    - InitializationType == 1 (refined: parameter-based estimation):
+    *        - Uses `ComputeInitialParameters(Bz)` to obtain a more accurate estimate
+    *          of position and momentum, typically exploiting multiple hits.
+    *        - Optionally updates the reference point (`m_VP_referencePoint`):
+    *            - if `UseFirstHitAsReference` is true, or
+    *            - if displaced tracking is enabled and the first hit lies outside
+    *              a sphere of radius `RadiusForDisplacedTracking`.
+    *        - The covariance matrix is computed consistently with the estimated parameters.
+    *
+    *    - InitializationType == 2 (track state based):
+    *        - Extracts initialization from an existing `edm4hep::TrackState`.
+    *        - The reference point is taken from the track state.
+    *        - The momentum is reconstructed from helix parameters:
+    *            - transverse momentum is derived from curvature (`omega`) and Bz
+    *            - direction is defined using `phi` and `tanLambda`
+    *        - The covariance matrix is:
+    *            - first reconstructed in helix parameter space
+    *            - then transformed to Cartesian coordinates via
+    *              `CovarianceMatrixHelixToCartesian`.
+    *
+    *    - InitializationType == 3 (custom user-defined):
+    *        - Uses user-provided `Init_position` and `Init_momentum`.
+    *        - Both parameters are mandatory.
+    *        - The charge hypothesis is still inferred via `ComputeInitialParameters(Bz)`.
     *        - The covariance matrix is computed accordingly.
     *
-    *    - InitializationType == 2 (track state):
-    *        - Extracts initial parameters from a specified track state location.
-    *        - The position is taken from the track state's reference point.
-    *        - The momentum is computed from the track state's helix parameters
-    *          using the magnetic field Bz and physical constants.
-    *        - The covariance matrix is computed accordingly.
+    * ---
     *
-    *    - InitializationType == 3 (custom):
-    *        - Uses user-provided Init_position and Init_momentum.
-    *        - Both parameters must be specified.
-    *        - The covariance matrix is computed accordingly.
+    * Error handling:
+    * - The method throws `std::runtime_error` in the following cases:
+    *     - missing required parameters (e.g. TrackStateLocation, Init_position, ...)
+    *     - insufficient number of hits for the selected strategy
+    *     - requested track state not found
+    *     - unknown InitializationType
     *
-    * @param LimitHits If true, reduces the number of hits used for initialization.
-    * @param InitializationType Defines the initialization strategy:
+    * ---
+    *
+    * @param RadiusForDisplacedTracking If > 0, enables displaced tracking logic:
+    *        tracks with first hit outside this radius may use a different reference point.
+    * @param UseFirstHitAsReference If true, the first hit is always used as reference point.
+    * @param LimitHits If true, reduces the number of hits before initialization.
+    * @param InitializationType Strategy selector:
     *        0 = default (first two hits),
     *        1 = refined (computed parameters),
-    *        2 = track state (parameters from a specific track state location),
-    *        3 = custom (user-defined position and momentum).
-    * @param TrackStateLocation Required if InitializationType == 2; specifies the track state location to extract parameters from:
+    *        2 = track state (from edm4hep::TrackState),
+    *        3 = custom (user-defined).
+    * @param TrackStateLocation Required if InitializationType == 2:
     *        0 = edm4hep::TrackState::AtOther
     *        1 = edm4hep::TrackState::AtFirstHit
     *        2 = edm4hep::TrackState::AtLastHit
     *        3 = edm4hep::TrackState::AtCalorimeter
-    * @param Init_position Optional custom initial position (required if InitializationType == 3).
-    * @param Init_momentum Optional custom initial momentum (required if InitializationType == 3).
-    * @param Epsilon Optional parameter for hit limiting (required if LimitHits == true).
-    * @param Window Optional parameter for hit limiting (required if LimitHits == true).
-    *
+    * @param Init_position Custom initial position (required if InitializationType == 3).
+    * @param Init_momentum Custom initial momentum (required if InitializationType == 3).
+    * @param Epsilon Parameter for hit reduction (required if LimitHits == true).
+    * @param Window Parameter for hit reduction (required if LimitHits == true).
     */
-    void GenfitTrack::InitializeTrack(bool LimitHits, int InitializationType, std::optional<int> TrackStateLocation, std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum, std::optional<double> Epsilon, std::optional<int> Window) {
+    void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking,
+                                  bool UseFirstHitAsReference,
+                                  bool LimitHits,
+                                  int InitializationType,
+                                  std::optional<int> TrackStateLocation,
+                                  std::optional<TVector3> Init_position,
+                                  std::optional<TVector3> Init_momentum,
+                                  std::optional<double> Epsilon,
+                                  std::optional<int> Window) {
 
-        double c_mm_s = 2.998e11;
-        double a = 1e-15 * c_mm_s;
+        // Conversion factor for momentum (GeV/c)
+        const double c_mm_s = 2.998e11;
+        const double a = 1e-15 * c_mm_s;
 
+        // -------------------------
+        // Optional hit preprocessing
+        // -------------------------
         if (LimitHits)
-        {   
-            if (Epsilon.has_value() && Window.has_value())  
+        {
+            if (Epsilon.has_value() && Window.has_value())
             {
-                LimitNumberHits(Epsilon.value(), Window.value()); 
+                LimitNumberHits(Epsilon.value(), Window.value());
             }
             else
             {
-                std::cerr << "Missing Values for Epsilon or Window!" << std::endl;
+                throw std::runtime_error("InitializeTrack: Epsilon and Window are required when LimitHits is true");
             }
         }
 
-        // Inizialization
-        if (InitializationType == 0) // default
+        // =========================
+        // Initialization strategies
+        // =========================
+
+        if (InitializationType == 0) // --- Default: first two hits
         {
+            auto hits = m_edm4hepTrack.getTrackerHits();
 
-            auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
-            TVector3 firstHit_referencePoint;
-            TVector3 secondHit_referencePoint;
-            int index_loopHit = 0;
-            for (auto hit : hits_for_genfit) {
-
-                if (index_loopHit == 0) {
-        
-                    auto position = hit.getPosition();
-                    firstHit_referencePoint = TVector3(dd4hep::mm * position.x, dd4hep::mm * position.y, dd4hep::mm * position.z); // cm
-
-                }
-                if (index_loopHit == 1) {
-
-                    auto position = hit.getPosition();
-                    secondHit_referencePoint = TVector3(dd4hep::mm * position.x, dd4hep::mm * position.y, dd4hep::mm * position.z); // cm
-                
-                }
-
-                index_loopHit++;
-                if (index_loopHit > 1) break;
-
+            if (hits.size() < 2)
+            {
+                throw std::runtime_error("InitializeTrack: Not enough hits for InitializationType == 0");
             }
 
-            m_posInit = firstHit_referencePoint;                                       // cm
-            m_momInit = (secondHit_referencePoint - firstHit_referencePoint).Unit();   // GeV/c
+            auto pos1 = hits[0].getPosition();
+            auto pos2 = hits[1].getPosition();
+
+            TVector3 p1(pos1.x * dd4hep::mm,
+                        pos1.y * dd4hep::mm,
+                        pos1.z * dd4hep::mm);
+
+            TVector3 p2(pos2.x * dd4hep::mm,
+                        pos2.y * dd4hep::mm,
+                        pos2.z * dd4hep::mm);
+
+            // Seed definition
+            m_posInit = p1;
+            m_momInit = (p2 - p1).Unit();
 
             double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
-            HelperInitialization InitInfo = ComputeInitialParameters(Bz);
-            m_charge_hypothesis = InitInfo.Charge;
 
-            m_covInit = ComputeInitialCovarianceMatrix(Bz, a);
-            
+            HelperInitialization initInfo = ComputeInitialParameters(Bz);
+            m_charge_hypothesis = initInfo.Charge;
+
+            m_covInit = ComputeInitialCovarianceMatrix(Bz);
         }
-        else if (InitializationType == 1) // refined 
+
+        else if (InitializationType == 1) // --- Refined
         {
+            auto hits = m_edm4hepTrack.getTrackerHits();
 
-            auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
-            auto firstHit = hits_for_genfit[0].getPosition();
-            double Bz = m_fieldMap->getBz(TVector3(firstHit.x * dd4hep::mm, firstHit.y * dd4hep::mm, firstHit.z * dd4hep::mm)) / 10.; // Tesla
-
-            HelperInitialization InitInfo = ComputeInitialParameters(Bz);
-            m_charge_hypothesis = InitInfo.Charge;
-            m_posInit = InitInfo.Position;
-            m_momInit = InitInfo.Momentum;
-    
-            m_covInit = ComputeInitialCovarianceMatrix(Bz, a);
-
-
-        }
-        else if (InitializationType == 2) // take from trackState
-        {
-
-            if (TrackStateLocation.has_value())
+            if (hits.empty())
             {
-            
+                std::cerr << "InitializeTrack: No hits available for InitializationType == 1" << std::endl;
+            }
 
-                auto trackStates = m_originalTrack.getTrackStates();
-                for (auto ts : trackStates) {
+            auto firstHit = hits[0].getPosition();
 
-                    if (ts.location == TrackStateLocation.value())
-                    {   
-                        m_VP_referencePoint = TVector3(ts.referencePoint.x * dd4hep::mm, ts.referencePoint.y * dd4hep::mm, ts.referencePoint.z * dd4hep::mm ); // cm
-                        m_posInit = m_VP_referencePoint; // cm
+            TVector3 firstHitVec(firstHit.x * dd4hep::mm,
+                                firstHit.y * dd4hep::mm,
+                                firstHit.z * dd4hep::mm);
 
-                        double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
+            double Bz = m_fieldMap->getBz(firstHitVec) / 10.; // Tesla
 
-                        HelperInitialization InitInfo = ComputeInitialParameters(Bz);
-                        m_charge_hypothesis = InitInfo.Charge;
-
-                        double pT = a * std::abs(Bz) / std::abs(ts.omega);  // GeV/c
-                        double px = pT * std::cos(ts.phi);
-                        double py = pT * std::sin(ts.phi);
-                        double pz = pT * ts.tanLambda;
-
-                      
-                        m_momInit = TVector3(px, py, pz); // GeV/c
-                        
-                        auto& covMatrixHelix = ts.covMatrix;
-
-                        std::array<double, 25> covMatrixHelix_array{};
-                        int index = 0;
-                        for (int i = 0; i < 5; ++i) {
-                            for (int j = 0; j < 5; ++j) {
-                                if (j <= i) {
-                                    covMatrixHelix_array[i*5 + j] = covMatrixHelix[index++];
-                                } else {
-                                    covMatrixHelix_array[i*5 + j] = covMatrixHelix_array[j*5 + i]; 
-                                }
-                            }
-                        }
-
-                        // Convert to Cartesian
-                        auto covMatrixCartesian_array = CovarianceMatrixHelixToCartesian(
-                            covMatrixHelix_array, m_posInit, m_momInit, m_VP_referencePoint, Bz
-                        );
-
-                        // Fill 6x6 symmetric TMatrixDSym
-                        TMatrixDSym covMatrixCartesian(6);
-                        for (int i = 0; i < 6; ++i) {
-                            for (int j = 0; j <= i; ++j) {
-                                covMatrixCartesian(i, j) = covMatrixCartesian_array[i*6 + j];
-                                if (i != j) covMatrixCartesian(j, i) = covMatrixCartesian_array[i*6 + j];
-                            }
-                        }
-
-                        m_covInit = covMatrixCartesian; 
-
-                        break;
-                    }
-
+            // Optional reference point update
+            if (UseFirstHitAsReference || RadiusForDisplacedTracking > 0.)
+            {
+                if (UseFirstHitAsReference || firstHitVec.Mag() > RadiusForDisplacedTracking)
+                {
+                    m_VP_referencePoint = firstHitVec;
                 }
             }
-            else
-            {
-                std::cerr << "Missing Value for TrackStateLocation!" << std::endl;
-                std::exit(EXIT_FAILURE);
-            }
+
+            HelperInitialization initInfo = ComputeInitialParameters(Bz);
+
+            m_charge_hypothesis = initInfo.Charge;
+            m_posInit = initInfo.Position;
+            m_momInit = initInfo.Momentum;
+
+            m_covInit = ComputeInitialCovarianceMatrix(Bz);
         }
-        else if (InitializationType == 3) // custom 
+
+        else if (InitializationType == 2) // --- From TrackState
         {
-
-            if (Init_position.has_value() && Init_momentum.has_value())  
+            if (!TrackStateLocation.has_value())
             {
-                m_posInit = Init_position.value();
-                m_momInit = Init_momentum.value();
-
-                double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
-                HelperInitialization InitInfo = ComputeInitialParameters(Bz);
-                m_charge_hypothesis = InitInfo.Charge;
-
-                m_covInit = ComputeInitialCovarianceMatrix(Bz, a);
-
-            }
-            else
-            {
-                std::cerr << "Missing Values for Init_position or Init_momentum!" << std::endl;
-                std::exit(EXIT_FAILURE);
+                std::cerr << "InitializeTrack: TrackStateLocation is required for InitializationType == 2" << std::endl;
             }
 
+            auto trackStates = m_originalTrack.getTrackStates();
+            bool found = false;
+
+            for (auto ts : trackStates)
+            {
+                if (ts.location == TrackStateLocation.value())
+                {
+                    found = true;
+
+                    m_VP_referencePoint = TVector3(ts.referencePoint.x * dd4hep::mm,
+                                                ts.referencePoint.y * dd4hep::mm,
+                                                ts.referencePoint.z * dd4hep::mm);
+
+                    double Bz = m_fieldMap->getBz(m_VP_referencePoint) / 10.; // Tesla
+
+                    HelperInitialization initInfo = ComputeInitialParameters(Bz);
+                    m_posInit = initInfo.Position;
+                    m_charge_hypothesis = initInfo.Charge;
+
+                    // Helix -> momentum conversion
+                    double pT = a * std::abs(Bz) / std::abs(ts.omega);
+                    double px = pT * std::cos(ts.phi);
+                    double py = pT * std::sin(ts.phi);
+                    double pz = pT * ts.tanLambda;
+
+                    m_momInit = TVector3(px, py, pz);
+
+                    // Build symmetric covariance matrix (helix parameters)
+                    TMatrixDSym C_helix(5);
+                    C_helix.Zero();
+
+                    int index = 0;
+                    for (int i = 0; i < 5; ++i) {
+                        for (int j = 0; j <= i; ++j) {
+                            C_helix(i,j) = ts.covMatrix[index++];
+                        }
+                    }
+
+                    for (int i = 0; i < 5; ++i) {
+                        for (int j = i+1; j < 5; ++j) {
+                            C_helix(i,j) = C_helix(j,i);
+                        }
+                    }
+
+                    // Convert to Cartesian covariance
+                    m_covInit = CovarianceMatrixHelixToCartesian(
+                        C_helix, m_posInit, m_momInit, m_VP_referencePoint, Bz
+                    );
+
+                    break;
+                }
+            }
+
+            if (!found)
+            {
+                std::cerr << "InitializeTrack: Requested TrackStateLocation not found" << std::endl;
+            }
         }
+
+        else if (InitializationType == 3) // --- Custom
+        {
+            if (!(Init_position.has_value() && Init_momentum.has_value()))
+            {
+                std::cerr << "InitializeTrack: Init_position and Init_momentum are required for InitializationType == 3" << std::endl;
+            }
+
+            m_posInit = Init_position.value();
+            m_momInit = Init_momentum.value();
+
+            double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
+
+            HelperInitialization initInfo = ComputeInitialParameters(Bz);
+            m_charge_hypothesis = initInfo.Charge;
+
+            m_covInit = ComputeInitialCovarianceMatrix(Bz);
+        }
+
         else
-        {   
-            std::cerr << "Unknown InitializationType!" << std::endl;
+        {
+            std::cerr << "InitializeTrack: Unknown InitializationType" << std::endl;
         }
-
     }
 
     /**
@@ -390,7 +447,7 @@ namespace GenfitInterface {
         if (maxHit == 0)
         {
             std::cerr << "Internal edm4hep::Track is empty." << std::endl;
-            std::exit(EXIT_FAILURE);
+
         }
 
         if (n < smoothWindow || n < 3) maxHit = -1;
@@ -480,27 +537,31 @@ namespace GenfitInterface {
     * - Returns the Cartesian state covariance matrix.
     *
     * @param Bz Magnetic field component along the z-axis.
-    * @param a  Conversion factor used in curvature calculation.
     *
     * @return 6x6 symmetric covariance matrix in Cartesian coordinates.
     */
-    TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, double a) {
-        std::array<double,25> C_helix{};
-        C_helix.fill(0.0);
+    TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz) {
+
+        // Conversion factor for momentum (GeV/c)
+        const double c_mm_s = 2.998e11;
+        const double a = 1e-15 * c_mm_s;
+
+        TMatrixDSym C_helix(5);
+        C_helix.Zero();
 
         // columns: 0=d0, 1=phi, 2=omega, 3=z0, 4=tanLambda
 
-        C_helix[0*5 + 0] = 0.05 * 0.05;                         // d0 : 500 um = 0.05 cm
-        C_helix[1*5 + 1] = 0.1 * 0.1;                           // phi : 0.1 rad
-             
+        C_helix(0,0) = 0.05 * 0.05;                         // d0 : 500 um = 0.05 cm
+        C_helix(1,1) = 0.1 * 0.1;                           // phi : 0.1 rad
+
         double pt = m_momInit.Perp();
-        double omega = std::abs(a * Bz / pt * dd4hep::mm);      // a * Bz / pt
+        double omega = std::abs(a * Bz / pt * dd4hep::mm);
 
-        C_helix[2*5 + 2] = std::pow(0.5 * omega, 2);            // omega : 0.5*omega 
-        C_helix[3*5 + 3] = std::pow(0.1 * m_posInit.Z(), 2);    // z0 : 0.1*z0 
-        C_helix[4*5 + 4] = 0.1 * 0.1;                           // tanLambda : 0.1  
+        C_helix(2,2) = std::pow(0.5 * omega, 2);            // omega : 0.5*omega
+        C_helix(3,3) = std::pow(0.1 * m_posInit.Z(), 2);    // z0 : 0.1*z0
+        C_helix(4,4) = 0.1 * 0.1;                           // tanLambda : 0.1
 
-        std::array<double,36> C_cart = 
+        TMatrixDSym covState = 
             CovarianceMatrixHelixToCartesian(
                 C_helix,
                 m_posInit,
@@ -508,19 +569,64 @@ namespace GenfitInterface {
                 m_VP_referencePoint,
                 Bz
             );
-        
-        TMatrixDSym covState(6);
-        for (int i = 0; i < 6; ++i) {
-            for (int j = 0; j < 6; ++j) {
-                covState(i,j) = C_cart[i*6 + j];
-            }
-        }
 
         return covState;
 
     }
 
 
+    /**
+    * @brief Computes initial track parameters (position, momentum, charge)
+    *        from tracker hits using geometric fits.
+    *
+    * The method estimates a first approximation of the particle trajectory
+    * starting from a collection of tracker hits. It reconstructs the transverse
+    * motion via a circular fit in the XY plane and the longitudinal motion
+    * via a linear fit in the R–Z plane.
+    *
+    * The procedure is as follows:
+    *
+    * - Extracts 3D hit positions (x, y, z) from the input track.
+    *
+    * - Projects the hits onto the XY plane and performs a circular fit:
+    *     - Uses FastCircleFit to determine the best-fit circle.
+    *     - Computes the point of closest approach (PCA) to a reference point.
+    *     - Evaluates the tangent direction at the PCA.
+    *
+    * - Estimates the transverse momentum (pT):
+    *     - Uses the relation:
+    *           pT = |rho * 0.3 * Bz| / 1000
+    *       where rho is the circle radius and Bz is the magnetic field.
+    *     - Builds the initial momentum vector in the transverse plane
+    *       from the tangent direction.
+    *
+    * - Reconstructs the longitudinal momentum (pZ):
+    *     - Converts each hit into (R, z), where R is the radial distance
+    *       from the reference point.
+    *     - Performs a linear regression:
+    *           z = a * R + b
+    *     - Computes:
+    *           pZ = a * pT
+    *     - Handles degenerate cases (small denominator) by setting pZ = 0.
+    *
+    * - Determines the z-coordinate at the PCA:
+    *     - Uses the intercept b from the linear fit.
+    *
+    * - Estimates the particle charge:
+    *     - Computes the curvature direction from the circle center.
+    *     - Computes the Lorentz force direction: p × B.
+    *     - Compares the two directions via a dot product:
+    *           charge = +1 if aligned, -1 otherwise.
+    *
+    * - Fills and returns a HelperInitialization structure containing:
+    *     - Position  : PCA in 3D (converted to cm)
+    *     - Momentum  : (px, py, pz)
+    *     - Charge    : ±1
+    *
+    * @param Bz Magnetic field component along the z-axis.
+    *
+    * @return HelperInitialization structure with initial track parameters.
+    */
     GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double Bz) {
 
         struct Point3D
@@ -529,6 +635,8 @@ namespace GenfitInterface {
             double y;
             double z;
         };
+
+        Point2D_xy referencePoint_xy = Point2D_xy(m_VP_referencePoint.X() / dd4hep::mm, m_VP_referencePoint.Y() / dd4hep::mm);
 
         // FIT CIRCLE TO XY PROJECTION
         std::vector<Point3D> points;
@@ -546,7 +654,8 @@ namespace GenfitInterface {
         }
 
         FastCircleFit circle(points_xy);
-        Point2D_xy closestPoint = circle.closestPointTo(points_xy[0]);
+
+        Point2D_xy closestPoint = circle.closestPointTo(referencePoint_xy);
         Point2D_xy tangent_xy = circle.tangentAtPCA(closestPoint, points_xy[1]);
 
         double rho = circle.rho();
@@ -562,9 +671,12 @@ namespace GenfitInterface {
         std::vector<Point2D_xy> points_Rz;
         for (const auto& p : points) {
 
-            double R = std::sqrt(std::pow(p.x,2) + std::pow(p.y,2));
+            double dx = p.x - m_VP_referencePoint.X() / dd4hep::mm;
+            double dy = p.y - m_VP_referencePoint.Y() / dd4hep::mm;
+            double R  = std::sqrt(dx*dx + dy*dy);
+
             double z_coord = p.z;
-            points_Rz.push_back(Point2D_xy(R, z_coord));
+            points_Rz.emplace_back(R, z_coord);
         }
 
         double sumR = 0.0;
@@ -579,20 +691,21 @@ namespace GenfitInterface {
             sumR2 += p.x * p.x;
         }
 
-        double numerator   = N * sumRZ - sumR * sumZ;
         double denominator = N * sumR2 - sumR * sumR;
 
-        pZ = numerator / denominator * init_pT;
+        double a = (N * sumRZ - sumR * sumZ) / denominator;
+        double b = (sumZ - a * sumR) / N;
+        pZ = a * init_pT;
         init_mom.SetZ(pZ);
 
-        double a = numerator / denominator;
-        sumZ = 0.0;
-        for (const auto& p : points_Rz) sumZ += p.y;
-        double b = (sumZ - a * sumR) / N;
+        if (std::abs(denominator) < 1e-12) {
+            pZ = 0;
+            init_mom.SetZ(pZ);
+        }
 
         double z_PCA = b;
 
-        // CHARGEs
+        // CHARGE
         double x0_ = circle.x0();
         double y0_ = circle.y0();
         TVector3 B_field = TVector3(0., 0., 2.);
@@ -683,52 +796,60 @@ namespace GenfitInterface {
         for (auto hit : hits_for_genfit)
         {
 
-            auto cellID0 = hit.getCellID();
             if (hit.isA<edm4hep::TrackerHitPlane>())
             {
-                
                 detID = 0;
-                auto planar_hit =  hit.as<edm4hep::TrackerHitPlane>();
-                GenfitInterface::PlanarMeasurement measurement = GenfitInterface::PlanarMeasurement(planar_hit, detID, ++hit_idx, debug_lvl);
+                auto planar_hit = hit.as<edm4hep::TrackerHitPlane>();
+                GenfitInterface::PlanarMeasurement measurement(planar_hit, detID, ++hit_idx, debug_lvl);
                 m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack));
-                
             }
-            else if (hit.isA<edm4hep::SenseWireHit>()) 
+            else if (hit.isA<edm4hep::SenseWireHit>())
             {
-                
                 detID = 1;
-                auto wire_hit =  hit.as<edm4hep::SenseWireHit>();
-                GenfitInterface::WireMeasurement measurement = GenfitInterface::WireMeasurement(wire_hit, m_dch_info, m_dc_decoder, detID, ++hit_idx, debug_lvl);
+                auto wire_hit = hit.as<edm4hep::SenseWireHit>();
+                GenfitInterface::WireMeasurement measurement(wire_hit, m_dch_info, m_dc_decoder, detID, ++hit_idx, debug_lvl);
                 m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack));
-
-                       
-            } 
-            else 
-            {
-
-                std::cerr << "Error: No hits with cellID: " << cellID0 << std::endl;
-                std::exit(EXIT_FAILURE);
-             
             }
-
+            else
+            {
+                std::cerr << "InitializeTrack: Unknown hit type encountered - Hit will be skipped." << std::endl;
+            }
         }
 
     }
 
     /**
-    * @brief Fit the Genfit track using the Deterministic Annealing Filter (DAF).
+    * @brief Fit the Genfit track using a chosen track fitting algorithm.
     * 
-    * This function performs a forward and backward track fit using the Genfit DAF algorithm,
-    * and populates the EDM4hep track states at the IP, first hit, and last hit positions.
+    * This method fits the `GenfitTrack` object using the specified fitting strategy
+    * (Deterministic Annealing Filter, standard Kalman, or Kalman with reference track),
+    * and updates the associated `edm4hep::Track` track states at key locations: 
+    * the Interaction Point (IP), the first hit, and the last hit.  
     * 
-    * @param FitterType Fitting strategy: DAF, KALMAN, KALMAN_REF
-    * @param debug_lvl  debug level: output if > 0
-    * @param Beta_init  Initial annealing parameter (if DAF is enabled)
-    * @param Beta_final Final annealing parameter (if DAF is enabled)
-    * @param Beta_steps Number of steps in the annealing schedule (if DAF is enabled)
-    * @param FilterHits If true, applies hit filtering based on measurement weights after fitting (if DAF is enabled)
+    * If DAF is used and `FilterHits` is enabled, track hits are filtered after fitting 
+    * based on their measurement weights, retaining only accepted hits in `m_fittedHits`.
     * 
-    * @return true if the fit was successful, false otherwise.
+    * The method also computes helix parameters (d0, z0, phi, omega, tanLambda) for each
+    * track state based on the fitted position and momentum, taking into account the 
+    * assumed charge hypothesis and magnetic field.
+    * 
+    * @param FitterType Fitting strategy to use (https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf):
+    *        - "DAF"        : Deterministic Annealing Filter
+    *        - "KALMAN"     : Standard Kalman filter
+    *        - "KALMAN_REF" : Kalman filter with reference track
+    * @param debug_lvl   Verbosity level for debug output 
+    *                       - 0 = silent,
+    *                       - 1 = fitter printout
+    *                       - 2 = fitter printout + fit results
+    * @param Beta_init   Initial annealing parameter (only for DAF, default = 100)
+    * @param Beta_final  Final annealing parameter (only for DAF, default = 0.1)
+    * @param Beta_steps  Number of annealing steps (only for DAF, default = 10)
+    * @param FilterHits  If true and DAF is used, applies hit filtering after fitting (default = true)
+    * 
+    * @return true if the fit was successful, false otherwise.  
+    * 
+    * @note If any exception occurs during fitting or state extrapolation, the function
+    *       returns false and does not update the track.
     */
     bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::optional<double> Beta_init = 100., std::optional<double> Beta_final=0.1, std::optional<int> Beta_steps=10, std::optional<bool> FilterHits = true) {
 
@@ -811,61 +932,66 @@ namespace GenfitInterface {
                     for (int idx = 0; idx < numPoints; idx++)
                     {
 
+                        // Retrieve the genfit::TrackPoint for this index and get its associated fitter information.
+                        // Each TrackPoint can have one or more assigned measurements:
+                        // - Planar measurements: typically 1 measurement
+                        // - Drift chamber hits: typically 2 measurements (left and right positions)
+                        //
+                        // The loop iterates over all measurements to check their assigned weights and determine 
+                        // whether the hit should be accepted or discarded.
                         auto point_track = genfitTrack.getPoint(idx);
                         auto fitterInfo = point_track->getFitterInfo(trackRep);
                         genfit::KalmanFitterInfo* kfi = static_cast<genfit::KalmanFitterInfo*>(fitterInfo);
-                                                        
+
                         unsigned int nMeas = kfi->getNumMeasurements();
                         bool isAccepted = false;
-                        for(unsigned int j=0; j<nMeas; j++) {
-                                            
-                            genfit::MeasurementOnPlane *mop = kfi->getMeasurementOnPlane(j);
 
+                        for(unsigned int j = 0; j < nMeas; j++) {
+                            genfit::MeasurementOnPlane* mop = kfi->getMeasurementOnPlane(j);
                             double weight = mop->getWeight();
-                            if (weight > 1e-5) 
-                            {
+
+                            // Weight threshold: 1e-5
+                            // - Genfit assigns 1e-10 to measurements it discards.
+                            // - Exception: when left and right hits are very close (within detector resolution),
+                            //   both may get weight 0.5. In this case, we resolve the ambiguity by selecting the left hit.
+                            if (weight > 1e-5) {
                                 isAccepted = true;
                                 break;
                             }
-
                         }
                                     
                         if (isAccepted) 
                         {
-                            
+                            // Retrieve the fitted state from the KalmanFitterInfo
                             genfit::StateOnPlane state = kfi->getFittedState();
                             genfit::MeasuredStateOnPlane measState = kfi->getFittedState();
 
+                            // Extract the 3D position of the fitted state
                             TVector3 pos = state.getPos();
 
+                            // Extract the measurement plane's orientation vectors
                             auto planeMeas = state.getPlane();
-                            auto U = planeMeas->getU();
-                            auto V = planeMeas->getV();
-                            auto O = planeMeas->getO();
+                            auto U = planeMeas->getU();  // Plane u-direction
+                            auto V = planeMeas->getV();  // Plane v-direction
+                            auto O = planeMeas->getO();  // Plane origin
 
-                            TVector3 measPos = measState.getPos();
+                            // Extract covariance matrix in Genfit's 6D (pos+momentum) space
                             TMatrixDSym covMatrix_cm_gev = measState.get6DCov();
 
+                            // Scale the covariance matrix from cm/GeV to desired mm/GeV
                             TMatrixDSym covMatrix = covMatrix_cm_gev;
                             for (int i = 0; i < 6; ++i) {
                                 for (int j = 0; j < 6; ++j) {
-
                                     double scale = 1.0;
-
                                     bool pos_i = (i < 3);
                                     bool pos_j = (j < 3);
-
-                                    if (pos_i && pos_j) {
-                                        scale = 100.0;
-                                    }
-                                    else if (pos_i || pos_j) {
-                                        scale = 10.0;
-                                    }
-
+                                    if (pos_i && pos_j) scale = 100.0;       // position-position
+                                    else if (pos_i || pos_j) scale = 10.0;   // position-momentum
                                     covMatrix(i,j) *= scale;
                                 }
                             }
 
+                            // Extract only the 3x3 position covariance submatrix
                             TMatrixDSym covXYZ(3);
                             for (int i = 0; i < 3; i++) {
                                 for (int j = 0; j < 3; j++) {
@@ -873,30 +999,27 @@ namespace GenfitInterface {
                                 }
                             }
 
-
+                            // Convert plane axes to TVector3 for error computation
                             TVector3 u(U.X(), U.Y(), U.Z());
                             TVector3 v(V.X(), V.Y(), V.Z());
 
-                            TVectorD uVec(3);
-                            uVec[0] = U.X();
-                            uVec[1] = U.Y();
-                            uVec[2] = U.Z();
+                            // Convert plane axes to TVectorD for similarity calculation with covariance
+                            TVectorD uVec(3); uVec[0]=U.X(); uVec[1]=U.Y(); uVec[2]=U.Z();
+                            TVectorD vVec(3); vVec[0]=V.X(); vVec[1]=V.Y(); vVec[2]=V.Z();
 
-                            TVectorD vVec(3);
-                            vVec[0] = V.X();
-                            vVec[1] = V.Y();
-                            vVec[2] = V.Z();
-
+                            // Compute variances along plane directions using covariance similarity
                             double var_u = covXYZ.Similarity(uVec);
                             double var_v = covXYZ.Similarity(vVec);
 
+                            // Convert variance to standard deviation (errors)
                             double err_u = std::sqrt(var_u);
                             double err_v = std::sqrt(var_v);
 
-
+                            // Create a new fitted hit object and set its position
                             auto hit3D = m_fittedHits.create();
                             hit3D.setPosition(edm4hep::Vector3d(pos.X()/dd4hep::mm, pos.Y()/dd4hep::mm, pos.Z()/dd4hep::mm));
 
+                            // Set the 3x3 position covariance matrix in EDM4hep format
                             hit3D.setCovMatrix({
                                 static_cast<float>(covXYZ(0,0)),  // xx
                                 static_cast<float>(covXYZ(1,0)),  // yx
@@ -906,22 +1029,24 @@ namespace GenfitInterface {
                                 static_cast<float>(covXYZ(2,2))   // zz
                             });
 
+                            // Set the errors along the local plane axes
                             hit3D.setDu(err_u);
                             hit3D.setDv(err_v);
+
+                            // Set plane orientation in EDM4hep
                             edm4hep::Vector2f edm4hepU = {static_cast<float>(u.X()), static_cast<float>(u.Y())};
                             edm4hep::Vector2f edm4hepV = {static_cast<float>(v.X()), static_cast<float>(v.Y())};
-
                             hit3D.setU(edm4hepU);
                             hit3D.setV(edm4hepV);
-                            hit3D.setType(1); // Accepted hit
-                            m_trackWithFit.addToTrackerHits(hit3D);
 
-                        
+                            hit3D.setType(1); // Mark as accepted hit
+                            m_trackWithFit.addToTrackerHits(hit3D);
                         }
                         else
                         {
+                            // Create a placeholder for the rejected hit
                             auto hit3D = m_fittedHits.create();
-                            hit3D.setType(0); // Rejected hit
+                            hit3D.setType(0); // Mark as rejected hit
                         }
                     }
                 }
@@ -998,7 +1123,6 @@ namespace GenfitInterface {
 
                 //take first fitted point
                 genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
-                if (tp == NULL) {std::cout << "Track has no TrackPoint with fitterInfo! (but fitstatus ok?)"<<std::endl;}
                 auto* fi = static_cast<genfit::KalmanFitterInfo*>(tp->getFitterInfo(trackRep));
 
                 // extrapolate rep to target plane (IP)
@@ -1046,32 +1170,32 @@ namespace GenfitInterface {
                     if (debug_lvl == 2)
                     {
 
-                        std::cout << "GenfitTrackFitter    DEBUG : TrackState at IP: " << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  D0: " << trackStateIP.D0 << " mm" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  Z0: " << trackStateIP.Z0 << " mm" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  phi: " << trackStateIP.phi << " rad" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  omega: " << trackStateIP.omega << " 1/mm" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  tanLambda: " << trackStateIP.tanLambda << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  location: " << trackStateIP.location << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  reference point: (" << trackStateIP.referencePoint.x << ", " << trackStateIP.referencePoint.y << ", " << trackStateIP.referencePoint.z << ") mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG : TrackState at IP: " << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateIP.D0 << " mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  Z0: " << trackStateIP.Z0 << " mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  phi: " << trackStateIP.phi << " rad" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  omega: " << trackStateIP.omega << " 1/mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  tanLambda: " << trackStateIP.tanLambda << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  location: " << trackStateIP.location << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  reference point: (" << trackStateIP.referencePoint.x << ", " << trackStateIP.referencePoint.y << ", " << trackStateIP.referencePoint.z << ") mm" << std::endl;
                         
-                        std::cout << "\nGenfitTrackFitter    DEBUG : TrackState at First Hit: " << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  D0: " << trackStateFirstHit.D0 << " mm" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  Z0: " << trackStateFirstHit.Z0 << " mm" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  phi: " << trackStateFirstHit.phi << " rad" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  omega: " << trackStateFirstHit.omega << " 1/mm" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  tanLambda: " << trackStateFirstHit.tanLambda << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  location: " << trackStateFirstHit.location << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  reference point: (" << trackStateFirstHit.referencePoint.x << ", " << trackStateFirstHit.referencePoint.y << ", " << trackStateFirstHit.referencePoint.z << ") mm" << std::endl;
+                        std::cout << "\nGenfitTrack   DEBUG : TrackState at First Hit: " << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateFirstHit.D0 << " mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  Z0: " << trackStateFirstHit.Z0 << " mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  phi: " << trackStateFirstHit.phi << " rad" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  omega: " << trackStateFirstHit.omega << " 1/mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  tanLambda: " << trackStateFirstHit.tanLambda << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  location: " << trackStateFirstHit.location << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  reference point: (" << trackStateFirstHit.referencePoint.x << ", " << trackStateFirstHit.referencePoint.y << ", " << trackStateFirstHit.referencePoint.z << ") mm" << std::endl;
 
-                        std::cout << "\nGenfitTrackFitter    DEBUG : TrackState at Last Hit: " << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  D0: " << trackStateLastHit.D0 << " mm" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  Z0: " << trackStateLastHit.Z0 << " mm" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  phi: " << trackStateLastHit.phi << " rad" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  omega: " << trackStateLastHit.omega << " 1/mm" << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  tanLambda: " << trackStateLastHit.tanLambda << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  location: " << trackStateLastHit.location << std::endl;
-                        std::cout << "GenfitTrackFitter    DEBUG :  reference point: (" << trackStateLastHit.referencePoint.x << ", " << trackStateLastHit.referencePoint.y << ", " << trackStateLastHit.referencePoint.z << ") mm\n" << std::endl;
+                        std::cout << "\nGenfitTrack   DEBUG : TrackState at Last Hit: " << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateLastHit.D0 << " mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  Z0: " << trackStateLastHit.Z0 << " mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  phi: " << trackStateLastHit.phi << " rad" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  omega: " << trackStateLastHit.omega << " 1/mm" << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  tanLambda: " << trackStateLastHit.tanLambda << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  location: " << trackStateLastHit.location << std::endl;
+                        std::cout << "GenfitTrack    DEBUG :  reference point: (" << trackStateLastHit.referencePoint.x << ", " << trackStateLastHit.referencePoint.y << ", " << trackStateLastHit.referencePoint.z << ") mm\n" << std::endl;
 
                     }   
 
@@ -1146,167 +1270,102 @@ namespace GenfitInterface {
     * 
     * @return Covariance matrix in cartesian-basis
     */
-    std::array<double, 36> GenfitTrack::CovarianceMatrixHelixToCartesian(   const std::array<double,25>& C_helix, TVector3 Position_cm, TVector3 Momentum_gev,  TVector3 RefPoint_cm, double Bz) {                                                       
-                                                                
+    TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(
+        const TMatrixDSym& C_helix,   // 5x5
+        TVector3 Position_cm,
+        TVector3 Momentum_gev,
+        TVector3 RefPoint_cm,
+        double Bz)
+    {
+        
         double c_mm_s = 2.998e11;
         double a = 1e-15 * c_mm_s;
 
-        // Assumption: the initialization refers to the PCA 
         double x_PCA = Position_cm.X();
         double y_PCA = Position_cm.Y();
 
         double px = Momentum_gev.X();
         double py = Momentum_gev.Y();
-        double pz = Momentum_gev.Z();  
+        double pz = Momentum_gev.Z();
 
-        double pt   = Momentum_gev.Perp(); 
-        double phi0 = std::atan2(py, px);               
+        double pt   = Momentum_gev.Perp();
+        double phi0 = std::atan2(py, px);
 
-        double d0 = - (RefPoint_cm.X() - x_PCA) * sin(phi0) + (RefPoint_cm.Y() - y_PCA) * cos(phi0); // cm                                            // rad
-        double tanLambda = pz / pt;                                                                  
-        double omega = (std::abs(a * Bz / pt)) * dd4hep::mm;                                         // cm-1
+        double d0 = - (RefPoint_cm.X() - x_PCA) * sin(phi0)
+                    + (RefPoint_cm.Y() - y_PCA) * cos(phi0);
 
-        // Jacobian J[row][col] = d(cartesian variable) / d(helix parameter)
-        // rows:    0=x, 1=y, 2=z, 3=px, 4=py, 5=pz
-        // columns: 0=d0, 1=phi, 2=omega, 3=z0, 4=tanLambda
+        double tanLambda = pz / pt;
+        double omega = (std::abs(a * Bz / pt)) * dd4hep::mm;
 
-        double J[6][5] = {0};
+        // --- Jacobian (6x5) ---
+        TMatrixD J(6, 5);
+        J.Zero();
 
-        ///////
-        // x //
-        ///////
-
-        J[0][0] = 1.0 / sin(phi0);  
-        // dx / dd0
-
-        J[0][1] = cos(phi0) / (sin(phi0) * sin(phi0)) * d0 - (y_PCA - RefPoint_cm.Y()) / (cos(phi0) * cos(phi0) * std::tan(phi0) * std::tan(phi0));
-        // dx / dphi0
-
-        J[0][2] =  0.0;  
-        // dx / domega
-
-        J[0][3] =  0.0;  
-        // dx / dz0
-
-        J[0][4] =  0.0;  
-        // dx / dtanLambda
-
-
-        ///////
-        // y //
-        ///////
-
-        J[1][0] = - 1.0 / cos(phi0);  
-        // dy / dd0
-
-        J[1][1] =  - sin(phi0) / (cos(phi0) * cos(phi0)) * d0 - (RefPoint_cm.X() - x_PCA) / (cos(phi0) * cos(phi0));
-        // dy / dphi0
-
-        J[1][2] =  0.0;  
-        // dy / domega
-
-        J[1][3] =  0.0;  
-        // dy / dz0
-
-        J[1][4] =  0.0;  
-        // dy / dtanLambda
-
-
-        ///////
-        // z //
-        ///////
+        // These definitions are taken from https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
         
-        J[2][0] =  0.0;  
-        // dz / dd0
+        // x = x_PCA = P^0_x = d0/sin(phi0) + P^r_x - (P^r_y - P^0_y) / tan(phi0)
+        J(0,0) = 1.0 / sin(phi0);                                               // dx / dd0
+        J(0,1) = ( (RefPoint_cm.Y() - y_PCA) - d0 * cos(phi0) ) / sin(phi0);    // dx / dphi0
+        J(0,2) = 0.0;                                                           // dx / domega
+        J(0,3) = 0.0;                                                           // dx / dz0
+        J(0,4) = 0.0;                                                           // dx / dtanLambda
 
-        J[2][1] =  0.0;  
-        // dz / dphi0
-
-        J[2][2] =  0.0;  
-        // dz / domega
-
-        J[2][3] =  1.0;  
-        // dz / dz0
-
-        J[2][4] =  0.0;  
-        // dz / dtanLambda
-
-
-        /////////////////////////////////////////////////////////////////////////////////////
-        // px = p * cos(phi0) * sin(theta) = pT * cos(phi0) = a * |Bz| / omega * cos(phi0) //
-        /////////////////////////////////////////////////////////////////////////////////////
-
-        J[3][0] =  0.0;  
-        // dpx / dd0
-
-        J[3][1] = - px * std::tan(phi0);
-        // dpx / dphi0
-
-        J[3][2] = - px / std::abs(omega);
-        // dpx / domega
-
-        J[3][3] =  0.0;  
-        // dpx / dz0
-
-        J[3][4] = - Momentum_gev.Mag() * std::cos(phi0) * tanLambda / std::pow(1.0 + tanLambda * tanLambda, 1.5);
-        // dpx / dtanLambda
+        // y = y_PCA = P^0_y =  - d0/cos(phi0) + P^r_y + (P^r_x - P^0_x) * tan(phi0)
+        J(1,0) = -1.0 / cos(phi0);                                              // dy / dd0
+        J(1,1) = ( (RefPoint_cm.X() - x_PCA) -d0 * sin(phi0) ) / cos(phi0);     // dy / dphi0
+        J(1,2) = 0.0;                                                           // dy / domega
+        J(1,3) = 0.0;                                                           // dy / dz0
+        J(1,4) = 0.0;                                                           // dy / dtanLambda
 
 
-        /////////////////////////////////////////////////////////////////////////////////////
-        // py = p * sin(phi0) * sin(theta) = pT * sin(phi0) = a * |Bz| / omega * sin(phi0) //
-        /////////////////////////////////////////////////////////////////////////////////////
+        // z = z_PCA = P^0_z = z0 + P^r_z
+        J(2,0) = 0.0;                                                           // dz / dd0
+        J(2,1) = 0.0;                                                           // dz / dphi0
+        J(2,2) = 0.0;                                                           // dz / domega
+        J(2,3) = 1.0;                                                           // dz / dz0
+        J(2,4) = 0.0;                                                           // dz / dtanLambda
 
-        J[4][0] =  0.0;  
-        // dpy / dd0
+        // px = pt * cos(phi0) = a * Bz / omega * cos(phi0) = p * cos(phi0) * sin(theta) = p * cos(phi0) * sin(cot^-1(tanLambda))
+        J(3,0) = 0.0;                                                           // dpx / dd0
+        J(3,1) = - px * std::tan(phi0);                                         // dpx / dphi0
+        J(3,2) = - px / std::abs(omega);                                        // dpx / domega
+        J(3,3) = 0.0;                                                           // dpx / dz0
+        J(3,4) = - Momentum_gev.Mag() * std::cos(phi0) * tanLambda /              
+                    std::pow(1.0 + tanLambda*tanLambda, 1.5);                   // dpx / dtanLambda
 
-        J[4][1] = - py / std::tan(phi0);
-        // dpy / dphi0
+        // py = pt * sin(phi0) = a * Bz / omega * sin(phi0) = p * sin(phi0) * sin(theta) = p * sin(phi0) * sin(cot^-1(tanLambda))
+        J(4,0) = 0.0;                                                           // dpy / dd0
+        J(4,1) = - py / std::tan(phi0);                                         // dpy / dphi0
+        J(4,2) = - py / std::abs(omega);                                        // dpy / domega
+        J(4,3) = 0.0;                                                           // dpy / dz0
+        J(4,4) = - Momentum_gev.Mag() * std::sin(phi0) * tanLambda / 
+                    std::pow(1.0 + tanLambda*tanLambda, 1.5);                   // dpy / dtanLambda
 
-        J[4][2] = - py / std::abs(omega);
-        // dpy / domega
+        // pz = pt * tanLambda = a * Bz / omega * tanLambda = p * cos(theta) = p * cos(cot^-1(tanLambda))
+        J(5,0) = 0.0;                                                           // dpz / dd0
+        J(5,1) = 0.0;                                                           // dpz / dphi0
+        J(5,2) = - pz / std::abs(omega);                                        // dpz / domega
+        J(5,3) = 0.0;                                                           // dpz / dz0
+        J(5,4) = pt;                                                            // dpz / dtanLambda
 
-        J[4][3] =  0.0;  
-        // dpy / dz0
+        // --- Compute C_cart = J * C_helix * J^T ---
+        TMatrixD Jt(TMatrixD::kTransposed, J);
+        TMatrixD tmp = J * C_helix * Jt;
 
-        J[4][4] = - Momentum_gev.Mag() * std::sin(phi0) * tanLambda / std::pow(1.0 + tanLambda * tanLambda, 1.5);
-        // dpy / dtanLambda
-
-        ////////////////////////////////////////////////////////
-        // pz = pT * tanLambda = a * |Bz| / omega * tanLambda //
-        ////////////////////////////////////////////////////////
-
-        J[5][0] =  0.0;  
-        // dpz / dd0
-
-        J[5][1] =  0.0;  
-        // dpz / dphi0
-
-        J[5][2] =  - pz / std::abs(omega);
-        // dpz / domega
-
-        J[5][3] =  0.0;  
-        // dpz / dz0
-
-        J[5][4] = pt;
-        // dpz / dtanLambda
-
-        std::array<double, 36> C_cart;
-        C_cart.fill(0.0);
+        TMatrixDSym C_cart(6);
+        C_cart.Zero();
         for (int i = 0; i < 6; ++i) {
-            for (int j = 0; j < 6; ++j) {
-                double sum = 0.0;
-                for (int k = 0; k < 5; ++k) {
-                    for (int l = 0; l < 5; ++l) {
-                    
-                        sum += J[i][k] * C_helix[k*5 + l] * J[j][l];
-                    }
-                }
-                C_cart[i*6 + j] = sum;
+            for (int j = 0; j <= i; ++j) {
+                C_cart(i,j) = tmp(i,j);
+            }
+        }
+        for (int i = 0; i < 6; ++i) {
+            for (int j = i+1; j < 6; ++j) {
+                C_cart(i,j) = C_cart(j,i);
             }
         }
 
         return C_cart;
-
     }
 
     /**
@@ -1339,9 +1398,6 @@ namespace GenfitInterface {
     *         - `PCA`   : The 3D position of the closest approach point.
     *         - `Phi0`  : Azimuthal angle of the trajectory at the PCA (radians).
     *
-    * @throws std::runtime_error if the transverse momentum is zero or the reference point
-    *         coincides with the circle center in the XY plane.
-    *
     * @note Assumes a uniform magnetic field along z and a simple helical trajectory.
     */
     GenfitTrack::PCAInfoHelper GenfitTrack::PCAInfo(TVector3 position, TVector3 momentum, int charge, TVector3 refPoint, double Bz) {
@@ -1349,10 +1405,6 @@ namespace GenfitInterface {
         double px = momentum.X();
         double py = momentum.Y();
         double pt = momentum.Perp();
-
-        if (pt == 0.0) {
-            throw std::runtime_error("Transverse momentum is zero");
-        }
   
         double R = pt / (0.3 *std::abs(charge) * Bz) * 100; // in cm (assuming pt in GeV/c, Bz in Tesla)
 
@@ -1369,10 +1421,6 @@ namespace GenfitInterface {
         TVector3 v = refPoint - center;
 
         double vxy = std::sqrt(v.X()*v.X() + v.Y()*v.Y());
-
-        if (vxy == 0.0) {
-            throw std::runtime_error("Reference point coincides with circle center");
-        }
             
         TVector3 u(v.X()/vxy, v.Y()/vxy, 0.0);
         TVector3 closestPoint = center + R * u;

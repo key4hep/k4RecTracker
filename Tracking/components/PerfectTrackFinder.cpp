@@ -90,19 +90,12 @@ struct PerfectTrackFinder final : k4FWCore::MultiTransformer< std::tuple<edm4hep
 
                          }) {}
 
-  StatusCode initialize() override {
-
-    
-
-    return StatusCode::SUCCESS;
-
-  }
-
   std::tuple<edm4hep::TrackCollection> 
     operator()(const std::vector<   const edm4hep::TrackerHitSimTrackerHitLinkCollection*>& planarHitLinks,
                                     const std::vector<const edm4hep::TrackerHitSimTrackerHitLinkCollection*>& wireHitLinks,
                                     const edm4hep::MCParticleCollection& mcParticles) const override {
     
+                                        
     //////////////////////////////////
     ////////// PERFECT TRACKING //////
     //////////////////////////////////
@@ -112,10 +105,8 @@ struct PerfectTrackFinder final : k4FWCore::MultiTransformer< std::tuple<edm4hep
 
     // Loop over MCParticles to create perfect tracks
     for (const auto& mcParticle : mcParticles) {
-
-        auto edm4hep_track = outputTracks.create();
+    
         auto mcParticleObjectId = mcParticle.getObjectID();
-
         std::vector<std::pair<float, edm4hep::TrackerHit>> hitsWithTime;
 
         // Planar hits
@@ -152,24 +143,26 @@ struct PerfectTrackFinder final : k4FWCore::MultiTransformer< std::tuple<edm4hep
             }
         );
 
-        for (const auto& [time, hit] : hitsWithTime) {
-            edm4hep_track.addToTrackerHits(hit);
+
+        if (!hitsWithTime.empty()) {
+
+            auto edm4hep_track = outputTracks.create();
+
+            // Add all hits with their associated time
+            for (const auto& [time, hit] : hitsWithTime) {
+                edm4hep_track.addToTrackerHits(hit);
+            }
+
+            // Set track type as reconstructed
+            edm4hep_track.setType(1);
         }
 
-        edm4hep_track.setType(1);
     }
 
     // Return the output collections as a tuple
     return std::make_tuple(std::move(outputTracks));
     
   }
-
-  StatusCode finalize() override {
-
-    return StatusCode::SUCCESS;
-
-  }
-
 
 };
 

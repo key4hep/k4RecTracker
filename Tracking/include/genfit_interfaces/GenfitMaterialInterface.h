@@ -48,6 +48,7 @@
  *  Author: Andrea De Vita  
  *  Date  : 2025-11
  *
+ * @note: This implementation is inspired by the work of Yao Zhang (zhangyao@ihep.ac.cn), as presented in CEPCSW/Reconstruction/RecGenfitAlg/src/GenfitMaterialInterface.h
  */
 
 namespace GenfitInterface{
