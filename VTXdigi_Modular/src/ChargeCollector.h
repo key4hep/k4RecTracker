@@ -25,15 +25,11 @@ struct Index_segment {
 
 /** @brief Computes & then holds position & information about a simHits path through the sensor */
 struct Path {
-
-  /** @brief Construct path information from a simHit and the sensor's transformation matrix 
-   * @note Only returns paths inside the sensor volume */
-  Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer);
   Path() = default;
 
-  dd4hep::rec::Vector3D entry;
-  dd4hep::rec::Vector3D travel;
-  dd4hep::rec::Vector3D simPos;
+  dd4hep::rec::Vector3D entry; // in local coordinates, in mm
+  dd4hep::rec::Vector3D travel; // in local coordinates, in mm
+  dd4hep::rec::Vector3D simPos; // in local coordinates, in mm
 
   float length; // in mm
   float lengthG4;
@@ -43,6 +39,10 @@ struct Path {
 
 /** @brief Compute the factors by which to clip a path along a given axis (to clip it to the sensor volume) */
 std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, const float entry_ax, const float travel_ax, const float sensorLength_ax);
+
+/** @brief Construct path information from a simHit and the sensor's transformation matrix 
+ * @note returns true if path is valid, false otherwise. false means the path would not intersect the sensor volume */
+bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer);
 
 /* -- Charge collector algorithm: LUT-based -- */
 

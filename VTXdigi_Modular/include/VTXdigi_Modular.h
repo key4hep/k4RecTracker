@@ -48,7 +48,7 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
   std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> operator() (const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const override;
 
   /** @brief Increment histograms. To be called from the charge collector, once per simHit */
-  void FillHistograms_fromChargeCollector_perSimHit(const float pathLength, const float pathLength_Geant4) const;
+  void FillHistograms_fromChargeCollector_perSimHit(const int layer, const dd4hep::rec::Vector3D& pathTravel, const float pathLength_Geant4, const dd4hep::rec::Vector3D& truthPos_local, const TGeoHMatrix& trafoMatrix, const bool createdInGenerator) const;
 
   /* -- Accessors for charge collector -- */
 
@@ -97,7 +97,7 @@ private:
   
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
   void FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
-  void FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const;
+  void FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize, const int clusterSize_u, const int clusterSize_v) const;
   
   /* -- Properties -- */
 
@@ -133,7 +133,6 @@ private:
   /* -- Services, geometry variables -- */
   
   SmartIF<IRndmGenSvc> m_randomService;
-  SmartIF<IUniqueIDGenSvc> m_uidService;
   SmartIF<IGeoSvc> m_geoService;
   std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_cellIdDecoder;
   const dd4hep::Detector* m_detector = nullptr;
@@ -178,18 +177,32 @@ private:
     hist1d_simHitMomentum_keV,
     hist1d_simHitMomentum_MeV,
     hist1d_simHitMomentum_GeV,
+    hist1d_simHit_z,
+    hist1d_simHit_z_createdInGenerator,
+    hist1d_simHit_z_createdInSimulation,
     hist1d_digiHitCharge,
     hist1d_simHitPDG,
     hist1d_digiHitsPerSimHit,
     hist1d_clusterSize,
     hist1d_clusterSize_createdInGenerator,
     hist1d_clusterSize_createdInSimulation,
-    hist1d_residualU, 
-    hist1d_residualV, 
-    hist1d_residualW, 
-    hist1d_residualR, 
-    hist1d_pixelDistToClusterCenterU,
-    hist1d_pixelDistToClusterCenterV,
+    hist1d_residual_u, 
+    hist1d_residual_u_singlePixelCluster, 
+    hist1d_residual_u_multiPixelCluster, 
+    hist1d_residual_u_createdInGenerator, 
+    hist1d_residual_u_createdInSimulation,
+    hist1d_residual_v, 
+    hist1d_residual_v_singlePixelCluster, 
+    hist1d_residual_v_multiPixelCluster, 
+    hist1d_residual_v_createdInGenerator, 
+    hist1d_residual_v_createdInSimulation,
+    hist1d_residual_w, 
+    hist1d_residual_r, 
+    hist1d_pixelDistToClusterCenter_u,
+    hist1d_pixelDistToClusterCenter_v,
+    hist1d_pathTravel_u,
+    hist1d_pathTravel_v,
+    hist1d_pathTravel_r,
     hist1dArrayLen
   }; 
   mutable std::unordered_map<
@@ -207,10 +220,16 @@ private:
   > m_hist1d;
 
   enum{
-    histProfile1d_clusterSize_vs_hit_z,
-    histProfile1d_residual_u_vs_hit_z,
-    histProfile1d_residual_v_vs_hit_z,
-    histProfile1d_residual_r_vs_hit_z,
+    histProfile1d_digiHitCharge_vs_global_z,
+    histProfile1d_clusterSize_vs_global_z,
+    histProfile1d_clusterSize_u_vs_global_z,
+    histProfile1d_clusterSize_v_vs_global_z,
+    histProfile1d_residual_u_vs_global_z,
+    histProfile1d_residual_v_vs_global_z,
+    histProfile1d_residual_r_vs_global_z,
+    histProfile1d_pathTravel_u_vs_global_z, 
+    histProfile1d_pathTravel_v_vs_global_z,
+    histProfile1d_pathTravel_r_vs_global_z,
     histProfile1dArrayLen };
   mutable std::unordered_map<
     int, // layer number
@@ -227,14 +246,27 @@ private:
   > m_histProfile1d;
 
   enum { 
+    hist2d_digiHitCharge_vs_global_z,
     hist2d_hitMap_simHits,
     hist2d_hitMap_pixelHits, 
-    hist2d_clusterSize_vs_hit_z,
-    hist2d_clusterSize_vs_hit_z_createdInGenerator,
-    hist2d_clusterSize_vs_hit_z_createdInSim,
-    hist2d_residual_u_vs_hit_z,
-    hist2d_residual_v_vs_hit_z,
-    hist2d_residual_r_vs_hit_z,
+    hist2d_clusterSize_vs_global_z,
+    hist2d_clusterSize_u_vs_global_z,
+    hist2d_clusterSize_v_vs_global_z,
+    hist2d_clusterSize_vs_global_z_createdInGenerator,
+    hist2d_clusterSize_vs_global_z_createdInSim,
+    hist2d_residual_u_vs_global_z,
+    hist2d_residual_v_vs_global_z,
+    hist2d_residual_r_vs_global_z,
+    hist2d_pathTravel_u_vs_global_z,
+    hist2d_pathTravel_u_vs_global_z_createdInGenerator,
+    hist2d_pathTravel_u_vs_global_z_createdInSimulation,
+    hist2d_pathTravel_v_vs_global_z,
+    hist2d_pathTravel_v_vs_global_z_createdInGenerator,
+    hist2d_pathTravel_v_vs_global_z_createdInSimulation,
+    hist2d_pathTravel_w_vs_global_z,
+    hist2d_pathTravel_w_vs_global_z_createdInGenerator,
+    hist2d_pathTravel_w_vs_global_z_createdInSimulation,
+    hist2d_pathTravel_r_vs_global_z,
     hist2dArrayLen
   };
   mutable std::unordered_map<
@@ -252,9 +284,9 @@ private:
   > m_hist2d;
 
   enum { 
-    hist1dglobal_pathLength,
-    hist1dglobal_pathLength_Geant4,
-    hist1dglobal_pathLength_ratio,
+    hist1dglobal_pathTravel_r,
+    hist1dglobal_pathTravel_r_Geant4,
+    hist1dglobal_pathTravel_r_ratio,
     hist1dglobalArrayLen
   };
   std::array<

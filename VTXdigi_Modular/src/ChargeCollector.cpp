@@ -24,10 +24,10 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
   throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
 }
 
-Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer) {
-  simPos = simHit.truthPos();
-
+bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular&  digitizer) {
   const float eps = 1e-6f; // reasonable for number O(0.01) (like sensor thickness in mm) with float precision
+
+  path.simPos = simHit.truthPos();
 
   double momentum_global[3] = {
     static_cast<double>(simHit.hitPtr()->getMomentum().x), 
@@ -39,62 +39,65 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
 
   /* Step 1 - travel vector */
   const double scaleFactor_travel = digitizer.SensorDimensions().at(2) / std::abs(momentum_local[2]);
-  travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]); 
+  path.travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]); 
 
   /* Step 2 - entry point */
-  if (abs(simPos.z()) > digitizer.SensorDimensions().at(2)/2.f + eps) {
-      digitizer.warning() << "SimHit position is outside the sensor volume (local w = " << simPos.z() << " mm, sensor thickness = " << digitizer.SensorDimensions().at(2) << " mm). This should never happen. Forcing it to w=0." << endmsg;
-    simPos.z() = 0.f; // ensures no divide by zero etc
+  if (abs(path.simPos.z()) > digitizer.SensorDimensions().at(2)/2.f + eps) {
+      digitizer.warning() << "SimHit position is outside the sensor volume (local w = " << path.simPos.z() << " mm, sensor thickness = " << digitizer.SensorDimensions().at(2) << " mm). This should never happen. Forcing it to w=0." << endmsg;
+    path.simPos.z() = 0.f; // ensures no divide by zero etc
   }
   float shiftDist_w;
-  if (travel.z() >= 0.f)
-    shiftDist_w = simPos.z() + 0.5f * digitizer.SensorDimensions().at(2);
+  if (path.travel.z() >= 0.f)
+    shiftDist_w = path.simPos.z() + 0.5f * digitizer.SensorDimensions().at(2);
   else
-    shiftDist_w = simPos.z() - 0.5f * digitizer.SensorDimensions().at(2);
-  const float scaleFactor_entry = shiftDist_w / travel.z();
-  entry = simPos - scaleFactor_entry * travel;
+    shiftDist_w = path.simPos.z() - 0.5f * digitizer.SensorDimensions().at(2);
+  const float scaleFactor_entry = shiftDist_w / path.travel.z();
+  path.entry = path.simPos - scaleFactor_entry * path.travel;
 
   /* Step 3 - clip path to sensor edges (in u/v) */
   std::pair<float, float> t = std::make_pair(0.f, 1.f); // parametrize path as entry + t*travel; t in [0,1]
-  t = ComputePathClippingFactors(t, entry.x(), travel.x(), digitizer.SensorDimensions().at(0));
-  t = ComputePathClippingFactors(t, entry.y(), travel.y(), digitizer.SensorDimensions().at(1));
+  t = ComputePathClippingFactors(t, path.entry.x(), path.travel.x(), digitizer.SensorDimensions().at(0));
+  t = ComputePathClippingFactors(t, path.entry.y(), path.travel.y(), digitizer.SensorDimensions().at(1));
   if (t.first != 0.f || t.second != 1.f) { 
     if (0.f <= t.first && t.first < t.second && t.second <= 1.f) {
       /* valid clipping */
-      digitizer.debug() << "       - Clipping SimHitPath with t [" << t.first << ", " << t.second << "]. PathLength changed to " << static_cast<int>((t.second - t.first) * travel.r()*1000) << " um from " << static_cast<int>(travel.r()*1000) << " um" << endmsg;
+      digitizer.debug() << "       - Clipping SimHitPath with t [" << t.first << ", " << t.second << "]. PathLength changed to " << static_cast<int>((t.second - t.first) * path.travel.r()*1000) << " um from " << static_cast<int>(path.travel.r()*1000) << " um" << endmsg;
 
-      entry = entry + t.first * travel;
-      travel = (t.second - t.first) * travel;
+      path.entry = path.entry + t.first * path.travel;
+      path.travel = (t.second - t.first) * path.travel;
     }
     else [[unlikely]] {
       /* invalid clipping, shouldn't happen */
       digitizer.warning() << "VTXdigi_tools::Path::Path() - invalid clipping factors t = [" << t.first << ", " << t.second << "]. Path might lie completely outside the sensor." << endmsg;
-      digitizer.debug() << " -> entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, sensor dim. (+-" << digitizer.SensorDimensions().at(0)/2 << ", +-" << digitizer.SensorDimensions().at(1)/2 << ") mm" << endmsg;
-      digitizer.debug() << " -> Path length " << static_cast<int>(travel.r()*1000) << " um, in G4 " << static_cast<int>(simHit.hitPtr()->getPathLength()*1000) << " um" << endmsg;
+      digitizer.debug() << " -> entry (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, exit (" << path.entry.x() + path.travel.x() << ", " << path.entry.y() + path.travel.y() << ", " << path.entry.z() + path.travel.z() << ") mm, sensor dim. (+-" << digitizer.SensorDimensions().at(0)/2 << ", +-" << digitizer.SensorDimensions().at(1)/2 << ") mm" << endmsg;
+      digitizer.debug() << " -> Path length " << static_cast<int>(path.travel.r()*1000) << " um, in G4 " << static_cast<int>(simHit.hitPtr()->getPathLength()*1000) << " um" << endmsg;
+      return false;
     }
   }
 
   /* Step 4 -check that path is not much longer than the length it had in Geant4 */
-  lengthG4 = simHit.hitPtr()->getPathLength();
-  if (travel.r() > 1.05f * lengthG4) {
-    digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*1000) << " um to " << static_cast<int>(lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
+  path.lengthG4 = simHit.hitPtr()->getPathLength();
+  if (path.travel.r() > 1.05f * path.lengthG4) {
+    digitizer.debug() << "       - Shortening path length from " << static_cast<int>(path.travel.r()*1000) << " um to " << static_cast<int>(path.lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
 
     /* make sure the path stays centred around the simTrackerHit position */
-    const float t_simPos = ( (simPos - entry).dot(travel) ) / (travel.r() * travel.r());
+    const float t_simPos = ( (path.simPos - path.entry).dot(path.travel) ) / (path.travel.r() * path.travel.r());
 
-    const float t_length_halved = 0.5f * lengthG4 / travel.r(); // length of the new path in terms of t [0,1] on old path, halved
+    const float t_length_halved = 0.5f * path.lengthG4 / path.travel.r(); // length of the new path in terms of t [0,1] on old path, halved
     const float t_center = std::max(t_length_halved, std::min(t_simPos, 1.f - t_length_halved)); // center of new path clamped to [t_length_half, 1 - t_length_half] while not exceeding [0,1]
 
     const float t_min = t_center - t_length_halved;
     const float t_max = t_center + t_length_halved;
 
-    entry = entry + t_min * travel;
-    travel = (t_max - t_min) * travel;
+    path.entry = path.entry + t_min * path.travel;
+    path.travel = (t_max - t_min) * path.travel;
   }
 
-  length = travel.r();
+  path.length = path.travel.r();
+  
 
-  digitizer.debug() << "       - Constructed path, length " << travel.r()*1000 << " um (G4-length " << lengthG4*1000 << " um), entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, " << endmsg;
+  digitizer.debug() << "       - Constructed path, length " << path.travel.r()*1000 << " um (G4-length " << path.lengthG4*1000 << " um), entry (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, exit (" << path.entry.x() + path.travel.x() << ", " << path.entry.y() + path.travel.y() << ", " << path.entry.z() + path.travel.z() << ") mm, " << endmsg;
+  return true; // indicate valid path constructed
 }
 
 std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, const float entry_ax, const float travel_ax, const float sensorLength_ax) {
@@ -329,12 +332,13 @@ ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : ICh
 }
 
 void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
-  // m_digitizer.FillHistograms_fromChargeCollector_perSimHit(path.length, path.lengthG4);
-  
   /* TODO: implement voxel-traversal instead of numerically splitting the charge. 
   I would start from the simple algo here: https://www.redblobgames.com/grids/line-drawing.html */
 
-  Path path(simHit, trafoMatrix, m_digitizer);
+  Path path;
+  if (!ConstructPath(path, simHit, trafoMatrix, m_digitizer)) [[unlikely]]
+    return;
+
   MoveTruthPosition(simHit, path); // shifts the sim hit position to the depth in the sensor where most charge is collected, to get useful residual plots
 
   const int stepCount = std::max(1, static_cast<int>(std::ceil(path.length / m_stepLength)));
@@ -362,7 +366,7 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
     }
   } // loop over segments
 
-  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(path.length, path.lengthG4);
+  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix, simHit.isCreatedInGenerator()); // fill histograms once per sim hit, with info from the path (eg. travel vector, which contains info on the angle of incidence)
 
   DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit);
 }

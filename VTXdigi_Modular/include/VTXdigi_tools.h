@@ -10,6 +10,8 @@
 
 #include <queue>
 #include <unordered_set>
+#include <string_view>
+#include <limits>
 
 namespace VTXdigi_tools {
 
@@ -35,10 +37,12 @@ public:
   SimHitWrapper(SimHitWrapper&& other) = default;
   SimHitWrapper() = default;
 
+  /** @brief Set the truth position of the simHit in local coordinates */
   inline void SetTruthPos(const dd4hep::rec::Vector3D& pos) const { m_truthPos = pos; } // only used for histogramming after filling the hits, so not really a problem that this is mutable
 
   friend void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
   inline const edm4hep::SimTrackerHit* hitPtr() const { return &m_simTrackerHit; }
+
   /** @brief Access the truth position of the simHit in local coordinates
    * @note might have been adjusted by ChargeCollector::FillHit() to account for charge collection effects. */
   inline const dd4hep::rec::Vector3D truthPos() const { return m_truthPos; }
@@ -46,6 +50,8 @@ public:
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
   inline float charge() const { return m_charge; }
   inline int layer() const { return m_layerNumber; }
+
+  inline bool isCreatedInGenerator() const { return !m_simTrackerHit.getParticle().isCreatedInSimulation(); }
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
@@ -82,6 +88,8 @@ struct Cluster {
 
   /** @brief Compute the center position of a cluster via charge-weighed center of gravity */
   std::pair<float, float> ComputePos() const;
+  inline int GetSize() const { return pixels.size(); };
+  int GetSize(const int axis) const; // axis = 0 for u, 1 for v. 
 };
 
 /** @brief Get the indices of all direct neighbors of a pixel */

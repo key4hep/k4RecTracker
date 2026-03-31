@@ -255,6 +255,29 @@ std::pair<float, float> Cluster::ComputePos() const {
   return pos;
 }
 
+int Cluster::GetSize(const int axis) const {
+  int min = std::numeric_limits<int>::max();
+  int max = std::numeric_limits<int>::min();
+
+  if (axis == 0) { // u
+    for (const Pixel* pix : pixels) {
+      min = std::min(min, pix->index.first);
+      max = std::max(max, pix->index.first);
+    }
+  }
+  else if (axis == 1) { // v
+    for (const Pixel* pix : pixels) {
+      min = std::min(min, pix->index.second);
+      max = std::max(max, pix->index.second);
+    }
+  }
+  else {
+    throw std::runtime_error("Cluster::GetClusterSize: axis must be 0 (u) or 1 (v), got " + std::to_string(axis));
+  }
+
+  return max - min + 1; // +1 because of counting: if min=max, cluster size is 1, not 0
+}
+
 std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv) {
   return {{
     {i_uv.first - 1, i_uv.second}, // left

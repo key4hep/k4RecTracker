@@ -44,6 +44,9 @@ VTXdigi_Modular::VTXdigi_Modular(const std::string& name, ISvcLocator* svcLoc)
 StatusCode VTXdigi_Modular::initialize() {
   info() << "INITIALIZING VTXdigi_Modular..." << endmsg;
 
+  info() << "OutputLevel set to " << msgSvc()->outputLevel(name()) << endmsg;
+  // TODO: implement if-clause for debug/verbose messages in hot loops (to avoid constructing the message string when the message won't be printed) -> this will improve performance significantly
+
   if (!VTXdigi_tools::ToolTest())
     return StatusCode::FAILURE;
 
@@ -54,7 +57,7 @@ StatusCode VTXdigi_Modular::initialize() {
   if (m_debugHistograms)
     InitHistograms();
 
-  /* This needs to come in after the properties, geometry and services have all been initialized */
+  // This needs to come in after the properties, geometry and services have all been initialized 
   verbose() << "Initializing charge collection method: " << m_chargeCollectionMethod.value() << endmsg;
   m_chargeCollector = VTXdigi_tools::CreateChargeCollector(*this, m_chargeCollectionMethod);
 
@@ -164,10 +167,6 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   
   if (m_subDetName.value() == m_undefinedString)
     throw GaudiException("Property SubDetectorName is not set!", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-
-  m_uidService = service<IUniqueIDGenSvc>("UniqueIDGenSvc", true);
-  if (!m_uidService)
-    throw GaudiException("Unable to get UniqueIDGenSvc", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   m_geoService = serviceLocator()->service(m_geoServiceName);
   if (!m_geoService)
@@ -438,6 +437,7 @@ void VTXdigi_Modular::InitHistograms() {
     static_cast<float>(m_pixelCount.second+0.5)};
 
   Gaudi::Accumulators::Axis<float> axis_pathLength{500, 0.f, m_sensorThickness*1000.f*10.f};
+  Gaudi::Accumulators::Axis<float> axis_pathTravel{1000, -m_sensorThickness*1000.f*10.f, m_sensorThickness*1000.f*10.f};
     
   /* Fill histograms per layer */
   for (int layer : m_layers.value()) {
@@ -482,6 +482,29 @@ void VTXdigi_Modular::InitHistograms() {
         axis_momentum_GeV
       }
     );
+
+    hist1d.at(hist1d_simHit_z).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_global_z",
+        "Global z-position of simHits - Layer " + std::to_string(layer) + ";z [mm];Entries",
+        axis_z
+      }
+    );
+    hist1d.at(hist1d_simHit_z_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_global_z_createdInGenerator",
+        "Global z-position of simHits from particles created in the generator - Layer " + std::to_string(layer) + ";z [mm];Entries",
+        axis_z
+      }
+    );
+    hist1d.at(hist1d_simHit_z_createdInSimulation).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_global_z_createdInSimulation",
+        "Global z-position of simHits from particles created in simulation - Layer " + std::to_string(layer) + ";z [mm];Entries",
+        axis_z
+      }
+    );
+    
     hist1d.at(hist1d_simHitPDG).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/simHit_PDG",
@@ -500,7 +523,7 @@ void VTXdigi_Modular::InitHistograms() {
     );
     hist1d.at(hist1d_digiHitsPerSimHit).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/digiHits_per_simHit",
+        "Layer" + std::to_string(layer) + "/digiHit_digiHits_per_simHit",
         "Raw number of digiHits created per simHit - Layer " + std::to_string(layer) + ";DigiHits per SimHit;Entries",
         axis_clusterSize // not technically correct, but works
       }
@@ -528,28 +551,84 @@ void VTXdigi_Modular::InitHistograms() {
       }
     );
 
-    hist1d.at(hist1d_residualU).reset(
+    hist1d.at(hist1d_residual_u).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_residual_u",
         "Residual (u_digiHit - u_simHit) in local u direction - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
         axis_residual
       }
     );
-    hist1d.at(hist1d_residualV).reset(
+    hist1d.at(hist1d_residual_u_singlePixelCluster).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_singlePixelCluster",
+        "Residual (u_digiHit - u_simHit) in local u direction for clusters with exactly one pixel - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_u_multiPixelCluster).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_multiPixelCluster",
+        "Residual (u_digiHit - u_simHit) in local u direction for clusters with more than one pixel - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_u_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_createdInGenerator",
+        "Residual (u_digiHit - u_simHit) in local u direction, from particles created in the generator - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_u_createdInSimulation).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_createdInSimulation",
+        "Residual (u_digiHit - u_simHit) in local u direction, from particles created in simulation - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_v).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_residual_v",
         "Residual (v_digiHit - v_simHit) in local v direction - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
         axis_residual
       }
     );
-    hist1d.at(hist1d_residualW).reset(
+    hist1d.at(hist1d_residual_v_singlePixelCluster).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_singlePixelCluster",
+        "Residual (v_digiHit - v_simHit) in local v direction for clusters with exactly one pixel - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_v_multiPixelCluster).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_multiPixelCluster",
+        "Residual (v_digiHit - v_simHit) in local v direction for clusters with more than one pixel - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_v_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_createdInGenerator",
+        "Residual (v_digiHit - v_simHit) in local v direction, from particles created in the generator - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_v_createdInSimulation).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_createdInSimulation",
+        "Residual (v_digiHit - v_simHit) in local v direction, from particles created in simulation - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_w).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_residual_w",
         "Residual (w_digiHit - w_simHit) in local w direction (ie. sensor normal direction) - Layer " + std::to_string(layer) + ";Residual w [um];Entries",
         axis_residual
       }
     );
-    hist1d.at(hist1d_residualR).reset(
+    hist1d.at(hist1d_residual_r).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_residual_r",
         "Residual magnitude (|r_digiHit - r_simHit|) - Layer " + std::to_string(layer) + ";Residual r [um];Entries",
@@ -557,20 +636,42 @@ void VTXdigi_Modular::InitHistograms() {
       }
     );
 
-    hist1d.at(hist1d_pixelDistToClusterCenterU).reset(
+    hist1d.at(hist1d_pixelDistToClusterCenter_u).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/pixelHit_distanceToClusterCenter_u",
+        "Layer" + std::to_string(layer) + "/digiHit_pixelDistanceToClusterCenter_u",
         "Distance of pixel to center of cluster in u direction - Layer " + std::to_string(layer) + ";Distance to cluster center u [pix];Entries",
         axis_residual_pixels
       }
     );
-    hist1d.at(hist1d_pixelDistToClusterCenterV).reset(
+    hist1d.at(hist1d_pixelDistToClusterCenter_v).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/pixelHit_distanceToClusterCenter_v",
+        "Layer" + std::to_string(layer) + "/digiHit_pixelDistanceToClusterCenter_v",
         "Distance of pixel to center of cluster in v direction - Layer " + std::to_string(layer) + ";Distance to cluster center v [pix];Entries",
         axis_residual_pixels
       }
     );
+
+    hist1d.at(hist1d_pathTravel_u).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_u",
+        "Path travel length inside the sensor active volume in u direction - Layer " + std::to_string(layer) + ";Path length in u [um];Entries",
+        axis_pathTravel
+      }
+    );
+    hist1d.at(hist1d_pathTravel_v).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_v",
+        "Path travel length inside the sensor active volume in v direction - Layer " + std::to_string(layer) + ";Path length in v [um];Entries",
+        axis_pathTravel
+      }
+    );
+    hist1d.at(hist1d_pathTravel_r).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_r",
+        "Path travel length inside the sensor active volume - Layer " + std::to_string(layer) + ";Path length [um];Entries",
+        axis_pathLength
+      }
+    ); 
 
     m_hist1d.emplace(layer, std::move(hist1d));
 
@@ -578,32 +679,76 @@ void VTXdigi_Modular::InitHistograms() {
 
     std::array< std::unique_ptr< Gaudi::Accumulators::StaticProfileHistogram<1,Gaudi::Accumulators::atomicity::full,float>>, histProfile1dArrayLen> histProfile1d;
 
-    histProfile1d.at(histProfile1d_clusterSize_vs_hit_z).reset(
+    histProfile1d.at(histProfile1d_digiHitCharge_vs_global_z).reset(
       new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_vs_hit_z",
-        "Cluster size - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Pixels per cluster",
+        "Layer" + std::to_string(layer) + "/digiHit_chargeDep_vs_global_z",
+        "DigiHit charge - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Charge [e-]",
         axis_z
       }
     );
 
-    histProfile1d.at(histProfile1d_residual_u_vs_hit_z).reset(
+    histProfile1d.at(histProfile1d_clusterSize_vs_global_z).reset(
       new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/digiHit_residual_u_vs_hit_z",
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_vs_global_z",
+        "Cluster size - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Pixels per cluster",
+        axis_z
+      }
+    );
+    histProfile1d.at(histProfile1d_clusterSize_u_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_u_vs_global_z",
+        "Cluster length along u - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Cluster length in u [pix]",
+        axis_z
+      }
+    );
+    histProfile1d.at(histProfile1d_clusterSize_v_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_v_vs_global_z",
+        "Cluster length along v - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Cluster length in v [pix]",
+        axis_z
+      }
+    );
+
+    histProfile1d.at(histProfile1d_residual_u_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_vs_global_z",
         "Residual u (u_digiHit - u_simHit) vs. global z position - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Residual u [um]",
         axis_z
       }
     );
-    histProfile1d.at(histProfile1d_residual_v_vs_hit_z).reset(
+    histProfile1d.at(histProfile1d_residual_v_vs_global_z).reset(
       new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/digiHit_residual_v_vs_hit_z",
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_vs_global_z",
         "Residual v (v_digiHit - v_simHit) vs. global z position - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Residual v [um]",
         axis_z
       }
     );
-    histProfile1d.at(histProfile1d_residual_r_vs_hit_z).reset(
+    histProfile1d.at(histProfile1d_residual_r_vs_global_z).reset(
       new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/digiHit_residual_r_vs_hit_z",
+        "Layer" + std::to_string(layer) + "/digiHit_residual_r_vs_global_z",
         "Residual r (|r_digiHit - r_simHit|) vs. global z position - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Residual r [um]",
+        axis_z
+      }
+    );
+
+    histProfile1d.at(histProfile1d_pathTravel_u_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_u_vs_global_z",
+        "Path travel length inside the sensor active volume in u direction vs. global z position - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Path length in u [um]",
+        axis_z
+      }
+    );
+    histProfile1d.at(histProfile1d_pathTravel_v_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_v_vs_global_z",
+        "Path travel length inside the sensor active volume in v direction vs. global z position - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Path length in v [um]",
+        axis_z
+      }
+    );
+    histProfile1d.at(histProfile1d_pathTravel_r_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_r_vs_global_z",
+        "Path travel length inside the sensor active volume vs. global z position - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Path length [um]",
         axis_z
       }
     );
@@ -613,6 +758,15 @@ void VTXdigi_Modular::InitHistograms() {
     /* -- 2d-hist -- */
 
     std::array< std::unique_ptr< Gaudi::Accumulators::StaticHistogram< 2, Gaudi::Accumulators::atomicity::full, float > >, hist2dArrayLen>  hist2d;
+
+    hist2d.at(hist2d_digiHitCharge_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_chargeDep_vs_global_z_2D",
+        "DigiHit charge - Layer " + std::to_string(layer) + ";Global z position [mm];Charge [e-]",
+        axis_z,
+        axis_charge
+      }
+    );
 
     hist2d.at(hist2d_hitMap_simHits).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
@@ -630,55 +784,153 @@ void VTXdigi_Modular::InitHistograms() {
         axis_pixels_v
       }
     );
-    hist2d.at(hist2d_clusterSize_vs_hit_z).reset(
+    hist2d.at(hist2d_clusterSize_vs_global_z).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/clusterSize_vs_hit_z_2D",
-        "Cluster size vs. global hit z - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Pixels per cluster;Entries",
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_vs_global_z_2D",
+        "Cluster size vs. global hit z - Layer " + std::to_string(layer) + ";Global z position [mm];Pixels per cluster;Entries",
         axis_z,
         axis_clusterSize
       }
     );
-    hist2d.at(hist2d_clusterSize_vs_hit_z_createdInGenerator).reset(
+    hist2d.at(hist2d_clusterSize_u_vs_global_z).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/clusterSize_vs_hit_z_createdInGenerator_2D",
-        "Cluster size vs. global hit z (simHit particle created in generator) - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Pixels per cluster;Entries",
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_u_vs_global_z_2D",
+        "Cluster length along u vs. global hit z - Layer " + std::to_string(layer) + ";Global z position [mm];Cluster length in u [pix];Entries",
         axis_z,
         axis_clusterSize
       }
     );
-    hist2d.at(hist2d_clusterSize_vs_hit_z_createdInSim).reset(
+    hist2d.at(hist2d_clusterSize_v_vs_global_z).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/clusterSize_vs_hit_z_createdInSimulation_2D",
-        "Cluster size vs. global hit z (simHit particle created in simulation) - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Pixels per cluster;Entries",
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_v_vs_global_z_2D",
+        "Cluster length along v vs. global hit z - Layer " + std::to_string(layer) + ";Global z position [mm];Cluster length in v [pix];Entries",
+        axis_z,
+        axis_clusterSize
+      }
+    );
+    hist2d.at(hist2d_clusterSize_vs_global_z_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_vs_global_z_createdInGenerator_2D",
+        "Cluster size vs. global hit z (simHit particle created in generator) - Layer " + std::to_string(layer) + ";Global z position [mm];Pixels per cluster;Entries",
+        axis_z,
+        axis_clusterSize
+      }
+    );
+    hist2d.at(hist2d_clusterSize_vs_global_z_createdInSim).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_vs_global_z_createdInSimulation_2D",
+        "Cluster size vs. global hit z (simHit particle created in simulation) - Layer " + std::to_string(layer) + ";Global z position [mm];Pixels per cluster;Entries",
         axis_z,
         axis_clusterSize
       }
     );
 
-    hist2d.at(hist2d_residual_u_vs_hit_z).reset(
+    hist2d.at(hist2d_residual_u_vs_global_z).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/digiHit_residual_u_vs_hit_z_2D",
-        "Residual u (u_digiHit - u_simHit) vs. global z position - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Residual u [um];Entries",
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_vs_global_z_2D",
+        "Residual u (u_digiHit - u_simHit) vs. global z position - Layer " + std::to_string(layer) + ";Global z position [mm];Residual u [um];Entries",
         axis_z,
         axis_residual
       }
     );
-    hist2d.at(hist2d_residual_v_vs_hit_z).reset(
+    hist2d.at(hist2d_residual_v_vs_global_z).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/digiHit_residual_v_vs_hit_z_2D",
-        "Residual v (v_digiHit - v_simHit) vs. global z position - Layer "+ std::to_string(layer) + ";SimHit global z position [mm];Residual v [um];Entries",
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_vs_global_z_2D",
+        "Residual v (v_digiHit - v_simHit) vs. global z position - Layer "+ std::to_string(layer) + ";Global z position [mm];Residual v [um];Entries",
         axis_z,
         axis_residual
       }
     );
-    hist2d.at(hist2d_residual_r_vs_hit_z).reset(
+    hist2d.at(hist2d_residual_r_vs_global_z).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/digiHit_residual_r_vs_hit_z_2D",
-        "Residual r (|r_digiHit - r_simHit|) vs. global z position - Layer " + std::to_string(layer) + ";SimHit global z position [mm];Residual r [um];Entries",
+        "Layer" + std::to_string(layer) + "/digiHit_residual_r_vs_global_z_2D",
+        "Residual r (|r_digiHit - r_simHit|) vs. global z position - Layer " + std::to_string(layer) + ";Global z position [mm];Residual r [um];Entries",
         axis_z,
         axis_residual_abs
       }
     );
+
+    hist2d.at(hist2d_pathTravel_u_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_u_vs_global_z_2D",
+        "Path travel length inside the sensor active volume in u direction vs. global z position - Layer " + std::to_string(layer) + ";Global z position [mm];Path length in u [um];Entries",
+        axis_z,
+        axis_pathTravel
+      }
+    );
+    hist2d.at(hist2d_pathTravel_u_vs_global_z_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_u_vs_global_z_createdInGenerator_2D",
+        "Path travel length inside the sensor active volume in u direction vs. global z position, for particles created in the generator - Layer " + std::to_string(layer) + ";Global z position [mm];Path length in u [um];Entries",
+        axis_z,
+        axis_pathTravel
+      }
+    );
+    hist2d.at(hist2d_pathTravel_u_vs_global_z_createdInSimulation).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_u_vs_global_z_createdInSimulation_2D",
+        "Path travel length inside the sensor active volume in u direction vs. global z position, for particles created in the simulation - Layer " + std::to_string(layer) + ";Global z position [mm];Path length in u [um];Entries",
+        axis_z,
+        axis_pathTravel
+      }
+    );
+    hist2d.at(hist2d_pathTravel_v_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_v_vs_global_z_2D",
+        "Path travel length inside the sensor active volume in v direction vs. global z position - Layer " + std::to_string(layer) + ";Global z position [mm];Path length in v [um];Entries",
+        axis_z,
+        axis_pathTravel
+      }
+    );
+    hist2d.at(hist2d_pathTravel_v_vs_global_z_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_v_vs_global_z_createdInGenerator_2D",
+        "Path travel length inside the sensor active volume in v direction vs. global z position, for particles created in the generator - Layer " + std::to_string(layer) + ";Global z position [mm];Path length in v [um];Entries",
+        axis_z,
+        axis_pathTravel
+      }
+    );
+    hist2d.at(hist2d_pathTravel_v_vs_global_z_createdInSimulation).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_v_vs_global_z_createdInSimulation_2D",
+        "Path travel length inside the sensor active volume in v direction vs. global z position, for particles created in the simulation - Layer " + std::to_string(layer) + ";Global z position [mm];Path length in v [um];Entries",
+        axis_z,
+        axis_pathTravel
+      }
+    );
+    hist2d.at(hist2d_pathTravel_w_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_w_vs_global_z_2D",
+        "Path travel length inside the sensor active volume in w direction vs. global z position - Layer " + std::to_string(layer) + ";Global z position [mm];Path length in w [um];Entries",
+        axis_z,
+        axis_pathTravel
+      }
+    );
+    hist2d.at(hist2d_pathTravel_w_vs_global_z_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_w_vs_global_z_createdInGenerator_2D",
+        "Path travel length inside the sensor active volume in w direction vs. global z position, for particles created in the generator - Layer " + std::to_string(layer) + ";Global z position [mm];Path length in w [um];Entries",
+        axis_z,
+        axis_pathTravel
+      }
+    );
+    hist2d.at(hist2d_pathTravel_w_vs_global_z_createdInSimulation).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_w_vs_global_z_createdInSimulation_2D",
+        "Path travel length inside the sensor active volume in w direction vs. global z position, for particles created in the simulation - Layer " + std::to_string(layer) + ";Global z position [mm];Path length in w [um];Entries",
+        axis_z,
+        axis_pathTravel
+      }
+    );
+    hist2d.at(hist2d_pathTravel_r_vs_global_z).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pathTravel_r_vs_global_z_2D",
+        "Path travel length inside the sensor active volume vs. global z position - Layer " + std::to_string(layer) + ";Global z position [mm];Path length [um];Entries",
+        axis_z,
+        axis_pathLength
+      }
+    );
+
 
     m_hist2d.emplace(layer, std::move(hist2d));
 
@@ -686,21 +938,21 @@ void VTXdigi_Modular::InitHistograms() {
 
   /* global (eg covering all layers) histograms */
 
-  m_hist1dglobal.at(hist1dglobal_pathLength).reset(
+  m_hist1dglobal.at(hist1dglobal_pathTravel_r).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Global/simHit_pathLength",
-        "Path length in sensor active volume, as computed by VTXdigi_tools reconstruction;Path length [um];Entries",
+        "Path travel length in sensor active volume, as computed by VTXdigi_tools reconstruction;Path length [um];Entries",
         axis_pathLength
       }
     );
-  m_hist1dglobal.at(hist1dglobal_pathLength_Geant4).reset(
+  m_hist1dglobal.at(hist1dglobal_pathTravel_r_Geant4).reset(
     new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
       "Global/simHit_pathLength_Geant4",
       "Path length in sensor active volume, as given by Geant4;Path length [um];Entries",
       axis_pathLength
     }
   );
-  m_hist1dglobal.at(hist1dglobal_pathLength_ratio).reset(
+  m_hist1dglobal.at(hist1dglobal_pathTravel_r_ratio).reset(
     new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
       "Global/simHit_pathLength_ratio",
       "Path length in sensor active volume divided by path length given by Geant4;Path length / path length Geant4;Entries",
@@ -802,7 +1054,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     /* TODO: estimate uncertainty from pitch/sqrt(12), or from cluster size in u/v*/
 
     if (m_debugHistograms.value()) {
-      FillHistograms_perDigiHit(cluster.simHits, digiHit, trafoMatrix, cluster.pixels.size());
+      FillHistograms_perDigiHit(cluster.simHits, digiHit, trafoMatrix, cluster.pixels.size(), cluster.GetSize(0), cluster.GetSize(1));
 
       for (const VTXdigi_tools::Pixel* pix : cluster.pixels)
         FillHistograms_perPixel(cellID, *pix, pos_index);
@@ -827,6 +1079,16 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_keV))[simHitMomentum.r() * 1.E6]; 
   ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_MeV))[simHitMomentum.r() * 1.E3]; 
   ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_GeV))[simHitMomentum.r()]; 
+
+  ++(*m_hist1d.at(layer).at(hist1d_simHit_z))[simHitPos_global.z()];
+
+  if ( simHit.isCreatedInGenerator() ) {
+    ++(*m_hist1d.at(layer).at(hist1d_simHit_z_createdInGenerator))[simHitPos_global.z()];
+  }
+  else {
+    ++(*m_hist1d.at(layer).at(hist1d_simHit_z_createdInSimulation))[simHitPos_global.z()];
+  }
+
   ++(*m_hist1d.at(layer).at(hist1d_simHitPDG))[simHit.hitPtr()->getParticle().getPDG()];
 
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits))[{i_uv.first, i_uv.second}];
@@ -845,22 +1107,29 @@ void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::Cell
     const float distToClusterCenter_u = static_cast<float>(pix.index.first) - clusterPos_local.first; // in pix
     const float distToClusterCenter_v = static_cast<float>(pix.index.second) - clusterPos_local.second;
 
-    ++(*m_hist1d.at(layer).at(hist1d_pixelDistToClusterCenterU))[distToClusterCenter_u]; // convert to um
-    ++(*m_hist1d.at(layer).at(hist1d_pixelDistToClusterCenterV))[distToClusterCenter_v];
+    ++(*m_hist1d.at(layer).at(hist1d_pixelDistToClusterCenter_u))[distToClusterCenter_u]; // convert to um
+    ++(*m_hist1d.at(layer).at(hist1d_pixelDistToClusterCenter_v))[distToClusterCenter_v];
   }
 }
 
-void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize) const {
+void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize, const int clusterSize_u, const int clusterSize_v) const {
   /* executed once for each digiHit */
   const int layer = VTXdigi_tools::GetLayer(digiHit.getCellID(), m_cellIdDecoder);
   const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(digiHit.getPosition());
   const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::GlobalToLocal(pos_global, trafoMatrix);
   
   ++(*m_hist1d.at(layer).at(hist1d_digiHitCharge))[digiHit.getEDep() * m_chargePerkeV]; 
+
   ++(*m_hist1d.at(layer).at(hist1d_clusterSize))[clusterSize];
-  (*m_histProfile1d.at(layer).at(histProfile1d_clusterSize_vs_hit_z))[pos_global.z()] += clusterSize;
-  ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_hit_z))[{pos_global.z(), clusterSize}];
   
+  (*m_histProfile1d.at(layer).at(histProfile1d_clusterSize_vs_global_z))[pos_global.z()] += clusterSize;
+  (*m_histProfile1d.at(layer).at(histProfile1d_clusterSize_u_vs_global_z))[pos_global.z()] += clusterSize_u;
+  (*m_histProfile1d.at(layer).at(histProfile1d_clusterSize_v_vs_global_z))[pos_global.z()] += clusterSize_v;
+  
+  ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_global_z))[{pos_global.z(), clusterSize}];
+  ++(*m_hist2d.at(layer).at(hist2d_clusterSize_u_vs_global_z))[{pos_global.z(), clusterSize_u}];
+  ++(*m_hist2d.at(layer).at(hist2d_clusterSize_v_vs_global_z))[{pos_global.z(), clusterSize_v}];
+
   /* per simhit that is connected to this digiHit (cluster) */
   for (const auto& simHit : simHits) {
     const dd4hep::rec::Vector3D simHitPos_local = simHit->truthPos();
@@ -872,39 +1141,85 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
 
     const float hit_z = simHitPos_global.z();
     
-    (*m_histProfile1d.at(layer).at(histProfile1d_residual_u_vs_hit_z))[hit_z] += residual_local.x()*1000.f; // convert from mm to um
-    (*m_histProfile1d.at(layer).at(histProfile1d_residual_v_vs_hit_z))[hit_z] += residual_local.y()*1000.f;
-    (*m_histProfile1d.at(layer).at(histProfile1d_residual_r_vs_hit_z))[hit_z] += residual_local.r()*1000.f;
+    (*m_histProfile1d.at(layer).at(histProfile1d_residual_u_vs_global_z))[hit_z] += residual_local.x()*1000.f; // convert from mm to um
+    (*m_histProfile1d.at(layer).at(histProfile1d_residual_v_vs_global_z))[hit_z] += residual_local.y()*1000.f;
+    (*m_histProfile1d.at(layer).at(histProfile1d_residual_r_vs_global_z))[hit_z] += residual_local.r()*1000.f;
 
-    ++(*m_hist2d.at(layer).at(hist2d_residual_u_vs_hit_z))[{hit_z, residual_local.x()*1000.f}];
-    ++(*m_hist2d.at(layer).at(hist2d_residual_v_vs_hit_z))[{hit_z, residual_local.y()*1000.f}];
-    ++(*m_hist2d.at(layer).at(hist2d_residual_r_vs_hit_z))[{hit_z, residual_local.r()*1000.f}];
+    ++(*m_hist2d.at(layer).at(hist2d_residual_u_vs_global_z))[{hit_z, residual_local.x()*1000.f}];
+    ++(*m_hist2d.at(layer).at(hist2d_residual_v_vs_global_z))[{hit_z, residual_local.y()*1000.f}];
+    ++(*m_hist2d.at(layer).at(hist2d_residual_r_vs_global_z))[{hit_z, residual_local.r()*1000.f}];
 
-    ++(*m_hist1d.at(layer).at(hist1d_residualU))[ residual_local.x()*1000.f ];
-    ++(*m_hist1d.at(layer).at(hist1d_residualV))[ residual_local.y()*1000.f ];
-    ++(*m_hist1d.at(layer).at(hist1d_residualW))[ residual_local.z()*1000.f ];
-    ++(*m_hist1d.at(layer).at(hist1d_residualR))[ residual_local.r()*1000.f ];
+    ++(*m_hist1d.at(layer).at(hist1d_residual_u))[ residual_local.x()*1000.f ];
+    ++(*m_hist1d.at(layer).at(hist1d_residual_v))[ residual_local.y()*1000.f ];
+    ++(*m_hist1d.at(layer).at(hist1d_residual_w))[ residual_local.z()*1000.f ];
+    ++(*m_hist1d.at(layer).at(hist1d_residual_r))[ residual_local.r()*1000.f ];
     
-    if (simHit->hitPtr()->getParticle().isCreatedInSimulation()) {
-      ++(*m_hist1d.at(layer).at(hist1d_clusterSize_createdInSimulation))[clusterSize];
-      ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_hit_z_createdInSim))[{hit_z, clusterSize}];
+    if (clusterSize == 1) {
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_singlePixelCluster))[ residual_local.x()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_singlePixelCluster))[ residual_local.y()*1000.f ];
+    }
+    else if (clusterSize > 1) {
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_multiPixelCluster))[ residual_local.x()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_multiPixelCluster))[ residual_local.y()*1000.f ];
+    }
+
+
+
+    if ( simHit->isCreatedInGenerator() ) {
+      ++(*m_hist1d.at(layer).at(hist1d_clusterSize_createdInGenerator))[clusterSize];
+      ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_global_z_createdInGenerator))[{hit_z, clusterSize}];
+
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_createdInGenerator))[ residual_local.x()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_createdInGenerator))[ residual_local.y()*1000.f ];
     }
     else {
-      ++(*m_hist1d.at(layer).at(hist1d_clusterSize_createdInGenerator))[clusterSize];
-      ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_hit_z_createdInGenerator))[{hit_z, clusterSize}];
+      ++(*m_hist1d.at(layer).at(hist1d_clusterSize_createdInSimulation))[clusterSize];
+      ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_global_z_createdInSim))[{hit_z, clusterSize}];
+
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_createdInSimulation))[ residual_local.x()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_createdInSimulation))[ residual_local.y()*1000.f ];
     }
   }
 }
 
-void VTXdigi_Modular::FillHistograms_fromChargeCollector_perSimHit(const float pathLength, const float pathLength_Geant4) const {
+void VTXdigi_Modular::FillHistograms_fromChargeCollector_perSimHit(const int layer, const dd4hep::rec::Vector3D& pathTravel, const float pathLength_Geant4, const dd4hep::rec::Vector3D& truthPos_local, const TGeoHMatrix& trafoMatrix, const bool createdInGenerator) const {
   if (!m_debugHistograms.value()) return;
 
-  ++(*m_hist1dglobal.at(hist1dglobal_pathLength))[pathLength*1000.f]; // convert from mm to um
-  ++(*m_hist1dglobal.at(hist1dglobal_pathLength_Geant4))[pathLength_Geant4*1000.f];
+  const float pathLength = pathTravel.r(); // in mm
+  const float factor_um_per_mm = 1000.f;
+  const dd4hep::rec::Vector3D truthPos_global = VTXdigi_tools::LocalToGlobal(truthPos_local, trafoMatrix);
+  
+  ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r))[pathLength*factor_um_per_mm]; // convert from mm to um
+  ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r_Geant4))[pathLength_Geant4*factor_um_per_mm];
   if (pathLength_Geant4 != 0.f) {
-    ++(*m_hist1dglobal.at(hist1dglobal_pathLength_ratio))[pathLength / pathLength_Geant4];
+    ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r_ratio))[pathLength / pathLength_Geant4];
+  }
+    
+  ++(*m_hist1d.at(layer).at(hist1d_pathTravel_u))[pathTravel.x()*factor_um_per_mm];
+  ++(*m_hist1d.at(layer).at(hist1d_pathTravel_v))[pathTravel.y()*factor_um_per_mm];
+  ++(*m_hist1d.at(layer).at(hist1d_pathTravel_r))[pathLength*factor_um_per_mm];
+    
+  (*m_histProfile1d.at(layer).at(histProfile1d_pathTravel_u_vs_global_z))[truthPos_global.z()] += pathTravel.x()*factor_um_per_mm;
+  (*m_histProfile1d.at(layer).at(histProfile1d_pathTravel_v_vs_global_z))[truthPos_global.z()] += pathTravel.y()*factor_um_per_mm;
+  (*m_histProfile1d.at(layer).at(histProfile1d_pathTravel_r_vs_global_z))[truthPos_global.z()] += pathLength*factor_um_per_mm;
+
+  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_u_vs_global_z))[{truthPos_global.z(), pathTravel.x()*factor_um_per_mm}];
+  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_v_vs_global_z))[{truthPos_global.z(), pathTravel.y()*factor_um_per_mm}];
+  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_w_vs_global_z))[{truthPos_global.z(), pathTravel.z()*factor_um_per_mm}];
+  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_r_vs_global_z))[{truthPos_global.z(), pathLength*factor_um_per_mm}];
+
+  if (createdInGenerator) {
+    ++(*m_hist2d.at(layer).at(hist2d_pathTravel_u_vs_global_z_createdInGenerator))[{truthPos_global.z(), pathTravel.x()*factor_um_per_mm}];
+    ++(*m_hist2d.at(layer).at(hist2d_pathTravel_v_vs_global_z_createdInGenerator))[{truthPos_global.z(), pathTravel.y()*factor_um_per_mm}];
+    ++(*m_hist2d.at(layer).at(hist2d_pathTravel_w_vs_global_z_createdInGenerator))[{truthPos_global.z(), pathTravel.z()*factor_um_per_mm}];
+  }
+  else {
+    ++(*m_hist2d.at(layer).at(hist2d_pathTravel_u_vs_global_z_createdInSimulation))[{truthPos_global.z(), pathTravel.x()*factor_um_per_mm}];
+    ++(*m_hist2d.at(layer).at(hist2d_pathTravel_v_vs_global_z_createdInSimulation))[{truthPos_global.z(), pathTravel.y()*factor_um_per_mm}];
+    ++(*m_hist2d.at(layer).at(hist2d_pathTravel_w_vs_global_z_createdInSimulation))[{truthPos_global.z(), pathTravel.z()*factor_um_per_mm}];
   }
 }
+
   
   /* TODO: add */
 // hist1d_digiHitsPerSimHit,
