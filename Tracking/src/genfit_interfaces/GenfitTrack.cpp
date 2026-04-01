@@ -384,7 +384,18 @@ namespace GenfitInterface {
                     m_covInit = CovarianceMatrixHelixToCartesian(
                         C_helix, m_posInit, m_momInit, m_VP_referencePoint, Bz
                     );
+                    
+                    TMatrixDSym C_cart(6);
+                    C_cart.Zero();
+                    C_cart(0,0) = 100;
+                    C_cart(1,1) = 100;
+                    C_cart(2,2) = 1;
+                    C_cart(3,3) = 1500.;
+                    C_cart(4,4) = 1500.;
+                    C_cart(5,5) = 1500.;
 
+
+                    m_covInit = C_cart;
                     break;
                 }
             }
@@ -706,21 +717,18 @@ namespace GenfitInterface {
         double z_PCA = b;
 
         // CHARGE
-        double x0_ = circle.x0();
-        double y0_ = circle.y0();
-        TVector3 B_field = TVector3(0., 0., 2.);
-
         TVector3 pos(closestPoint.x, closestPoint.y, z_PCA);
-        TVector3 center(x0_, y0_, 0);
+        TVector3 center(circle.x0(), circle.y0(), 0);
 
-        TVector3 curvDir = center - pos;
-        TVector3 lorentzDir = init_mom.Cross(B_field);
-        lorentzDir.SetZ(0);
-        curvDir.SetZ(0);
+        double rx = center.X() - pos.X();
+        double ry = center.Y() - pos.Y();
+        double signed_param = init_mom.X() * ry - init_mom.y() * rx;
+        int charge = 0;
+        if (signed_param > 0)
+            charge = (Bz > 0) ? +1 : -1;
+        else if (signed_param < 0)
+            charge = (Bz > 0) ? -1 : +1;
 
-        int charge = (lorentzDir.Dot(curvDir) > 0) ? +1 : -1;
-
-        // Fill helpers
         HelperInitialization helper;
         helper.Position = TVector3(closestPoint.x * dd4hep::mm, closestPoint.y * dd4hep::mm, z_PCA * dd4hep::mm);
         helper.Momentum = init_mom;
@@ -977,6 +985,8 @@ namespace GenfitInterface {
 
                             // Extract covariance matrix in Genfit's 6D (pos+momentum) space
                             TMatrixDSym covMatrix_cm_gev = measState.get6DCov();
+
+                            // covMatrix_cm_gev.Print();
 
                             // Scale the covariance matrix from cm/GeV to desired mm/GeV
                             TMatrixDSym covMatrix = covMatrix_cm_gev;
