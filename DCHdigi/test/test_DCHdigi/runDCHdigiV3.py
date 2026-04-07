@@ -2,7 +2,7 @@
 # gaudi steering file that runs DCHdigi
 #
 # to execute:
-# k4run runDCHdigi.py
+# k4run runDCHdigiV3.py
 
 from Gaudi.Configuration import INFO,DEBUG
 from Configurables import EventDataSvc, UniqueIDGenSvc
