@@ -10,8 +10,8 @@ from k4FWCore import ApplicationMgr, IOSvc
 from Gaudi.Configuration import *
 
 svc = IOSvc("IOSvc")
-svc.Input = [ "dch_muon_10GeV_N100.root"]
-svc.Output = "dch_muon_10GeV_digi_N100.root"
+svc.Input = [ "dch_proton_10GeV.root"]
+svc.Output = "dch_proton_10GeV_digi.root"
 
 from Configurables import GeoSvc
 geoservice = GeoSvc("GeoSvc")
