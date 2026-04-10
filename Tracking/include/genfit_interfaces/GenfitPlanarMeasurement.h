@@ -15,56 +15,53 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
 #ifndef PLANAR_MEASUREMENT_H
 #define PLANAR_MEASUREMENT_H
 
 #include <iostream>
 
-#include <TVectorD.h>
-#include <TMatrixDSym.h>
-#include <TMatrixD.h>
 #include "TDecompSVD.h"
+#include <TMatrixD.h>
+#include <TMatrixDSym.h>
+#include <TVectorD.h>
 
 #include <PlanarMeasurement.h>
 #include <TrackPoint.h>
 
-#include "edm4hep/TrackerHitPlane.h"
-#include "DDRec/Vector3D.h" 
-#include "DDRec/Vector2D.h"
 #include "DD4hep/DD4hepUnits.h"
-
+#include "DDRec/Vector2D.h"
+#include "DDRec/Vector3D.h"
+#include "edm4hep/TrackerHitPlane.h"
 
 /** @class PlanarMeasurement
  *
  *  Interface class that wraps a TrackerHitPlane object into a GENFIT-compatible PlanarMeasurement.
- *  
+ *
  *  This class converts a hit from the EDM4hep TrackerHitPlane collection into a `genfit::PlanarMeasurement`,
  *  allowing it to be used as input for GENFIT's track fitting algorithms.
  *  The constructor initializes the measurement from the given hit and stores the detector and hit indices
  *  for debugging or traceability purposes.
  *
  *
- *  Author: Andrea De Vita  
+ *  Author: Andrea De Vita
  *  Date  : 2025-06
  *
-*/
+ */
 
 namespace GenfitInterface {
 
-    class PlanarMeasurement {
-    public:
+class PlanarMeasurement {
+public:
+  PlanarMeasurement(const edm4hep::TrackerHitPlane& hit, const int det_idx, const int hit_idx, const int debug_lvl);
 
-        PlanarMeasurement(const edm4hep::TrackerHitPlane& hit, const int det_idx, const int hit_idx,const int debug_lvl);
+  genfit::PlanarMeasurement* getGenFit() const { return m_genfitHit; };
 
-        genfit::PlanarMeasurement* getGenFit() const {return m_genfitHit;};
+private:
+  genfit::PlanarMeasurement* m_genfitHit;
+};
 
-    private:
-    
-        genfit::PlanarMeasurement* m_genfitHit;
-    };
-
-} 
+} // namespace GenfitInterface
 
 #endif // GenfitPlanarMeasurement

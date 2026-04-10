@@ -25,13 +25,13 @@
 #include "MaterialEffects.h"
 
 #include "TGeoManager.h"
-#include "TGeoNode.h"
-#include "TGeoMedium.h"
 #include "TGeoMaterial.h"
+#include "TGeoMedium.h"
+#include "TGeoNode.h"
 
 #include "GaudiKernel/Bootstrap.h"
-#include "GaudiKernel/SmartIF.h"
 #include "GaudiKernel/ISvcLocator.h"
+#include "GaudiKernel/SmartIF.h"
 
 #include "DD4hep/Detector.h"
 
@@ -45,51 +45,46 @@
  *  detector service and the GENFIT tracking library.
  *
  *
- *  Author: Andrea De Vita  
+ *  Author: Andrea De Vita
  *  Date  : 2025-11
  *
- * @note: This implementation is inspired by the work of Yao Zhang (zhangyao@ihep.ac.cn), as presented in CEPCSW/Reconstruction/RecGenfitAlg/src/GenfitMaterialInterface.h
+ * @note: This implementation is inspired by the work of Yao Zhang (zhangyao@ihep.ac.cn), as presented in
+ * CEPCSW/Reconstruction/RecGenfitAlg/src/GenfitMaterialInterface.h
  */
 
-namespace GenfitInterface{
+namespace GenfitInterface {
 
-        class GenfitMaterialInterface : public genfit::AbsMaterialInterface{
-        public:
+class GenfitMaterialInterface : public genfit::AbsMaterialInterface {
+public:
+  GenfitMaterialInterface(const dd4hep::Detector* dd4hepGeo);
+  virtual ~GenfitMaterialInterface() {};
+  static GenfitMaterialInterface* getInstance(const dd4hep::Detector* dd4hepGeo);
+  void destruct();
 
-                GenfitMaterialInterface(const dd4hep::Detector* dd4hepGeo);
-                virtual ~GenfitMaterialInterface(){};
-                static GenfitMaterialInterface* getInstance(const dd4hep::Detector* dd4hepGeo);
-                void destruct();
+  void setDetector(dd4hep::Detector*);
+  bool initTrack(double posX, double posY, double posZ, double dirX, double dirY, double dirZ) override;
 
-                void setDetector(dd4hep::Detector*);
-                bool initTrack(double posX, double posY, double posZ, double dirX, double dirY, double dirZ) override;
+  genfit::Material getMaterialParameters() override;
 
-                genfit::Material getMaterialParameters() override;
+  double findNextBoundary(const genfit::RKTrackRep* rep, const genfit::M1x7& state7, double sMax,
+                          bool varField = true) override;
 
-                double findNextBoundary(const genfit::RKTrackRep* rep,
-                                        const genfit::M1x7& state7,
-                                        double sMax,
-                                        bool varField = true) override;
+  void setMinSafetyDistanceCut(double safeDistCut = 1e-7) { m_safeDistCut = safeDistCut; }
+  virtual void setDebugLvl(unsigned int lvl = 1) { debugLvl_ = lvl; }
 
-                void setMinSafetyDistanceCut(double safeDistCut=1e-7) {m_safeDistCut=safeDistCut;}
-                virtual void setDebugLvl(unsigned int lvl = 1) {debugLvl_ = lvl;}
+private:
+  static GenfitMaterialInterface* m_instance;
+  TGeoManager* m_geoManager;
+  double m_safeDistCut;
 
-        private:
+  TGeoManager* getGeoManager();
+  double getSafeDistance();
+  double getStep();
+  TGeoNode* findNextBoundary(double stepmax, const char* path = "", bool frombdr = false);
+  bool isSameLocation(double posX, double posY, double posZ, bool change = false);
+  void setCurrentDirection(double nx, double ny, double nz);
+};
 
-                static GenfitMaterialInterface* m_instance;
-                TGeoManager* m_geoManager;
-                double m_safeDistCut;
-
-                TGeoManager* getGeoManager();
-                double getSafeDistance();
-                double getStep();
-                TGeoNode* findNextBoundary(double stepmax, const char* path="", bool frombdr=false);
-                bool isSameLocation(double posX, double posY, double posZ, bool change=false);
-                void setCurrentDirection(double nx, double ny, double nz);
-               
-
-        };
-
-}
+} // namespace GenfitInterface
 
 #endif // GenfitMaterialInterface

@@ -127,17 +127,17 @@ siwrd_digitizer.ForceHitsOntoSurface = True
 dch_digitizer = DCHdigi_v02(
     "DCHdigi2",
     InputSimHitCollection=["DCHCollection"],
-    OutputDigihitCollection = ["DCH_DigiCollection"],
-    OutputLinkCollection = ["DCH_DigiSimAssociationCollection"],
+    OutputDigihitCollection=["DCH_DigiCollection"],
+    OutputLinkCollection=["DCH_DigiSimAssociationCollection"],
     DCH_name="DCH_v2",
-    zResolution_mm = 30.0,              # in mm
-    xyResolution_mm = 0.1,              # in mm
-    Deadtime_ns = 400.0,                # in ns
-    GasType=0,                          # 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
-    ReadoutWindowStartTime_ns=1.0,      # in ns (taking into account time of flight, drift, and signal travel)
-    ReadoutWindowDuration_ns=450.0,     # in ns
-    DriftVelocity_um_per_ns=-1.0,       # in um/ns, if negative, automatically chosen based on GasType
-    SignalVelocity_mm_per_ns=200.0,     # in mm/ns (Default: 2/3 of the speed of light)
+    zResolution_mm=30.0,  # in mm
+    xyResolution_mm=0.1,  # in mm
+    Deadtime_ns=400.0,  # in ns
+    GasType=0,  # 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
+    ReadoutWindowStartTime_ns=1.0,  # in ns (taking into account time of flight, drift, and signal travel)
+    ReadoutWindowDuration_ns=450.0,  # in ns
+    DriftVelocity_um_per_ns=-1.0,  # in um/ns, if negative, automatically chosen based on GasType
+    SignalVelocity_mm_per_ns=200.0,  # in mm/ns (Default: 2/3 of the speed of light)
     OutputLevel=INFO,
 )
 

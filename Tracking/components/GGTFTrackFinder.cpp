@@ -20,9 +20,9 @@
 // Standard Library
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>    
+#include <cstdlib>
 #include <filesystem>
-#include <fstream>    
+#include <fstream>
 #include <iostream>
 #include <iterator>
 #include <map>
@@ -56,9 +56,9 @@
 
 // EDM4HEP
 #include "edm4hep/MCParticleCollection.h"
+#include "edm4hep/SenseWireHitCollection.h"
 #include "edm4hep/SimTrackerHitCollection.h"
 #include "edm4hep/TrackCollection.h"
-#include "edm4hep/SenseWireHitCollection.h"
 #include "edm4hep/TrackerHitPlaneCollection.h"
 
 #include "utils.h"
@@ -86,20 +86,20 @@
  */
 
 struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::TrackCollection>(
-                                 const std::vector<const edm4hep::TrackerHitPlaneCollection*>&,
-                                 const std::vector<const edm4hep::SenseWireHitCollection*>&)> {
+                                   const std::vector<const edm4hep::TrackerHitPlaneCollection*>&,
+                                   const std::vector<const edm4hep::SenseWireHitCollection*>&)> {
 
   GGTFTrackFinder(const std::string& name, ISvcLocator* svcLoc)
       : MultiTransformer(name, svcLoc,
                          {
 
-                            KeyValues("InputPlanarHitCollections", {"InputPlanarHitCollections"}),
-                            KeyValues("InputWireHitCollections", {"InputWireHitCollections"})
+                             KeyValues("InputPlanarHitCollections", {"InputPlanarHitCollections"}),
+                             KeyValues("InputWireHitCollections", {"InputWireHitCollections"})
 
                          },
                          {
 
-                            KeyValues("OutputTracksGGTF", {"OutputTracksGGTF"})
+                             KeyValues("OutputTracksGGTF", {"OutputTracksGGTF"})
 
                          }) {}
 
@@ -139,7 +139,6 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
     m_fOnames.push_back(outputNames);
 
     return StatusCode::SUCCESS;
-
   }
 
   std::tuple<edm4hep::TrackCollection>
@@ -196,7 +195,6 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
 
     torch::Tensor listPlanarHitIndices_tensor =
         torch::from_blob(listPlanarHitIndices.data(), {planarHitIndex, 2}, torch::kInt64);
-
 
     /// Processing hits from gaseous detectors
     std::vector<int64_t> listHitTypeWire;
@@ -405,7 +403,6 @@ public:
   mutable int m_indexCounter = 0;
 
 private:
-
   // Pointer to the ONNX environment.
   // This object manages the global state of the ONNX runtime, such as logging and threading.
   std::unique_ptr<Ort::Env> m_fEnv;
@@ -432,10 +429,10 @@ private:
   Gaudi::Property<std::string> m_modelPath{this, "ModelPath", "", "ModelPath"};
 
   // Properties of the clustering step.
-  Gaudi::Property<double> m_tbeta{ this, "Tbeta", 0.6, "tbeta: threshold used to identify core points in clusters (tracks)"};
-  Gaudi::Property<double> m_td{this, "Td", 0.3, "td: radius around a core point used to assign nearby hits to its cluster"};
-
-
+  Gaudi::Property<double> m_tbeta{this, "Tbeta", 0.6,
+                                  "tbeta: threshold used to identify core points in clusters (tracks)"};
+  Gaudi::Property<double> m_td{this, "Td", 0.3,
+                               "td: radius around a core point used to assign nearby hits to its cluster"};
 };
 
 DECLARE_COMPONENT(GGTFTrackFinder)

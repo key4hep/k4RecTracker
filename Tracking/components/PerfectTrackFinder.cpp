@@ -69,33 +69,32 @@
  *
  */
 
-struct PerfectTrackFinder final : k4FWCore::MultiTransformer< std::tuple<edm4hep::TrackCollection> (
-                                
-                                const std::vector<const edm4hep::TrackerHitSimTrackerHitLinkCollection*>&,
-                                const std::vector<const edm4hep::TrackerHitSimTrackerHitLinkCollection*>&,
-                                const edm4hep::MCParticleCollection&)> {
+struct PerfectTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::TrackCollection>(
+
+                                      const std::vector<const edm4hep::TrackerHitSimTrackerHitLinkCollection*>&,
+                                      const std::vector<const edm4hep::TrackerHitSimTrackerHitLinkCollection*>&,
+                                      const edm4hep::MCParticleCollection&)> {
 
   PerfectTrackFinder(const std::string& name, ISvcLocator* svcLoc)
       : MultiTransformer(name, svcLoc,
                          {
 
-                            KeyValues("InputPlanarHitCollections", {"InputPlanarHitCollections"}),
-                            KeyValues("InputWireHitCollections", {"InputWireHitCollections"}),
-                            KeyValues("InputMCParticles", {"InputMCParticles"})
+                             KeyValues("InputPlanarHitCollections", {"InputPlanarHitCollections"}),
+                             KeyValues("InputWireHitCollections", {"InputWireHitCollections"}),
+                             KeyValues("InputMCParticles", {"InputMCParticles"})
 
                          },
                          {
 
-                            KeyValues("OutputPerfectTracks", {"OutputPerfectTracks"})
+                             KeyValues("OutputPerfectTracks", {"OutputPerfectTracks"})
 
                          }) {}
 
-  std::tuple<edm4hep::TrackCollection> 
-    operator()(const std::vector<   const edm4hep::TrackerHitSimTrackerHitLinkCollection*>& planarHitLinks,
-                                    const std::vector<const edm4hep::TrackerHitSimTrackerHitLinkCollection*>& wireHitLinks,
-                                    const edm4hep::MCParticleCollection& mcParticles) const override {
-    
-                                        
+  std::tuple<edm4hep::TrackCollection>
+  operator()(const std::vector<const edm4hep::TrackerHitSimTrackerHitLinkCollection*>& planarHitLinks,
+             const std::vector<const edm4hep::TrackerHitSimTrackerHitLinkCollection*>& wireHitLinks,
+             const edm4hep::MCParticleCollection& mcParticles) const override {
+
     //////////////////////////////////
     ////////// PERFECT TRACKING //////
     //////////////////////////////////
@@ -105,65 +104,56 @@ struct PerfectTrackFinder final : k4FWCore::MultiTransformer< std::tuple<edm4hep
 
     // Loop over MCParticles to create perfect tracks
     for (const auto& mcParticle : mcParticles) {
-    
-        auto mcParticleObjectId = mcParticle.getObjectID();
-        std::vector<std::pair<float, edm4hep::TrackerHit>> hitsWithTime;
 
-        // Planar hits
-        for (const auto& planarHitLinkCollection : planarHitLinks) {
-            for (const auto& hitLink : *planarHitLinkCollection) {
+      auto mcParticleObjectId = mcParticle.getObjectID();
+      std::vector<std::pair<float, edm4hep::TrackerHit>> hitsWithTime;
 
-                auto simHit = hitLink.getTo();
-                auto digiHit = hitLink.getFrom();
+      // Planar hits
+      for (const auto& planarHitLinkCollection : planarHitLinks) {
+        for (const auto& hitLink : *planarHitLinkCollection) {
 
-                if (simHit.getParticle().getObjectID() == mcParticleObjectId) {
-                    hitsWithTime.emplace_back(simHit.getTime(), digiHit);
-                }
-            }
+          auto simHit = hitLink.getTo();
+          auto digiHit = hitLink.getFrom();
+
+          if (simHit.getParticle().getObjectID() == mcParticleObjectId) {
+            hitsWithTime.emplace_back(simHit.getTime(), digiHit);
+          }
+        }
+      }
+
+      // Wire hits
+      for (const auto& wireHitLinkCollection : wireHitLinks) {
+        for (const auto& hitLink : *wireHitLinkCollection) {
+
+          auto simHit = hitLink.getTo();
+          auto digiHit = hitLink.getFrom();
+
+          if (simHit.getParticle().getObjectID() == mcParticleObjectId) {
+            hitsWithTime.emplace_back(simHit.getTime(), digiHit);
+          }
+        }
+      }
+
+      std::sort(hitsWithTime.begin(), hitsWithTime.end(),
+                [](const auto& a, const auto& b) { return a.first < b.first; });
+
+      if (!hitsWithTime.empty()) {
+
+        auto edm4hep_track = outputTracks.create();
+
+        // Add all hits with their associated time
+        for (const auto& [time, hit] : hitsWithTime) {
+          edm4hep_track.addToTrackerHits(hit);
         }
 
-        // Wire hits
-        for (const auto& wireHitLinkCollection : wireHitLinks) {
-            for (const auto& hitLink : *wireHitLinkCollection) {
-
-                auto simHit = hitLink.getTo();
-                auto digiHit = hitLink.getFrom();
-
-                if (simHit.getParticle().getObjectID() == mcParticleObjectId) {
-                    hitsWithTime.emplace_back(simHit.getTime(), digiHit);
-                }
-            }
-        }
-
-        std::sort(
-            hitsWithTime.begin(),
-            hitsWithTime.end(),
-            [](const auto& a, const auto& b) {
-                return a.first < b.first;
-            }
-        );
-
-
-        if (!hitsWithTime.empty()) {
-
-            auto edm4hep_track = outputTracks.create();
-
-            // Add all hits with their associated time
-            for (const auto& [time, hit] : hitsWithTime) {
-                edm4hep_track.addToTrackerHits(hit);
-            }
-
-            // Set track type as reconstructed
-            edm4hep_track.setType(1);
-        }
-
+        // Set track type as reconstructed
+        edm4hep_track.setType(1);
+      }
     }
 
     // Return the output collections as a tuple
     return std::make_tuple(std::move(outputTracks));
-    
   }
-
 };
 
 DECLARE_COMPONENT(PerfectTrackFinder)

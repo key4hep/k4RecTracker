@@ -15,42 +15,32 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
 #include "GenfitField.h"
 
 namespace GenfitInterface {
-    
-    GenfitField::GenfitField(dd4hep::OverlayedField dd4hepField)
-    :m_dd4hepField(dd4hepField)
-    {
-        genfit::FieldManager::getInstance()->init(this);
-    }
 
-    TVector3 GenfitField::get(const TVector3& pos) const
-    {
-        double B[3]={1e9,1e9,1e9};
-        get(pos.X(),pos.Y(),pos.Z(),B[0],B[1],B[2]);
-        return TVector3(B[0],B[1],B[2]);
-    }
-
-    
-    void GenfitField::get(const double& posX, const double& posY, const double& posZ,
-            double& Bx, double& By, double& Bz) const
-    {
-        /// get field from dd4hepField
-        const dd4hep::Direction& field=m_dd4hepField.magneticField(
-                dd4hep::Position( posX, posY, posZ));
-
-        Bx=field.X() / dd4hep::kilogauss;
-        By=field.Y() / dd4hep::kilogauss;
-        Bz=field.Z() / dd4hep::kilogauss;
-
-    }
-
-    double GenfitField::getBz(const TVector3& pos) const
-    {
-        return get(pos).Z();
-    }
-
+GenfitField::GenfitField(dd4hep::OverlayedField dd4hepField) : m_dd4hepField(dd4hepField) {
+  genfit::FieldManager::getInstance()->init(this);
 }
+
+TVector3 GenfitField::get(const TVector3& pos) const {
+  double B[3] = {1e9, 1e9, 1e9};
+  get(pos.X(), pos.Y(), pos.Z(), B[0], B[1], B[2]);
+  return TVector3(B[0], B[1], B[2]);
+}
+
+void GenfitField::get(const double& posX, const double& posY, const double& posZ, double& Bx, double& By,
+                      double& Bz) const {
+  /// get field from dd4hepField
+  const dd4hep::Direction& field = m_dd4hepField.magneticField(dd4hep::Position(posX, posY, posZ));
+
+  Bx = field.X() / dd4hep::kilogauss;
+  By = field.Y() / dd4hep::kilogauss;
+  Bz = field.Z() / dd4hep::kilogauss;
+}
+
+double GenfitField::getBz(const TVector3& pos) const { return get(pos).Z(); }
+
+} // namespace GenfitInterface

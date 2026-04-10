@@ -28,7 +28,6 @@ from Configurables import GenfitTrackFitter
 
 trackFitter = GenfitTrackFitter(
     "GenfitTrackFitter",
-    
     InputTracks=["GGTFTracks"],
     OutputFittedTracks=["FittedTracks"],
     OutputLevel=DEBUG,
@@ -49,21 +48,23 @@ trackFitter.FilterTrackHits = True
 
 # ################ Detector geometry
 from Configurables import GeoSvc
+
 geoservice = GeoSvc("GeoSvc")
-geoservice.detectors = [os.environ["K4GEO"]+"/FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml"]
+geoservice.detectors = [os.environ["K4GEO"] + "/FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml"]
 geoservice.OutputLevel = INFO
 geoservice.EnableGeant4Geo = False
-    
+
 ################ Application
 from k4FWCore import ApplicationMgr
+
 chra = ChronoAuditor()
 audsvc = AuditorSvc()
 audsvc.Auditors = [chra]
 ApplicationMgr(
-    TopAlg = [trackFitter],
-    EvtSel = "NONE",
-    ExtSvc = [geoservice,EventDataSvc("EventDataSvc"), audsvc],
-    StopOnSignal = True,
-    EvtMax = -1,
-    OutputLevel = INFO,
+    TopAlg=[trackFitter],
+    EvtSel="NONE",
+    ExtSvc=[geoservice, EventDataSvc("EventDataSvc"), audsvc],
+    StopOnSignal=True,
+    EvtMax=-1,
+    OutputLevel=INFO,
 )

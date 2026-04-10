@@ -17,19 +17,16 @@
  * limitations under the License.
  */
 
-
 #ifndef GENFIT_FIELD_H
 #define GENFIT_FIELD_H
 
-#include "DD4hep/Fields.h"
 #include "DD4hep/DD4hepUnits.h"
+#include "DD4hep/Fields.h"
 #include "DD4hep/Printout.h"
 
-#include "FieldManager.h"
-#include "ConstField.h"
 #include "AbsBField.h"
-
-
+#include "ConstField.h"
+#include "FieldManager.h"
 
 /** @class GenfitField
  *
@@ -45,34 +42,34 @@
  *  to directly access the `Bz` component in kilogauss.
  *
  *
- *  Author: Andrea De Vita  
+ *  Author: Andrea De Vita
  *  Date  : 2025-11
  *
- * @note: This implementation is inspired by the work of Yao Zhang (zhangyao@ihep.ac.cn), as presented in CEPCSW/Reconstruction/RecGenfitAlg/src/GenfitField.h
+ * @note: This implementation is inspired by the work of Yao Zhang (zhangyao@ihep.ac.cn), as presented in
+ * CEPCSW/Reconstruction/RecGenfitAlg/src/GenfitField.h
  */
-
 
 namespace GenfitInterface {
 
-    class GenfitField : public genfit::AbsBField{
-        public:
-            GenfitField(dd4hep::OverlayedField dd4hepField);
-            virtual ~GenfitField(){;}
+class GenfitField : public genfit::AbsBField {
+public:
+  GenfitField(dd4hep::OverlayedField dd4hepField);
+  virtual ~GenfitField() { ; }
 
-            TVector3 get(const TVector3& pos) const override;
+  TVector3 get(const TVector3& pos) const override;
 
-            void get(const double& posX, const double& posY, const double& posZ,
-                    double& Bx, double& By, double& Bz) const override;
+  void get(const double& posX, const double& posY, const double& posZ, double& Bx, double& By,
+           double& Bz) const override;
 
-            // Get Bz, kilogauss
-            double getBz(const TVector3& pos) const;
+  // Get Bz, kilogauss
+  double getBz(const TVector3& pos) const;
 
-            // Get dd4hep field
-            const dd4hep::OverlayedField field() const {return m_dd4hepField;}
+  // Get dd4hep field
+  const dd4hep::OverlayedField field() const { return m_dd4hepField; }
 
-        private:
-            dd4hep::OverlayedField m_dd4hepField;
-    };
-}
+private:
+  dd4hep::OverlayedField m_dd4hepField;
+};
+} // namespace GenfitInterface
 
 #endif // GenfitField

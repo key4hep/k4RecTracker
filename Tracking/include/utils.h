@@ -13,18 +13,18 @@
 #include "DD4hep/DetectorSelector.h"
 #include <DDRec/DetectorData.h>
 
-#include "edm4hep/TrackState.h"
 #include "edm4hep/MutableTrack.h"
 #include "edm4hep/TrackCollection.h"
+#include "edm4hep/TrackState.h"
 
 #include <Objects/Helix.h>
+#include <TDecompChol.h>
 #include <TMatrixDSym.h>
+#include <TMatrixDSymEigen.h>
 #include <TVector3.h>
 #include <TVectorD.h>
 #include <marlinutil/HelixClass_double.h>
 #include <torch/torch.h>
-#include <TMatrixDSymEigen.h>
-#include <TDecompChol.h>
 
 /////////////////////////////////
 /// Track propagation to Ecal ///
@@ -151,15 +151,14 @@ torch::Tensor get_clustering(const std::vector<float>& output_vector, int num_ro
  * is considered positive semi-definite if all its eigenvalues are non-negative.
  *
  * @param M   The symmetric matrix to check (TMatrixDSym).
- * @param tol A small tolerance value to account for numerical inaccuracies. Eigenvalues 
+ * @param tol A small tolerance value to account for numerical inaccuracies. Eigenvalues
  *            greater than -tol are considered non-negative.
  *
- * @return true if the matrix is positive semi-definite within the specified tolerance; 
+ * @return true if the matrix is positive semi-definite within the specified tolerance;
  *         false otherwise.
  *
  * @note This function uses `TMatrixDSymEigen` from ROOT to compute the eigenvalues.
  */
 bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol);
-
 
 #endif // UTILS_HPP

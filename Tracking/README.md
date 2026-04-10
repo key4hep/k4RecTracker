@@ -109,19 +109,19 @@ To ensure a clean separation between the experiment data model and the fitting e
 
 ##### Implemented Interfaces
 
-- `GenfitTrack.{h,cpp}`  
+- `GenfitTrack.{h,cpp}`
   Converts an `edm4hep::Track` into a GenFit track object and back.
 
-- `GenfitPlanarMeasurement.{h,cpp}`  
+- `GenfitPlanarMeasurement.{h,cpp}`
   Wraps silicon planar hits into GenFit `PlanarMeasurement` objects.
 
-- `GenfitWireMeasurement.{h,cpp}`  
+- `GenfitWireMeasurement.{h,cpp}`
   Converts drift chamber hits into GenFit `WireMeasurement` objects.
 
-- `GenfitField.{h,cpp}`  
+- `GenfitField.{h,cpp}`
   Provides the magnetic field interface required by GenFit.
 
-- `GenfitMaterialInterface.{h,cpp}`  
+- `GenfitMaterialInterface.{h,cpp}`
   Connects detector material effects (energy loss, multiple scattering) to GenFit.
 
 This modular structure ensures:
