@@ -47,8 +47,8 @@ StatusCode VTXdigi_Modular::initialize() {
   info() << "OutputLevel set to " << msgSvc()->outputLevel(name()) << endmsg;
   // TODO: implement if-clause for debug/verbose messages in hot loops (to avoid constructing the message string when the message won't be printed) -> this will improve performance significantly
 
-  if (!VTXdigi_tools::ToolTest())
-    return StatusCode::FAILURE;
+  // if (!VTXdigi_tools::ToolTest())
+  //   return StatusCode::FAILURE;
 
   InitServicesAndGeometry();
 
@@ -111,7 +111,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
     for (const VTXdigi_tools::SimHitWrapper& simHit : simHits) {
       const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getPosition());
       simHit.SetTruthPos(VTXdigi_tools::GlobalToLocal(pos_global, trafoMatrix)); // do this only now to not compute the trafo matrix twice. TruthPos might be shifted by the charge collection algorithm later.
-      debug() << "     - Processing simHit, charge dep. " << simHit.charge() << " e at (" << simHit.truthPos().x() << ", " << simHit.truthPos().y() << ", " << simHit.truthPos().z() << ") local" << endmsg;
+      debug() << "     - Processing simHit, charge dep. " << simHit.charge() << " e at (" << simHit.truthPos().x() << ", " << simHit.truthPos().y() << ", " << simHit.truthPos().z() << ") local, (" << pos_global.x() << ", " << pos_global.y() << ", " << pos_global.z() << ") global" << endmsg;
 
       m_chargeCollector->FillHit(simHit, hitMap, trafoMatrix); // uses the selected charge collection method
 
@@ -252,6 +252,12 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
    *   - subDetChild is child of subDet, eg. VertexBarrel
    *   - subDetChildChild are layers 
    * If this is not the case, layers might be direct children of subDet: */
+
+  debug() << " - Retrieving subdetector " << m_subDetName.value() << " from DD4hep detector..." << endmsg;
+  verbose() << "   - The detector has the following subDetectors: " << endmsg;
+  for (const auto& [subDetName, subDet] : m_detector->detectors()) {
+    verbose() << "   - " << subDetName << endmsg;
+  }
 
   if (m_subDetChildName.value() != m_undefinedString) {
     /* IDEA/Allegro setup */
@@ -415,7 +421,7 @@ void VTXdigi_Modular::InitHistograms() {
   Gaudi::Accumulators::Axis<float> axis_phi{4*180, -180, 180};
   
   Gaudi::Accumulators::Axis<float> axis_moduleID{2000, -0.5f, 1999.5f};
-  Gaudi::Accumulators::Axis<float> axis_clusterSize{30, 0.5f, 30.5f};
+  Gaudi::Accumulators::Axis<float> axis_clusterSize{60, 0.5f, 60.5f};
   Gaudi::Accumulators::Axis<float> axis_E{1000, 0, m_sensorThickness*2000.f};
   Gaudi::Accumulators::Axis<float> axis_charge{1000, 0, m_sensorThickness*500000.f};
   Gaudi::Accumulators::Axis<float> axis_momentum_keV{10000, 0.f, 1000.f};
@@ -533,6 +539,20 @@ void VTXdigi_Modular::InitHistograms() {
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_clusterSize",
         "Number of pixels per cluster (after clustering algorithm) - Layer " + std::to_string(layer) + ";Cluster size [pixels];Entries",
+        axis_clusterSize
+      }
+    );
+    hist1d.at(hist1d_clusterSize_u).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_u",
+        "Cluster length in u direction (after clustering algorithm) - Layer " + std::to_string(layer) + ";Cluster size [pixels];Entries",
+        axis_clusterSize
+      }
+    );
+    hist1d.at(hist1d_clusterSize_v).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterSize_v",
+        "Cluster length in v direction (after clustering algorithm) - Layer " + std::to_string(layer) + ";Cluster size [pixels];Entries",
         axis_clusterSize
       }
     );
@@ -776,9 +796,25 @@ void VTXdigi_Modular::InitHistograms() {
         axis_pixels_v
       }
     );
+    hist2d.at(hist2d_hitMap_simHits_createdInGenerator).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_hitMap_createdInGenerator",
+        "SimHit hit map (pixel in which this simHit position lies) for particles created in the generator - Layer " + std::to_string(layer) + ";Pixel u;Pixel v;Entries",
+        axis_pixels_u,
+        axis_pixels_v
+      }
+    );
+    hist2d.at(hist2d_hitMap_simHits_createdInSimulation).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_hitMap_createdInSimulation",
+        "SimHit hit map (pixel in which this simHit position lies) for particles created in the simulation - Layer " + std::to_string(layer) + ";Pixel u;Pixel v;Entries",
+        axis_pixels_u,
+        axis_pixels_v
+      }
+    );
     hist2d.at(hist2d_hitMap_pixelHits).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/hitMap",
+        "Layer" + std::to_string(layer) + "/digiHit_hitMap",
         "Hit map (pixels that collect charge over the threshold) - Layer " + std::to_string(layer) + ";Pixel u;Pixel v;Entries",
         axis_pixels_u,
         axis_pixels_v
@@ -931,6 +967,30 @@ void VTXdigi_Modular::InitHistograms() {
       }
     );
 
+    hist2d.at(hist2d_simHit_xy).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_xy_2D",
+        "SimHit x vs y position (global) - Layer " + std::to_string(layer) + ";X position [mm];Y position [mm];Entries",
+        axis_z,
+        axis_z
+      }
+    );
+    hist2d.at(hist2d_simHit_xz).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_xz_2D",
+        "SimHit x vs z position (global) - Layer " + std::to_string(layer) + ";X position [mm];Z position [mm];Entries",
+        axis_z,
+        axis_z
+      }
+    );
+    hist2d.at(hist2d_simHit_yz).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_yz_2D",
+        "SimHit y vs z position (global) - Layer " + std::to_string(layer) + ";Y position [mm];Z position [mm];Entries",
+        axis_z,
+        axis_z
+      }
+    );
 
     m_hist2d.emplace(layer, std::move(hist2d));
 
@@ -1016,12 +1076,10 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
 
   for (auto& cluster : clusters) {
     if (cluster.simHits.empty()) {
-      error() << "Cluster with no contributing simHits found, skipping..." << endmsg;
-      continue;
+      error() << "Cluster with no contributing simHits found." << endmsg;
     }
-    if (cluster.charge <= 0){
-      /* this should never happen */
-      error() << "Cluster with non-positive charge found, cannot compute cluster position" << endmsg;
+    if (cluster.charge <= 0) {
+      error() << "Cluster with non-positive charge found." << endmsg;
     }
     
     const std::pair<float, float> pos_index = cluster.ComputePos();
@@ -1065,7 +1123,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
 /* ---- Histogramming functions ---- */
 
 void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& simHit) const {
-  /* executed once for each simHit */
+  /* executed once for each simHit, no cuts applied before */
 
   const int layer = simHit.layer();
   const dd4hep::rec::Vector3D simHitMomentum = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getMomentum()); // in GeV
@@ -1084,14 +1142,20 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
 
   if ( simHit.isCreatedInGenerator() ) {
     ++(*m_hist1d.at(layer).at(hist1d_simHit_z_createdInGenerator))[simHitPos_global.z()];
+    ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits_createdInGenerator))[{i_uv.first, i_uv.second}];
   }
   else {
     ++(*m_hist1d.at(layer).at(hist1d_simHit_z_createdInSimulation))[simHitPos_global.z()];
+    ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits_createdInSimulation))[{i_uv.first, i_uv.second}];
   }
 
   ++(*m_hist1d.at(layer).at(hist1d_simHitPDG))[simHit.hitPtr()->getParticle().getPDG()];
-
+  
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits))[{i_uv.first, i_uv.second}];
+  
+  ++(*m_hist2d.at(layer).at(hist2d_simHit_xy))[{simHitPos_global.x(), simHitPos_global.y()}];
+  ++(*m_hist2d.at(layer).at(hist2d_simHit_xz))[{simHitPos_global.x(), simHitPos_global.z()}];
+  ++(*m_hist2d.at(layer).at(hist2d_simHit_yz))[{simHitPos_global.y(), simHitPos_global.z()}];
 }
 
 void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const {
@@ -1121,6 +1185,8 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
   ++(*m_hist1d.at(layer).at(hist1d_digiHitCharge))[digiHit.getEDep() * m_chargePerkeV]; 
 
   ++(*m_hist1d.at(layer).at(hist1d_clusterSize))[clusterSize];
+  ++(*m_hist1d.at(layer).at(hist1d_clusterSize_u))[clusterSize_u];
+  ++(*m_hist1d.at(layer).at(hist1d_clusterSize_v))[clusterSize_v];
   
   (*m_histProfile1d.at(layer).at(histProfile1d_clusterSize_vs_global_z))[pos_global.z()] += clusterSize;
   (*m_histProfile1d.at(layer).at(histProfile1d_clusterSize_u_vs_global_z))[pos_global.z()] += clusterSize_u;
@@ -1162,8 +1228,6 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
       ++(*m_hist1d.at(layer).at(hist1d_residual_u_multiPixelCluster))[ residual_local.x()*1000.f ];
       ++(*m_hist1d.at(layer).at(hist1d_residual_v_multiPixelCluster))[ residual_local.y()*1000.f ];
     }
-
-
 
     if ( simHit->isCreatedInGenerator() ) {
       ++(*m_hist1d.at(layer).at(hist1d_clusterSize_createdInGenerator))[clusterSize];

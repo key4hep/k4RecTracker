@@ -184,6 +184,8 @@ private:
     hist1d_simHitPDG,
     hist1d_digiHitsPerSimHit,
     hist1d_clusterSize,
+    hist1d_clusterSize_u,
+    hist1d_clusterSize_v,
     hist1d_clusterSize_createdInGenerator,
     hist1d_clusterSize_createdInSimulation,
     hist1d_residual_u, 
@@ -248,6 +250,8 @@ private:
   enum { 
     hist2d_digiHitCharge_vs_global_z,
     hist2d_hitMap_simHits,
+    hist2d_hitMap_simHits_createdInGenerator,
+    hist2d_hitMap_simHits_createdInSimulation,
     hist2d_hitMap_pixelHits, 
     hist2d_clusterSize_vs_global_z,
     hist2d_clusterSize_u_vs_global_z,
@@ -267,6 +271,9 @@ private:
     hist2d_pathTravel_w_vs_global_z_createdInGenerator,
     hist2d_pathTravel_w_vs_global_z_createdInSimulation,
     hist2d_pathTravel_r_vs_global_z,
+    hist2d_simHit_xy,
+    hist2d_simHit_xz,
+    hist2d_simHit_yz,
     hist2dArrayLen
   };
   mutable std::unordered_map<
@@ -300,4 +307,3 @@ private:
     hist1dglobalArrayLen
   > m_hist1dglobal;
 }; // class VTXdigi_Modular
-
