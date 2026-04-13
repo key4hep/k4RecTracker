@@ -59,8 +59,6 @@ public:
   genfit::PlanarMeasurement* getGenFit() const { return m_genfitHit; };
 
 private:
-
-
   // This pointer is used to create a genfit::TrackPoint, which is then stored
   // inside a genfit::Track. The Track aggregates a collection of TrackPoints
   // representing the hits used for the track fit.

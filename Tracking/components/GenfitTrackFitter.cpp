@@ -163,8 +163,8 @@ struct GenfitTrackFitter final
 
     } catch (const std::out_of_range& e) {
 
-      warning() << "No DCH found in detector geometry (name = " << m_DCH_name.value() << "). Skipping DCH-related setup." << endmsg;
-
+      warning() << "No DCH found in detector geometry (name = " << m_DCH_name.value()
+                << "). Skipping DCH-related setup." << endmsg;
     }
 
     // Retrive calorimeter information
@@ -243,7 +243,8 @@ struct GenfitTrackFitter final
       int isSuccess = 0;
       if (m_singleEvaluation) {
 
-        isSuccess = ProcessTrack(track, false, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits, FittedHits);
+        isSuccess =
+            ProcessTrack(track, false, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits, FittedHits);
 
       } else {
 
@@ -256,26 +257,25 @@ struct GenfitTrackFitter final
           isSuccess = 1;
           int pdgCode = winning_hypothesis;
           ProcessTrack(track, false, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits);
-
         }
-
       }
 
       if (!isSuccess) {
 
         if (m_singleEvaluation) {
 
-          isSuccess = ProcessTrack(track, true, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits, FittedHits);
+          isSuccess = ProcessTrack(track, true, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits,
+                                   FittedHits);
 
           if (!isSuccess) {
 
             number_failures += 1;
-            debug() << "Track " << num_tracks - 1 << ": fit failed for single evaluation hypothesis, skipping track." << endmsg;
+            debug() << "Track " << num_tracks - 1 << ": fit failed for single evaluation hypothesis, skipping track."
+                    << endmsg;
             auto failedTrack = FittedTracks.create();
             failedTrack.setChi2(-1);
             failedTrack.setNdf(-1);
             continue;
-
           }
 
         } else {
@@ -295,9 +295,7 @@ struct GenfitTrackFitter final
 
             int pdgCode = winning_hypothesis;
             ProcessTrack(track, true, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits);
-
           }
-
         }
       }
     }
@@ -318,18 +316,17 @@ struct GenfitTrackFitter final
   }
 
 public:
-
   // Debug / monitoring counters (not part of core algorithm logic).
   // These are mainly used to keep track of what happens during processing,
   // e.g. for logging, sanity checks, and performance evaluation.
 
-  mutable int event_counter = 0;  // Counts how many events have been processed
+  mutable int event_counter = 0; // Counts how many events have been processed
 
   // Num_tracks = num_processed_tracks + num_skip
-  mutable int num_tracks = 0;            // Total number of tracks seen (including skipped ones)
-  mutable int num_skip = 0;              // Number of tracks skipped (e.g. failing pre-selection)
-  mutable int num_processed_tracks = 0;  // Number of tracks actually processed (i.e. not skipped)
-  mutable int number_failures = 0;       // Number of track fits that failed
+  mutable int num_tracks = 0;           // Total number of tracks seen (including skipped ones)
+  mutable int num_skip = 0;             // Number of tracks skipped (e.g. failing pre-selection)
+  mutable int num_processed_tracks = 0; // Number of tracks actually processed (i.e. not skipped)
+  mutable int number_failures = 0;      // Number of track fits that failed
 
 private:
   // ====================== Debug & Printout ======================
@@ -353,7 +350,9 @@ private:
   dd4hep::rec::DCH_info* m_dch_info;
   dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
 
-  Gaudi::Property<std::string> m_DCH_name{this, "DCHName", "DCH_v2", "DCHName in the detector description (used to retrieve DCH geometry and material information)"};
+  Gaudi::Property<std::string> m_DCH_name{
+      this, "DCHName", "DCH_v2",
+      "DCHName in the detector description (used to retrieve DCH geometry and material information)"};
 
   // ====================== ECAL Geometry Parameters ======================
   double m_eCalBarrelInnerR;
@@ -442,62 +441,32 @@ private:
       "Radius [mm] defining a spherical region around {0,0,0}: "
       "tracks produced within this radius are considered prompt; tracks outside are considered displaced"};
 
-
   // Fit implementation
-  bool ProcessTrack(
-    const edm4hep::Track& track,
-    bool LimitHits,
-    int particleHypothesis,
-    edm4hep::TrackCollection& FittedTracks,
-    edm4hep::TrackCollection& FittedTracksWithFilteredHits,
-    edm4hep::TrackerHitPlaneCollection& FittedHits) const 
-  {
+  bool ProcessTrack(const edm4hep::Track& track, bool LimitHits, int particleHypothesis,
+                    edm4hep::TrackCollection& FittedTracks, edm4hep::TrackCollection& FittedTracksWithFilteredHits,
+                    edm4hep::TrackerHitPlaneCollection& FittedHits) const {
 
-    GenfitInterface::GenfitTrack track_interface(
-        track,
-        m_skipTrackOrdering,
-        m_dch_info,
-        m_dc_decoder,
-        m_genfitField.get());
+    GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder,
+                                                 m_genfitField.get());
 
-    TVector3 Init_position(
-        m_init_position.value()[0],
-        m_init_position.value()[1],
-        m_init_position.value()[2]);
+    TVector3 Init_position(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
 
-    TVector3 Init_momentum(
-        m_init_momentum.value()[0],
-        m_init_momentum.value()[1],
-        m_init_momentum.value()[2]);
+    TVector3 Init_momentum(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
 
-    track_interface.InitializeTrack(
-        m_identifyDisplaced,
-        m_useFirstHitAsReference,
-        LimitHits,
-        m_initializationType,
-        m_trackStateLocation.value(),
-        Init_position,
-        Init_momentum,
-        m_epsilon.value(),
-        m_smoothWindow.value());
+    track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, LimitHits, m_initializationType,
+                                    m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(),
+                                    m_smoothWindow.value());
 
     auto track_init = track_interface.GetInitialization();
 
-    debug() << "Track " << num_tracks - 1
-            << " with " << track.getTrackerHits().size()
+    debug() << "Track " << num_tracks - 1 << " with " << track.getTrackerHits().size()
             << " hits: initial seed for track fit:" << endmsg;
 
-    debug() << "  Initial position [mm]: ("
-            << track_init.Position.X() / dd4hep::mm << ", "
-            << track_init.Position.Y() / dd4hep::mm << ", "
-            << track_init.Position.Z() / dd4hep::mm << ")"
-            << endmsg;
+    debug() << "  Initial position [mm]: (" << track_init.Position.X() / dd4hep::mm << ", "
+            << track_init.Position.Y() / dd4hep::mm << ", " << track_init.Position.Z() / dd4hep::mm << ")" << endmsg;
 
-    debug() << "  Initial momentum [GeV/c]: ("
-            << track_init.Momentum.X() << ", "
-            << track_init.Momentum.Y() << ", "
-            << track_init.Momentum.Z() << ")"
-            << endmsg;
+    debug() << "  Initial momentum [GeV/c]: (" << track_init.Momentum.X() << ", " << track_init.Momentum.Y() << ", "
+            << track_init.Momentum.Z() << ")" << endmsg;
 
     debug() << "  Charge hypothesis: " << track_init.Charge << endmsg;
     debug() << "  Max hit for loopers: " << track_init.NumHits << endmsg;
@@ -513,13 +482,8 @@ private:
 
     track_interface.CreateGenFitTrack(particleHypothesis, debug_track);
 
-    bool isFit = track_interface.Fit(
-        m_Fitter_type.value(),
-        m_printoutLevel,
-        m_Beta_init,
-        m_Beta_final,
-        m_Beta_steps,
-        m_filterTrackHits);
+    bool isFit = track_interface.Fit(m_Fitter_type.value(), m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps,
+                                     m_filterTrackHits);
 
     if (!isFit) {
       debug() << "Track fit FAILED for track " << num_tracks - 1 << endmsg;
@@ -533,108 +497,61 @@ private:
       if (ts.location == edm4hep::TrackState::AtLastHit) {
 
         auto ref = ts.referencePoint;
-        Bz = m_genfitField->getBz(
-                TVector3(ref.x * dd4hep::mm,
-                        ref.y * dd4hep::mm,
-                        ref.z * dd4hep::mm)) / 10.;
+        Bz = m_genfitField->getBz(TVector3(ref.x * dd4hep::mm, ref.y * dd4hep::mm, ref.z * dd4hep::mm)) / 10.;
       }
     }
 
     if (Bz > 0) {
 
-      FillTrackWithCalorimeterExtrapolation(
-          edm4hep_track,
-          Bz,
-          track_interface.GetCharge(),
-          m_eCalBarrelInnerR,
-          m_eCalBarrelMaxZ,
-          m_eCalEndCapInnerR,
-          m_eCalEndCapOuterR,
-          m_eCalEndCapInnerZ);
+      FillTrackWithCalorimeterExtrapolation(edm4hep_track, Bz, track_interface.GetCharge(), m_eCalBarrelInnerR,
+                                            m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR,
+                                            m_eCalEndCapInnerZ);
     }
 
-    info() << "Fit chi2/ndf = "
-          << edm4hep_track.getChi2() << " / "
-          << edm4hep_track.getNdf() << " = "
-          << edm4hep_track.getChi2() / (edm4hep_track.getNdf() * 1.)
-          << endmsg;
+    info() << "Fit chi2/ndf = " << edm4hep_track.getChi2() << " / " << edm4hep_track.getNdf() << " = "
+           << edm4hep_track.getChi2() / (edm4hep_track.getNdf() * 1.) << endmsg;
 
     FittedTracks.push_back(edm4hep_track);
 
     if (m_filterTrackHits) {
 
-      auto edm4hep_track_with_fit =
-          track_interface.GetTrackWithFit_edm4hep();
+      auto edm4hep_track_with_fit = track_interface.GetTrackWithFit_edm4hep();
 
       if (Bz > 0) {
 
-        FillTrackWithCalorimeterExtrapolation(
-            edm4hep_track_with_fit,
-            Bz,
-            track_interface.GetCharge(),
-            m_eCalBarrelInnerR,
-            m_eCalBarrelMaxZ,
-            m_eCalEndCapInnerR,
-            m_eCalEndCapOuterR,
-            m_eCalEndCapInnerZ);
+        FillTrackWithCalorimeterExtrapolation(edm4hep_track_with_fit, Bz, track_interface.GetCharge(),
+                                              m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR,
+                                              m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
       }
 
       FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);
       FittedHits = std::move(track_interface.GetFittedHits());
-
     }
 
     return true;
-
   }
 
-  int FindBestHypothesis(
-    const edm4hep::Track& track,
-    bool LimitHits) const {
+  int FindBestHypothesis(const edm4hep::Track& track, bool LimitHits) const {
 
-    TVector3 Init_position(
-        m_init_position.value()[0],
-        m_init_position.value()[1],
-        m_init_position.value()[2]);
+    TVector3 Init_position(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
 
-    TVector3 Init_momentum(
-        m_init_momentum.value()[0],
-        m_init_momentum.value()[1],
-        m_init_momentum.value()[2]);
+    TVector3 Init_momentum(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
 
-    int winning_hypothesis = -1; 
+    int winning_hypothesis = -1;
     double winning_chi2_ndf = std::numeric_limits<double>::max();
 
     for (int pdgCode : m_particleHypothesis) {
 
-      GenfitInterface::GenfitTrack track_interface(
-          track,
-          m_skipTrackOrdering,
-          m_dch_info,
-          m_dc_decoder,
-          m_genfitField.get());
+      GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder,
+                                                   m_genfitField.get());
 
-      
-      track_interface.InitializeTrack(
-          m_identifyDisplaced,
-          m_useFirstHitAsReference,
-          LimitHits,
-          m_initializationType,
-          m_trackStateLocation.value(),
-          Init_position,
-          Init_momentum,
-          m_epsilon.value(),
-          m_smoothWindow.value());
+      track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, LimitHits, m_initializationType,
+                                      m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(),
+                                      m_smoothWindow.value());
 
       track_interface.CreateGenFitTrack(pdgCode, 0);
 
-      bool isFit = track_interface.Fit(
-          m_Fitter_type.value(),
-          0,
-          m_Beta_init,
-          m_Beta_final,
-          m_Beta_steps,
-          false);
+      bool isFit = track_interface.Fit(m_Fitter_type.value(), 0, m_Beta_init, m_Beta_final, m_Beta_steps, false);
 
       if (!isFit)
         continue;
@@ -653,15 +570,11 @@ private:
 
         winning_chi2_ndf = chi2_ndf;
         winning_hypothesis = pdgCode;
-
       }
-
     }
 
     return winning_hypothesis;
-
   }
-
 };
 
 DECLARE_COMPONENT(GenfitTrackFitter)

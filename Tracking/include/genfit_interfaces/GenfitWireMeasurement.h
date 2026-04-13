@@ -63,7 +63,6 @@ public:
   genfit::WirePointMeasurement* getGenFit() const { return m_genfitHit; };
 
 private:
-
   // This pointer is used to create a genfit::TrackPoint, which is then stored
   // inside a genfit::Track. The Track aggregates a collection of TrackPoints
   // representing the hits used for the track fit.
@@ -76,7 +75,6 @@ private:
   //
   // Therefore, this pointer is NOT owned by this class and must not be deleted here.
   genfit::WirePointMeasurement* m_genfitHit;
-  
 };
 
 } // namespace GenfitInterface
