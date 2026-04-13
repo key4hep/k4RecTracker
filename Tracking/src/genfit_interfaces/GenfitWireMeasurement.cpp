@@ -108,6 +108,16 @@ WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep:
   rawHitCov(7, 7) = positionAlongWireError * positionAlongWireError;
 
   // Create the genfit::WirePointMeasurement
+
+  // This pointer is used to create a genfit::TrackPoint, which is then stored
+  // inside a genfit::Track. The Track aggregates a collection of TrackPoints
+  // representing the hits used for the track fit.
+  //
+  // GENFIT manages ownership of the full chain:
+  // - A genfit::Track owns its TrackPoints
+  // - When a Track is deleted, all associated TrackPoints are automatically deleted
+  // - When a TrackPoint is deleted, the associated measurement object used to
+  //   construct it is also released
   m_genfitHit = new genfit::WirePointMeasurement(rawHitCoords, rawHitCov, det_idx, hit_idx, nullptr);
 
   if (debug_lvl > 0) {

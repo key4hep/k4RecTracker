@@ -59,6 +59,19 @@ public:
   genfit::PlanarMeasurement* getGenFit() const { return m_genfitHit; };
 
 private:
+
+
+  // This pointer is used to create a genfit::TrackPoint, which is then stored
+  // inside a genfit::Track. The Track aggregates a collection of TrackPoints
+  // representing the hits used for the track fit.
+  //
+  // GENFIT manages ownership of the full chain:
+  // - A genfit::Track owns its TrackPoints
+  // - When a Track is deleted, all associated TrackPoints are automatically deleted
+  // - When a TrackPoint is deleted, the associated measurement object used to
+  //   construct it is also released
+  //
+  // Therefore, this pointer is NOT owned by this class and must not be deleted here.
   genfit::PlanarMeasurement* m_genfitHit;
 };
 

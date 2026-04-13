@@ -93,6 +93,16 @@ PlanarMeasurement::PlanarMeasurement(const edm4hep::TrackerHitPlane& hit, const 
   }
 
   // Create genfit::PlanarMeasurement
+
+  // This pointer is used to create a genfit::TrackPoint, which is then stored
+  // inside a genfit::Track. The Track aggregates a collection of TrackPoints
+  // representing the hits used for the track fit.
+  //
+  // GENFIT manages ownership of the full chain:
+  // - A genfit::Track owns its TrackPoints
+  // - When a Track is deleted, all associated TrackPoints are automatically deleted
+  // - When a TrackPoint is deleted, the associated measurement object used to
+  //   construct it is also released
   m_genfitHit = new genfit::PlanarMeasurement(rawHitCoords, rawHitCov, det_idx, hit_idx, nullptr);
   genfit::SharedPlanePtr plane(new genfit::DetPlane(Origin, U, V));
 
