@@ -7,18 +7,13 @@
 #include <numeric>
 #include <vector>
 
-// Simple point structure (x,y)
-struct Point2D_xy {
-  double x;
-  double y;
-};
+#include "utils.h"
 
 /*
  * Generic version of the CMS FastCircleFit.
  * Fits a circle to a set of weighted 2D hits using the method
  * described by Strandlie & Frühwirth (NIM A488 (2002)).
  */
-
 class FastCircleFit {
 
 public:

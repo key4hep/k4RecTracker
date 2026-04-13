@@ -18,7 +18,6 @@
  */
 
 #include "GenfitTrack.h"
-#include "TRandom3.h"
 
 namespace GenfitInterface {
 
@@ -588,27 +587,20 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz) {
  */
 GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double Bz) {
 
-  struct Point3D {
-    double x;
-    double y;
-    double z;
-  };
-
   Point2D_xy referencePoint_xy = Point2D_xy(m_VP_referencePoint.X() / dd4hep::mm, m_VP_referencePoint.Y() / dd4hep::mm);
 
   // FIT CIRCLE TO XY PROJECTION
-  std::vector<Point3D> points;
+  std::vector<TVector3> points;
   auto hits = m_edm4hepTrack.getTrackerHits();
   for (const auto& hit : hits) {
 
     auto p = hit.getPosition();
-
-    points.push_back(Point3D(p.x, p.y, p.z));
+    points.push_back(TVector3(p.x, p.y, p.z));
   }
 
   std::vector<Point2D_xy> points_xy;
   for (const auto& p : points) {
-    points_xy.push_back(Point2D_xy(p.x, p.y));
+    points_xy.push_back(Point2D_xy(p.X(), p.Y()));
   }
 
   FastCircleFit circle(points_xy);
@@ -626,14 +618,14 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
 
   size_t N = points.size();
 
-  std::vector<Point2D_xy> points_Rz;
+  std::vector<Point2D_Rz> points_Rz;
   for (const auto& p : points) {
 
-    double dx = p.x - m_VP_referencePoint.X() / dd4hep::mm;
-    double dy = p.y - m_VP_referencePoint.Y() / dd4hep::mm;
+    double dx = p.X() - m_VP_referencePoint.X() / dd4hep::mm;
+    double dy = p.Y() - m_VP_referencePoint.Y() / dd4hep::mm;
     double R = std::sqrt(dx * dx + dy * dy);
 
-    double z_coord = p.z;
+    double z_coord = p.Z();
     points_Rz.emplace_back(R, z_coord);
   }
 
@@ -643,10 +635,10 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
   double sumR2 = 0.0;
 
   for (const auto& p : points_Rz) {
-    sumR += p.x;
-    sumZ += p.y;
-    sumRZ += p.x * p.y;
-    sumR2 += p.x * p.x;
+    sumR += p.R;
+    sumZ += p.z;
+    sumRZ += p.R * p.z;
+    sumR2 += p.R * p.R;
   }
 
   double denominator = N * sumR2 - sumR * sumR;

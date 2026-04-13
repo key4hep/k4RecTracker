@@ -161,4 +161,35 @@ torch::Tensor get_clustering(const std::vector<float>& output_vector, int num_ro
  */
 bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol);
 
+/**
+ * @brief Simple 2D point structure representing a hit in the XY plane.
+ *
+ * This structure is used to store the coordinates of a point in a 2D Cartesian
+ * system. It is mainly intended for tracking and fitting algorithms where hits
+ * are projected onto the transverse (x, y) plane.
+ *
+ * The structure is intentionally minimal and does not include additional
+ * metadata such as errors or weights.
+ */
+struct Point2D_xy {
+  double x;
+  double y;
+};
+
+/**
+ * @brief Simple 2D point structure in cylindrical coordinates (R, z).
+ *
+ * This structure represents a point in a cylindrical coordinate system,
+ * where R denotes the radial distance from the reference axis and z
+ * represents the longitudinal coordinate.
+ *
+ * The structure is intentionally minimal and is designed for lightweight
+ * numerical operations without additional metadata such as uncertainties
+ * or weights.
+ */
+struct Point2D_Rz {
+  double R;
+  double z;
+};
+
 #endif // UTILS_HPP
