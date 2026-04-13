@@ -257,7 +257,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     m_posInit = p1;
     m_momInit = (p2 - p1).Unit();
 
-    double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
+    double Bz = m_fieldMap->getBz(m_posInit) / 10.; // From kilogauss to Tesla
 
     HelperInitialization initInfo = ComputeInitialParameters(Bz);
     m_charge_hypothesis = initInfo.Charge;
@@ -277,7 +277,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
 
     TVector3 firstHitVec(firstHit.x * dd4hep::mm, firstHit.y * dd4hep::mm, firstHit.z * dd4hep::mm);
 
-    double Bz = m_fieldMap->getBz(firstHitVec) / 10.; // Tesla
+    double Bz = m_fieldMap->getBz(firstHitVec) / 10.; // From kilogauss to Tesla
 
     // Optional reference point update
     if (UseFirstHitAsReference || RadiusForDisplacedTracking > 0.) {
@@ -311,7 +311,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
         m_VP_referencePoint = TVector3(ts.referencePoint.x * dd4hep::mm, ts.referencePoint.y * dd4hep::mm,
                                        ts.referencePoint.z * dd4hep::mm);
 
-        double Bz = m_fieldMap->getBz(m_VP_referencePoint) / 10.; // Tesla
+        double Bz = m_fieldMap->getBz(m_VP_referencePoint) / 10.; // From kilogauss to Tesla
 
         HelperInitialization initInfo = ComputeInitialParameters(Bz);
         m_posInit = initInfo.Position;
@@ -374,7 +374,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     m_posInit = Init_position.value();
     m_momInit = Init_momentum.value();
 
-    double Bz = m_fieldMap->getBz(m_posInit) / 10.; // Tesla
+    double Bz = m_fieldMap->getBz(m_posInit) / 10.; // From kilogauss to Tesla
 
     HelperInitialization initInfo = ComputeInitialParameters(Bz);
     m_charge_hypothesis = initInfo.Charge;
@@ -998,7 +998,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
       pz = gen_momentum.Z();    // gev
       pt = gen_momentum.Perp(); // gev
 
-      double Bz = m_fieldMap->getBz(gen_position) / 10.; // Tesla
+      double Bz = m_fieldMap->getBz(gen_position) / 10.; // From kilogauss to Tesla
       auto infoComputeD0Z0_firstHit = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
 
       d0 = ((-(m_VP_referencePoint.X() - infoComputeD0Z0_firstHit.PCA.X())) * sin(infoComputeD0Z0_firstHit.Phi0) +
@@ -1034,7 +1034,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
       pz = gen_momentum.Z();    // gev
       pt = gen_momentum.Perp(); // gev
 
-      Bz = m_fieldMap->getBz(gen_position) / 10.; // Tesla
+      Bz = m_fieldMap->getBz(gen_position) / 10.; // From kilogauss to Tesla
       auto infoComputeD0Z0_lastHit = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
 
       d0 = ((-(m_VP_referencePoint.X() - infoComputeD0Z0_lastHit.PCA.X())) * sin(infoComputeD0Z0_lastHit.Phi0) +
@@ -1082,7 +1082,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
         pz = gen_momentum.Z();    // gev
         pt = gen_momentum.Perp(); // gev
 
-        Bz = m_fieldMap->getBz(gen_position) / 10.; // Tesla
+        Bz = m_fieldMap->getBz(gen_position) / 10.; // From kilogauss to Tesla
         auto infoComputeD0Z0_IP = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
 
         d0 = ((-(m_VP_referencePoint.X() - infoComputeD0Z0_IP.PCA.X())) * sin(infoComputeD0Z0_IP.Phi0) +

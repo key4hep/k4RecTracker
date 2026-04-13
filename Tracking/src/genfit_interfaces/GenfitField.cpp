@@ -21,9 +21,7 @@
 
 namespace GenfitInterface {
 
-GenfitField::GenfitField(dd4hep::OverlayedField dd4hepField) : m_dd4hepField(dd4hepField) {
-  genfit::FieldManager::getInstance()->init(this);
-}
+GenfitField::GenfitField(dd4hep::OverlayedField dd4hepField) : m_dd4hepField(dd4hepField) {}
 
 TVector3 GenfitField::get(const TVector3& pos) const {
   double B[3] = {1e9, 1e9, 1e9};
@@ -33,9 +31,12 @@ TVector3 GenfitField::get(const TVector3& pos) const {
 
 void GenfitField::get(const double& posX, const double& posY, const double& posZ, double& Bx, double& By,
                       double& Bz) const {
-  /// get field from dd4hepField
-  const dd4hep::Direction& field = m_dd4hepField.magneticField(dd4hep::Position(posX, posY, posZ));
 
+  // get field from dd4hepField
+  const dd4hep::Direction& field = m_dd4hepField.magneticField(dd4hep::Position(posX, posY, posZ));
+  
+  // DD4hep returns the field in its internal units, while GenFit expects the field in kilogauss.
+  // Therefore, each component is divided by `dd4hep::kilogauss` to ensure consistent units.
   Bx = field.X() / dd4hep::kilogauss;
   By = field.Y() / dd4hep::kilogauss;
   Bz = field.Z() / dd4hep::kilogauss;
