@@ -34,7 +34,7 @@ void GenfitField::get(const double& posX, const double& posY, const double& posZ
 
   // get field from dd4hepField
   const dd4hep::Direction& field = m_dd4hepField.magneticField(dd4hep::Position(posX, posY, posZ));
-  
+
   // DD4hep returns the field in its internal units, while GenFit expects the field in kilogauss.
   // Therefore, each component is divided by `dd4hep::kilogauss` to ensure consistent units.
   Bx = field.X() / dd4hep::kilogauss;
