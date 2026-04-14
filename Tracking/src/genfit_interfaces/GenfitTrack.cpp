@@ -644,15 +644,22 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
 
   double denominator = N * sumR2 - sumR * sumR;
 
-  double a = (N * sumRZ - sumR * sumZ) / denominator;
-  double b = (sumZ - a * sumR) / N;
+  double a = 0.0;
+  double b = 0.0;
+
+  if (std::abs(denominator) > 1e-12) {
+
+    a = (N * sumRZ - sumR * sumZ) / denominator;
+    b = (sumZ - a * sumR) / N;
+
+  } else {
+
+    a = 0.0;
+    b = sumZ / N;
+  }
+
   pZ = a * init_pT;
   init_mom.SetZ(pZ);
-
-  if (std::abs(denominator) < 1e-12) {
-    pZ = 0;
-    init_mom.SetZ(pZ);
-  }
 
   double z_PCA = b;
 
@@ -832,28 +839,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
     genfit::Track genfitTrack = *m_genfitTrack;
     genfit::AbsTrackRep* trackRep = genfitTrack.getTrackRep(0);
     genfitFitter->processTrackWithRep(&genfitTrack, trackRep);
-
-    // Update edm4hep track state
-    genfit::MeasuredStateOnPlane fittedState;
-    TVector3 gen_position, gen_momentum;
-    TMatrixDSym covariancePosMom(6);
-
-    double x_ref;
-    double y_ref;
-    double z_ref;
-
-    double pz;
-    double pt;
-
-    double d0;
-    double z0;
-    double phi;
-    double omega;
-    double tanLambda;
-
-    double c_mm_s = 2.998e11;
-    double a = 1e-15 * c_mm_s;
-
+    
     if (genfitFitter->isTrackFitted(&genfitTrack, trackRep)) {
 
       if (FilterHits.value() && FitterType == "DAF") {
@@ -987,77 +973,17 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
         }
       }
 
+      genfit::MeasuredStateOnPlane fittedState;
+
       // trackState First Hit
       fittedState = genfitTrack.getFittedState();
-      fittedState.getPosMomCov(gen_position, gen_momentum, covariancePosMom);
-      auto stateVecFirstHit = fittedState.getState();
-
       edm4hep::TrackState trackStateFirstHit;
-      x_ref = gen_position.X(); // cm
-      y_ref = gen_position.Y(); // cm
-      z_ref = gen_position.Z(); // cm
-      pz = gen_momentum.Z();    // gev
-      pt = gen_momentum.Perp(); // gev
-
-      double Bz = m_fieldMap->getBz(gen_position) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
-      auto infoComputeD0Z0_firstHit = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
-
-      d0 = ((-(m_VP_referencePoint.X() - infoComputeD0Z0_firstHit.PCA.X())) * sin(infoComputeD0Z0_firstHit.Phi0) +
-            (m_VP_referencePoint.Y() - infoComputeD0Z0_firstHit.PCA.Y()) * cos(infoComputeD0Z0_firstHit.Phi0)) /
-           dd4hep::mm;                                                                // mm
-      z0 = (infoComputeD0Z0_firstHit.PCA.Z() - m_VP_referencePoint.Z()) / dd4hep::mm; // mm
-      phi = gen_momentum.Phi();                                                       // rad
-
-      tanLambda = pz / pt;
-      omega = std::abs(a * Bz / pt);
-      if (m_charge_hypothesis < 0)
-        omega = -omega;
-
-      trackStateFirstHit.D0 = d0;
-      trackStateFirstHit.Z0 = z0;
-      trackStateFirstHit.phi = phi;
-      trackStateFirstHit.omega = omega;
-      trackStateFirstHit.tanLambda = tanLambda;
-      trackStateFirstHit.time = 0.;
-
-      trackStateFirstHit.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
-      trackStateFirstHit.location = edm4hep::TrackState::AtFirstHit;
+      UpdateTrackState(trackStateFirstHit, fittedState, edm4hep::TrackState::AtFirstHit);
 
       // trackState lastHit
       fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
-      fittedState.getPosMomCov(gen_position, gen_momentum, covariancePosMom);
-      auto stateVecLastHit = fittedState.getState();
-
       edm4hep::TrackState trackStateLastHit;
-      x_ref = gen_position.X(); // cm
-      y_ref = gen_position.Y(); // cm
-      z_ref = gen_position.Z(); // cm
-      pz = gen_momentum.Z();    // gev
-      pt = gen_momentum.Perp(); // gev
-
-      Bz = m_fieldMap->getBz(gen_position) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
-      auto infoComputeD0Z0_lastHit = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
-
-      d0 = ((-(m_VP_referencePoint.X() - infoComputeD0Z0_lastHit.PCA.X())) * sin(infoComputeD0Z0_lastHit.Phi0) +
-            (m_VP_referencePoint.Y() - infoComputeD0Z0_lastHit.PCA.Y()) * cos(infoComputeD0Z0_lastHit.Phi0)) /
-           dd4hep::mm;                                                               // mm
-      z0 = (infoComputeD0Z0_lastHit.PCA.Z() - m_VP_referencePoint.Z()) / dd4hep::mm; // mm
-      phi = gen_momentum.Phi();                                                      // rad
-
-      tanLambda = pz / pt;
-      omega = std::abs(a * Bz / pt);
-      if (m_charge_hypothesis < 0)
-        omega = -omega;
-
-      trackStateLastHit.D0 = d0;
-      trackStateLastHit.Z0 = z0;
-      trackStateLastHit.phi = phi;
-      trackStateLastHit.omega = omega;
-      trackStateLastHit.tanLambda = tanLambda;
-      trackStateLastHit.time = 0.;
-
-      trackStateLastHit.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
-      trackStateLastHit.location = edm4hep::TrackState::AtLastHit;
+      UpdateTrackState(trackStateLastHit, fittedState, edm4hep::TrackState::AtLastHit);
 
       // take first fitted point
       genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
@@ -1069,43 +995,8 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
         fittedState = fi->getFittedState(true);
         trackRep->extrapolateToLine(fittedState, TVector3(0, 0, 0), TVector3(0, 0, 1));
 
-        fittedState.getPosMomCov(gen_position, gen_momentum, covariancePosMom);
-        auto stateVecIP = fittedState.getState();
-
-        gen_momentum.SetX(-gen_momentum.X());
-        gen_momentum.SetY(-gen_momentum.Y());
-        gen_momentum.SetZ(-gen_momentum.Z());
-
         edm4hep::TrackState trackStateIP;
-        x_ref = gen_position.X(); // cm
-        y_ref = gen_position.Y(); // cm
-        z_ref = gen_position.Z(); // cm
-        pz = gen_momentum.Z();    // gev
-        pt = gen_momentum.Perp(); // gev
-
-        Bz = m_fieldMap->getBz(gen_position) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
-        auto infoComputeD0Z0_IP = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
-
-        d0 = ((-(m_VP_referencePoint.X() - infoComputeD0Z0_IP.PCA.X())) * sin(infoComputeD0Z0_IP.Phi0) +
-              (m_VP_referencePoint.Y() - infoComputeD0Z0_IP.PCA.Y()) * cos(infoComputeD0Z0_IP.Phi0)) /
-             dd4hep::mm;                                                          // mm
-        z0 = (infoComputeD0Z0_IP.PCA.Z() - m_VP_referencePoint.Z()) / dd4hep::mm; // mm
-        phi = gen_momentum.Phi();                                                 // rad
-
-        tanLambda = pz / pt;
-        omega = std::abs(a * Bz / pt);
-        if (m_charge_hypothesis < 0)
-          omega = -omega;
-
-        trackStateIP.D0 = d0;
-        trackStateIP.Z0 = z0;
-        trackStateIP.phi = phi;
-        trackStateIP.omega = omega;
-        trackStateIP.tanLambda = tanLambda;
-        trackStateIP.time = 0.;
-
-        trackStateIP.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
-        trackStateIP.location = edm4hep::TrackState::AtIP;
+        UpdateTrackState(trackStateIP, fittedState, edm4hep::TrackState::AtIP);
 
         if (debug_lvl == 2) {
 
@@ -1297,6 +1188,88 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
   }
 
   return C_cart;
+}
+
+/**
+ * @brief Update an edm4hep::TrackState using the fitted Genfit state parameters.
+ *
+ * This method extracts position, momentum, and covariance information from a
+ * `genfit::MeasuredStateOnPlane` object and converts them into the corresponding
+ * `edm4hep::TrackState` representation, including helix parameters.
+ *
+ * The procedure includes:
+ *   - Extraction of position, momentum, and covariance from the Genfit state
+ *   - Optional inversion of the momentum direction for states at the Interaction Point (IP)
+ *   - Retrieval of the local magnetic field (Bz) at the track position
+ *   - Computation of the Point of Closest Approach (PCA) to a reference point
+ *   - Derivation of helix parameters:
+ *       - d0          : transverse impact parameter (mm)
+ *       - z0          : longitudinal impact parameter (mm)
+ *       - phi         : azimuthal angle of momentum (rad)
+ *       - omega       : curvature (1/mm), signed according to charge hypothesis
+ *       - tanLambda   : dip angle (pz / pt)
+ *   - Assignment of the reference point and track state location
+ *
+ * The PCA and associated parameters are computed assuming a helical trajectory
+ * in a magnetic field aligned along the z-axis.
+ *
+ * @param Edm4hepTrackState Output track state to be updated
+ * @param MeasuredState Genfit measured state containing fitted position and momentum
+ * @param location Location identifier for the track state (e.g. AtIP, AtFirstHit, AtLastHit)
+ *
+ * @note The momentum is reversed for states at the Interaction Point (AtIP) to ensure
+ *       a consistent track parameter convention.
+ * @note The magnetic field is retrieved at the current position and converted to Tesla.
+ * @note The curvature sign (omega) depends on the assumed particle charge hypothesis.
+ */
+void GenfitTrack::UpdateTrackState(edm4hep::TrackState Edm4hepTrackState, genfit::MeasuredStateOnPlane MeasuredState, int location) {
+
+  TVector3 gen_position, gen_momentum;
+  TMatrixDSym covariancePosMom(6);
+
+  double c_mm_s = 2.998e11;
+  double a = 1e-15 * c_mm_s;
+
+  MeasuredState.getPosMomCov(gen_position, gen_momentum, covariancePosMom);
+
+  if (location == edm4hep::TrackState::AtIP) {
+
+    gen_momentum.SetX(-gen_momentum.X());
+    gen_momentum.SetY(-gen_momentum.Y());
+    gen_momentum.SetZ(-gen_momentum.Z());
+
+  }
+
+  double x_ref = gen_position.X(); // cm
+  double y_ref = gen_position.Y(); // cm
+  double z_ref = gen_position.Z(); // cm
+  double pz = gen_momentum.Z();    // gev
+  double pt = gen_momentum.Perp(); // gev
+
+  double Bz = m_fieldMap->getBz(gen_position) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
+  auto infoComputeD0Z0_firstHit = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
+
+  double d0 = ((-(m_VP_referencePoint.X() - infoComputeD0Z0_firstHit.PCA.X())) * sin(infoComputeD0Z0_firstHit.Phi0) +
+        (m_VP_referencePoint.Y() - infoComputeD0Z0_firstHit.PCA.Y()) * cos(infoComputeD0Z0_firstHit.Phi0)) /
+       dd4hep::mm;                                                                // mm
+  double z0 = (infoComputeD0Z0_firstHit.PCA.Z() - m_VP_referencePoint.Z()) / dd4hep::mm; // mm
+  double phi = gen_momentum.Phi();                                                       // rad
+
+  double tanLambda = pz / pt;
+  double omega = std::abs(a * Bz / pt);
+  if (m_charge_hypothesis < 0)
+    omega = -omega;
+
+  Edm4hepTrackState.D0 = d0;
+  Edm4hepTrackState.Z0 = z0;
+  Edm4hepTrackState.phi = phi;
+  Edm4hepTrackState.omega = omega;
+  Edm4hepTrackState.tanLambda = tanLambda;
+  Edm4hepTrackState.time = 0.;
+
+  Edm4hepTrackState.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
+  Edm4hepTrackState.location = location;
+
 }
 
 /**

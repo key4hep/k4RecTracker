@@ -145,6 +145,9 @@ private:
   TMatrixDSym ComputeInitialCovarianceMatrix(double Bz);
 
   HelperInitialization ComputeInitialParameters(double Bz);
+
+  void UpdateTrackState(edm4hep::TrackState Edm4hepTrackState, genfit::MeasuredStateOnPlane MeasuredState, int location);
+
   PCAInfoHelper PCAInfo(TVector3 position, TVector3 momentum, int charge, TVector3 refPoint, double Bz);
 
   int m_signed_particle_hypothesis = 211;
