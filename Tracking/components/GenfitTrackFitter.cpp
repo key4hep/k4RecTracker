@@ -441,7 +441,40 @@ private:
       "Radius [mm] defining a spherical region around {0,0,0}: "
       "tracks produced within this radius are considered prompt; tracks outside are considered displaced"};
 
-  // Fit implementation
+  // ====================== Fit Helpers ======================
+
+  /**
+   * @brief Process and fit a reconstructed track using Genfit, with optional hit filtering
+   *        and calorimeter extrapolation.
+   *
+   * This method takes an input `edm4hep::Track`, initializes a corresponding Genfit track,
+   * performs the fit using the chosen fitting algorithm, and stores the resulting fitted
+   * track(s) in the provided output collections.
+   *
+   * The procedure includes:
+   *   - Initialization of the Genfit track with configurable seeding options
+   *     (initial position, momentum, hit selection, and smoothing parameters)
+   *   - Execution of the track fit using the selected fitter
+   *   - Extraction of the fitted `edm4hep::Track`
+   *   - Optional extrapolation of the track to the calorimeter surfaces if a magnetic field is present
+   *   - Optional filtering of hits (e.g. using DAF weights) and storage of filtered tracks and hits
+   *
+   * Debug information about the initialization (position, momentum, covariance, etc.)
+   * is printed depending on the configured verbosity level.
+   *
+   * @param track Input reconstructed track to be processed and fitted
+   * @param LimitHits If true, limits the number of hits used during initialization
+   * @param particleHypothesis PDG-based hypothesis used for the track fit (affects mass/charge assumptions)
+   * @param FittedTracks Output collection storing the fitted tracks
+   * @param FittedTracksWithFilteredHits Output collection storing fitted tracks after hit filtering (if enabled)
+   * @param FittedHits Output collection storing the filtered fitted hits (if enabled)
+   *
+   * @return true if the track fit was successful, false otherwise
+   *
+   * @note If the fit fails, the function exits early and no track is added to the output collections.
+   * @note Calorimeter extrapolation is applied only if a non-zero magnetic field (Bz > 0) is found
+   *       at the last hit position.
+   */
   bool ProcessTrack(const edm4hep::Track& track, bool LimitHits, int particleHypothesis,
                     edm4hep::TrackCollection& FittedTracks, edm4hep::TrackCollection& FittedTracksWithFilteredHits,
                     edm4hep::TrackerHitPlaneCollection& FittedHits) const {
@@ -531,6 +564,33 @@ private:
     return true;
   }
 
+  /**
+   * @brief Determine the best particle hypothesis for a track by comparing fit quality.
+   *
+   * This method tests multiple particle hypotheses (specified via PDG codes) by
+   * fitting the input `edm4hep::Track` separately for each hypothesis using Genfit.
+   * For each successful fit, the chi2/ndf is evaluated and the hypothesis yielding
+   * the lowest value is selected as the best candidate.
+   *
+   * The procedure includes:
+   *   - Initialization of a Genfit track for each particle hypothesis using the same
+   *     seeding configuration (initial position, momentum, and hit selection)
+   *   - Execution of the track fit for each hypothesis
+   *   - Extraction of the fitted `edm4hep::Track` and computation of chi2/ndf
+   *   - Selection of the hypothesis with the best (lowest) chi2/ndf
+   *
+   * Fits that fail or produce invalid chi2/ndf values are ignored.
+   *
+   * @param track Input reconstructed track to be tested against different hypotheses
+   * @param LimitHits If true, limits the number of hits used during initialization
+   *
+   * @return The PDG code corresponding to the best particle hypothesis.
+   *         Returns -1 if no valid fit is found for any hypothesis.
+   *
+   * @note The comparison is purely based on chi2/ndf and does not include
+   *       additional physics constraints or likelihood-based criteria.
+   * @note All fits are performed with debug output disabled and without hit filtering.
+   */
   int FindBestHypothesis(const edm4hep::Track& track, bool LimitHits) const {
 
     TVector3 Init_position(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);

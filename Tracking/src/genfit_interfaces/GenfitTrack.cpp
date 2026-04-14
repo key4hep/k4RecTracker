@@ -662,7 +662,7 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
 
   double rx = center.X() - pos.X();
   double ry = center.Y() - pos.Y();
-  double signed_param = init_mom.X() * ry - init_mom.y() * rx;
+  double signed_param = init_mom.X() * ry - init_mom.Y() * rx;
   int charge = 0;
   if (signed_param > 0)
     charge = (Bz > 0) ? +1 : -1;
