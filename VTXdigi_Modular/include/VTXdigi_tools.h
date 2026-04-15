@@ -15,8 +15,10 @@
 
 namespace VTXdigi_tools {
 
-/* -- Tool tests -- */
+constexpr float kChargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
 
+
+/* -- Tool tests -- */
 bool ToolTest();
 
 
@@ -29,7 +31,7 @@ class SimHitWrapper {
   dd4hep::DDSegmentation::CellID m_cellID; // without segmentation bits
   float m_charge;
   int m_layerNumber;
-  mutable dd4hep::rec::Vector3D m_truthPos; // truth position of the simHit, in local coordinates. Can be adjusted by the charge collection algorithm. Only used for histogramming after filling the hits
+  mutable dd4hep::rec::Vector3D m_truthPos; // simHit truth position, local coordinates. Mutable because it might be adjusted in const ChargeCollector::FillHit() to account for charge collection biases (see ChargeCollector_impl.h ChargeCollector_LUT::MoveTruthPosition() for more info).
 
 public:
   SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
@@ -44,7 +46,7 @@ public:
   inline const edm4hep::SimTrackerHit* hitPtr() const { return &m_simTrackerHit; }
 
   /** @brief Access the truth position of the simHit in local coordinates
-   * @note might have been adjusted by ChargeCollector::FillHit() to account for charge collection effects. */
+   * @note might have been adjusted by ChargeCollector::FillHit() to correct for charge collection effects (eg. not completely depleted sensors where charges are only collected close to the upper sensor surface as in TPSCo 65nm CIS). */
   inline const dd4hep::rec::Vector3D truthPos() const { return m_truthPos; }
 
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
@@ -55,6 +57,7 @@ public:
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
+
 
 /* -- Pixel -- */
 
@@ -72,17 +75,11 @@ struct Pixel {
   }
 };
 
-struct Hash_PairInt {
-  size_t operator()(const std::pair<int,int>& i_uv) const noexcept {
-    return (static_cast<uint64_t>(i_uv.first) << 32) ^ static_cast<uint32_t>(i_uv.second);
-  }
-};
-
 /* -- Cluster -- */
 
-/** @brief Contains a clusters charge, pointers to all pixels in the cluster, and pointers to all contributing simHits */
+/** @brief Holds clusters: charge, pointers to all contributing pixels, pointers to all contributing simHits */
 struct Cluster {
-  std::vector<const Pixel*> pixels; // pointer to pixels in this cluster (stored by value in HitMap::m_pixels)
+  std::vector<const Pixel*> pixels; // raw pointer into HitMap::Pixels. Valid as long as the HitMap is not modified after clustering. See HitMap::ComputeClusters() for details.
   std::unordered_set<const SimHitWrapper*> simHits;
   float charge = 0.f;
 
@@ -96,6 +93,12 @@ struct Cluster {
 std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
 
 /* -- HitMap -- */
+
+struct Hash_PairInt {
+  size_t operator()(const std::pair<int,int>& i_uv) const noexcept {
+    return (static_cast<uint64_t>(i_uv.first) << 32) ^ static_cast<uint32_t>(i_uv.second);
+  }
+};
 
 using PixelMap = std::unordered_map<std::pair<int, int>, Pixel, Hash_PairInt>;
 
@@ -128,7 +131,8 @@ public:
   /** @brief Return the number of pixels with charge */
   inline int GetTotalPixelsWithCharge() const { return m_pixels.size(); };
 
-  /** @brief Clusterize hit pixels in the HitMap, using direct neighbors */
+  /** @brief Clusterize hit pixels in the HitMap, using direct neighbors 
+   * @note Returns Cluster objects whose `pixels` members hold raw pointers into m_pixels. This is safe because ComputeClusters() is const and called only after all FillCharge() insertions are complete -> the map will not rehash while the returned Clusters are alive. Do not call FillCharge() on this HitMap after calling ComputeClusters(). */
   std::vector<Cluster> ComputeClusters() const;
 
   /** @brief Return a vector of clusters, where each cluster is a single pixel */

@@ -3,35 +3,6 @@
 
 DECLARE_COMPONENT(VTXdigi_Modular)
 
-/* Notes ~ Jona 2025-09
- * - all lengths in mm (edm4hep already does this)
- *   BUT: dd4hep uses cm internally, so convert when passing values to/from dd4hep via dd4hep::mm = 0.1
- *        mm -> cm: a [cm] = dd4hep::mm * a [mm]
- *        cm -> mm: a [mm] = 1/dd4hep::mm * a [cm]
-
- * - Vectors can be given in 
- *        a) dd4hep::rec::Vector3D <- fully featured vector, overloads operators *+- etc
- *        b) edm4hep::Vector3d <- natively used by edm4hep (where simHit, digiHit are from)
- *      -> generally use dd4hep::rec::Vector3D, convert via ConvertVector() where edm4hep::Vector3d is needed
- * - Indices named i_ ... refer to pixels. Indices named j_ ... refer to in-pixel bins (for charge deposition)
- * - Reference frames: 
- *        - global detector frame, use (x,y,z)
- *             - z along beamline
- *        - local sensor frame: (u,v,w)
- *             - u,v span sensor plane, (for ARCADIA in barrel: v along z)
- *             - w (called n in dd4hep) normal to sensor plane
- * - Energies in keV, but deposited energy is always converted to the electron charge equivalent [e-], 3.65 eV per eh-pair
- * - Charges are given as either 
- *        - "raw charge" (as given by Geant4/Allpix2, before thresholding and noise) or 
- *        - "measured charge" (after thresholding and noise)
- *  - Notation:
- *    - simTrackerHit refers to edm4hep::SimTrackerHit
- *    - simHit is always a VTXdigi_tools::SimHitWrapper (which contains a edm4hep::SimTrackerHit and some pre-computed info like surface and layer number)
- *    - digiHit refers to edm4hep::TrackerHitPlane (the output of this digitizer)
- * 
- * - I am sorry for the unholy mix of US and British spelling. I tried to keep the code consistent in US spelling. ~ Jona
- */
-
 VTXdigi_Modular::VTXdigi_Modular(const std::string& name, ISvcLocator* svcLoc)
     : MultiTransformer(name, svcLoc,
                        {KeyValues("SimTrackHitCollectionName", {"UNDEFINED_SimTrackHitCollectionName"}),
@@ -83,8 +54,8 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
     return std::make_tuple(edm4hep::TrackerHitPlaneCollection(), edm4hep::TrackerHitSimTrackerHitLinkCollection());
   }
 
-  /* TODO: Impletement FAST charge collection method (simply smear simHit position)
-  * this makes a lot of the init etc unnecessary, so maybe have a separate class for that? ~ Jona 2026-02 */
+  /* TODO: Implement fast digitization, where simHit pos is simply smeared by a Gaussian.
+  * this makes a lot of the init etc unnecessary, so maybe keep it in a separate class? We cannot simply add a ChargeCollector implementation to do this, because ChargeCollectors act on pixels, but fast digitization acts on the position itself (ofc we could emulate this in clusters, but thats incredibly inefficient and stinks) */
 
   std::unordered_map<dd4hep::DDSegmentation::CellID, std::vector<VTXdigi_tools::SimHitWrapper>> sensorSimHits; // map from sensor (shortened cellID) to hits
   for (const auto& simTrackerHit : simTrackerHits) {
@@ -172,7 +143,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (!m_geoService)
     throw GaudiException("Unable to retrieve the GeoSvc", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
   
-  /* TODO: get cellID without using geoService, a la Jessy (if this is advantageous) ~ Jona */
+  /* TODO: get cellID without using geoService, a la Jessy (if this is advantageous) */
   std::string cellIDstr = m_geoService->constantAsString(m_encodingStringVariable.value());
   m_cellIdDecoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(cellIDstr);
   if (!m_cellIdDecoder)
@@ -232,9 +203,8 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     }
 
     /* TODO: this only makes sure that the sensor normal vector is perpendicular to the surface.
-    * It does NOT make sure that the local x and y are not swapped and have the correct polarity
-    * I do NOT have the energy to think about Euler angles now. ~Jona, 2026-02 
-    * This at least prints a warning if it isn't correct. */
+    * It does NOT make sure that the local x and y are not swapped and have the correct polarity.
+    * I tried coming up with the correct transformation matrix based on the axis rotations, but tbh I am quite stumped by how the rotation acts on the vectors, and how I can fix it. */
     TGeoHMatrix M = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation);
     M.MasterToLocalVect(surface->u().unit(), tempVec);
     if (std::abs(tempVec[0]-1.) > epsilon || std::abs(tempVec[1]) > epsilon || std::abs(tempVec[2]) > epsilon)
@@ -1103,11 +1073,11 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     if (m_smearing_time > 0.f)
       timeStamp += m_rndm_time;
     digiHit.setTime(timeStamp); 
-    /* TODO: think of proper way to do timestamping for clusters. Maybe use earliest hit? averaging is not physical at all. ~ Jona 2026-02 */
-    digiHit.setEDep(cluster.charge / m_chargePerkeV);
+    /* TODO: think of proper way to do timestamping for clusters. Maybe use earliest hit? averaging is not physical at all. */
+    digiHit.setEDep(cluster.charge / VTXdigi_tools::kChargePerkeV);
     digiHit.setPosition(VTXdigi_tools::ConvertVector(pos_global));
     digiHit.setCellID(cellID);
-    /* TODO: do we want cellID with segmentation, instead of using the short cellID (that only encodes the sensor) */
+    /* TODO: do we want cellID with segmentation? (instead of using the short cellID that only encodes the sensor and not the pixel) */
 
     /* TODO: estimate uncertainty from pitch/sqrt(12), or from cluster size in u/v*/
 
@@ -1182,7 +1152,7 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
   const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(digiHit.getPosition());
   const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::GlobalToLocal(pos_global, trafoMatrix);
   
-  ++(*m_hist1d.at(layer).at(hist1d_digiHitCharge))[digiHit.getEDep() * m_chargePerkeV]; 
+  ++(*m_hist1d.at(layer).at(hist1d_digiHitCharge))[digiHit.getEDep() * VTXdigi_tools::kChargePerkeV]; 
 
   ++(*m_hist1d.at(layer).at(hist1d_clusterSize))[clusterSize];
   ++(*m_hist1d.at(layer).at(hist1d_clusterSize_u))[clusterSize_u];

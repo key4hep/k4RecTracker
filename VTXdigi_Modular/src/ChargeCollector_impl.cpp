@@ -1,9 +1,9 @@
-// VTXdigi_Modular/src/ChargeCollector.cpp
+// VTXdigi_Modular/src/ChargeCollector_impl.cpp
 
-#include "../src/ChargeCollector.h"
+#include "../src/ChargeCollector_impl.h"
 
 namespace VTXdigi_tools {
-using ::VTXdigi_Modular; // "unqualified name introduction from global namespace" (just so I remember what to call this in C++ speak ~ Jona)
+using ::VTXdigi_Modular; // "unqualified name introduction from global namespace" (just so I remember what to call this in C++ speak)
 using ::endmsg; // makes the Copilot autocomplete work better
 
 std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& digitizer, const std::string& algorithm) {
@@ -17,8 +17,7 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
     throw std::runtime_error("ChargeCollector_Fast not implemented yet.");
   } else if (algorithm == "SinglePixel") {
     return std::make_unique<ChargeCollector_SinglePixel>(digitizer);
-  }
-  else if (algorithm == "Debug") {
+  } else if (algorithm == "Debug") {
     return std::make_unique<ChargeCollector_Debug>(digitizer);
   }
   throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
@@ -42,15 +41,17 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
   path.travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]); 
 
   /* Step 2 - entry point */
-  if (abs(path.simPos.z()) > digitizer.SensorDimensions().at(2)/2.f + eps) {
+  if (std::abs(path.simPos.z()) > digitizer.SensorDimensions().at(2)/2.f + eps) {
       digitizer.warning() << "SimHit position is outside the sensor volume (local w = " << path.simPos.z() << " mm, sensor thickness = " << digitizer.SensorDimensions().at(2) << " mm). This should never happen. Forcing it to w=0." << endmsg;
     path.simPos.z() = 0.f; // ensures no divide by zero etc
   }
   float shiftDist_w;
-  if (path.travel.z() >= 0.f)
+  if (path.travel.z() >= 0.f) {
     shiftDist_w = path.simPos.z() + 0.5f * digitizer.SensorDimensions().at(2);
-  else
+  }
+  else {
     shiftDist_w = path.simPos.z() - 0.5f * digitizer.SensorDimensions().at(2);
+  }
   const float scaleFactor_entry = shiftDist_w / path.travel.z();
   path.entry = path.simPos - scaleFactor_entry * path.travel;
 
@@ -77,7 +78,7 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
 
   /* Step 4 -check that path is not much longer than the length it had in Geant4 */
   path.lengthG4 = simHit.hitPtr()->getPathLength();
-  if (path.travel.r() > 1.05f * path.lengthG4) {
+  if (path.travel.r() > kPathLengthTolerance * path.lengthG4) {
     digitizer.debug() << "       - Shortening path length from " << static_cast<int>(path.travel.r()*1000) << " um to " << static_cast<int>(path.lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
 
     /* make sure the path stays centred around the simTrackerHit position */
@@ -92,7 +93,6 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
     path.entry = path.entry + t_min * path.travel;
     path.travel = (t_max - t_min) * path.travel;
   }
-
   path.length = path.travel.r();
   
 
@@ -105,24 +105,26 @@ std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, con
   const bool positiveDir = travel_ax >= 0.f; // false -> path points in negative direction along this axis
 
   const float minPos = std::min(entry_ax, entry_ax + travel_ax);
-  if (minPos < -0.5 * sensorLength_ax) {
+  if (minPos < -0.5f * sensorLength_ax) {
     /* path extends out of sensor in negative direction*/
 
-    const float t_clip = (-minPos - 0.5f * sensorLength_ax) / abs(travel_ax);
-    if (positiveDir)
+    const float t_clip = (-minPos - 0.5f * sensorLength_ax) / std::abs(travel_ax);
+    if (positiveDir){
       t.first = std::max(t.first, t_clip);
-    else
+    } else {
       t.second = std::min(t.second, 1-t_clip);
+    }
   }
 
   const float maxPos = std::max(entry_ax, entry_ax + travel_ax);
-  if (maxPos > 0.5 * sensorLength_ax) {
-    const float t_clip = (maxPos - 0.5f * sensorLength_ax) / abs(travel_ax);
+  if (maxPos > 0.5f * sensorLength_ax) {
+    const float t_clip = (maxPos - 0.5f * sensorLength_ax) / std::abs(travel_ax);
 
-    if (positiveDir)
+    if (positiveDir) {
       t.second = std::min(t.second, 1-t_clip);
-    else
+    } else {
       t.first = std::max(t.first, t_clip);
+    }
   }
 
   return t;
@@ -253,7 +255,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     float matrixEntrySum = 0.f;
     for (int i = 0; i < m_matrixSize*m_matrixSize; i++) {
       float entry = std::stof(lineEntries[3 + indexMapping[i]]); // NaN check done on sum
-      if (entry < 1.e-5f)
+      if (entry < kLutEntryMinimum)
         entry = 0.f; // avoid very small entries for performace
       matrixEntries[i] = entry;
       matrixEntrySum += entry;
@@ -295,7 +297,7 @@ void LookupTable::SetMatrix(const Index_inPix& j_uvw, const std::vector<float>& 
     for (int col = 0; col < m_matrixSize; ++col) {
       /* weights are given in row-major order, starting at top left. 
         * We store charge sharing matrices in col-major order, starting at bottom left (lowest bin index) */
-      m_matrices.at(_FindIndex(j_uvw, col, row)) = weights.at((m_matrixSize-1-row)*m_matrixSize + col);
+      m_matrices.at(FindIndex(j_uvw, col, row)) = weights.at((m_matrixSize-1-row)*m_matrixSize + col);
     }
   }
 }
@@ -310,14 +312,14 @@ void LookupTable::SetAllMatrices(const std::vector<float>& weights) {
   }
 }
 
-int LookupTable::_FindIndex (const Index_inPix& j, const int col, const int row) const {
+int LookupTable::FindIndex (const Index_inPix& j, const int col, const int row) const {
   if (j[0] < 0 || j[0] >= m_binCount[0] 
     || j[1] < 0 || j[1] >= m_binCount[1]
     || j[2] < 0 || j[2] >= m_binCount[2] ) [[unlikely]] {
-    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: in-pix bin out of range");
+    throw std::runtime_error("VTXdigi_tools::LookupTable::FindIndex: in-pix bin out of range");
   }
   if (col < 0 || col >= m_matrixSize || row < 0 || row >= m_matrixSize) [[unlikely]] {
-    throw std::runtime_error("VTXdigi_tools::LookupTable::_FindIndex: col or row out of range");
+    throw std::runtime_error("VTXdigi_tools::LookupTable::FindIndex: col or row out of range");
   }
 
   int index_matrix = j[0] + m_binCount[0] * (j[1] + m_binCount[1] * j[2]);
@@ -439,7 +441,7 @@ ChargeCollector_SinglePixel::ChargeCollector_SinglePixel(const VTXdigi_Modular& 
 }
 
 void ChargeCollector_SinglePixel::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
-  (void) trafoMatrix; // Not used in this approach, but we need to keep it as argument to conform to the interface. Silences the unused parameter warning.
+  (void) trafoMatrix; // Not used in this implementation of ChargeCollector, but we need to keep it as argument to conform to the interface. Silences the unused parameter warning.
 
   const std::pair<int, int> i_uv = ComputePixelIndices(simHit.truthPos(), m_digitizer.PixelPitch(), m_digitizer.PixelCount());
 
@@ -454,7 +456,7 @@ ChargeCollector_Debug::ChargeCollector_Debug(const VTXdigi_Modular& digitizer) :
 }
 
 void ChargeCollector_Debug::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
-  (void) trafoMatrix; // Not used in this approach, but we need to keep it as argument to conform to the interface. Silences the unused parameter warning.
+  (void) trafoMatrix; // Not used in this implementation of ChargeCollector, but we need to keep it as argument to conform to the interface. Silences the unused parameter warning.
 
   const dd4hep::rec::Vector3D pos_local = simHit.truthPos();
   const float charge = simHit.charge();
@@ -470,11 +472,11 @@ void ChargeCollector_Debug::FillHit(const SimHitWrapper& simHit, HitMap& hitMap,
 
     hitMap.FillCharge(i_uv, 0.5*charge, simHit);
     if (i_uv.first + 1 < static_cast<int>(m_digitizer.PixelCount().first))
-      hitMap.FillCharge({i_uv.first + 1, i_uv.second}, 0.2*charge, simHit); 
-    if (i_uv.first + 2 < static_cast<int>(m_digitizer.PixelCount().first))
-      hitMap.FillCharge({i_uv.first + 2, i_uv.second}, 0.2*charge, simHit);
+      hitMap.FillCharge({i_uv.first + 1, i_uv.second}, 0.3*charge, simHit); 
     if (i_uv.second + 1 < static_cast<int>(m_digitizer.PixelCount().second))
       hitMap.FillCharge({i_uv.first, i_uv.second + 1}, 0.1*charge, simHit);
+    if (i_uv.second + 2 < static_cast<int>(m_digitizer.PixelCount().second))
+      hitMap.FillCharge({i_uv.first, i_uv.second + 2}, 0.1*charge, simHit);
       
     m_digitizer.verbose() << "       - Total charge collected in hitMap: " << hitMap.GetTotalCharge() << " e." << endmsg;
   }

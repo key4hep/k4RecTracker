@@ -6,21 +6,16 @@ namespace VTXdigi_tools {
 SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simTrackerHit(simTrackerHit) {
   m_cellID = GetCellID_short(m_simTrackerHit);
 
-  const float chargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
-  m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * chargePerkeV); // convert energy deposit (in keV) to number of electrons 
+  m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * kChargePerkeV); // convert energy deposit (in keV) to number of electrons 
 
   m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
 }
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
-  if (&a == &b) 
-    return;
-
-  using std::swap;
-  swap(a.m_simTrackerHit, b.m_simTrackerHit);
-  swap(a.m_cellID, b.m_cellID);
-  swap(a.m_charge, b.m_charge);
-  swap(a.m_layerNumber, b.m_layerNumber);
+  std::swap(a.m_simTrackerHit, b.m_simTrackerHit);
+  std::swap(a.m_cellID, b.m_cellID);
+  std::swap(a.m_charge, b.m_charge);
+  std::swap(a.m_layerNumber, b.m_layerNumber);
 } // swap(Hit&, Hit&)
 
 /* -- helpers -- */
@@ -91,11 +86,11 @@ int ComputeBinIndex(float x, float binX0, float binWidth, int binN) {
    *  return -1 if x is out of range
    */
 
-  if (binN <= 0) throw GaudiException("ComputeBinIndex: binN must be positive", "VTXdigi_Allpix2::ComputeBinIndex()", StatusCode::FAILURE);
-  if (binWidth <= 0.0) throw GaudiException("ComputeBinIndex: binWidth must be positive", "VTXdigi_Allpix2::ComputeBinIndex()", StatusCode::FAILURE);
+  if (binN <= 0) throw std::runtime_error("VTXdigi_tools::ComputeBinIndex(): binN must be positive");
+  if (binWidth <= 0.0) throw std::runtime_error("VTXdigi_tools::ComputeBinIndex(): binWidth must be positive");
 
   float relativePos = (x - binX0) / binWidth; // shift to [0, binN]
-  if (relativePos < 0.0f || relativePos > static_cast<float>(binN))
+  if (relativePos < 0.0f || relativePos > static_cast<float>(binN)) 
     return -1;
   if (relativePos == static_cast<float>(binN))
     return binN - 1; // include upper edge in last bin (makes sense for pixels)

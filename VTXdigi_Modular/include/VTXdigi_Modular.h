@@ -24,7 +24,6 @@
 // DD4HEP
 #include "DDRec/SurfaceManager.h"
 
-
 /** @class VTXdigi_Modular
  *
  * Creates trackerHits from simHits. Produces clusters from simHits, outputs either the cluster centre or all hits in the cluster as digitized hits.
@@ -62,6 +61,9 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
 
   inline float Threshold() const { return m_threshold; }
   
+  /** @brief Draw a random number for charge smearing 
+   * FIXME: this is not thread safe, but I don't know how this is done in Gaudi (while retaining thread safety & reproducibility with a given seed). 
+  */
   inline float DrawChargeSmearingNumber() const { return static_cast<float>(m_rndm_charge()); }
 
   inline std::string LutFileName() const { return m_LUT_FileName; }
@@ -118,7 +120,7 @@ private:
   /* -- Properties and members related to the various charge collection algorithms-- */
 
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
-  Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0 mm. ONLY used for plotting the resdiuals, does not change the output collections in any way."};
+  Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0 mm. Used for plotting of the residuals, does not affect the charge collection itself. "};
   Gaudi::Property<float> m_threshold{this, "Threshold", 0.0f, "Pixel threshold for firing (in e-)."};
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Quadratically add pixel noise and threshold smearing if necessary."};
   Gaudi::Property<float> m_smearing_time{this, "TimeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels time (in ns). Applied to the digiHits time stamp. If 0, no time smearing is applied."};
@@ -128,7 +130,7 @@ private:
 
   /* LUT */
   Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
-  Gaudi::Property<float> m_LUT_stepLength{this, "LookupTableSegmentStepLength", 0.0004f, "Length of the segments that a particle path through the sensor is split into. The deposited charge is distributed evenly over the segments, and each segments charge is distributed according to the in-pixel bin the segment center falls into. In mm. Defaults to 0.0004 mm."};
+  Gaudi::Property<float> m_LUT_stepLength{this, "LookupTableSegmentStepLength", 0.0005f, "Length of the segments that a particle path through the sensor is split into. The deposited charge is distributed evenly over the segments, and each segments charge is distributed according to the in-pixel bin the segment center falls into. In mm. Defaults to 0.0005 mm."};
   
   /* -- Services, geometry variables -- */
   
@@ -139,10 +141,6 @@ private:
   const dd4hep::rec::SurfaceMap* m_surfaceMap; // map from cellID (unsigned long, without segmentation bits) to simSurface (dd4hep::rec::ISurface*)
   dd4hep::VolumeManager m_volumeManager; // volume manager to get the physical cell sensitive volume
   dd4hep::DetElement m_subDetector; // subdetector DetElement. contains layers as children
-  
-  /* -- Constants -- */
-  
-  const float m_chargePerkeV = 273.97f; // number of electron-hole pairs created per keV of deposited energy in silicon. eh-pair ~ 3.65 eV
   
   /* -- Member variables -- */
 
