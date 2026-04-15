@@ -616,8 +616,8 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
     points_xy.emplace_back(p.x, p.y);
 
     // RZ for linear fit
-    const double dx = p.x - refX;
-    const double dy = p.y - refY;
+    const double dx = p.x - referencePoint_xy.x;
+    const double dy = p.y - referencePoint_xy.y;
     const double R = std::sqrt(dx * dx + dy * dy);
     const double Z = p.z;
 
