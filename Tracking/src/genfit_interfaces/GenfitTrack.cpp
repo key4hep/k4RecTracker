@@ -746,6 +746,13 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
 
   int hit_idx(0);
   int detID(-1);
+
+  // The following code creates genfit::TrackPoints from EDM4hep hits and adds them to the genfit::Track.
+  //
+  // GENFIT manages ownership of the entire object chain:
+  // - A genfit::Track owns its TrackPoints
+  // - Deleting a Track automatically deletes all associated TrackPoints
+  // - Deleting a TrackPoint also releases the underlying measurement object used to create it
   for (auto hit : hits_for_genfit) {
 
     if (hit.isA<edm4hep::TrackerHitPlane>()) {
