@@ -814,38 +814,40 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
     Track_temp.getTrackStates(i) = edm4hep::TrackState();
   }
 
+  // Initialize the genfit fitter
+  genfit::AbsKalmanFitter* genfitFitter = nullptr;
+
+  if (FitterType == "DAF") {
+
+    genfit::DAF* daf = new genfit::DAF(true, 1e-3, 1e-3);
+    daf->setAnnealingScheme(Beta_init.value(), Beta_final.value(), Beta_steps.value());
+    daf->setProbCut(1e-5);
+    daf->setConvergenceDeltaWeight(1e-2);
+
+    genfitFitter = daf;
+
+  } else if (FitterType == "KALMAN") {
+
+    genfitFitter = new genfit::KalmanFitter();
+
+  } else if (FitterType == "KALMAN_REF") {
+
+    genfitFitter = new genfit::KalmanFitterRefTrack();
+
+  } else {
+
+    std::cerr << "Unknown fit method: " << FitterType << std::endl;
+
+    delete genfitFitter;
+    return false;
+  }
+
+  int debug_lvl_fit = debug_lvl;
+  if (debug_lvl > 1)
+    debug_lvl_fit = 0;
+  genfitFitter->setDebugLvl(debug_lvl_fit);
+
   try {
-
-    // Initialize the genfit fitter
-    genfit::AbsKalmanFitter* genfitFitter = nullptr;
-
-    if (FitterType == "DAF") {
-
-      genfit::DAF* daf = new genfit::DAF(true, 1e-3, 1e-3);
-      daf->setAnnealingScheme(Beta_init.value(), Beta_final.value(), Beta_steps.value());
-      daf->setProbCut(1e-5);
-      daf->setConvergenceDeltaWeight(1e-2);
-
-      genfitFitter = daf;
-
-    } else if (FitterType == "KALMAN") {
-
-      genfitFitter = new genfit::KalmanFitter();
-
-    } else if (FitterType == "KALMAN_REF") {
-
-      genfitFitter = new genfit::KalmanFitterRefTrack();
-
-    } else {
-
-      std::cerr << "Unknown fit method: " << FitterType << std::endl;
-      return false;
-    }
-
-    int debug_lvl_fit = debug_lvl;
-    if (debug_lvl > 1)
-      debug_lvl_fit = 0;
-    genfitFitter->setDebugLvl(debug_lvl_fit);
 
     // Process track
     genfit::Track genfitTrack = *m_genfitTrack;
