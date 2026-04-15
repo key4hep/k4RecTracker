@@ -593,101 +593,89 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz) {
  */
 GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double Bz) {
 
-  Point2D_xy referencePoint_xy = Point2D_xy(m_VP_referencePoint.X() / dd4hep::mm, m_VP_referencePoint.Y() / dd4hep::mm);
+  Point2D_xy referencePoint_xy(m_VP_referencePoint.X() / dd4hep::mm, m_VP_referencePoint.Y() / dd4hep::mm);
 
-  // FIT CIRCLE TO XY PROJECTION
-  std::vector<TVector3> points;
   auto hits = m_edm4hepTrack.getTrackerHits();
+  const size_t N = hits.size();
+
+  if (N < 2) {
+    throw std::runtime_error("Not enough hits to compute initial parameters");
+  }
+
+  // XY + RZ projection
+  std::vector<Point2D_xy> points_xy;
+  points_xy.reserve(N);
+
+  double sumR = 0.0, sumZ = 0.0, sumRZ = 0.0, sumR2 = 0.0;
+
   for (const auto& hit : hits) {
 
-    auto p = hit.getPosition();
-    points.push_back(TVector3(p.x, p.y, p.z));
+    const auto p = hit.getPosition();
+
+    // XY for circle fit
+    points_xy.emplace_back(p.x, p.y);
+
+    // RZ for linear fit
+    const double dx = p.x - refX;
+    const double dy = p.y - refY;
+    const double R = std::sqrt(dx * dx + dy * dy);
+    const double Z = p.z;
+
+    sumR += R;
+    sumZ += Z;
+    sumRZ += R * Z;
+    sumR2 += R * R;
   }
 
-  std::vector<Point2D_xy> points_xy;
-  for (const auto& p : points) {
-    points_xy.push_back(Point2D_xy(p.X(), p.Y()));
-  }
-
+  // Circle fit (XY)
   FastCircleFit circle(points_xy);
 
   Point2D_xy closestPoint = circle.closestPointTo(referencePoint_xy);
   Point2D_xy tangent_xy = circle.tangentAtPCA(closestPoint, points_xy[1]);
 
   double rho = circle.rho();
-  double init_pT = std::abs(rho * 0.3 * Bz) / 1000;
+  double init_pT = std::abs(rho * 0.3 * Bz) / 1000.0; // 1000 is used to convert from m to mm
+  TVector3 init_mom(tangent_xy.x * init_pT, tangent_xy.y * init_pT, 0.0);
 
-  TVector3 init_mom = TVector3(tangent_xy.x * init_pT, tangent_xy.y * init_pT, 0);
-
-  // FIT Z
-  double pZ = 0;
-
-  size_t N = points.size();
-
-  std::vector<Point2D_Rz> points_Rz;
-  for (const auto& p : points) {
-
-    double dx = p.X() - m_VP_referencePoint.X() / dd4hep::mm;
-    double dy = p.Y() - m_VP_referencePoint.Y() / dd4hep::mm;
-    double R = std::sqrt(dx * dx + dy * dy);
-
-    double z_coord = p.Z();
-    points_Rz.emplace_back(R, z_coord);
-  }
-
-  double sumR = 0.0;
-  double sumZ = 0.0;
-  double sumRZ = 0.0;
-  double sumR2 = 0.0;
-
-  for (const auto& p : points_Rz) {
-    sumR += p.R;
-    sumZ += p.z;
-    sumRZ += p.R * p.z;
-    sumR2 += p.R * p.R;
-  }
-
+  //  Z fit (linear R-Z)
   double denominator = N * sumR2 - sumR * sumR;
 
   double a = 0.0;
   double b = 0.0;
 
-  if (std::abs(denominator) > 1e-12) {
-
+  if (std::abs(denominator) > 1e-12 * (N * sumR2)) {
     a = (N * sumRZ - sumR * sumZ) / denominator;
     b = (sumZ - a * sumR) / N;
-
   } else {
-
     a = 0.0;
     b = sumZ / N;
   }
 
-  pZ = a * init_pT;
-  init_mom.SetZ(pZ);
-
   double z_PCA = b;
 
-  // CHARGE
+  init_mom.SetZ(a * init_pT);
+
+  // Charge
   TVector3 pos(closestPoint.x, closestPoint.y, z_PCA);
-  TVector3 center(circle.x0(), circle.y0(), 0);
+  TVector3 center(circle.x0(), circle.y0(), 0.0);
 
-  double rx = center.X() - pos.X();
-  double ry = center.Y() - pos.Y();
-  double signed_param = init_mom.X() * ry - init_mom.Y() * rx;
-  int charge = 0;
-  if (signed_param > 0)
-    charge = (Bz > 0) ? +1 : -1;
-  else if (signed_param < 0)
-    charge = (Bz > 0) ? -1 : +1;
+  const double rx = center.X() - pos.X();
+  const double ry = center.Y() - pos.Y();
 
+  const int sign = (init_mom.X() * ry - init_mom.Y() * rx > 0) ? 1 : -1;
+
+  const int bzSign = (Bz > 0) ? 1 : -1;
+  int charge = sign * bzSign;
+
+  // Output
   HelperInitialization helper;
   helper.Position = TVector3(closestPoint.x * dd4hep::mm, closestPoint.y * dd4hep::mm, z_PCA * dd4hep::mm);
+
   helper.Momentum = init_mom;
   helper.Charge = charge;
 
   return helper;
-};
+}
 
 /**
  * @brief Builds the genfit::Track from the initialized state and tracker hits.
