@@ -448,12 +448,17 @@ void GenfitTrack::LimitNumberHits(double epsilon, int smoothWindow) {
 
   // Compute first derivative
   std::vector<double> d(n, 0.0);
-  d[0] = (y_val[1] - y_val[0]) / (z_val[1] - z_val[0]);
+
+  double dz0 = z_val[1] - z_val[0];
+  d[0] = (dz0 != 0.0) ? (y_val[1] - y_val[0]) / dz0 : 0.0;
+
   for (std::size_t i = 1; i < static_cast<std::size_t>(W - 1); ++i) {
     double dz = z_val[i + 1] - z_val[i - 1];
     d[i] = (dz != 0.0) ? (y_val[i + 1] - y_val[i - 1]) / dz : 0.0;
   }
-  d[n - 1] = (y_val[n - 1] - y_val[n - 2]) / (z_val[n - 1] - z_val[n - 2]);
+
+  double dzn = z_val[n - 1] - z_val[n - 2];
+  d[n - 1] = (dzn != 0.0) ? (y_val[n - 1] - y_val[n - 2]) / dzn : 0.0;
 
   // Find first significant extremum
   bool MaxFound = false;

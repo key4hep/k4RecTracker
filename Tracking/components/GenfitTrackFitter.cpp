@@ -530,7 +530,8 @@ private:
       if (ts.location == edm4hep::TrackState::AtLastHit) {
 
         auto ref = ts.referencePoint;
-        Bz = m_genfitField->getBz(TVector3(ref.x * dd4hep::mm, ref.y * dd4hep::mm, ref.z * dd4hep::mm)) / 10.;
+        Bz = m_genfitField->getBz(TVector3(ref.x * dd4hep::mm, ref.y * dd4hep::mm, ref.z * dd4hep::mm)) /
+             (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla;
       }
     }
 
