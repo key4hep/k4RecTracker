@@ -1055,6 +1055,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
 
       } catch (...) {
 
+        delete genfitFitter;
         return false;
       }
 
@@ -1074,6 +1075,8 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
         m_trackWithFit.setChi2(-1);
         m_trackWithFit.setNdf(-1);
 
+        delete genfitFitter;
+
         return false;
       }
 
@@ -1085,12 +1088,18 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
       m_trackWithFit.setChi2(-1);
       m_trackWithFit.setNdf(-1);
 
+      delete genfitFitter;
+
       return false;
     }
 
-    return genfitFitter->isTrackFitted(&genfitTrack, trackRep);
+    bool isFitted = genfitFitter->isTrackFitted(&genfitTrack, trackRep);
+    delete genfitFitter;
+
+    return isFitted;
 
   } catch (...) {
+
     return false;
   }
 }
