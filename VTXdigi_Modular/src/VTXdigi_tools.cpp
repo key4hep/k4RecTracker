@@ -273,6 +273,24 @@ int Cluster::GetSize(const int axis) const {
   return max - min + 1; // +1 because of counting: if min=max, cluster size is 1, not 0
 }
 
+std::pair<float, float> Cluster::ComputePosUncertainty_ChargeWeighted(const std::pair<float, float>& clusterPos) const {
+  float sig2_u=0.f, sig2_v=0.f;
+  for (const Pixel* pix : pixels) {
+    float du = (pix->index.first - clusterPos.first);
+    float dv = (pix->index.second - clusterPos.second);
+    sig2_u += pix->charge * du * du;
+    sig2_v += pix->charge * dv * dv;
+  }
+  sig2_u /= charge;
+  sig2_v /= charge;
+  return {std::sqrt(sig2_u), std::sqrt(sig2_v)};
+}
+
+std::pair<float, float> Cluster::ComputePosUncertainty_ChargeWeighted() const {
+  return ComputePosUncertainty_ChargeWeighted(ComputePos());
+}
+
+
 std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv) {
   return {{
     {i_uv.first - 1, i_uv.second}, // left

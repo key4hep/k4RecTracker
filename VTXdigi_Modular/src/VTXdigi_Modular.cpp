@@ -127,6 +127,15 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (m_smearing_time.value() < 0.f)
     throw GaudiException("Time smearing sigma " + std::to_string(m_smearing_time.value()) + " ns is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
+  if (m_positionUncertainty.value().empty())
+    info() << "Cluster position uncertainty not set. Doing simple charge-weighted uncertainty estimation." << endmsg;
+  else if (m_positionUncertainty.value().size() == 2)
+    info() << "Cluster position uncertainty set to (" << m_positionUncertainty.value().at(0) << " mm, " << m_positionUncertainty.value().at(1) << " mm) in u and v direction." << endmsg;
+  else if (m_positionUncertainty.value().size() == 6)
+    info() << "Cluster position uncertainty set to (" << m_positionUncertainty.value().at(0) << ", " << m_positionUncertainty.value().at(1) << ", " << m_positionUncertainty.value().at(2) << ") mm and (" << m_positionUncertainty.value().at(3) << ", " << m_positionUncertainty.value().at(4) << ", " << m_positionUncertainty.value().at(5) << ") mm for cluster lengths of (1, 2, 3), in u and v direction, respectively." << endmsg;
+  else
+    throw GaudiException("Property ClusterPositionUncertainty must be either empty (for charge-weighted estimation), have exactly 2 values (for fixed uncertainty in u and v), or six values (for cluster-length based estimation).", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+
   m_randomService = service("RndmGenSvc", false);
   if (!m_randomService) 
     throw GaudiException("Unable to get RndmGenSvc.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
@@ -626,6 +635,21 @@ void VTXdigi_Modular::InitHistograms() {
       }
     );
 
+    hist1d.at(hist1d_clusterPosUncertainty_u).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterPosUncertainty_u",
+        "DigiHit position uncertainty in u direction - Layer " + std::to_string(layer) + ";Position uncertainty u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_clusterPosUncertainty_v).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterPosUncertainty_v",
+        "DigiHit position uncertainty in v direction - Layer " + std::to_string(layer) + ";Position uncertainty v [um];Entries",
+        axis_residual
+      }
+    );
+
     hist1d.at(hist1d_pixelDistToClusterCenter_u).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_pixelDistanceToClusterCenter_u",
@@ -856,6 +880,23 @@ void VTXdigi_Modular::InitHistograms() {
       }
     );
 
+    hist2d.at(hist2d_residual_vs_clusterPosUncertainty_u).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_vs_clusterPosUncertainty_u_2D",
+        "Residual r (|r_digiHit - r_simHit|) vs. cluster position uncertainty in u direction - Layer " + std::to_string(layer) + ";Cluster position uncertainty u [um];Residual u [um];Entries",
+        axis_residual_abs,
+        axis_residual_abs
+      }
+    );
+    hist2d.at(hist2d_residual_vs_clusterPosUncertainty_v).reset(
+      new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_vs_clusterPosUncertainty_v_2D",
+        "Residual r (|r_digiHit - r_simHit|) vs. cluster position uncertainty in v direction - Layer " + std::to_string(layer) + ";Cluster position uncertainty v [um];Residual v [um];Entries",
+        axis_residual_abs,
+        axis_residual_abs
+      }
+    );
+
     hist2d.at(hist2d_pathTravel_u_vs_global_z).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/simHit_pathTravel_u_vs_global_z_2D",
@@ -1044,6 +1085,13 @@ std::vector<VTXdigi_tools::Cluster> VTXdigi_Modular::Clusterize(const VTXdigi_to
 
 void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const {
 
+  // Called for each cluster on a sensor, so cellID and direction vectors are same among these clusters
+  const dd4hep::rec::Vector3D direction_u_3d = VTXdigi_tools::LocalToGlobal(dd4hep::rec::Vector3D(1, 0, 0), trafoMatrix);
+  const edm4hep::Vector2f direction_u = edm4hep::Vector2f(direction_u_3d.theta(), direction_u_3d.phi()); // edm4hep expects direction in to given as (theta, phi)
+
+  const dd4hep::rec::Vector3D direction_v_3d = VTXdigi_tools::LocalToGlobal(dd4hep::rec::Vector3D(0, 1, 0), trafoMatrix);
+  const edm4hep::Vector2f direction_v = edm4hep::Vector2f(direction_v_3d.theta(), direction_v_3d.phi()); // edm4hep expects direction in to given as (theta, phi)
+
   for (auto& cluster : clusters) {
     if (cluster.simHits.empty()) {
       error() << "Cluster with no contributing simHits found." << endmsg;
@@ -1051,33 +1099,65 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     if (cluster.charge <= 0) {
       error() << "Cluster with non-positive charge found." << endmsg;
     }
-    
-    const std::pair<float, float> pos_index = cluster.ComputePos();
-    const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::ComputePosFromPixIndex_local(pos_index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
-    const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::LocalToGlobal(pos_local, trafoMatrix);
-    
-    debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << pos_index.first << ", " << pos_index.second << "). Has " << cluster.simHits.size() << " contributing simHits." << endmsg;
-    
+
     edm4hep::MutableTrackerHitPlane digiHit = digiHits.create();
     ++m_counter_digiHitsCreated;
+    /* TODO: do we want cellID with segmentation? (instead of using the short cellID that only encodes the sensor and not the pixel) */
+    digiHit.setCellID(cellID);
+    digiHit.setEDep(cluster.charge / VTXdigi_tools::kChargePerkeV);
     
-    float timeStamp = 0.f;      
+
+    // collect position
+    const std::pair<float, float> clusterPos_index = cluster.ComputePos();
+    const dd4hep::rec::Vector3D clusterPos_local = VTXdigi_tools::ComputePosFromPixIndex_local(clusterPos_index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
+    const dd4hep::rec::Vector3D clusterPos_global = VTXdigi_tools::LocalToGlobal(clusterPos_local, trafoMatrix);
+    debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_index.first << ", " << clusterPos_index.second << "). Has " << cluster.simHits.size() << " contributing simHits." << endmsg;
+    digiHit.setPosition(VTXdigi_tools::ConvertVector(clusterPos_global));
+    
+    // pos uncertainty
+    digiHit.setU(direction_u);
+    digiHit.setV(direction_v);
+    if (m_positionUncertainty.value().empty()) {
+      std::pair<float, float> clusterPos_unc = cluster.ComputePosUncertainty_ChargeWeighted(clusterPos_index);
+      digiHit.setDu(clusterPos_unc.first * m_pixelPitch.first);
+      digiHit.setDv(clusterPos_unc.second * m_pixelPitch.second);
+    }
+    else if (m_positionUncertainty.value().size() == 2) {
+      digiHit.setDu(m_positionUncertainty.value().at(0));
+      digiHit.setDv(m_positionUncertainty.value().at(1));
+    }
+    else if (m_positionUncertainty.value().size() == 6) {
+      int clusterSize_u = cluster.GetSize(0);
+      if (clusterSize_u == 1)
+        digiHit.setDu(m_positionUncertainty.value().at(0));
+      else if (clusterSize_u == 2)
+        digiHit.setDu(m_positionUncertainty.value().at(1));
+      else
+        digiHit.setDu(m_positionUncertainty.value().at(2));
+
+      int clusterSize_v = cluster.GetSize(1);
+      if (clusterSize_v == 1)
+        digiHit.setDv(m_positionUncertainty.value().at(3));
+      else if (clusterSize_v == 2)
+        digiHit.setDv(m_positionUncertainty.value().at(4));
+      else
+        digiHit.setDv(m_positionUncertainty.value().at(5));
+    }
+    debug() << "         - Set digiHit position uncertainty to (" << digiHit.getDu() << ", " << digiHit.getDv() << ") mm." << endmsg;
+
+    // collect timestamp & create links
+    float timeStamp = std::numeric_limits<float>::max(); // TODO: use earliest timestamp among simHits
     for (const auto& simHit : cluster.simHits) {
       auto link = digiHitLinks.create();
       link.setFrom(digiHit);
       link.setTo(*(simHit->hitPtr()));
 
-      timeStamp += simHit->hitPtr()->getTime();
+      timeStamp = std::min(timeStamp, simHit->hitPtr()->getTime());
     }
-    timeStamp /= cluster.simHits.size();
     if (m_smearing_time > 0.f)
       timeStamp += m_rndm_time;
     digiHit.setTime(timeStamp); 
-    /* TODO: think of proper way to do timestamping for clusters. Maybe use earliest hit? averaging is not physical at all. */
-    digiHit.setEDep(cluster.charge / VTXdigi_tools::kChargePerkeV);
-    digiHit.setPosition(VTXdigi_tools::ConvertVector(pos_global));
-    digiHit.setCellID(cellID);
-    /* TODO: do we want cellID with segmentation? (instead of using the short cellID that only encodes the sensor and not the pixel) */
+    
 
     /* TODO: estimate uncertainty from pitch/sqrt(12), or from cluster size in u/v*/
 
@@ -1085,7 +1165,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
       FillHistograms_perDigiHit(cluster.simHits, digiHit, trafoMatrix, cluster.pixels.size(), cluster.GetSize(0), cluster.GetSize(1));
 
       for (const VTXdigi_tools::Pixel* pix : cluster.pixels)
-        FillHistograms_perPixel(cellID, *pix, pos_index);
+        FillHistograms_perPixel(cellID, *pix, clusterPos_index);
     }
   } /* loop over clusters */
 }
@@ -1166,6 +1246,9 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
   ++(*m_hist2d.at(layer).at(hist2d_clusterSize_u_vs_global_z))[{pos_global.z(), clusterSize_u}];
   ++(*m_hist2d.at(layer).at(hist2d_clusterSize_v_vs_global_z))[{pos_global.z(), clusterSize_v}];
 
+  ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_u))[ digiHit.getDu() * 1000.f ]; // convert to um
+  ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_v))[ digiHit.getDv() * 1000.f ];
+
   /* per simhit that is connected to this digiHit (cluster) */
   for (const auto& simHit : simHits) {
     const dd4hep::rec::Vector3D simHitPos_local = simHit->truthPos();
@@ -1190,6 +1273,9 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
     ++(*m_hist1d.at(layer).at(hist1d_residual_w))[ residual_local.z()*1000.f ];
     ++(*m_hist1d.at(layer).at(hist1d_residual_r))[ residual_local.r()*1000.f ];
     
+    ++(*m_hist2d.at(layer).at(hist2d_residual_vs_clusterPosUncertainty_u))[{std::abs(digiHit.getDu()) * 1000.f, std::abs(residual_local.x())*1000.f}]; // convert to um
+    ++(*m_hist2d.at(layer).at(hist2d_residual_vs_clusterPosUncertainty_v))[{std::abs(digiHit.getDv()) * 1000.f, std::abs(residual_local.y())*1000.f}];
+
     if (clusterSize == 1) {
       ++(*m_hist1d.at(layer).at(hist1d_residual_u_singlePixelCluster))[ residual_local.x()*1000.f ];
       ++(*m_hist1d.at(layer).at(hist1d_residual_v_singlePixelCluster))[ residual_local.y()*1000.f ];
@@ -1253,11 +1339,6 @@ void VTXdigi_Modular::FillHistograms_fromChargeCollector_perSimHit(const int lay
     ++(*m_hist2d.at(layer).at(hist2d_pathTravel_w_vs_global_z_createdInSimulation))[{truthPos_global.z(), pathTravel.z()*factor_um_per_mm}];
   }
 }
-
-  
-  /* TODO: add */
-// hist1d_digiHitsPerSimHit,
-// hist2d_clusterSize_vs_module_z,
 
 void VTXdigi_Modular::PrintCountersSummary() const {
   const int colWidths[] = {65, 10};  

@@ -17,10 +17,8 @@ namespace VTXdigi_tools {
 
 constexpr float kChargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
 
-
 /* -- Tool tests -- */
 bool ToolTest();
-
 
 /* -- SimHitWrapper -- */
 
@@ -82,11 +80,16 @@ struct Cluster {
   std::vector<const Pixel*> pixels; // raw pointer into HitMap::Pixels. Valid as long as the HitMap is not modified after clustering. See HitMap::ComputeClusters() for details.
   std::unordered_set<const SimHitWrapper*> simHits;
   float charge = 0.f;
-
-  /** @brief Compute the center position of a cluster via charge-weighed center of gravity */
-  std::pair<float, float> ComputePos() const;
+  
   inline int GetSize() const { return pixels.size(); };
   int GetSize(const int axis) const; // axis = 0 for u, 1 for v. 
+
+  /** @brief Compute the center position of a cluster via charge-weighed center of gravity in terms of pixel indices */
+  std::pair<float, float> ComputePos() const;
+  
+  /** @brief Compute the uncertainty of the cluster position via charge-weighed center of gravity in terms of pixel indices */
+  std::pair<float, float> ComputePosUncertainty_ChargeWeighted() const;
+  std::pair<float, float> ComputePosUncertainty_ChargeWeighted(const std::pair<float, float>& clusterPos) const;
 };
 
 /** @brief Get the indices of all direct neighbors of a pixel */

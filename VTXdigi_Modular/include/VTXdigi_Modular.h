@@ -122,6 +122,7 @@ private:
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
   Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0 mm. Used for plotting of the residuals, does not affect the charge collection itself. "};
   Gaudi::Property<float> m_threshold{this, "Threshold", 0.0f, "Pixel threshold for firing (in e-)."};
+  Gaudi::Property<std::vector<float>> m_positionUncertainty{this, "ClusterPositionUncertainty", {}, "Sensor spatial resolution in u and v direction (in mm). Used for the position uncertainty in digiHits"};
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Quadratically add pixel noise and threshold smearing if necessary."};
   Gaudi::Property<float> m_smearing_time{this, "TimeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels time (in ns). Applied to the digiHits time stamp. If 0, no time smearing is applied."};
   
@@ -198,6 +199,8 @@ private:
     hist1d_residual_v_createdInSimulation,
     hist1d_residual_w, 
     hist1d_residual_r, 
+    hist1d_clusterPosUncertainty_u,
+    hist1d_clusterPosUncertainty_v,
     hist1d_pixelDistToClusterCenter_u,
     hist1d_pixelDistToClusterCenter_v,
     hist1d_pathTravel_u,
@@ -259,6 +262,8 @@ private:
     hist2d_residual_u_vs_global_z,
     hist2d_residual_v_vs_global_z,
     hist2d_residual_r_vs_global_z,
+    hist2d_residual_vs_clusterPosUncertainty_u,
+    hist2d_residual_vs_clusterPosUncertainty_v,
     hist2d_pathTravel_u_vs_global_z,
     hist2d_pathTravel_u_vs_global_z_createdInGenerator,
     hist2d_pathTravel_u_vs_global_z_createdInSimulation,
