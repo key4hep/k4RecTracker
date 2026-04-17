@@ -206,6 +206,8 @@ private:
     hist1d_pathTravel_u,
     hist1d_pathTravel_v,
     hist1d_pathTravel_r,
+    hist1d_simHitTimeStamp,
+    hist1d_digiHitTimeStamp,
     hist1dArrayLen
   }; 
   mutable std::unordered_map<

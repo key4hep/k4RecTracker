@@ -406,6 +406,7 @@ void VTXdigi_Modular::InitHistograms() {
   Gaudi::Accumulators::Axis<float> axis_momentum_keV{10000, 0.f, 1000.f};
   Gaudi::Accumulators::Axis<float> axis_momentum_MeV{10000, 0.f, 1000.f};
   Gaudi::Accumulators::Axis<float> axis_momentum_GeV{10000, 0.f, 1000.f};
+  Gaudi::Accumulators::Axis<float> axis_time{1000, 0.f, 1000.f};
   
   Gaudi::Accumulators::Axis<float> axis_residual{1600, -200.f, 200.f};
   Gaudi::Accumulators::Axis<float> axis_residual_abs{800, 0.f, 200.f};
@@ -684,6 +685,21 @@ void VTXdigi_Modular::InitHistograms() {
         "Layer" + std::to_string(layer) + "/simHit_pathTravel_r",
         "Path travel length inside the sensor active volume - Layer " + std::to_string(layer) + ";Path length [um];Entries",
         axis_pathLength
+      }
+    ); 
+
+    hist1d.at(hist1d_simHitTimeStamp).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_timeStamp",
+        "SimHit time stamp - Layer " + std::to_string(layer) + ";Time [?s];Entries",
+        axis_time
+      }
+    ); 
+    hist1d.at(hist1d_digiHitTimeStamp).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_timeStamp",
+        "Cluster time stamp - Layer " + std::to_string(layer) + ";Time [?s];Entries",
+        axis_time
       }
     ); 
 
@@ -1145,22 +1161,27 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     }
     debug() << "         - Set digiHit position uncertainty to (" << digiHit.getDu() << ", " << digiHit.getDv() << ") mm." << endmsg;
 
-    // collect timestamp & create links
-    float timeStamp = std::numeric_limits<float>::max(); // TODO: use earliest timestamp among simHits
-    for (const auto& simHit : cluster.simHits) {
-      auto link = digiHitLinks.create();
-      link.setFrom(digiHit);
-      link.setTo(*(simHit->hitPtr()));
-
-      timeStamp = std::min(timeStamp, simHit->hitPtr()->getTime());
+    // collect timestamp
+    const VTXdigi_tools::Pixel* seedPixel = cluster.pixels.front();
+    for (const VTXdigi_tools::Pixel* pix : cluster.pixels) {
+      if (pix->charge > seedPixel->charge)
+        seedPixel = pix; // use timestamp of pixel with the highest charge
+    }
+    float timeStamp = std::numeric_limits<float>::max();
+    for (const auto& simHit : seedPixel->simHits) {
+      timeStamp = std::min(timeStamp, simHit->hitPtr()->getTime()); // use earliest timestamp among simHits contributing to that pixel
     }
     if (m_smearing_time > 0.f)
       timeStamp += m_rndm_time;
-    digiHit.setTime(timeStamp); 
+    digiHit.setTime(timeStamp);
+
+    // Create links to simHits
+    for (const auto& simHit : cluster.simHits) { 
+      auto link = digiHitLinks.create();
+      link.setFrom(digiHit);
+      link.setTo(*(simHit->hitPtr()));
+    }
     
-
-    /* TODO: estimate uncertainty from pitch/sqrt(12), or from cluster size in u/v*/
-
     if (m_debugHistograms.value()) {
       FillHistograms_perDigiHit(cluster.simHits, digiHit, trafoMatrix, cluster.pixels.size(), cluster.GetSize(0), cluster.GetSize(1));
 
@@ -1187,6 +1208,8 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_keV))[simHitMomentum.r() * 1.E6]; 
   ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_MeV))[simHitMomentum.r() * 1.E3]; 
   ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_GeV))[simHitMomentum.r()]; 
+  
+  ++(*m_hist1d.at(layer).at(hist1d_simHitTimeStamp))[simHit.hitPtr()->getTime()];
 
   ++(*m_hist1d.at(layer).at(hist1d_simHit_z))[simHitPos_global.z()];
 
@@ -1248,6 +1271,8 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
 
   ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_u))[ digiHit.getDu() * 1000.f ]; // convert to um
   ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_v))[ digiHit.getDv() * 1000.f ];
+
+  ++(*m_hist1d.at(layer).at(hist1d_digiHitTimeStamp))[ digiHit.getTime() ];
 
   /* per simhit that is connected to this digiHit (cluster) */
   for (const auto& simHit : simHits) {
