@@ -50,11 +50,11 @@ GenfitTrack::~GenfitTrack() {}
 void GenfitTrack::CheckInitialization() {
 
   if (!genfit::FieldManager::getInstance()->isInitialized()) {
-    std::cerr << "Error: FieldManager is not initialized!" << std::endl;
+    throw std::runtime_error("Error: FieldManager is not initialized!");
   }
 
   if (!genfit::MaterialEffects::getInstance()->isInitialized()) {
-    std::cerr << "Error: MaterialEffects is not initialized!" << std::endl;
+    throw std::runtime_error("Error: MaterialEffects is not initialized!");
   }
 }
 
@@ -266,7 +266,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     auto hits = m_edm4hepTrack.getTrackerHits();
 
     if (hits.empty()) {
-      std::cerr << "InitializeTrack: No hits available for InitializationType == 1" << std::endl;
+      throw std::runtime_error("InitializeTrack: No hits available for InitializationType == 1");
     }
 
     auto firstHit = hits[0].getPosition();
@@ -294,7 +294,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
   else if (InitializationType == 2) // --- From TrackState
   {
     if (!TrackStateLocation.has_value()) {
-      std::cerr << "InitializeTrack: TrackStateLocation is required for InitializationType == 2" << std::endl;
+      throw std::runtime_error("InitializeTrack: TrackStateLocation is required for InitializationType == 2");
     }
 
     auto trackStates = m_originalTrack.getTrackStates();
@@ -357,15 +357,15 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     }
 
     if (!found) {
-      std::cerr << "InitializeTrack: Requested TrackStateLocation not found" << std::endl;
+      throw std::runtime_error("InitializeTrack: Requested TrackStateLocation not found");
     }
   }
 
   else if (InitializationType == 3) // --- Custom
   {
     if (!(Init_position.has_value() && Init_momentum.has_value())) {
-      std::cerr << "InitializeTrack: Init_position and Init_momentum are required for InitializationType == 3"
-                << std::endl;
+      throw std::runtime_error(
+          "InitializeTrack: Init_position and Init_momentum are required for InitializationType == 3");
     }
 
     m_posInit = Init_position.value();
@@ -380,7 +380,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
   }
 
   else {
-    std::cerr << "InitializeTrack: Unknown InitializationType" << std::endl;
+    throw std::runtime_error("InitializeTrack: Unknown InitializationType");
   }
 }
 
@@ -410,7 +410,7 @@ void GenfitTrack::LimitNumberHits(double epsilon, int smoothWindow) {
   int n = maxHit;
 
   if (maxHit == 0) {
-    std::cerr << "Internal edm4hep::Track is empty." << std::endl;
+    throw std::runtime_error("Internal edm4hep::Track is empty.");
   }
 
   if (n < smoothWindow || n < 3)
@@ -746,7 +746,7 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
       GenfitInterface::WireMeasurement measurement(wire_hit, m_dch_info, m_dc_decoder, detID, ++hit_idx, debug_lvl);
       m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack.get()));
     } else {
-      std::cerr << "InitializeTrack: Unknown hit type encountered - Hit will be skipped." << std::endl;
+      throw std::runtime_error("InitializeTrack: Unknown hit type encountered - Hit will be skipped.");
     }
   }
 }
@@ -816,9 +816,9 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
 
   } else {
 
-    std::cerr << "Unknown fit method: " << FitterType << std::endl;
-
     delete genfitFitter;
+    throw std::invalid_argument("Unknown fit method: " + FitterType);
+
     return false;
   }
 
