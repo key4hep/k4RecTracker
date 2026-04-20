@@ -17,8 +17,7 @@
 class FastCircleFit {
 
 public:
-  FastCircleFit(const std::vector<Point2D_xy>& points)
-  {
+  FastCircleFit(const std::vector<Point2D_xy>& points) {
     size_t N = points.size();
     std::vector<double> x(N), y(N), z(N), w(N);
     calculate(points, x, y, z, w);

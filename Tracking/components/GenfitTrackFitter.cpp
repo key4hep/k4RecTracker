@@ -174,19 +174,15 @@ struct GenfitTrackFitter final
         }
       }
 
-      if (!(fields.count("superlayer") &&
-            fields.count("layer") &&
-            fields.count("nphi"))) {
+      if (!(fields.count("superlayer") && fields.count("layer") && fields.count("nphi"))) {
 
         warning() << "DCH decoder missing required fields: " << desc << endmsg;
         throw std::runtime_error("Invalid DCH decoder");
       }
 
-
     } catch (const std::exception& e) {
 
       warning() << "DCH setup error: " << e.what() << endmsg;
-
     }
 
     // Retrive calorimeter information
