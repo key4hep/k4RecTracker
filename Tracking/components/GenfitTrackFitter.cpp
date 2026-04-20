@@ -561,7 +561,7 @@ private:
     }
 
     auto edm4hep_track = track_interface.GetTrack_edm4hep();
-    
+
     double Bz = 0.;
     for (auto ts : edm4hep_track.getTrackStates()) {
       if (ts.location == edm4hep::TrackState::AtLastHit) {
@@ -577,10 +577,29 @@ private:
       FillTrackWithCalorimeterExtrapolation(edm4hep_track, Bz, track_interface.GetCharge(), m_eCalBarrelInnerR,
                                             m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR,
                                             m_eCalEndCapInnerZ);
-    }
 
-    info() << "Fit chi2/ndf = " << edm4hep_track.getChi2() << " / " << edm4hep_track.getNdf() << " = "
-           << edm4hep_track.getChi2() / (edm4hep_track.getNdf() * 1.) << endmsg;
+      if (m_printoutLevel == uint(MSG::DEBUG)) {
+        auto trackStates = edm4hep_track.getTrackStates();
+        edm4hep::TrackState trackStateCalo;
+        for (const auto& ts : trackStates) {
+          if (ts.location == edm4hep::TrackState::AtCalorimeter) {
+            trackStateCalo = ts;
+            break;
+          }
+        }
+
+        debug() << ": TrackState at Calo: " << endmsg;
+        debug() << ":  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+        debug() << ":  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+        debug() << ":  phi: " << trackStateCalo.phi << " rad" << endmsg;
+        debug() << ":  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
+        debug() << ":  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+        debug() << ":  location: " << trackStateCalo.location << endmsg;
+        debug() << ":  reference point: (" << trackStateCalo.referencePoint.x << ", " << trackStateCalo.referencePoint.y
+                << ", " << trackStateCalo.referencePoint.z << ") mm\n"
+                << endmsg;
+      }
+    }
 
     FittedTracks.push_back(edm4hep_track);
 
@@ -593,6 +612,28 @@ private:
         FillTrackWithCalorimeterExtrapolation(edm4hep_track_with_fit, Bz, track_interface.GetCharge(),
                                               m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR,
                                               m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
+
+        if (m_printoutLevel == uint(MSG::DEBUG)) {
+          auto trackStates = edm4hep_track.getTrackStates();
+          edm4hep::TrackState trackStateCalo;
+          for (const auto& ts : trackStates) {
+            if (ts.location == edm4hep::TrackState::AtCalorimeter) {
+              trackStateCalo = ts;
+              break;
+            }
+          }
+
+          debug() << ": TrackState at Calo: " << endmsg;
+          debug() << ":  D0: " << trackStateCalo.D0 << " mm" << endmsg;
+          debug() << ":  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
+          debug() << ":  phi: " << trackStateCalo.phi << " rad" << endmsg;
+          debug() << ":  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
+          debug() << ":  tanLambda: " << trackStateCalo.tanLambda << endmsg;
+          debug() << ":  location: " << trackStateCalo.location << endmsg;
+          debug() << ":  reference point: (" << trackStateCalo.referencePoint.x << ", "
+                  << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm\n"
+                  << endmsg;
+        }
       }
 
       FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);

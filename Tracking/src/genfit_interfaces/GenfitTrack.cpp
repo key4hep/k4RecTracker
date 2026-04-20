@@ -1269,9 +1269,8 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
  * @note The magnetic field is retrieved at the current position and converted to Tesla.
  * @note The curvature sign (omega) depends on the assumed particle charge hypothesis.
  */
-edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState,
-                                   int location) {
-  
+edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState, int location) {
+
   edm4hep::TrackState Edm4hepTrackState;
 
   TVector3 gen_position, gen_momentum;
