@@ -219,10 +219,6 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
                                   std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum,
                                   std::optional<double> Epsilon, std::optional<int> Window) {
 
-  // Conversion factor for momentum (GeV/c)
-  const double c_mm_s = 2.998e11;
-  const double a = 1e-15 * c_mm_s;
-
   // -------------------------
   // Optional hit preprocessing
   // -------------------------
@@ -319,7 +315,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
         m_charge_hypothesis = initInfo.Charge;
 
         // Helix -> momentum conversion
-        double pT = a * std::abs(Bz) / std::abs(ts.omega);
+        double pT = ConversionUnits::a_lcio * std::abs(Bz) / std::abs(ts.omega);
         double px = pT * std::cos(ts.phi);
         double py = pT * std::sin(ts.phi);
         double pz = pT * ts.tanLambda;
@@ -515,10 +511,6 @@ void GenfitTrack::LimitNumberHits(double epsilon, int smoothWindow) {
  */
 TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz) {
 
-  // Conversion factor for momentum (GeV/c)
-  const double c_mm_s = 2.998e11;
-  const double a = 1e-15 * c_mm_s;
-
   TMatrixDSym C_helix(5);
   C_helix.Zero();
 
@@ -528,7 +520,7 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz) {
   C_helix(1, 1) = 0.1 * 0.1;   // phi : 0.1 rad
 
   double pt = m_momInit.Perp();
-  double omega = std::abs(a * Bz / pt * dd4hep::mm);
+  double omega = std::abs(ConversionUnits::a_lcio * Bz / pt * dd4hep::mm);
 
   C_helix(2, 2) = std::pow(0.5 * omega, 2);         // omega : 0.5*omega
   C_helix(3, 3) = std::pow(0.1 * m_posInit.Z(), 2); // z0 : 0.1*z0
@@ -1110,9 +1102,6 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
                                                           TVector3 Position_cm, TVector3 Momentum_gev,
                                                           TVector3 RefPoint_cm, double Bz) {
 
-  double c_mm_s = 2.998e11;
-  double a = 1e-15 * c_mm_s;
-
   double x_PCA = Position_cm.X();
   double y_PCA = Position_cm.Y();
 
@@ -1126,7 +1115,7 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
   double d0 = -(RefPoint_cm.X() - x_PCA) * sin(phi0) + (RefPoint_cm.Y() - y_PCA) * cos(phi0);
 
   double tanLambda = pz / pt;
-  double omega = (std::abs(a * Bz / pt)) * dd4hep::mm;
+  double omega = (std::abs(ConversionUnits::a_lcio * Bz / pt)) * dd4hep::mm;
 
   // --- Jacobian (6x5) ---
   TMatrixD J(6, 5);
@@ -1239,9 +1228,6 @@ void GenfitTrack::UpdateTrackState(edm4hep::TrackState Edm4hepTrackState, genfit
   TVector3 gen_position, gen_momentum;
   TMatrixDSym covariancePosMom(6);
 
-  double c_mm_s = 2.998e11;
-  double a = 1e-15 * c_mm_s;
-
   MeasuredState.getPosMomCov(gen_position, gen_momentum, covariancePosMom);
 
   if (location == edm4hep::TrackState::AtIP) {
@@ -1267,7 +1253,7 @@ void GenfitTrack::UpdateTrackState(edm4hep::TrackState Edm4hepTrackState, genfit
   double phi = gen_momentum.Phi();                                                       // rad
 
   double tanLambda = pz / pt;
-  double omega = std::abs(a * Bz / pt);
+  double omega = std::abs(ConversionUnits::a_lcio * Bz / pt);
   if (m_charge_hypothesis < 0)
     omega = -omega;
 

@@ -161,10 +161,32 @@ struct GenfitTrackFitter final
       dd4hep::Readout dch_readout = dch_sd.readout();
       m_dc_decoder = dch_readout.idSpec().decoder();
 
-    } catch (const std::out_of_range& e) {
+      std::string desc = m_dc_decoder->fieldDescription();
 
-      warning() << "No DCH found in detector geometry (name = " << m_DCH_name.value()
-                << "). Skipping DCH-related setup." << endmsg;
+      std::set<std::string> fields;
+      std::stringstream ss(desc);
+      std::string token;
+
+      while (std::getline(ss, token, ',')) {
+        auto pos = token.find(':');
+        if (pos != std::string::npos) {
+          fields.insert(token.substr(0, pos));
+        }
+      }
+
+      if (!(fields.count("superlayer") &&
+            fields.count("layer") &&
+            fields.count("nphi"))) {
+
+        warning() << "DCH decoder missing required fields: " << desc << endmsg;
+        throw std::runtime_error("Invalid DCH decoder");
+      }
+
+
+    } catch (const std::exception& e) {
+
+      warning() << "DCH setup error: " << e.what() << endmsg;
+
     }
 
     // Retrive calorimeter information

@@ -83,12 +83,9 @@ void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track,
                                            double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
                                            double m_eCalEndCapInnerZ) {
 
-  double c_mm_s = 2.998e11;
-  double a = 1e-15 * c_mm_s;
-
   auto trackStateLastHit = edm4hep_track.getTrackStates()[2];
   double omega_lastHit = trackStateLastHit.omega;
-  double pt_lasthit = a * Bz / abs(omega_lastHit);
+  double pt_lasthit = ConversionUnits::a_lcio * Bz / abs(omega_lastHit);
   double phi_lasthit = trackStateLastHit.phi;
   double pz_lasthit = trackStateLastHit.tanLambda * pt_lasthit;
   double px_lasthit = pt_lasthit * std::cos(phi_lasthit);

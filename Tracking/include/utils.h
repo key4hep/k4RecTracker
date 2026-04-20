@@ -192,4 +192,10 @@ struct Point2D_Rz {
   double z;
 };
 
+namespace ConversionUnits
+{
+    constexpr double c_mm_s = 2.998e11;           // speed of light mm/s
+    constexpr double a_lcio = 1e-15 * c_mm_s;     // conversion constant
+}
+
 #endif // UTILS_HPP
