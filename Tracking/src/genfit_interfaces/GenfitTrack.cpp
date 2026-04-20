@@ -213,11 +213,33 @@ void GenfitTrack::OrderHits(const edm4hep::Track& track, bool skipTrackOrdering)
  * @param Init_momentum Custom initial momentum (required if InitializationType == 3).
  * @param Epsilon Parameter for hit reduction (required if LimitHits == true).
  * @param Window Parameter for hit reduction (required if LimitHits == true).
+ * @param sigma_d0        Optional standard deviation for d0 (used in covariance construction).
+ * @param sigma_phi       Optional standard deviation for phi (used in covariance construction).
+ * @param omega_factor    Optional factor for omega (used in covariance construction).
+ * @param z0_factor       Optional factor for z0 (used in covariance construction).
+ * @param sigma_tanLambda Optional standard deviation for tanLambda (used in covariance construction).
+ *
+ *
+ * @note The optional sigma parameters (sigma_d0, sigma_phi, omega_factor, z0_factor, sigma_tanLambda) are used to
+ * construct the initial covariance matrix in the absence of a track state (InitializationType == 0,1,3).
+ *
+ * They are applied only in:
+ * - InitializationType == 0 (default)
+ * - InitializationType == 1 (refined initialization)
+ * - InitializationType == 3 (custom initialization)
+ *
+ * If not provided, default physically motivated values are used internally.
+ * These parameters are not used in InitializationType == 2, where the
+ * covariance is directly taken from the input TrackState and transformed
+ * to Cartesian coordinates.
  */
 void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFirstHitAsReference, bool LimitHits,
                                   int InitializationType, std::optional<int> TrackStateLocation,
                                   std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum,
-                                  std::optional<double> Epsilon, std::optional<int> Window) {
+                                  std::optional<double> Epsilon, std::optional<int> Window,
+                                  std::optional<double> sigma_d0, std::optional<double> sigma_phi,
+                                  std::optional<double> omega_factor, std::optional<double> z0_factor,
+                                  std::optional<double> sigma_tanLambda) {
 
   // -------------------------
   // Optional hit preprocessing
@@ -258,7 +280,8 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     HelperInitialization initInfo = ComputeInitialParameters(Bz);
     m_charge_hypothesis = initInfo.Charge;
 
-    m_covInit = ComputeInitialCovarianceMatrix(Bz);
+    m_covInit = ComputeInitialCovarianceMatrix(Bz, sigma_d0.value(), sigma_phi.value(), omega_factor.value(),
+                                               z0_factor.value(), sigma_tanLambda.value());
   }
 
   else if (InitializationType == 1) // --- Refined
@@ -288,7 +311,8 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     m_posInit = initInfo.Position;
     m_momInit = initInfo.Momentum;
 
-    m_covInit = ComputeInitialCovarianceMatrix(Bz);
+    m_covInit = ComputeInitialCovarianceMatrix(Bz, sigma_d0.value(), sigma_phi.value(), omega_factor.value(),
+                                               z0_factor.value(), sigma_tanLambda.value());
   }
 
   else if (InitializationType == 2) // --- From TrackState
@@ -341,18 +365,6 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
 
         // Convert to Cartesian covariance
         m_covInit = CovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_VP_referencePoint, Bz);
-
-        TMatrixDSym C_cart(6);
-        C_cart.Zero();
-        C_cart(0, 0) = 100;
-        C_cart(1, 1) = 100;
-        C_cart(2, 2) = 1;
-        C_cart(3, 3) = 1500.;
-        C_cart(4, 4) = 1500.;
-        C_cart(5, 5) = 1500.;
-
-        m_covInit = C_cart;
-        break;
       }
     }
 
@@ -376,7 +388,8 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     HelperInitialization initInfo = ComputeInitialParameters(Bz);
     m_charge_hypothesis = initInfo.Charge;
 
-    m_covInit = ComputeInitialCovarianceMatrix(Bz);
+    m_covInit = ComputeInitialCovarianceMatrix(Bz, sigma_d0.value(), sigma_phi.value(), omega_factor.value(),
+                                               z0_factor.value(), sigma_tanLambda.value());
   }
 
   else {
@@ -486,46 +499,92 @@ void GenfitTrack::LimitNumberHits(double epsilon, int smoothWindow) {
 }
 
 /**
- * @brief Computes the initial 6x6 covariance matrix in Cartesian coordinates.
+ * @brief Computes the initial covariance matrix of the track parameters
+ *        in Cartesian coordinates starting from helix parameter uncertainties.
  *
- * The method performs the following steps:
+ * This method builds an initial estimate of the track parameter covariance
+ * in helix parameter space and propagates it to Cartesian coordinates using
+ * a transformation that depends on the magnetic field and the initial state
+ * (position and momentum).
  *
- * - Initializes a 5x5 covariance matrix in helix parameter space
- *   (d0, phi, omega, z0, tanLambda), with diagonal elements:
- *     - d0          : (0.05 cm)^2
- *     - phi         : (0.1 rad)^2
- *     - omega       : (0.5·omega)^2
- *     - z0          : (0.1·z0)^2
- *     - tanLambda   : (0.1)^2
- * - Computes the curvature parameter:
- *       omega = |a * Bz / pt|
- *   where pt is derived from m_momInit.
- * - Converts the covariance matrix from helix to Cartesian
- *   representation (6x6) using CovarianceMatrixHelixToCartesian().
- * - Fills a TMatrixDSym (6x6) with the converted values.
- * - Returns the Cartesian state covariance matrix.
+ * The procedure is as follows:
  *
- * @param Bz Magnetic field component along the z-axis.
+ * - Initializes a 5x5 diagonal covariance matrix in helix parameter space
+ *   (d0, phi, omega, z0, tanLambda), assuming no initial correlations.
  *
- * @return 6x6 symmetric covariance matrix in Cartesian coordinates.
+ * - d0 (transverse impact parameter):
+ *     Uses sigma_d0 if provided, otherwise a default value of 0.05.
+ *     Sets the variance as sigma_d0 squared.
+ *
+ * - phi (azimuthal angle):
+ *     Uses sigma_phi if provided, otherwise a default value of 0.1.
+ *     Sets the variance as sigma_phi squared.
+ *
+ * - omega (curvature):
+ *     Computes curvature from the initial momentum magnitude in the transverse plane
+ *     and the magnetic field Bz, using a conversion constant.
+ *     The uncertainty is scaled by omega_factor (default 0.5).
+ *     The variance is (omega_factor * omega)^2.
+ *
+ * - z0 (longitudinal impact parameter):
+ *     Uses the absolute value of the initial z position as a scale.
+ *     Scales it using z0_factor (default 0.1).
+ *     The variance is (z0_factor * |z_init_z|)^2.
+ *
+ * - tanLambda (dip angle):
+ *     Uses sigma_tanLambda if provided, otherwise a default value of 0.1.
+ *     Sets the variance as sigma_tanLambda squared.
+ *
+ * - Assumes no correlations between helix parameters (diagonal covariance only).
+ *
+ * - Converts the helix covariance matrix to Cartesian coordinates:
+ *     The transformation depends on:
+ *       - Initial position
+ *       - Initial momentum
+ *       - Reference point
+ *       - Magnetic field Bz
+ *
+ * - Returns the covariance matrix in Cartesian state representation.
+ *
+ * @param Bz Magnetic field component along the z axis.
+ * @param sigma_d0 Optional uncertainty on d0 (default 0.05).
+ * @param sigma_phi Optional uncertainty on phi (default 0.1).
+ * @param omega_factor Scaling factor for curvature uncertainty (default 0.5).
+ * @param z0_factor Scaling factor for z0 uncertainty (default 0.1).
+ * @param sigma_tanLambda Optional uncertainty on tanLambda (default 0.1).
+ *
+ * @return Covariance matrix in Cartesian coordinates (6x6).
  */
-TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz) {
-
+TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, std::optional<double> sigma_d0,
+                                                        std::optional<double> sigma_phi,
+                                                        std::optional<double> omega_factor,
+                                                        std::optional<double> z0_factor,
+                                                        std::optional<double> sigma_tanLambda) {
   TMatrixDSym C_helix(5);
   C_helix.Zero();
 
-  // columns: 0=d0, 1=phi, 2=omega, 3=z0, 4=tanLambda
+  // d0
+  double sd0 = sigma_d0.value_or(0.05);
+  C_helix(0, 0) = sd0 * sd0;
 
-  C_helix(0, 0) = 0.05 * 0.05; // d0 : 500 um = 0.05 cm
-  C_helix(1, 1) = 0.1 * 0.1;   // phi : 0.1 rad
+  // phi
+  double sphi = sigma_phi.value_or(0.1);
+  C_helix(1, 1) = sphi * sphi;
 
+  // omega
   double pt = m_momInit.Perp();
   double omega = std::abs(ConversionUnits::a_lcio * Bz / pt * dd4hep::mm);
+  C_helix(2, 2) = std::pow(omega_factor.value_or(0.5) * omega, 2);
 
-  C_helix(2, 2) = std::pow(0.5 * omega, 2);         // omega : 0.5*omega
-  C_helix(3, 3) = std::pow(0.1 * m_posInit.Z(), 2); // z0 : 0.1*z0
-  C_helix(4, 4) = 0.1 * 0.1;                        // tanLambda : 0.1
+  // z0
+  double z0_scale = std::abs(m_posInit.Z());
+  C_helix(3, 3) = std::pow(z0_factor.value_or(0.1) * z0_scale, 2);
 
+  // tanLambda
+  double stl = sigma_tanLambda.value_or(0.1);
+  C_helix(4, 4) = stl * stl;
+
+  // Convert to Cartesian covariance
   TMatrixDSym covState = CovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_VP_referencePoint, Bz);
 
   return covState;
@@ -577,7 +636,7 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz) {
  * - Fills and returns a HelperInitialization structure containing:
  *     - Position  : PCA in 3D (converted to cm)
  *     - Momentum  : (px, py, pz)
- *     - Charge    : ±1
+ *     - Charge    : +-1
  *
  * @param Bz Magnetic field component along the z-axis.
  *
@@ -696,9 +755,6 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
  * @note InitializeTrack() must be called before this method.
  */
 void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
-
-  // m_genfitTrack.reset();
-  // m_genfitTrackRep.reset();
 
   delete m_genfitTrack;
   delete m_genfitTrackRep;

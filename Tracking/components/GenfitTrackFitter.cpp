@@ -417,6 +417,24 @@ private:
       "2: initialize from a track state (position from reference point, momentum from helix parameters); "
       "3: use user-provided InitPosition and InitMomentum"};
 
+  Gaudi::Property<double> m_sigma_d0{
+      this, "Sigma_d0", 0.05,
+      "Initial uncertainty on d0 (mm) for the initial covariance matrix when InitializationType = 0,1,3."};
+  Gaudi::Property<double> m_sigma_phi{
+      this, "Sigma_phi", 0.1,
+      "Initial uncertainty on phi (rad) for the initial covariance matrix when InitializationType = 0,1,3."};
+  Gaudi::Property<double> m_omega_factor{
+      this, "OmegaFactor", 0.5,
+      "Scaling factor for omega uncertainty for the initial covariance matrix when InitializationType = 0,1,3."
+      "The actual sigma_omega is computed as OmegaFactor * |omega|"};
+  Gaudi::Property<double> m_z0_factor{
+      this, "Z0Factor", 0.1,
+      "Scaling factor for z0 uncertainty for the initial covariance matrix when InitializationType = 0,1,3."
+      "The actual sigma_z0 is computed as Z0Factor * |z0|"};
+  Gaudi::Property<double> m_sigma_tanLambda{
+      this, "Sigma_tanLambda", 0.1,
+      "Initial uncertainty on tanLambda for the initial covariance matrix when InitializationType = 0,1,3."};
+
   Gaudi::Property<int> m_trackStateLocation{this, "TrackStateLocation", edm4hep::TrackState::AtFirstHit,
                                             "TrackState location used for initialization when InitializationType = 2. "
                                             "Defines where the reference point and helix parameters are taken from"};
@@ -506,7 +524,8 @@ private:
 
     track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, LimitHits, m_initializationType,
                                     m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(),
-                                    m_smoothWindow.value());
+                                    m_smoothWindow.value(), m_sigma_d0.value(), m_sigma_phi.value(),
+                                    m_omega_factor.value(), m_z0_factor.value(), m_sigma_tanLambda.value());
 
     auto track_init = track_interface.GetInitialization();
 
@@ -626,7 +645,8 @@ private:
 
       track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, LimitHits, m_initializationType,
                                       m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(),
-                                      m_smoothWindow.value());
+                                      m_smoothWindow.value(), m_sigma_d0.value(), m_sigma_phi.value(),
+                                      m_omega_factor.value(), m_z0_factor.value(), m_sigma_tanLambda.value());
 
       track_interface.CreateGenFitTrack(pdgCode, 0);
 

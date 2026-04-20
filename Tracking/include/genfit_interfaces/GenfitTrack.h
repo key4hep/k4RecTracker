@@ -91,7 +91,9 @@ public:
   void InitializeTrack(double RadiusForDisplacedTracking, bool UseFirstHitAsReference, bool LimitHits,
                        int InitializationType, std::optional<int> TrackStateLocation,
                        std::optional<TVector3> Init_position, std::optional<TVector3> Init_momentum,
-                       std::optional<double> Epsilon, std::optional<int> Window);
+                       std::optional<double> Epsilon, std::optional<int> Window, std::optional<double> sigma_d0,
+                       std::optional<double> sigma_phi, std::optional<double> sigma_omega,
+                       std::optional<double> sigma_z0, std::optional<double> sigma_tanLambda);
 
   void CreateGenFitTrack(int particle_hypotesis, int debug_lvl);
   bool Fit(std::string FitterType, int debug_lvl, std::optional<double> Beta_init, std::optional<double> Beta_final,
@@ -142,7 +144,9 @@ private:
   TMatrixDSym CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_helix, TVector3 Position_cm, TVector3 Momentum_gev,
                                                TVector3 RefPoint_cm, double Bz);
 
-  TMatrixDSym ComputeInitialCovarianceMatrix(double Bz);
+  TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, std::optional<double> sigma_d0, std::optional<double> sigma_phi,
+                                             std::optional<double> sigma_omega, std::optional<double> sigma_z0,
+                                             std::optional<double> sigma_tanLambda);
 
   HelperInitialization ComputeInitialParameters(double Bz);
 
@@ -157,9 +161,6 @@ private:
   TVector3 m_posInit = TVector3(0., 0., 0.);
   TVector3 m_momInit = TVector3(0., 0., 0.);
   TMatrixDSym m_covInit;
-
-  // std::unique_ptr<genfit::AbsTrackRep> m_genfitTrackRep;
-  // std::unique_ptr<genfit::Track> m_genfitTrack;
 
   genfit::AbsTrackRep* m_genfitTrackRep = nullptr;
   genfit::Track* m_genfitTrack = nullptr;
