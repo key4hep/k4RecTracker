@@ -150,8 +150,8 @@ private:
 
   HelperInitialization ComputeInitialParameters(double Bz);
 
-  void UpdateTrackState(edm4hep::TrackState Edm4hepTrackState, genfit::MeasuredStateOnPlane MeasuredState,
-                        int location);
+  edm4hep::TrackState UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState,
+                                   int location);
 
   PCAInfoHelper PCAInfo(TVector3 position, TVector3 momentum, int charge, TVector3 refPoint, double Bz);
 

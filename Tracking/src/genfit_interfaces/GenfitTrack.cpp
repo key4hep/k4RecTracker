@@ -911,27 +911,6 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
 
   if (genfitFitter->isTrackFitted(&genfitTrack, trackRep)) {
 
-    // Extrapolation to IP
-    genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
-    auto* fi = static_cast<genfit::KalmanFitterInfo*>(tp->getFitterInfo(trackRep));
-    genfit::MeasuredStateOnPlane fittedState = fi->getFittedState(true);
-
-    try {
-      trackRep->extrapolateToLine(fittedState, TVector3(0, 0, 0), TVector3(0, 0, 1));
-    } catch (const std::exception& e) {
-      std::cerr << "Exception during extrapolation to IP: " << e.what() << std::endl;
-
-      m_edm4hepTrack.setChi2(-1);
-      m_edm4hepTrack.setNdf(-1);
-      m_trackWithFit.setChi2(-1);
-      m_trackWithFit.setNdf(-1);
-      delete genfitFitter;
-      return false;
-    }
-
-    edm4hep::TrackState trackStateIP;
-    UpdateTrackState(trackStateIP, fittedState, edm4hep::TrackState::AtIP);
-
     // Hit Filtering based on measurement weights (if FitterType == "DAF" and FilterHits == true)
     if (FilterHits.value() && FitterType == "DAF") {
 
@@ -1062,15 +1041,35 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
       }
     }
 
+    genfit::MeasuredStateOnPlane fittedState;
+
     // trackState First Hit
     fittedState = genfitTrack.getFittedState();
-    edm4hep::TrackState trackStateFirstHit;
-    UpdateTrackState(trackStateFirstHit, fittedState, edm4hep::TrackState::AtFirstHit);
+    edm4hep::TrackState trackStateFirstHit = UpdateTrackState(fittedState, edm4hep::TrackState::AtFirstHit);
 
     // trackState lastHit
     fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
-    edm4hep::TrackState trackStateLastHit;
-    UpdateTrackState(trackStateLastHit, fittedState, edm4hep::TrackState::AtLastHit);
+    edm4hep::TrackState trackStateLastHit = UpdateTrackState(fittedState, edm4hep::TrackState::AtLastHit);
+
+    // Extrapolation to IP
+    genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
+    auto* fi = static_cast<genfit::KalmanFitterInfo*>(tp->getFitterInfo(trackRep));
+    fittedState = fi->getFittedState(true);
+
+    try {
+      trackRep->extrapolateToLine(fittedState, TVector3(0, 0, 0), TVector3(0, 0, 1));
+    } catch (const std::exception& e) {
+      std::cerr << "Exception during extrapolation to IP: " << e.what() << std::endl;
+
+      m_edm4hepTrack.setChi2(-1);
+      m_edm4hepTrack.setNdf(-1);
+      m_trackWithFit.setChi2(-1);
+      m_trackWithFit.setNdf(-1);
+      delete genfitFitter;
+      return false;
+    }
+
+    edm4hep::TrackState trackStateIP = UpdateTrackState(fittedState, edm4hep::TrackState::AtIP);
 
     if (debug_lvl == 2) {
 
@@ -1270,8 +1269,10 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
  * @note The magnetic field is retrieved at the current position and converted to Tesla.
  * @note The curvature sign (omega) depends on the assumed particle charge hypothesis.
  */
-void GenfitTrack::UpdateTrackState(edm4hep::TrackState Edm4hepTrackState, genfit::MeasuredStateOnPlane MeasuredState,
+edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState,
                                    int location) {
+  
+  edm4hep::TrackState Edm4hepTrackState;
 
   TVector3 gen_position, gen_momentum;
   TMatrixDSym covariancePosMom(6);
@@ -1314,6 +1315,8 @@ void GenfitTrack::UpdateTrackState(edm4hep::TrackState Edm4hepTrackState, genfit
 
   Edm4hepTrackState.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
   Edm4hepTrackState.location = location;
+
+  return Edm4hepTrackState;
 }
 
 /**

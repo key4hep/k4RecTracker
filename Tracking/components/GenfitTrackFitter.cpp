@@ -561,7 +561,7 @@ private:
     }
 
     auto edm4hep_track = track_interface.GetTrack_edm4hep();
-
+    
     double Bz = 0.;
     for (auto ts : edm4hep_track.getTrackStates()) {
       if (ts.location == edm4hep::TrackState::AtLastHit) {
