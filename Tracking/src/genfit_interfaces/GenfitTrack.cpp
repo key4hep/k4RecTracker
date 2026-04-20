@@ -832,261 +832,248 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
     debug_lvl_fit = 0;
   genfitFitter->setDebugLvl(debug_lvl_fit);
 
+  // Process track
+  genfit::Track genfitTrack = *m_genfitTrack;
+  genfit::AbsTrackRep* trackRep = genfitTrack.getTrackRep(0);
+
   try {
 
-    // Process track
-    genfit::Track genfitTrack = *m_genfitTrack;
-    genfit::AbsTrackRep* trackRep = genfitTrack.getTrackRep(0);
     genfitFitter->processTrackWithRep(&genfitTrack, trackRep);
 
-    if (genfitFitter->isTrackFitted(&genfitTrack, trackRep)) {
+  } catch (const std::exception& e) {
 
-      if (FilterHits.value() && FitterType == "DAF") {
-        // Hit Filtering based on measurement weights
-        int numPoints = genfitTrack.getNumPoints();
-        for (int idx = 0; idx < numPoints; idx++) {
+    std::cerr << "Exception during track fitting: " << e.what() << std::endl;
+    m_edm4hepTrack.setChi2(-1);
+    m_edm4hepTrack.setNdf(-1);
 
-          // Retrieve the genfit::TrackPoint for this index and get its associated fitter information.
-          // Each TrackPoint can have one or more assigned measurements:
-          // - Planar measurements: typically 1 measurement
-          // - Drift chamber hits: typically 2 measurements (left and right positions)
-          //
-          // The loop iterates over all measurements to check their assigned weights and determine
-          // whether the hit should be accepted or discarded.
-          auto point_track = genfitTrack.getPoint(idx);
-          auto fitterInfo = point_track->getFitterInfo(trackRep);
-          genfit::KalmanFitterInfo* kfi = static_cast<genfit::KalmanFitterInfo*>(fitterInfo);
+    m_trackWithFit.setChi2(-1);
+    m_trackWithFit.setNdf(-1);
 
-          unsigned int nMeas = kfi->getNumMeasurements();
-          bool isAccepted = false;
+    delete genfitFitter;
+    return false;
+  }
 
-          for (unsigned int j = 0; j < nMeas; j++) {
-            genfit::MeasurementOnPlane* mop = kfi->getMeasurementOnPlane(j);
-            double weight = mop->getWeight();
+  if (genfitFitter->isTrackFitted(&genfitTrack, trackRep)) {
 
-            // Weight threshold: 1e-5
-            // - Genfit assigns 1e-10 to measurements it discards.
-            // - Exception: when left and right hits are very close (within detector resolution),
-            //   both may get weight 0.5. In this case, we resolve the ambiguity by selecting the left hit.
-            if (weight > 1e-5) {
-              isAccepted = true;
-              break;
-            }
-          }
+    // Extrapolation to IP
+    genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
+    auto* fi = static_cast<genfit::KalmanFitterInfo*>(tp->getFitterInfo(trackRep));
+    genfit::MeasuredStateOnPlane fittedState = fi->getFittedState(true);
 
-          if (isAccepted) {
-            // Retrieve the fitted state from the KalmanFitterInfo
-            genfit::StateOnPlane state = kfi->getFittedState();
-            genfit::MeasuredStateOnPlane measState = kfi->getFittedState();
-
-            // Extract the 3D position of the fitted state
-            TVector3 pos = state.getPos();
-
-            // Extract the measurement plane's orientation vectors
-            auto planeMeas = state.getPlane();
-            auto U = planeMeas->getU(); // Plane u-direction
-            auto V = planeMeas->getV(); // Plane v-direction
-            auto O = planeMeas->getO(); // Plane origin
-
-            // Extract covariance matrix in Genfit's 6D (pos+momentum) space
-            TMatrixDSym covMatrix_cm_gev = measState.get6DCov();
-
-            // covMatrix_cm_gev.Print();
-
-            // Scale the covariance matrix from cm/GeV to desired mm/GeV
-            TMatrixDSym covMatrix = covMatrix_cm_gev;
-            for (int i = 0; i < 6; ++i) {
-              for (int j = 0; j < 6; ++j) {
-                double scale = 1.0;
-                bool pos_i = (i < 3);
-                bool pos_j = (j < 3);
-                if (pos_i && pos_j)
-                  scale = 100.0; // position-position
-                else if (pos_i || pos_j)
-                  scale = 10.0; // position-momentum
-                covMatrix(i, j) *= scale;
-              }
-            }
-
-            // Extract only the 3x3 position covariance submatrix
-            TMatrixDSym covXYZ(3);
-            for (int i = 0; i < 3; i++) {
-              for (int j = 0; j < 3; j++) {
-                covXYZ(i, j) = covMatrix(i, j);
-              }
-            }
-
-            // Convert plane axes to TVector3 for error computation
-            TVector3 u(U.X(), U.Y(), U.Z());
-            TVector3 v(V.X(), V.Y(), V.Z());
-
-            // Convert plane axes to TVectorD for similarity calculation with covariance
-            TVectorD uVec(3);
-            uVec[0] = U.X();
-            uVec[1] = U.Y();
-            uVec[2] = U.Z();
-            TVectorD vVec(3);
-            vVec[0] = V.X();
-            vVec[1] = V.Y();
-            vVec[2] = V.Z();
-
-            // Compute variances along plane directions using covariance similarity
-            double var_u = covXYZ.Similarity(uVec);
-            double var_v = covXYZ.Similarity(vVec);
-
-            // Convert variance to standard deviation (errors)
-            double err_u = std::sqrt(var_u);
-            double err_v = std::sqrt(var_v);
-
-            // Create a new fitted hit object and set its position
-            auto hit3D = m_fittedHits.create();
-            hit3D.setPosition(edm4hep::Vector3d(pos.X() / dd4hep::mm, pos.Y() / dd4hep::mm, pos.Z() / dd4hep::mm));
-
-            // Set the 3x3 position covariance matrix in EDM4hep format
-            hit3D.setCovMatrix({
-                static_cast<float>(covXYZ(0, 0)), // xx
-                static_cast<float>(covXYZ(1, 0)), // yx
-                static_cast<float>(covXYZ(1, 1)), // yy
-                static_cast<float>(covXYZ(2, 0)), // zx
-                static_cast<float>(covXYZ(2, 1)), // zy
-                static_cast<float>(covXYZ(2, 2))  // zz
-            });
-
-            // Set the errors along the local plane axes
-            hit3D.setDu(err_u);
-            hit3D.setDv(err_v);
-
-            // Set plane orientation in EDM4hep
-            edm4hep::Vector2f edm4hepU = {static_cast<float>(u.X()), static_cast<float>(u.Y())};
-            edm4hep::Vector2f edm4hepV = {static_cast<float>(v.X()), static_cast<float>(v.Y())};
-            hit3D.setU(edm4hepU);
-            hit3D.setV(edm4hepV);
-
-            hit3D.setType(1); // Mark as accepted hit
-            m_trackWithFit.addToTrackerHits(hit3D);
-          } else {
-            // Create a placeholder for the rejected hit
-            auto hit3D = m_fittedHits.create();
-            hit3D.setType(0); // Mark as rejected hit
-          }
-        }
-      }
-
-      genfit::MeasuredStateOnPlane fittedState;
-
-      // trackState First Hit
-      fittedState = genfitTrack.getFittedState();
-      edm4hep::TrackState trackStateFirstHit;
-      UpdateTrackState(trackStateFirstHit, fittedState, edm4hep::TrackState::AtFirstHit);
-
-      // trackState lastHit
-      fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
-      edm4hep::TrackState trackStateLastHit;
-      UpdateTrackState(trackStateLastHit, fittedState, edm4hep::TrackState::AtLastHit);
-
-      // take first fitted point
-      genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
-      auto* fi = static_cast<genfit::KalmanFitterInfo*>(tp->getFitterInfo(trackRep));
-
-      // extrapolate rep to target plane (IP)
-      try {
-
-        fittedState = fi->getFittedState(true);
-        trackRep->extrapolateToLine(fittedState, TVector3(0, 0, 0), TVector3(0, 0, 1));
-
-        edm4hep::TrackState trackStateIP;
-        UpdateTrackState(trackStateIP, fittedState, edm4hep::TrackState::AtIP);
-
-        if (debug_lvl == 2) {
-
-          std::cout << "GenfitTrack    DEBUG : TrackState at IP: " << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateIP.D0 << " mm" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  Z0: " << trackStateIP.Z0 << " mm" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  phi: " << trackStateIP.phi << " rad" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  omega: " << trackStateIP.omega << " 1/mm" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  tanLambda: " << trackStateIP.tanLambda << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  location: " << trackStateIP.location << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  reference point: (" << trackStateIP.referencePoint.x << ", "
-                    << trackStateIP.referencePoint.y << ", " << trackStateIP.referencePoint.z << ") mm" << std::endl;
-
-          std::cout << "\nGenfitTrack   DEBUG : TrackState at First Hit: " << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateFirstHit.D0 << " mm" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  Z0: " << trackStateFirstHit.Z0 << " mm" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  phi: " << trackStateFirstHit.phi << " rad" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  omega: " << trackStateFirstHit.omega << " 1/mm" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  tanLambda: " << trackStateFirstHit.tanLambda << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  location: " << trackStateFirstHit.location << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  reference point: (" << trackStateFirstHit.referencePoint.x << ", "
-                    << trackStateFirstHit.referencePoint.y << ", " << trackStateFirstHit.referencePoint.z << ") mm"
-                    << std::endl;
-
-          std::cout << "\nGenfitTrack   DEBUG : TrackState at Last Hit: " << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateLastHit.D0 << " mm" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  Z0: " << trackStateLastHit.Z0 << " mm" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  phi: " << trackStateLastHit.phi << " rad" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  omega: " << trackStateLastHit.omega << " 1/mm" << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  tanLambda: " << trackStateLastHit.tanLambda << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  location: " << trackStateLastHit.location << std::endl;
-          std::cout << "GenfitTrack    DEBUG :  reference point: (" << trackStateLastHit.referencePoint.x << ", "
-                    << trackStateLastHit.referencePoint.y << ", " << trackStateLastHit.referencePoint.z << ") mm\n"
-                    << std::endl;
-        }
-
-        m_edm4hepTrack.addToTrackStates(trackStateIP);
-        m_edm4hepTrack.addToTrackStates(trackStateFirstHit);
-        m_edm4hepTrack.addToTrackStates(trackStateLastHit);
-
-        m_trackWithFit.addToTrackStates(trackStateIP);
-        m_trackWithFit.addToTrackStates(trackStateFirstHit);
-        m_trackWithFit.addToTrackStates(trackStateLastHit);
-
-      } catch (...) {
-
-        delete genfitFitter;
-        return false;
-      }
-
-      if (genfitFitter->isTrackFitted(&genfitTrack, trackRep)) {
-
-        m_edm4hepTrack.setChi2(genfitTrack.getFitStatus()->getChi2());
-        m_edm4hepTrack.setNdf(genfitTrack.getFitStatus()->getNdf());
-
-        m_trackWithFit.setChi2(genfitTrack.getFitStatus()->getChi2());
-        m_trackWithFit.setNdf(genfitTrack.getFitStatus()->getNdf());
-
-      } else {
-
-        m_edm4hepTrack.setChi2(-1);
-        m_edm4hepTrack.setNdf(-1);
-
-        m_trackWithFit.setChi2(-1);
-        m_trackWithFit.setNdf(-1);
-
-        delete genfitFitter;
-
-        return false;
-      }
-
-    } else {
+    try {
+      trackRep->extrapolateToLine(fittedState, TVector3(0, 0, 0), TVector3(0, 0, 1));
+    } catch (const std::exception& e) {
+      std::cerr << "Exception during extrapolation to IP: " << e.what() << std::endl;
 
       m_edm4hepTrack.setChi2(-1);
       m_edm4hepTrack.setNdf(-1);
-
       m_trackWithFit.setChi2(-1);
       m_trackWithFit.setNdf(-1);
-
       delete genfitFitter;
-
       return false;
     }
 
-    bool isFitted = genfitFitter->isTrackFitted(&genfitTrack, trackRep);
+    edm4hep::TrackState trackStateIP;
+    UpdateTrackState(trackStateIP, fittedState, edm4hep::TrackState::AtIP);
+
+    // Hit Filtering based on measurement weights (if FitterType == "DAF" and FilterHits == true)
+    if (FilterHits.value() && FitterType == "DAF") {
+
+      int numPoints = genfitTrack.getNumPoints();
+      for (int idx = 0; idx < numPoints; idx++) {
+
+        // Retrieve the genfit::TrackPoint for this index and get its associated fitter information.
+        // Each TrackPoint can have one or more assigned measurements:
+        // - Planar measurements: typically 1 measurement
+        // - Drift chamber hits: typically 2 measurements (left and right positions)
+        //
+        // The loop iterates over all measurements to check their assigned weights and determine
+        // whether the hit should be accepted or discarded.
+        auto point_track = genfitTrack.getPoint(idx);
+        auto fitterInfo = point_track->getFitterInfo(trackRep);
+        genfit::KalmanFitterInfo* kfi = static_cast<genfit::KalmanFitterInfo*>(fitterInfo);
+
+        unsigned int nMeas = kfi->getNumMeasurements();
+        bool isAccepted = false;
+
+        for (unsigned int j = 0; j < nMeas; j++) {
+          genfit::MeasurementOnPlane* mop = kfi->getMeasurementOnPlane(j);
+          double weight = mop->getWeight();
+
+          // Weight threshold: 1e-5
+          // - Genfit assigns 1e-10 to measurements it discards.
+          // - Exception: when left and right hits are very close (within detector resolution),
+          //   both may get weight 0.5. In this case, we resolve the ambiguity by selecting the left hit.
+          if (weight > 1e-5) {
+            isAccepted = true;
+            break;
+          }
+        }
+
+        if (isAccepted) {
+          // Retrieve the fitted state from the KalmanFitterInfo
+          genfit::StateOnPlane state = kfi->getFittedState();
+          genfit::MeasuredStateOnPlane measState = kfi->getFittedState();
+
+          // Extract the 3D position of the fitted state
+          TVector3 pos = state.getPos();
+
+          // Extract the measurement plane's orientation vectors
+          auto planeMeas = state.getPlane();
+          auto U = planeMeas->getU(); // Plane u-direction
+          auto V = planeMeas->getV(); // Plane v-direction
+          auto O = planeMeas->getO(); // Plane origin
+
+          // Extract covariance matrix in Genfit's 6D (pos+momentum) space
+          TMatrixDSym covMatrix_cm_gev = measState.get6DCov();
+
+          // Scale the covariance matrix from cm/GeV to desired mm/GeV
+          TMatrixDSym covMatrix = covMatrix_cm_gev;
+          for (int i = 0; i < 6; ++i) {
+            for (int j = 0; j < 6; ++j) {
+              double scale = 1.0;
+              bool pos_i = (i < 3);
+              bool pos_j = (j < 3);
+              if (pos_i && pos_j)
+                scale = 100.0; // position-position
+              else if (pos_i || pos_j)
+                scale = 10.0; // position-momentum
+              covMatrix(i, j) *= scale;
+            }
+          }
+
+          // Extract only the 3x3 position covariance submatrix
+          TMatrixDSym covXYZ(3);
+          for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+              covXYZ(i, j) = covMatrix(i, j);
+            }
+          }
+
+          // Convert plane axes to TVector3 for error computation
+          TVector3 u(U.X(), U.Y(), U.Z());
+          TVector3 v(V.X(), V.Y(), V.Z());
+
+          // Convert plane axes to TVectorD for similarity calculation with covariance
+          TVectorD uVec(3);
+          uVec[0] = U.X();
+          uVec[1] = U.Y();
+          uVec[2] = U.Z();
+          TVectorD vVec(3);
+          vVec[0] = V.X();
+          vVec[1] = V.Y();
+          vVec[2] = V.Z();
+
+          // Compute variances along plane directions using covariance similarity
+          double var_u = covXYZ.Similarity(uVec);
+          double var_v = covXYZ.Similarity(vVec);
+
+          // Convert variance to standard deviation (errors)
+          double err_u = std::sqrt(var_u);
+          double err_v = std::sqrt(var_v);
+
+          // Create a new fitted hit object and set its position
+          auto hit3D = m_fittedHits.create();
+          hit3D.setPosition(edm4hep::Vector3d(pos.X() / dd4hep::mm, pos.Y() / dd4hep::mm, pos.Z() / dd4hep::mm));
+
+          // Set the 3x3 position covariance matrix in EDM4hep format
+          hit3D.setCovMatrix({
+              static_cast<float>(covXYZ(0, 0)), // xx
+              static_cast<float>(covXYZ(1, 0)), // yx
+              static_cast<float>(covXYZ(1, 1)), // yy
+              static_cast<float>(covXYZ(2, 0)), // zx
+              static_cast<float>(covXYZ(2, 1)), // zy
+              static_cast<float>(covXYZ(2, 2))  // zz
+          });
+
+          // Set the errors along the local plane axes
+          hit3D.setDu(err_u);
+          hit3D.setDv(err_v);
+
+          // Set plane orientation in EDM4hep
+          edm4hep::Vector2f edm4hepU = {static_cast<float>(u.X()), static_cast<float>(u.Y())};
+          edm4hep::Vector2f edm4hepV = {static_cast<float>(v.X()), static_cast<float>(v.Y())};
+          hit3D.setU(edm4hepU);
+          hit3D.setV(edm4hepV);
+
+          hit3D.setType(1); // Mark as accepted hit
+          m_trackWithFit.addToTrackerHits(hit3D);
+        } else {
+          // Create a placeholder for the rejected hit
+          auto hit3D = m_fittedHits.create();
+          hit3D.setType(0); // Mark as rejected hit
+        }
+      }
+    }
+
+    // trackState First Hit
+    fittedState = genfitTrack.getFittedState();
+    edm4hep::TrackState trackStateFirstHit;
+    UpdateTrackState(trackStateFirstHit, fittedState, edm4hep::TrackState::AtFirstHit);
+
+    // trackState lastHit
+    fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
+    edm4hep::TrackState trackStateLastHit;
+    UpdateTrackState(trackStateLastHit, fittedState, edm4hep::TrackState::AtLastHit);
+
+    if (debug_lvl == 2) {
+
+      std::cout << "GenfitTrack    DEBUG : TrackState at IP: " << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateIP.D0 << " mm" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  Z0: " << trackStateIP.Z0 << " mm" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  phi: " << trackStateIP.phi << " rad" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  omega: " << trackStateIP.omega << " 1/mm" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  tanLambda: " << trackStateIP.tanLambda << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  location: " << trackStateIP.location << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  reference point: (" << trackStateIP.referencePoint.x << ", "
+                << trackStateIP.referencePoint.y << ", " << trackStateIP.referencePoint.z << ") mm" << std::endl;
+
+      std::cout << "\nGenfitTrack   DEBUG : TrackState at First Hit: " << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateFirstHit.D0 << " mm" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  Z0: " << trackStateFirstHit.Z0 << " mm" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  phi: " << trackStateFirstHit.phi << " rad" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  omega: " << trackStateFirstHit.omega << " 1/mm" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  tanLambda: " << trackStateFirstHit.tanLambda << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  location: " << trackStateFirstHit.location << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  reference point: (" << trackStateFirstHit.referencePoint.x << ", "
+                << trackStateFirstHit.referencePoint.y << ", " << trackStateFirstHit.referencePoint.z << ") mm"
+                << std::endl;
+
+      std::cout << "\nGenfitTrack   DEBUG : TrackState at Last Hit: " << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateLastHit.D0 << " mm" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  Z0: " << trackStateLastHit.Z0 << " mm" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  phi: " << trackStateLastHit.phi << " rad" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  omega: " << trackStateLastHit.omega << " 1/mm" << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  tanLambda: " << trackStateLastHit.tanLambda << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  location: " << trackStateLastHit.location << std::endl;
+      std::cout << "GenfitTrack    DEBUG :  reference point: (" << trackStateLastHit.referencePoint.x << ", "
+                << trackStateLastHit.referencePoint.y << ", " << trackStateLastHit.referencePoint.z << ") mm\n"
+                << std::endl;
+    }
+
+    m_edm4hepTrack.addToTrackStates(trackStateIP);
+    m_edm4hepTrack.addToTrackStates(trackStateFirstHit);
+    m_edm4hepTrack.addToTrackStates(trackStateLastHit);
+
+    m_trackWithFit.addToTrackStates(trackStateIP);
+    m_trackWithFit.addToTrackStates(trackStateFirstHit);
+    m_trackWithFit.addToTrackStates(trackStateLastHit);
+
+    m_edm4hepTrack.setChi2(genfitTrack.getFitStatus()->getChi2());
+    m_edm4hepTrack.setNdf(genfitTrack.getFitStatus()->getNdf());
+
+    m_trackWithFit.setChi2(genfitTrack.getFitStatus()->getChi2());
+    m_trackWithFit.setNdf(genfitTrack.getFitStatus()->getNdf());
+
+    return true;
+  } else {
+    m_edm4hepTrack.setChi2(-1);
+    m_edm4hepTrack.setNdf(-1);
+
+    m_trackWithFit.setChi2(-1);
+    m_trackWithFit.setNdf(-1);
+
     delete genfitFitter;
-
-    return isFitted;
-
-  } catch (...) {
-
     return false;
   }
 }
