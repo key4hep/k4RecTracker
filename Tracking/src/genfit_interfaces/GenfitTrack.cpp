@@ -697,6 +697,9 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
  */
 void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
 
+  m_genfitTrack.reset();
+  m_genfitTrackRep.reset();
+
   m_signed_particle_hypothesis = particle_hypotesis;
   if (particle_hypotesis == 11 || particle_hypotesis == 13) {
     m_signed_particle_hypothesis = -m_charge_hypothesis * particle_hypotesis;
@@ -704,9 +707,6 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
   } else {
     m_signed_particle_hypothesis = m_charge_hypothesis * particle_hypotesis;
   }
-
-  delete m_genfitTrackRep;
-  delete m_genfitTrack;
 
   // Create stateVec
   TVectorD stateVec(6);
@@ -719,8 +719,8 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
   stateVec[4] = m_momInit.Y();
   stateVec[5] = m_momInit.Z();
 
-  m_genfitTrackRep = new genfit::RKTrackRep(m_signed_particle_hypothesis);
-  m_genfitTrack = new genfit::Track(m_genfitTrackRep, stateVec, m_covInit);
+  m_genfitTrackRep = std::make_unique<genfit::RKTrackRep>(m_signed_particle_hypothesis);
+  m_genfitTrack = std::make_unique<genfit::Track>(m_genfitTrackRep.get(), stateVec, m_covInit);
 
   auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
 
@@ -739,12 +739,12 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
       detID = 0;
       auto planar_hit = hit.as<edm4hep::TrackerHitPlane>();
       GenfitInterface::PlanarMeasurement measurement(planar_hit, detID, ++hit_idx, debug_lvl);
-      m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack));
+      m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack.get()));
     } else if (hit.isA<edm4hep::SenseWireHit>()) {
       detID = 1;
       auto wire_hit = hit.as<edm4hep::SenseWireHit>();
       GenfitInterface::WireMeasurement measurement(wire_hit, m_dch_info, m_dc_decoder, detID, ++hit_idx, debug_lvl);
-      m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack));
+      m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack.get()));
     } else {
       std::cerr << "InitializeTrack: Unknown hit type encountered - Hit will be skipped." << std::endl;
     }
