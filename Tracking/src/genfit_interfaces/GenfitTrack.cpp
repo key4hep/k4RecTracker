@@ -856,31 +856,28 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
   }
 
   // Initialize the genfit fitter
-  genfit::AbsKalmanFitter* genfitFitter = nullptr;
+  std::unique_ptr<genfit::AbsKalmanFitter> genfitFitter = nullptr;
 
   if (FitterType == "DAF") {
 
-    genfit::DAF* daf = new genfit::DAF(true, 1e-3, 1e-3);
+    auto daf = std::make_unique<genfit::DAF>(true, 1e-3, 1e-3);
     daf->setAnnealingScheme(Beta_init.value(), Beta_final.value(), Beta_steps.value());
     daf->setProbCut(1e-5);
     daf->setConvergenceDeltaWeight(1e-2);
 
-    genfitFitter = daf;
+    genfitFitter = std::move(daf);
 
   } else if (FitterType == "KALMAN") {
 
-    genfitFitter = new genfit::KalmanFitter();
+    genfitFitter = std::make_unique<genfit::KalmanFitter>();
 
   } else if (FitterType == "KALMAN_REF") {
 
-    genfitFitter = new genfit::KalmanFitterRefTrack();
+    genfitFitter = std::make_unique<genfit::KalmanFitterRefTrack>();
 
   } else {
 
-    delete genfitFitter;
     throw std::invalid_argument("Unknown fit method: " + FitterType);
-
-    return false;
   }
 
   int debug_lvl_fit = debug_lvl;
@@ -905,7 +902,6 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
     m_trackWithFit.setChi2(-1);
     m_trackWithFit.setNdf(-1);
 
-    delete genfitFitter;
     return false;
   }
 
@@ -1065,7 +1061,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
       m_edm4hepTrack.setNdf(-1);
       m_trackWithFit.setChi2(-1);
       m_trackWithFit.setNdf(-1);
-      delete genfitFitter;
+
       return false;
     }
 
@@ -1128,7 +1124,6 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
     m_trackWithFit.setChi2(-1);
     m_trackWithFit.setNdf(-1);
 
-    delete genfitFitter;
     return false;
   }
 }
