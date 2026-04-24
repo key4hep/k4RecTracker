@@ -199,7 +199,7 @@ struct GenfitTrackFitter final
           dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL, dd4hep::DetType::AUXILIARY);
 
       if (barrelECal.empty()) {
-        warning() << "No barrel calorimeter found in detector description." << endmsg;
+        error() << "No barrel calorimeter found in detector description but runCalorimeterExtrapolation is set to true. Set it to false or define the detector types in the DD4hep geometry (dd4hep::DetType::CALORIMETER, ...)" << endmsg;
         return StatusCode::FAILURE;
       }
 
