@@ -712,17 +712,6 @@ private:
               break;
             }
           }
-
-          debug() << ": TrackState at Calo: " << endmsg;
-          debug() << ":  D0: " << trackStateCalo.D0 << " mm" << endmsg;
-          debug() << ":  Z0: " << trackStateCalo.Z0 << " mm" << endmsg;
-          debug() << ":  phi: " << trackStateCalo.phi << " rad" << endmsg;
-          debug() << ":  omega: " << trackStateCalo.omega << " 1/mm" << endmsg;
-          debug() << ":  tanLambda: " << trackStateCalo.tanLambda << endmsg;
-          debug() << ":  location: " << trackStateCalo.location << endmsg;
-          debug() << ":  reference point: (" << trackStateCalo.referencePoint.x << ", "
-                  << trackStateCalo.referencePoint.y << ", " << trackStateCalo.referencePoint.z << ") mm\n"
-                  << endmsg;
         }
       }
 
