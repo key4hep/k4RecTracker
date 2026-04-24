@@ -26,7 +26,7 @@
 // C++
 #include <string>
 
-#include <utils.hpp>
+#include <utils.h>
 
 using SimTrackerHitColl = std::vector<const edm4hep::SimTrackerHitCollection*>;
 
