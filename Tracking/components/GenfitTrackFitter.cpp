@@ -199,7 +199,10 @@ struct GenfitTrackFitter final
           dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL, dd4hep::DetType::AUXILIARY);
 
       if (barrelECal.empty()) {
-        error() << "No barrel calorimeter found in detector description but runCalorimeterExtrapolation is set to true. Set it to false or define the detector types in the DD4hep geometry (dd4hep::DetType::CALORIMETER, ...)" << endmsg;
+        error()
+            << "No barrel calorimeter found in detector description but runCalorimeterExtrapolation is set to true. "
+               "Set it to false or define the detector types in the DD4hep geometry (dd4hep::DetType::CALORIMETER, ...)"
+            << endmsg;
         return StatusCode::FAILURE;
       }
 
@@ -225,9 +228,9 @@ struct GenfitTrackFitter final
         } catch (const std::exception& e) {
 
           error() << "Failed to retrieve ECal LayeredCalorimeterData: " << e.what()
-                    << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
-                       "the extrapolation."
-                    << endmsg;
+                  << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
+                     "the extrapolation."
+                  << endmsg;
 
           return StatusCode::FAILURE;
         }
@@ -256,9 +259,9 @@ struct GenfitTrackFitter final
         } catch (const std::exception& e) {
 
           error() << "Failed to retrieve ECal LayeredCalorimeterData: " << e.what()
-                    << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
-                       "the extrapolation."
-                    << endmsg;
+                  << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
+                     "the extrapolation."
+                  << endmsg;
 
           return StatusCode::FAILURE;
         }
@@ -281,9 +284,9 @@ struct GenfitTrackFitter final
         } catch (const std::exception& e) {
 
           error() << "Failed to retrieve ECal EndCap LayeredCalorimeterData: " << e.what()
-                    << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
-                       "the extrapolation."
-                    << endmsg;
+                  << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
+                     "the extrapolation."
+                  << endmsg;
 
           return StatusCode::FAILURE;
         }
