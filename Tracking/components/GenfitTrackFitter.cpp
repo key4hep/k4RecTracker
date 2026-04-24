@@ -533,7 +533,7 @@ private:
   Gaudi::Property<bool> m_skipTrackOrdering{this, "SkipTrackOrdering", false, "Skip hit ordering before fitting"};
 
   Gaudi::Property<std::vector<int>> m_ListOfTypesToSkip{
-      this, "SkipUnmatchedTracks", std::vector<int>(),
+      this, "ListOfTypesToSkip", std::vector<int>(),
       "List of track types to skip during fitting (e.g. unmatched tracks with type = 0)"};
 
   Gaudi::Property<bool> m_singleEvaluation{
