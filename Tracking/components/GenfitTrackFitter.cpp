@@ -224,7 +224,7 @@ struct GenfitTrackFitter final
 
         } catch (const std::exception& e) {
 
-          warning() << "Failed to retrieve ECal LayeredCalorimeterData: " << e.what()
+          error() << "Failed to retrieve ECal LayeredCalorimeterData: " << e.what()
                     << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
                        "the extrapolation."
                     << endmsg;
