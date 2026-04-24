@@ -249,7 +249,7 @@ struct GenfitTrackFitter final
               getExtension(dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL,
                            dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD);
           if (!ecalBarrelExt) {
-            warning() << "ECal Barrel LayeredCalorimeterData is null: cannot retrieve calorimeter geometry." << endmsg;
+            error() << "ECal Barrel LayeredCalorimeterData is null: cannot retrieve calorimeter geometry." << endmsg;
             return StatusCode::FAILURE;
           }
 
