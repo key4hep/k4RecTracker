@@ -56,7 +56,7 @@ trackFitter.BetaSteps = args.Beta_steps
 
 trackFitter.InitializationType = 1
 trackFitter.SkipTrackOrdering = False
-trackFitter.SkipUnmatchedTracks = False
+trackFitter.ListOfTypesToSkip = [0]
 
 trackFitter.FilterTrackHits = True
 
