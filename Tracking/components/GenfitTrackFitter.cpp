@@ -218,7 +218,7 @@ struct GenfitTrackFitter final
                            dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD);
 
           if (!ecalExt) {
-            warning() << "ECal LayeredCalorimeterData is null: cannot retrieve calorimeter geometry." << endmsg;
+            error() << "ECal LayeredCalorimeterData is null: cannot retrieve calorimeter geometry." << endmsg;
             return StatusCode::FAILURE;
           }
 
