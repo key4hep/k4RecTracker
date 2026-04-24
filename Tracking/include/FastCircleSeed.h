@@ -13,6 +13,13 @@
  * Generic version of the CMS FastCircleFit.
  * Fits a circle to a set of weighted 2D hits using the method
  * described by Strandlie & Frühwirth (NIM A488 (2002)).
+ *
+ * This class is also used to pre-fit the hits in order to provide a
+ * reliable initialization of position and momentum when the GenFit
+ * fitter is invoked. In particular, the GenFit initialization is obtained
+ * by computing the PCA with respect to a chosen reference point
+ * (e.g. the production vertex of the tracks), and extracting the corresponding
+ * momentum at that point (see GenfitTrack.cpp).
  */
 class FastCircleFit {
 

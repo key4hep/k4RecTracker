@@ -74,7 +74,7 @@
 /** @struct GenfitTrackFitter
  *
  *  Gaudi MultiTransformer that refines the parameters of the reconstructed tracks using the GENFIT library.
- *  The fitting process minimizes the track χ² while accounting for material effects, magnetic field, and detector
+ *  The fitting process minimizes the track chi2 while accounting for material effects, magnetic field, and detector
  * geometry.
  *
  *  If the fit fails for a given hypothesis, a fallback track is still generated with chi2 = -1 and ndf = -1 to preserve
@@ -182,46 +182,118 @@ struct GenfitTrackFitter final
 
     } catch (const std::exception& e) {
 
-      warning() << "DCH setup error: " << e.what() << endmsg;
+      warning() << "DCH_info unexpected error: " << e.what()
+                << ". This may indicate missing drift chamber or configuration issues." << endmsg;
     }
 
-    // Retrive calorimeter information
-    // These parameters are necessary to propagate the track to the calorimeter surface
-    dd4hep::Detector& detector = dd4hep::Detector::getInstance();
-    const std::vector<dd4hep::DetElement>& isDuaReadout = dd4hep::DetectorSelector(detector).detectors(
-        dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL | dd4hep::DetType::ENDCAP, dd4hep::DetType::AUXILIARY);
-    if (isDuaReadout.size() > 0) {
+    // Calorimeter geometry
+    // These parameters are used to propagate tracks to the
+    // calorimeter surface (barrel and endcap geometry).
+    if (m_runCalorimeterExtrapolation.value()) {
 
-      const dd4hep::rec::LayeredCalorimeterData* DualReadoutExtension =
-          getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
-                       (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
+      dd4hep::Detector& detector = dd4hep::Detector::getInstance();
 
-      // mm (dd4hep::mm = 0.1)
-      m_eCalBarrelInnerR = DualReadoutExtension->extent[0] / dd4hep::mm; // barrel rmin
-      m_eCalBarrelMaxZ = DualReadoutExtension->extent[2] / dd4hep::mm;   // barrel zmax == endcap zmin
+      // Check if there is a calorimeter. For simplicity, we assume that if a barrel calorimeter is present, then the
+      // endcap is also present.
+      const std::vector<dd4hep::DetElement> barrelECal = dd4hep::DetectorSelector(detector).detectors(
+          dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL, dd4hep::DetType::AUXILIARY);
 
-      m_eCalEndCapInnerR = DualReadoutExtension->extent[4] / dd4hep::mm; // endcap rmin
-      m_eCalEndCapOuterR = DualReadoutExtension->extent[5] / dd4hep::mm; // endcap rmax
-      m_eCalEndCapInnerZ = DualReadoutExtension->extent[2] / dd4hep::mm; // endcap zmin
-      m_eCalEndCapOuterZ = DualReadoutExtension->extent[3] / dd4hep::mm; // endcap zmax
-    } else {
-      const dd4hep::rec::LayeredCalorimeterData* eCalBarrelExtension =
-          getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
-                       (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
+      if (barrelECal.empty()) {
+        warning() << "No barrel calorimeter found in detector description." << endmsg;
+        return StatusCode::FAILURE;
+      }
 
-      // mm (dd4hep::mm = 0.1)
-      m_eCalBarrelInnerR = eCalBarrelExtension->extent[0] / dd4hep::mm;
-      m_eCalBarrelMaxZ = eCalBarrelExtension->extent[3] / dd4hep::mm;
+      // If IDEA_o1 we expect that the calorimeter element is not separated in barrel and endcap,
+      // but we have a single calorimeter element with both barrel and endcap information.
+      const std::vector<dd4hep::DetElement> dualReadoutElements = dd4hep::DetectorSelector(detector).detectors(
+          dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL | dd4hep::DetType::ENDCAP, dd4hep::DetType::AUXILIARY);
 
-      const dd4hep::rec::LayeredCalorimeterData* eCalEndCapExtension =
-          getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
-                       (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
+      if (!dualReadoutElements.empty()) {
 
-      // mm (dd4hep::mm = 0.1)
-      m_eCalEndCapInnerR = eCalEndCapExtension->extent[0] / dd4hep::mm;
-      m_eCalEndCapOuterR = eCalEndCapExtension->extent[1] / dd4hep::mm;
-      m_eCalEndCapInnerZ = eCalEndCapExtension->extent[2] / dd4hep::mm;
-      m_eCalEndCapOuterZ = eCalEndCapExtension->extent[3] / dd4hep::mm;
+        const dd4hep::rec::LayeredCalorimeterData* ecalExt = nullptr;
+        try {
+
+          ecalExt =
+              getExtension(dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL,
+                           dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD);
+
+          if (!ecalExt) {
+            warning() << "ECal LayeredCalorimeterData is null: cannot retrieve calorimeter geometry." << endmsg;
+            return StatusCode::FAILURE;
+          }
+
+        } catch (const std::exception& e) {
+
+          warning() << "Failed to retrieve ECal LayeredCalorimeterData: " << e.what()
+                    << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
+                       "the extrapolation."
+                    << endmsg;
+
+          return StatusCode::FAILURE;
+        }
+
+        // Convert to mm (dd4hep::mm = 0.1)
+        m_eCalBarrelInnerR = ecalExt->extent[0] / dd4hep::mm; // barrel rmin
+        m_eCalBarrelMaxZ = ecalExt->extent[2] / dd4hep::mm;   // barrel zmax == endcap zmin
+
+        m_eCalEndCapInnerR = ecalExt->extent[4] / dd4hep::mm; // endcap rmin
+        m_eCalEndCapOuterR = ecalExt->extent[5] / dd4hep::mm; // endcap rmax
+        m_eCalEndCapInnerZ = ecalExt->extent[2] / dd4hep::mm; // endcap zmin
+        m_eCalEndCapOuterZ = ecalExt->extent[3] / dd4hep::mm; // endcap zmax
+
+      } else {
+
+        const dd4hep::rec::LayeredCalorimeterData* ecalBarrelExt = nullptr;
+        try {
+          ecalBarrelExt =
+              getExtension(dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL,
+                           dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD);
+          if (!ecalBarrelExt) {
+            warning() << "ECal Barrel LayeredCalorimeterData is null: cannot retrieve calorimeter geometry." << endmsg;
+            return StatusCode::FAILURE;
+          }
+
+        } catch (const std::exception& e) {
+
+          warning() << "Failed to retrieve ECal LayeredCalorimeterData: " << e.what()
+                    << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
+                       "the extrapolation."
+                    << endmsg;
+
+          return StatusCode::FAILURE;
+        }
+
+        // Convert to mm (dd4hep::mm = 0.1)
+        m_eCalBarrelInnerR = ecalBarrelExt->extent[0] / dd4hep::mm;
+        m_eCalBarrelMaxZ = ecalBarrelExt->extent[3] / dd4hep::mm;
+
+        const dd4hep::rec::LayeredCalorimeterData* ecalEndCapExt = nullptr;
+        try {
+          ecalEndCapExt =
+              getExtension(dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP,
+                           dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD);
+
+          if (!ecalEndCapExt) {
+            warning() << "ECal EndCap LayeredCalorimeterData is null: cannot retrieve calorimeter geometry." << endmsg;
+            return StatusCode::FAILURE;
+          }
+
+        } catch (const std::exception& e) {
+
+          warning() << "Failed to retrieve ECal EndCap LayeredCalorimeterData: " << e.what()
+                    << ". Calorimeter geometry for propagation is not available — please implement it or switch off "
+                       "the extrapolation."
+                    << endmsg;
+
+          return StatusCode::FAILURE;
+        }
+
+        // Convert to mm (dd4hep::mm = 0.1)
+        m_eCalEndCapInnerR = ecalEndCapExt->extent[0] / dd4hep::mm;
+        m_eCalEndCapOuterR = ecalEndCapExt->extent[1] / dd4hep::mm;
+        m_eCalEndCapInnerZ = ecalEndCapExt->extent[2] / dd4hep::mm;
+        m_eCalEndCapOuterZ = ecalEndCapExt->extent[3] / dd4hep::mm;
+      }
     }
 
     return StatusCode::SUCCESS;
@@ -244,9 +316,10 @@ struct GenfitTrackFitter final
 
       // Skip unmatched tracks if the option is enabled
       // Consider unmatched tracks those with type = 0
-      if (m_skip_unmatchedTracks && track.getType() == 0) {
+      if (m_ListOfTypesToSkip.size() > 0 && std::find(m_ListOfTypesToSkip.begin(), m_ListOfTypesToSkip.end(),
+                                                      track.getType()) != m_ListOfTypesToSkip.end()) {
         num_skip += 1;
-        warning() << "Track " << num_tracks - 1 << ": unmatched track (type = 0), skipping fit.\n" << endmsg;
+        warning() << "Skipping track " << num_tracks - 1 << " with type " << track.getType() << "\n" << endmsg;
         continue; // skip unmatched tracks
       }
 
@@ -261,8 +334,8 @@ struct GenfitTrackFitter final
       int isSuccess = 0;
       if (m_singleEvaluation) {
 
-        isSuccess =
-            ProcessTrack(track, false, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits, FittedHits);
+        isSuccess = ProcessTrack(track, false, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits,
+                                 FittedHits, m_runCalorimeterExtrapolation.value());
 
       } else {
 
@@ -274,7 +347,8 @@ struct GenfitTrackFitter final
 
           isSuccess = 1;
           int pdgCode = winning_hypothesis;
-          ProcessTrack(track, false, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits);
+          ProcessTrack(track, false, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits,
+                       m_runCalorimeterExtrapolation.value());
         }
       }
 
@@ -283,7 +357,7 @@ struct GenfitTrackFitter final
         if (m_singleEvaluation) {
 
           isSuccess = ProcessTrack(track, true, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits,
-                                   FittedHits);
+                                   FittedHits, m_runCalorimeterExtrapolation.value());
 
           if (!isSuccess) {
 
@@ -312,7 +386,8 @@ struct GenfitTrackFitter final
           } else {
 
             int pdgCode = winning_hypothesis;
-            ProcessTrack(track, true, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits);
+            ProcessTrack(track, true, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits,
+                         m_runCalorimeterExtrapolation.value());
           }
         }
       }
@@ -457,8 +532,9 @@ private:
   // ====================== Track Filtering & Evaluation ======================
   Gaudi::Property<bool> m_skipTrackOrdering{this, "SkipTrackOrdering", false, "Skip hit ordering before fitting"};
 
-  Gaudi::Property<bool> m_skip_unmatchedTracks{this, "SkipUnmatchedTracks", true,
-                                               "Skip tracks with type = 0 (unmatched) from fitting"};
+  Gaudi::Property<std::vector<int>> m_ListOfTypesToSkip{
+      this, "SkipUnmatchedTracks", std::vector<int>(),
+      "List of track types to skip during fitting (e.g. unmatched tracks with type = 0)"};
 
   Gaudi::Property<bool> m_singleEvaluation{
       this, "RunSingleEvaluation", false,
@@ -466,16 +542,26 @@ private:
       "If false, all hypotheses are scanned and the best fit is chosen based on chi2/ndf"};
 
   Gaudi::Property<bool> m_filterTrackHits{
-      this, "FilterTrackHits", false,
+      this, "FilterTrackHits", true,
       "Filter track hits after fitting based on their quality (weights assigned by the fitter). "
       "This also resolves the left/right ambiguity in drift chamber hits: only the hit with the higher weight is "
       "considered."};
 
+  Gaudi::Property<bool> m_runCalorimeterExtrapolation{
+      this, "RunCalorimeterExtrapolation", true,
+      "If true, the track is extrapolated to the calorimeter surfaces (barrel and endcap)"
+      "and the corresponding track states are stored in the output track."
+      "This is applied only if a non-zero magnetic field (Bz > 0) is found at the last hit position."};
+
   // ====================== Track Classification ======================
-  Gaudi::Property<double> m_identifyDisplaced{
-      this, "IdentifyDisplacedRadius", 100.,
-      "Radius [mm] defining a spherical region around {0,0,0}: "
-      "tracks produced within this radius are considered prompt; tracks outside are considered displaced"};
+  Gaudi::Property<double> m_RadialThresholdPromptTrack{
+      this, "RadialThresholdPromptTrack", 100.,
+      "Radius [mm] defining a spherical region centered at {0,0,0}. "
+      "Tracks produced within this radius are classified as prompt, while those outside are considered displaced. "
+      "This parameter is used to select different track initialization strategies: prompt tracks are initialized using "
+      "the PCA of the hits with respect to a reference point (IP or VP), whereas displaced tracks are initialized "
+      "using the PCA "
+      "of the first hit."};
 
   // ====================== Fit Helpers ======================
 
@@ -504,6 +590,7 @@ private:
    * @param FittedTracks Output collection storing the fitted tracks
    * @param FittedTracksWithFilteredHits Output collection storing fitted tracks after hit filtering (if enabled)
    * @param FittedHits Output collection storing the filtered fitted hits (if enabled)
+   * @param runCalorimeterExtrapolation If true, performs extrapolation to calorimeter surfaces and stores track states
    *
    * @return true if the track fit was successful, false otherwise
    *
@@ -513,7 +600,7 @@ private:
    */
   bool ProcessTrack(const edm4hep::Track& track, bool LimitHits, int particleHypothesis,
                     edm4hep::TrackCollection& FittedTracks, edm4hep::TrackCollection& FittedTracksWithFilteredHits,
-                    edm4hep::TrackerHitPlaneCollection& FittedHits) const {
+                    edm4hep::TrackerHitPlaneCollection& FittedHits, bool runCalorimeterExtrapolation) const {
 
     GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder,
                                                  m_genfitField.get());
@@ -522,9 +609,9 @@ private:
 
     TVector3 Init_momentum(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
 
-    track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, LimitHits, m_initializationType,
-                                    m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(),
-                                    m_smoothWindow.value(), m_sigma_d0.value(), m_sigma_phi.value(),
+    track_interface.InitializeTrack(m_RadialThresholdPromptTrack.value(), m_useFirstHitAsReference, LimitHits,
+                                    m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum,
+                                    m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value(), m_sigma_phi.value(),
                                     m_omega_factor.value(), m_z0_factor.value(), m_sigma_tanLambda.value());
 
     auto track_init = track_interface.GetInitialization();
@@ -572,7 +659,7 @@ private:
       }
     }
 
-    if (Bz > 0) {
+    if (runCalorimeterExtrapolation && Bz > 0) {
 
       FillTrackWithCalorimeterExtrapolation(edm4hep_track, Bz, track_interface.GetCharge(), m_eCalBarrelInnerR,
                                             m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR,
@@ -607,7 +694,7 @@ private:
 
       auto edm4hep_track_with_fit = track_interface.GetTrackWithFit_edm4hep();
 
-      if (Bz > 0) {
+      if (runCalorimeterExtrapolation && Bz > 0) {
 
         FillTrackWithCalorimeterExtrapolation(edm4hep_track_with_fit, Bz, track_interface.GetCharge(),
                                               m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR,
@@ -684,10 +771,11 @@ private:
       GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder,
                                                    m_genfitField.get());
 
-      track_interface.InitializeTrack(m_identifyDisplaced, m_useFirstHitAsReference, LimitHits, m_initializationType,
-                                      m_trackStateLocation.value(), Init_position, Init_momentum, m_epsilon.value(),
-                                      m_smoothWindow.value(), m_sigma_d0.value(), m_sigma_phi.value(),
-                                      m_omega_factor.value(), m_z0_factor.value(), m_sigma_tanLambda.value());
+      track_interface.InitializeTrack(m_RadialThresholdPromptTrack.value(), m_useFirstHitAsReference, LimitHits,
+                                      m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum,
+                                      m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value(),
+                                      m_sigma_phi.value(), m_omega_factor.value(), m_z0_factor.value(),
+                                      m_sigma_tanLambda.value());
 
       track_interface.CreateGenFitTrack(pdgCode, 0);
 

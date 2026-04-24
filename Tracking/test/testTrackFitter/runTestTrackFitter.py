@@ -11,9 +11,21 @@ from k4FWCore.parseArgs import parser
 
 parser.add_argument("--inputFile", default="output_tracks.root", help="InputFile")
 parser.add_argument("--outputFile", default="testFitter.root", help="OutputFile")
-parser.add_argument("--Beta_init", default=100, help="OutputFile")
-parser.add_argument("--Beta_final", default=0.05, help="OutputFile")
-parser.add_argument("--Beta_steps", default=15, help="OutputFile")
+parser.add_argument(
+    "--Beta_init",
+    default=100,
+    help="Initial annealing parameter (if FitterType == 'DAF') [https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf]",
+)
+parser.add_argument(
+    "--Beta_final",
+    default=0.05,
+    help="Final annealing parameter (if FitterType == 'DAF') [https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf]",
+)
+parser.add_argument(
+    "--Beta_steps",
+    default=15,
+    help="Number of annealing steps (if FitterType == 'DAF') [https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf]",
+)
 args = parser.parse_args()
 
 ################ input & output
