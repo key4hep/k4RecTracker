@@ -713,7 +713,7 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
   const double rx = center.X() - pos.X();
   const double ry = center.Y() - pos.Y();
 
-  const int sign = (init_mom.X() * ry - init_mom.Y() * rx > 0) ? 1 : -1;
+  const int sign = (init_mom.X() * ry - init_mom.Y() * rx > 0) ? -1 : 1;
 
   const int bzSign = (Bz > 0) ? 1 : -1;
   int charge = sign * bzSign;
@@ -1272,13 +1272,6 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
   TMatrixDSym covariancePosMom(6);
 
   MeasuredState.getPosMomCov(gen_position, gen_momentum, covariancePosMom);
-
-  if (location == edm4hep::TrackState::AtIP) {
-
-    gen_momentum.SetX(-gen_momentum.X());
-    gen_momentum.SetY(-gen_momentum.Y());
-    gen_momentum.SetZ(-gen_momentum.Z());
-  }
 
   double x_ref = gen_position.X(); // cm
   double y_ref = gen_position.Y(); // cm

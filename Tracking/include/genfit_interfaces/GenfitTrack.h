@@ -134,7 +134,7 @@ private:
 
   struct PCAInfoHelper {
     TVector3 PCA;
-    int Phi0;
+    double Phi0;
   };
 
   void CheckInitialization();
