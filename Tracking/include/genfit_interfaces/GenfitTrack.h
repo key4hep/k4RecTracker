@@ -134,7 +134,7 @@ private:
 
   struct PCAInfoHelper {
     TVector3 PCA;
-    int Phi0;
+    double Phi0;
   };
 
   void CheckInitialization();
@@ -143,6 +143,9 @@ private:
 
   TMatrixDSym CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_helix, TVector3 Position_cm, TVector3 Momentum_gev,
                                                TVector3 RefPoint_cm, double Bz);
+
+  TMatrixDSym CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6
+                                               TVector3 Momentum_gev, double Bz);
 
   TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, std::optional<double> sigma_d0, std::optional<double> sigma_phi,
                                              std::optional<double> sigma_omega, std::optional<double> sigma_z0,

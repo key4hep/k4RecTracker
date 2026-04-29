@@ -713,7 +713,7 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
   const double rx = center.X() - pos.X();
   const double ry = center.Y() - pos.Y();
 
-  const int sign = (init_mom.X() * ry - init_mom.Y() * rx > 0) ? 1 : -1;
+  const int sign = (init_mom.X() * ry - init_mom.Y() * rx > 0) ? -1 : 1;
 
   const int bzSign = (Bz > 0) ? 1 : -1;
   int charge = sign * bzSign;
@@ -1233,6 +1233,96 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
 }
 
 /**
+ * @brief Propagation of the covariance matrix from cartesian-parameter representation to Helix coordinate
+ * representation
+ *
+ * @param C_cartesian    Covariance Matrix in cartesian-basis
+ * @param Momentum_gev   Initial Momentum in gev/c
+ * @param Bz             Bz
+ *
+ * @return Covariance matrix in helix-basis
+ */
+TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6
+                                                          TVector3 Momentum_gev, double Bz) {
+
+  double px = Momentum_gev.X();
+  double py = Momentum_gev.Y();
+  double pz = Momentum_gev.Z();
+
+  double pt = Momentum_gev.Perp();
+
+  double phi0 = std::atan2(py, px);
+  double tanLambda = pz / pt;
+  double omega = (std::abs(ConversionUnits::a_lcio * Bz / pt)) * dd4hep::mm;
+
+  // --- Jacobian (5x6) ---
+  TMatrixD J(5, 6);
+  J.Zero();
+
+  // These definitions are taken from
+  // https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
+
+  // d0 = -(RefPoint_cm.X() - x_PCA) * sin(phi0) + (RefPoint_cm.Y() - y_PCA) * cos(phi0);
+  J(0, 0) = sin(phi0); // dd0 / dx_PCA
+  J(0, 1) = cos(phi0); // dd0 / dy_PCA
+  J(0, 2) = 0.0;       // dd0 / dz_PCA
+  J(0, 3) = 0.0;       // dd0 / dpx
+  J(0, 4) = 0.0;       // dd0 / dpy
+  J(0, 5) = 0.0;       // dd0 / dpz
+
+  // phi0 = atan2(py, px);
+  J(1, 0) = -py / std::pow(pt, 2); // dphi0 / dx_PCA
+  J(1, 1) = px / std::pow(pt, 2);  // dphi0 / dy_PCA
+  J(1, 2) = 0.0;                   // dphi0 / dz_PCA
+  J(1, 3) = 0.0;                   // dphi0 / dpx
+  J(1, 4) = 0.0;                   // dphi0 / dpy
+  J(1, 5) = 0.0;                   // dphi0 / dpz
+
+  // omega = (a * Bz / pt);
+  J(2, 0) = 0.0;                           // domega / dx_PCA
+  J(2, 1) = 0.0;                           // domega / dy_PCA
+  J(2, 2) = 0.0;                           // domega / dz_PCA
+  J(2, 3) = -omega * px / std::pow(pt, 2); // domega / dpx
+  J(2, 4) = -omega * py / std::pow(pt, 2); // domega / dpy
+  J(2, 5) = 0.0;                           // domega / dpz
+
+  // z0 = P^0_z - P^r_z
+  J(3, 0) = 0.0; // dz0 / dx_PCA
+  J(3, 1) = 0.0; // dz0 / dy_PCA
+  J(3, 2) = 1.0; // dz0 / dz_PCA
+  J(3, 3) = 0.0; // dz0 / dpx
+  J(3, 4) = 0.0; // dz0 / dpy
+  J(3, 5) = 0.0; // dz0 / dpz
+
+  // tanLambda = pz / pt
+  J(4, 0) = 0.0;                               // dtanLambda / dx_PCA
+  J(4, 1) = 0.0;                               // dtanLambda / dy_PCA
+  J(4, 2) = 0.0;                               // dtanLambda / dz_PCA
+  J(4, 3) = -tanLambda * px / std::pow(pt, 2); // dtanLambda / dpx
+  J(4, 4) = -tanLambda * py / std::pow(pt, 2); // dtanLambda / dpy
+  J(4, 5) = 1.0 / pt;                          // dtanLambda / dpz
+
+  // --- Compute C_cart = J * C_helix * J^T ---
+  TMatrixD Jt(TMatrixD::kTransposed, J);
+  TMatrixD tmp = J * C_cartesian * Jt;
+
+  TMatrixDSym C_helix(6);
+  C_helix.Zero();
+  for (int i = 0; i < 6; ++i) {
+    for (int j = 0; j <= i; ++j) {
+      C_helix(i, j) = tmp(i, j);
+    }
+  }
+  for (int i = 0; i < 6; ++i) {
+    for (int j = i + 1; j < 6; ++j) {
+      C_helix(i, j) = C_helix(j, i);
+    }
+  }
+
+  return C_helix;
+}
+
+/**
  * @brief Update an edm4hep::TrackState using the fitted Genfit state parameters.
  *
  * This method extracts position, momentum, and covariance information from a
@@ -1273,13 +1363,6 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
 
   MeasuredState.getPosMomCov(gen_position, gen_momentum, covariancePosMom);
 
-  if (location == edm4hep::TrackState::AtIP) {
-
-    gen_momentum.SetX(-gen_momentum.X());
-    gen_momentum.SetY(-gen_momentum.Y());
-    gen_momentum.SetZ(-gen_momentum.Z());
-  }
-
   double x_ref = gen_position.X(); // cm
   double y_ref = gen_position.Y(); // cm
   double z_ref = gen_position.Z(); // cm
@@ -1309,6 +1392,16 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
 
   Edm4hepTrackState.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
   Edm4hepTrackState.location = location;
+
+  TMatrixDSym CovHelix = CovarianceMatrixCartesianToHelix(covariancePosMom, gen_momentum, Bz);
+
+  // Conversion from TMatrixDSym(6x6) to lower-triangular packed format used in edm4hep::TrackState
+  for (int i = 0; i < 6; ++i) {
+    for (int j = 0; j <= i; ++j) {
+      Edm4hepTrackState.setCovMatrix(static_cast<float>(CovHelix(i, j)), static_cast<edm4hep::TrackParams>(i),
+                                     static_cast<edm4hep::TrackParams>(j));
+    }
+  }
 
   return Edm4hepTrackState;
 }
