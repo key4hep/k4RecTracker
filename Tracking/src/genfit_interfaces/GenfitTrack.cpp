@@ -1232,6 +1232,16 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
   return C_cart;
 }
 
+/**
+ * @brief Propagation of the covariance matrix from cartesian-parameter representation to Helix coordinate
+ * representation
+ *
+ * @param C_cartesian    Covariance Matrix in cartesian-basis
+ * @param Momentum_gev   Initial Momentum in gev/c
+ * @param Bz             Bz
+ *
+ * @return Covariance matrix in helix-basis
+ */
 TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6
                                                           TVector3 Momentum_gev, double Bz) {
 
