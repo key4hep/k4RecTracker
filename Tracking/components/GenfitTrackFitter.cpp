@@ -554,7 +554,7 @@ private:
       this, "RunCalorimeterExtrapolation", true,
       "If true, the track is extrapolated to the calorimeter surfaces (barrel and endcap)"
       "and the corresponding track states are stored in the output track."
-      "This is applied only if a non-zero magnetic field (Bz > 0) is found at the last hit position."};
+      "This is applied only if a non-zero magnetic field (|Bz| > 0) is found at the last hit position."};
 
   // ====================== Track Classification ======================
   Gaudi::Property<double> m_RadialThresholdPromptTrack{
@@ -598,7 +598,7 @@ private:
    * @return true if the track fit was successful, false otherwise
    *
    * @note If the fit fails, the function exits early and no track is added to the output collections.
-   * @note Calorimeter extrapolation is applied only if a non-zero magnetic field (Bz > 0) is found
+   * @note Calorimeter extrapolation is applied only if a non-zero magnetic field (|Bz| > 0) is found
    *       at the last hit position.
    */
   bool ProcessTrack(const edm4hep::Track& track, bool LimitHits, int particleHypothesis,
@@ -662,7 +662,7 @@ private:
       }
     }
 
-    if (runCalorimeterExtrapolation && Bz > 0) {
+    if (runCalorimeterExtrapolation && std::abs(Bz) > 0) {
 
       FillTrackWithCalorimeterExtrapolation(edm4hep_track, Bz, track_interface.GetCharge(), m_eCalBarrelInnerR,
                                             m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR,
@@ -697,7 +697,7 @@ private:
 
       auto edm4hep_track_with_fit = track_interface.GetTrackWithFit_edm4hep();
 
-      if (runCalorimeterExtrapolation && Bz > 0) {
+      if (runCalorimeterExtrapolation && std::abs(Bz) > 0) {
 
         FillTrackWithCalorimeterExtrapolation(edm4hep_track_with_fit, Bz, track_interface.GetCharge(),
                                               m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR,
