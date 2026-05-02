@@ -1452,6 +1452,25 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
     }
   }
 
+  std::cout << "\n===== Helix parameters with uncertainties =====\n";
+
+  // helper lambda
+  auto printParam = [](const std::string& name, double value, double err) {
+    std::cout << name << " = " << value << " ± " << err << "\n";
+  };
+
+  double d0_err        = std::sqrt(CovHelix(0,0));
+  double phi_err       = std::sqrt(CovHelix(1,1));
+  double omega_err     = std::sqrt(CovHelix(2,2));
+  double z0_err        = std::sqrt(CovHelix(3,3));
+  double tanL_err      = std::sqrt(CovHelix(4,4));
+
+  printParam("d0       ", d0, d0_err);
+  printParam("phi      ", phi, phi_err);
+  printParam("omega    ", omega, omega_err);
+  printParam("z0       ", z0, z0_err);
+  printParam("tanLambda", tanLambda, tanL_err);
+
   return Edm4hepTrackState;
 }
 

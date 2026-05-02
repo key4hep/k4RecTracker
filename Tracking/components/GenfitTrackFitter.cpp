@@ -657,7 +657,7 @@ private:
                                      m_filterTrackHits);
 
     if (!isFit) {
-      debug() << "Track fit FAILED for track " << num_tracks - 1 << endmsg;
+      info() << "Track fit FAILED for track " << num_tracks - 1 << endmsg;
       return false;
     }
 
