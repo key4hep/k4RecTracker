@@ -1276,14 +1276,16 @@ TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_c
   double py = Momentum_gev.Y();
   double pz = Momentum_gev.Z();
 
-  double x_PCA = Position_cm.X();
-  double y_PCA = Position_cm.Y();
+  double x_PCA_mm = Position_cm.X() / dd4hep::mm;
+  double y_PCA_mm = Position_cm.Y() / dd4hep::mm;
+  double RefX_mm = RefPoint_cm.X() / dd4hep::mm;
+  double RefY_mm = RefPoint_cm.Y() / dd4hep::mm;
 
   double pt = Momentum_gev.Perp();
 
   double phi0 = std::atan2(py, px);
   double tanLambda = pz / pt;
-  double omega = (std::abs(ConversionUnits::a_lcio * Bz / pt)) * dd4hep::mm;
+  double omega = (std::abs(ConversionUnits::a_lcio * Bz / pt)); // in 1/mm
 
   if (Bz * Charge < 0)
     omega = -omega;
@@ -1301,7 +1303,7 @@ TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_c
   J(0, 2) = 0.0;        // dd0 / dz
 
   // chain rule via phi0 = atan2(py, px)
-  double dd0_dphi = -(RefPoint_cm.X() - x_PCA) * cos(phi0) - (RefPoint_cm.Y() - y_PCA) * sin(phi0);
+  double dd0_dphi = -(RefX_mm - x_PCA_mm) * cos(phi0) - (RefY_mm - y_PCA_mm) * sin(phi0);
 
   J(0, 3) = dd0_dphi * (-py / (pt * pt)); // dd0 / dpx
   J(0, 4) = dd0_dphi * (px / (pt * pt));  // dd0 / dpy
