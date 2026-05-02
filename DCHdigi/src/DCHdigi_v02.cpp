@@ -118,8 +118,8 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
   for (const auto& [cellID, simhits] : cell_map) {
 
     // Some geometry values needed for the calculations below
-    int layer = m_dch_info->CalculateILayerFromCellIDFields(m_decoder->get(cellID, "layer"),
-                                                            m_decoder->get(cellID, "superlayer"));
+    int superlayer = m_decoder->get(cellID, "superlayer"); 
+    int layer = m_dch_info->CalculateILayerFromCellIDFields(m_decoder->get(cellID, "layer"), superlayer);
     int nphi = m_decoder->get(cellID, "nphi");
 
     /* THE FOLLOWING CALCULATION OF WIRE ANGLES HAS BEEN COPIED AS IS FROM DCHdigi_v01! */
@@ -128,16 +128,14 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
     // One point of the wire is for example the following:
     //   RotationZ(WireAzimuthalAngle) * Position(cell_rave_z0, 0 , 0)
     // variables are defined below
-    auto WireAzimuthalAngle = this->m_dch_info->Get_cell_phi_angle(layer, nphi);
+    auto WireAzimuthalAngle = this->m_dch_info->Get_cell_phi_angle(superlayer, layer, /*sector=*/0, nphi);
     float WireStereoAngle = 0;
     {
       auto l = this->m_dch_info->database.at(layer);
-      // radial middle point of the cell at Z=0
-      auto cell_rave_z0 = 0.5 * (l.radius_fdw_z0 + l.radius_fuw_z0);
       // when building the twisted tube, the twist angle is defined as:
-      //     cell_twistangle    = l.StereoSign() * DCH_i->twist_angle
+      //     cell_twistangle    = DCH_i->StereoSign(l) * DCH_i->twist_angle
       // which forces the stereoangle of the wire to have the oposite sign
-      WireStereoAngle = (-1.) * l.StereoSign() * m_dch_info->stereoangle_z0(cell_rave_z0);
+      WireStereoAngle = (-1.) * l.stereo_sw_z0;
     }
     /* END OF COPYING WIRE ANGLE CALCULATION FROM DCHdigi_v01 */
 
@@ -157,10 +155,10 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
       // Use dd4hep:mm as scale to convert into the dd4hep default units (_ddu)
       auto simhit_position_ddu = this->toTVector3(simhit.getPosition()) * dd4hep::mm;
 
-      auto hit_to_wire_vector_ddu = m_dch_info->Calculate_hitpos_to_wire_vector(layer, nphi, simhit_position_ddu);
+      auto hit_to_wire_vector_ddu = m_dch_info->Calculate_hitpos_to_wire_vector(superlayer, layer, /*isector=*/0, nphi, simhit_position_ddu);
       auto hit_projection_on_the_wire_ddu = simhit_position_ddu + hit_to_wire_vector_ddu;
       double distance_to_wire_mm =
-          hit_to_wire_vector_ddu.Mag() / dd4hep::mm; // Explicitly cast to mm, no matter what the default unit is
+          hit_to_wire_vector_ddu.R() / dd4hep::mm; // Explicitly cast to mm, no matter what the default unit is
 
       ////////////////////////////////////////////
       // POSITION SMEARING AND TIME COMPUTATION //
@@ -172,7 +170,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
 
       // z smearing
       double smearing_z_ddu = random_engine.Gaus(0.0, m_z_resolution_mm.value() * dd4hep::mm);
-      TVector3 wire_direction_ez_ddu = (m_dch_info->Calculate_wire_vector_ez(layer, nphi)).Unit();
+      auto wire_direction_ez_ddu = (m_dch_info->Calculate_wire_vector_ez(superlayer, layer,/*sector=*/0, nphi)).Unit();
       hit_projection_on_the_wire_ddu +=
           smearing_z_ddu *
           wire_direction_ez_ddu; // Need to multiply smearing_z_ddu with dd4hep::mm to cast into default units

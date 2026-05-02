@@ -60,6 +60,7 @@ gaudi_add_module(${PackageName}
   LINK
   k4FWCore::k4FWCore
   k4FWCore::k4Interface
+  k4geo::detectorCommon
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
   extensionDict
