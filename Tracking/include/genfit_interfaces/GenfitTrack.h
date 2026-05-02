@@ -116,9 +116,9 @@ public:
   }
 
   struct HelperInitialization {
-    TVector3 Position;
-    TVector3 Momentum;
-    TMatrixDSym CovMatrix;
+    TVector3 Position;     // in cm
+    TVector3 Momentum;     // in GeV/c
+    TMatrixDSym CovMatrix; // in cm and GeV units
     int Charge;
     int NumHits;
   };

@@ -329,7 +329,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
         found = true;
 
         m_VP_referencePoint = TVector3(ts.referencePoint.x * dd4hep::mm, ts.referencePoint.y * dd4hep::mm,
-                                       ts.referencePoint.z * dd4hep::mm);
+                                       ts.referencePoint.z * dd4hep::mm); // in cm
 
         double Bz =
             m_fieldMap->getBz(m_VP_referencePoint) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
@@ -360,6 +360,20 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
         for (int i = 0; i < 5; ++i) {
           for (int j = i + 1; j < 5; ++j) {
             C_helix(i, j) = C_helix(j, i);
+          }
+        }
+
+        // Conversion factors:
+        // d0 : mm -> cm
+        // phi0 : unchanged
+        // omega : 1/mm -> 1/cm => x10
+        // z0 : mm -> cm        => x0.1
+        // tanLambda : unchanged
+
+        double scale[5] = {dd4hep::mm, dd4hep::cm, 1. / dd4hep::mm, dd4hep::mm, dd4hep::cm};
+        for (int i = 0; i < 5; ++i) {
+          for (int j = 0; j < 5; ++j) {
+            C_helix(i, j) *= scale[i] * scale[j];
           }
         }
 
@@ -549,8 +563,8 @@ void GenfitTrack::LimitNumberHits(double epsilon, int smoothWindow) {
  *
  * @param Bz Magnetic field component along the z axis.
  * @param Charge Particle charge hypothesis (+1 or -1).
- * @param sigma_d0 Optional uncertainty on d0 (default 0.05).
- * @param sigma_phi Optional uncertainty on phi (default 0.1).
+ * @param sigma_d0 Optional uncertainty on d0 [cm] (default 0.05).
+ * @param sigma_phi Optional uncertainty on phi [rad] (default 0.1).
  * @param omega_factor Scaling factor for curvature uncertainty (default 0.5).
  * @param z0_factor Scaling factor for z0 uncertainty (default 0.1).
  * @param sigma_tanLambda Optional uncertainty on tanLambda (default 0.1).
@@ -565,20 +579,20 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, int Charge, s
   TMatrixDSym C_helix(5);
   C_helix.Zero();
 
-  // d0
+  // d0 (in cm)
   double sd0 = sigma_d0.value_or(0.05);
   C_helix(0, 0) = sd0 * sd0;
 
-  // phi
+  // phi (in rad)
   double sphi = sigma_phi.value_or(0.1);
   C_helix(1, 1) = sphi * sphi;
 
-  // omega
+  // omega (in 1/cm)
   double pt = m_momInit.Perp();
-  double omega = std::abs(ConversionUnits::a_lcio * Bz / pt * dd4hep::mm);
+  double omega = std::abs(ConversionUnits::a_lcio * Bz / pt * dd4hep::mm); // in 1/cm
   C_helix(2, 2) = std::pow(omega_factor.value_or(0.5) * omega, 2);
 
-  // z0
+  // z0 (in cm)
   double z0_scale = std::abs(m_posInit.Z());
   C_helix(3, 3) = std::pow(z0_factor.value_or(0.1) * z0_scale, 2);
 
@@ -647,7 +661,7 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, int Charge, s
  */
 GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double Bz) {
 
-  Point2D_xy referencePoint_xy(m_VP_referencePoint.X() / dd4hep::mm, m_VP_referencePoint.Y() / dd4hep::mm);
+  Point2D_xy referencePoint_xy(m_VP_referencePoint.X() / dd4hep::mm, m_VP_referencePoint.Y() / dd4hep::mm); // in mm
 
   auto hits = m_edm4hepTrack.getTrackerHits();
   const size_t N = hits.size();
@@ -723,7 +737,7 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
 
   // Output
   HelperInitialization helper;
-  helper.Position = TVector3(closestPoint.x * dd4hep::mm, closestPoint.y * dd4hep::mm, z_PCA * dd4hep::mm);
+  helper.Position = TVector3(closestPoint.x * dd4hep::mm, closestPoint.y * dd4hep::mm, z_PCA * dd4hep::mm); // in cm
 
   helper.Momentum = init_mom;
   helper.Charge = charge;
@@ -1135,7 +1149,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
  * @brief Propagation of the covariance matrix from helix-parameter representation to Cartesian coordinate
  * representation
  *
- * @param C_helix        Covariance Matrix in helix-basis
+ * @param C_helix        Covariance Matrix in helix-basis (cm and GeV units)
  * @param Position_cm    Inizial Position in cm
  * @param Momentum_gev   Initial Momentum in gev/c
  * @param RefPoint_cm    Reference position (e.g. IP)
@@ -1160,7 +1174,7 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
 
   double d0 = -(RefPoint_cm.X() - x_PCA) * sin(phi0) + (RefPoint_cm.Y() - y_PCA) * cos(phi0);
 
-  double omega = (std::abs(ConversionUnits::a_lcio * Bz / pt)) * dd4hep::mm;
+  double omega = (std::abs(ConversionUnits::a_lcio * Bz / pt)) * dd4hep::mm; // in 1/cm
 
   if (Bz * Charge < 0)
     omega = -omega;
@@ -1259,14 +1273,14 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
  * @brief Propagation of the covariance matrix from cartesian-parameter representation to Helix coordinate
  * representation
  *
- * @param C_cartesian    Covariance Matrix in cartesian-basis
+ * @param C_cartesian    Covariance Matrix in cartesian-basis (cm and GeV units)
  * @param Position_cm    Inizial Position in cm
  * @param Momentum_gev   Initial Momentum in gev/c
  * @param RefPoint_cm    Reference position (e.g. IP)
  * @param Charge         Charge hypothesis
  * @param Bz             Bz
  *
- * @return Covariance matrix in helix-basis
+ * @return Covariance matrix in helix-basis (mm and GeV units)
  */
 TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6
                                                           TVector3 Position_cm, TVector3 Momentum_gev,
@@ -1418,7 +1432,8 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
   double pt = gen_momentum.Perp(); // gev
 
   double Bz = m_fieldMap->getBz(gen_position) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
-  auto infoComputeD0Z0_firstHit = PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz);
+  auto infoComputeD0Z0_firstHit =
+      PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz); // in cm
 
   double d0 = ((-(m_VP_referencePoint.X() - infoComputeD0Z0_firstHit.PCA.X())) * sin(infoComputeD0Z0_firstHit.Phi0) +
                (m_VP_referencePoint.Y() - infoComputeD0Z0_firstHit.PCA.Y()) * cos(infoComputeD0Z0_firstHit.Phi0)) /
@@ -1475,15 +1490,15 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
  * 7. Calculate the azimuthal angle `Phi0` of the tangent.
  * 8. Compute the z-coordinate of the PCA along the helix using the straight-line approximation.
  *
- * @param position  Initial 3D position of the particle.
- * @param momentum  3D momentum vector of the particle.
+ * @param position  Initial 3D position of the particle (in cm).
+ * @param momentum  3D momentum vector of the particle (in GeV/c).
  * @param charge    Particle charge (in e units).
- * @param refPoint  Reference point to which the PCA is calculated.
+ * @param refPoint  Reference point to which the PCA is calculated (in cm).
  * @param Bz        Magnetic field along the z-axis (Tesla).
  *
  * @return A `PCAInfoHelper` structure containing:
- *         - `PCA`   : The 3D position of the closest approach point.
- *         - `Phi0`  : Azimuthal angle of the trajectory at the PCA (radians).
+ *         - `PCA`   : The 3D position of the closest approach point (in cm).
+ *         - `Phi0`  : Azimuthal angle of the trajectory at the PCA (in rad).
  *
  * @note Assumes a uniform magnetic field along z and a simple helical trajectory.
  */

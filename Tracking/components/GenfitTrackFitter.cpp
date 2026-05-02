@@ -508,7 +508,7 @@ private:
 
   Gaudi::Property<double> m_sigma_d0{
       this, "Sigma_d0", 0.05,
-      "Initial uncertainty on d0 (mm) for the initial covariance matrix when InitializationType = 0,1,3."};
+      "Initial uncertainty on d0 (cm) for the initial covariance matrix when InitializationType = 0,1,3."};
   Gaudi::Property<double> m_sigma_phi{
       this, "Sigma_phi", 0.1,
       "Initial uncertainty on phi (rad) for the initial covariance matrix when InitializationType = 0,1,3."};
@@ -519,7 +519,7 @@ private:
   Gaudi::Property<double> m_z0_factor{
       this, "Z0Factor", 0.1,
       "Scaling factor for z0 uncertainty for the initial covariance matrix when InitializationType = 0,1,3."
-      "The actual sigma_z0 is computed as Z0Factor * |z0|"};
+      "The actual sigma_z0 is computed as Z0Factor * |z0 (in cm)|"};
   Gaudi::Property<double> m_sigma_tanLambda{
       this, "Sigma_tanLambda", 0.1,
       "Initial uncertainty on tanLambda for the initial covariance matrix when InitializationType = 0,1,3."};
