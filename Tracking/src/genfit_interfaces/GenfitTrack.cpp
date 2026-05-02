@@ -280,8 +280,8 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     HelperInitialization initInfo = ComputeInitialParameters(Bz);
     m_charge_hypothesis = initInfo.Charge;
 
-    m_covInit = ComputeInitialCovarianceMatrix(Bz, sigma_d0.value(), sigma_phi.value(), omega_factor.value(),
-                                               z0_factor.value(), sigma_tanLambda.value());
+    m_covInit = ComputeInitialCovarianceMatrix(Bz, m_charge_hypothesis, sigma_d0.value(), sigma_phi.value(),
+                                               omega_factor.value(), z0_factor.value(), sigma_tanLambda.value());
   }
 
   else if (InitializationType == 1) // --- Refined
@@ -311,8 +311,8 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     m_posInit = initInfo.Position;
     m_momInit = initInfo.Momentum;
 
-    m_covInit = ComputeInitialCovarianceMatrix(Bz, sigma_d0.value(), sigma_phi.value(), omega_factor.value(),
-                                               z0_factor.value(), sigma_tanLambda.value());
+    m_covInit = ComputeInitialCovarianceMatrix(Bz, m_charge_hypothesis, sigma_d0.value(), sigma_phi.value(),
+                                               omega_factor.value(), z0_factor.value(), sigma_tanLambda.value());
   }
 
   else if (InitializationType == 2) // --- From TrackState
@@ -364,7 +364,8 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
         }
 
         // Convert to Cartesian covariance
-        m_covInit = CovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_VP_referencePoint, Bz);
+        m_covInit = CovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_VP_referencePoint,
+                                                     m_charge_hypothesis, Bz);
       }
     }
 
@@ -388,8 +389,8 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     HelperInitialization initInfo = ComputeInitialParameters(Bz);
     m_charge_hypothesis = initInfo.Charge;
 
-    m_covInit = ComputeInitialCovarianceMatrix(Bz, sigma_d0.value(), sigma_phi.value(), omega_factor.value(),
-                                               z0_factor.value(), sigma_tanLambda.value());
+    m_covInit = ComputeInitialCovarianceMatrix(Bz, m_charge_hypothesis, sigma_d0.value(), sigma_phi.value(),
+                                               omega_factor.value(), z0_factor.value(), sigma_tanLambda.value());
   }
 
   else {
@@ -547,6 +548,7 @@ void GenfitTrack::LimitNumberHits(double epsilon, int smoothWindow) {
  * - Returns the covariance matrix in Cartesian state representation.
  *
  * @param Bz Magnetic field component along the z axis.
+ * @param Charge Particle charge hypothesis (+1 or -1).
  * @param sigma_d0 Optional uncertainty on d0 (default 0.05).
  * @param sigma_phi Optional uncertainty on phi (default 0.1).
  * @param omega_factor Scaling factor for curvature uncertainty (default 0.5).
@@ -555,7 +557,7 @@ void GenfitTrack::LimitNumberHits(double epsilon, int smoothWindow) {
  *
  * @return Covariance matrix in Cartesian coordinates (6x6).
  */
-TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, std::optional<double> sigma_d0,
+TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, int Charge, std::optional<double> sigma_d0,
                                                         std::optional<double> sigma_phi,
                                                         std::optional<double> omega_factor,
                                                         std::optional<double> z0_factor,
@@ -585,7 +587,8 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, std::optional
   C_helix(4, 4) = stl * stl;
 
   // Convert to Cartesian covariance
-  TMatrixDSym covState = CovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_VP_referencePoint, Bz);
+  TMatrixDSym covState =
+      CovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_VP_referencePoint, Charge, Bz);
 
   return covState;
 }
@@ -1136,13 +1139,14 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
  * @param Position_cm    Inizial Position in cm
  * @param Momentum_gev   Initial Momentum in gev/c
  * @param RefPoint_cm    Reference position (e.g. IP)
+ * @param Charge         Charge hypothesis
  * @param Bz             Bz
  *
  * @return Covariance matrix in cartesian-basis
  */
 TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_helix, // 5x5
                                                           TVector3 Position_cm, TVector3 Momentum_gev,
-                                                          TVector3 RefPoint_cm, double Bz) {
+                                                          TVector3 RefPoint_cm, int Charge, double Bz) {
 
   double x_PCA = Position_cm.X();
   double y_PCA = Position_cm.Y();
@@ -1156,8 +1160,10 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
 
   double d0 = -(RefPoint_cm.X() - x_PCA) * sin(phi0) + (RefPoint_cm.Y() - y_PCA) * cos(phi0);
 
-  double tanLambda = pz / pt;
   double omega = (std::abs(ConversionUnits::a_lcio * Bz / pt)) * dd4hep::mm;
+
+  if (Bz * Charge < 0)
+    omega = -omega;
 
   // --- Jacobian (6x5) ---
   TMatrixD J(6, 5);
@@ -1166,19 +1172,40 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
   // These definitions are taken from
   // https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
 
-  // x = x_PCA = P^0_x = d0/sin(phi0) + P^r_x - (P^r_y - P^0_y) / tan(phi0)
-  J(0, 0) = 1.0 / sin(phi0);                                          // dx / dd0
-  J(0, 1) = ((RefPoint_cm.Y() - y_PCA) - d0 * cos(phi0)) / sin(phi0); // dx / dphi0
-  J(0, 2) = 0.0;                                                      // dx / domega
-  J(0, 3) = 0.0;                                                      // dx / dz0
-  J(0, 4) = 0.0;                                                      // dx / dtanLambda
+  // The transverse impact parameter d0 is defined as the projection of the
+  // displacement vector between the reference point Pr and the PCA P0
+  // onto the unit normal vector to the track direction at the PCA.
+  //
+  // d = P0 - Pr = (x_PCA - Xr, y_PCA - Yr)
+  //
+  // n_PCA = (-sin(phi0), cos(phi0))
+  //
+  // Therefore:
+  //
+  // d0 = n_PCA · d
+  //    = (x_PCA - Xr)(-sin(phi0))
+  //      + (y_PCA - Yr)(cos(phi0))
+  //
+  // Since the displacement vector from the reference point to the PCA is
+  // parallel to the normal direction:
+  //
+  // P0 - Pr = d0 * n_PCA
+  //
+  // the PCA coordinates become:
+  //
+  // x_PCA = Xr - d0 * sin(phi0)
+  // y_PCA = Yr + d0 * cos(phi0)
+  J(0, 0) = -sin(phi0);      // dx / dd0
+  J(0, 1) = -d0 * cos(phi0); // dx / dphi0
+  J(0, 2) = 0.0;             // dx / domega
+  J(0, 3) = 0.0;             // dx / dz0
+  J(0, 4) = 0.0;             // dx / dtanLambda
 
-  // y = y_PCA = P^0_y =  - d0/cos(phi0) + P^r_y + (P^r_x - P^0_x) * tan(phi0)
-  J(1, 0) = -1.0 / cos(phi0);                                         // dy / dd0
-  J(1, 1) = ((RefPoint_cm.X() - x_PCA) - d0 * sin(phi0)) / cos(phi0); // dy / dphi0
-  J(1, 2) = 0.0;                                                      // dy / domega
-  J(1, 3) = 0.0;                                                      // dy / dz0
-  J(1, 4) = 0.0;                                                      // dy / dtanLambda
+  J(1, 0) = cos(phi0);       // dy / dd0
+  J(1, 1) = -d0 * sin(phi0); // dy / dphi0
+  J(1, 2) = 0.0;             // dy / domega
+  J(1, 3) = 0.0;             // dy / dz0
+  J(1, 4) = 0.0;             // dy / dtanLambda
 
   // z = z_PCA = P^0_z = z0 + P^r_z
   J(2, 0) = 0.0; // dz / dd0
@@ -1187,30 +1214,26 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
   J(2, 3) = 1.0; // dz / dz0
   J(2, 4) = 0.0; // dz / dtanLambda
 
-  // px = pt * cos(phi0) = a * Bz / omega * cos(phi0) = p * cos(phi0) * sin(theta) = p * cos(phi0) *
-  // sin(cot^-1(tanLambda))
-  J(3, 0) = 0.0;                   // dpx / dd0
-  J(3, 1) = -px * std::tan(phi0);  // dpx / dphi0
-  J(3, 2) = -px / std::abs(omega); // dpx / domega
-  J(3, 3) = 0.0;                   // dpx / dz0
-  J(3, 4) =
-      -Momentum_gev.Mag() * std::cos(phi0) * tanLambda / std::pow(1.0 + tanLambda * tanLambda, 1.5); // dpx / dtanLambda
+  // px = pt * cos(phi0) = a * Bz / omega * cos(phi0)
+  J(3, 0) = 0.0;         // dpx / dd0
+  J(3, 1) = -py;         // dpx / dphi0
+  J(3, 2) = -px / omega; // dpx / domega
+  J(3, 3) = 0.0;         // dpx / dz0
+  J(3, 4) = 0.0;         // dpx / dtanLambda
 
-  // py = pt * sin(phi0) = a * Bz / omega * sin(phi0) = p * sin(phi0) * sin(theta) = p * sin(phi0) *
-  // sin(cot^-1(tanLambda))
-  J(4, 0) = 0.0;                   // dpy / dd0
-  J(4, 1) = -py / std::tan(phi0);  // dpy / dphi0
-  J(4, 2) = -py / std::abs(omega); // dpy / domega
-  J(4, 3) = 0.0;                   // dpy / dz0
-  J(4, 4) =
-      -Momentum_gev.Mag() * std::sin(phi0) * tanLambda / std::pow(1.0 + tanLambda * tanLambda, 1.5); // dpy / dtanLambda
+  // py = pt * sin(phi0) = a * Bz / omega * sin(phi0)
+  J(4, 0) = 0.0;         // dpy / dd0
+  J(4, 1) = px;          // dpy / dphi0
+  J(4, 2) = -py / omega; // dpy / domega
+  J(4, 3) = 0.0;         // dpy / dz0
+  J(4, 4) = 0.0;         // dpy / dtanLambda
 
   // pz = pt * tanLambda = a * Bz / omega * tanLambda = p * cos(theta) = p * cos(cot^-1(tanLambda))
-  J(5, 0) = 0.0;                   // dpz / dd0
-  J(5, 1) = 0.0;                   // dpz / dphi0
-  J(5, 2) = -pz / std::abs(omega); // dpz / domega
-  J(5, 3) = 0.0;                   // dpz / dz0
-  J(5, 4) = pt;                    // dpz / dtanLambda
+  J(5, 0) = 0.0;         // dpz / dd0
+  J(5, 1) = 0.0;         // dpz / dphi0
+  J(5, 2) = -pz / omega; // dpz / domega
+  J(5, 3) = 0.0;         // dpz / dz0
+  J(5, 4) = pt;          // dpz / dtanLambda
 
   // --- Compute C_cart = J * C_helix * J^T ---
   TMatrixD Jt(TMatrixD::kTransposed, J);
@@ -1237,23 +1260,33 @@ TMatrixDSym GenfitTrack::CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_h
  * representation
  *
  * @param C_cartesian    Covariance Matrix in cartesian-basis
+ * @param Position_cm    Inizial Position in cm
  * @param Momentum_gev   Initial Momentum in gev/c
+ * @param RefPoint_cm    Reference position (e.g. IP)
+ * @param Charge         Charge hypothesis
  * @param Bz             Bz
  *
  * @return Covariance matrix in helix-basis
  */
 TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6
-                                                          TVector3 Momentum_gev, double Bz) {
+                                                          TVector3 Position_cm, TVector3 Momentum_gev,
+                                                          TVector3 RefPoint_cm, int Charge, double Bz) {
 
   double px = Momentum_gev.X();
   double py = Momentum_gev.Y();
   double pz = Momentum_gev.Z();
+
+  double x_PCA = Position_cm.X();
+  double y_PCA = Position_cm.Y();
 
   double pt = Momentum_gev.Perp();
 
   double phi0 = std::atan2(py, px);
   double tanLambda = pz / pt;
   double omega = (std::abs(ConversionUnits::a_lcio * Bz / pt)) * dd4hep::mm;
+
+  if (Bz * Charge < 0)
+    omega = -omega;
 
   // --- Jacobian (5x6) ---
   TMatrixD J(5, 6);
@@ -1262,29 +1295,42 @@ TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_c
   // These definitions are taken from
   // https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
 
-  // d0 = -(RefPoint_cm.X() - x_PCA) * sin(phi0) + (RefPoint_cm.Y() - y_PCA) * cos(phi0);
-  J(0, 0) = sin(phi0); // dd0 / dx_PCA
-  J(0, 1) = cos(phi0); // dd0 / dy_PCA
-  J(0, 2) = 0.0;       // dd0 / dz_PCA
-  J(0, 3) = 0.0;       // dd0 / dpx
-  J(0, 4) = 0.0;       // dd0 / dpy
-  J(0, 5) = 0.0;       // dd0 / dpz
+  // d0 = -(Xr - x)*sin(phi0) + (Yr - y)*cos(phi0)
+  J(0, 0) = sin(phi0);  // dd0 / dx
+  J(0, 1) = -cos(phi0); // dd0 / dy
+  J(0, 2) = 0.0;        // dd0 / dz
+
+  // chain rule via phi0 = atan2(py, px)
+  double dd0_dphi = -(RefPoint_cm.X() - x_PCA) * cos(phi0) - (RefPoint_cm.Y() - y_PCA) * sin(phi0);
+
+  J(0, 3) = dd0_dphi * (-py / (pt * pt)); // dd0 / dpx
+  J(0, 4) = dd0_dphi * (px / (pt * pt));  // dd0 / dpy
+  J(0, 5) = 0.0;                          // dd0 / dpz
 
   // phi0 = atan2(py, px);
-  J(1, 0) = -py / std::pow(pt, 2); // dphi0 / dx_PCA
-  J(1, 1) = px / std::pow(pt, 2);  // dphi0 / dy_PCA
-  J(1, 2) = 0.0;                   // dphi0 / dz_PCA
-  J(1, 3) = 0.0;                   // dphi0 / dpx
-  J(1, 4) = 0.0;                   // dphi0 / dpy
+  J(1, 0) = 0.0;                   // dphi0 / dx
+  J(1, 1) = 0.0;                   // dphi0 / dy
+  J(1, 2) = 0.0;                   // dphi0 / dz
+  J(1, 3) = -py / std::pow(pt, 2); // dphi0 / dpx
+  J(1, 4) = px / std::pow(pt, 2);  // dphi0 / dpy
   J(1, 5) = 0.0;                   // dphi0 / dpz
 
-  // omega = (a * Bz / pt);
-  J(2, 0) = 0.0;                           // domega / dx_PCA
-  J(2, 1) = 0.0;                           // domega / dy_PCA
-  J(2, 2) = 0.0;                           // domega / dz_PCA
-  J(2, 3) = -omega * px / std::pow(pt, 2); // domega / dpx
-  J(2, 4) = -omega * py / std::pow(pt, 2); // domega / dpy
-  J(2, 5) = 0.0;                           // domega / dpz
+  // omega = q * a * Bz / pt, with pt = sqrt(px^2 + py^2)
+  double pt2 = px * px + py * py;
+
+  // domega / dx_PCA, domega / dy_PCA, domega / dz_PCA
+  J(2, 0) = 0.0; // domega / dx_PCA
+  J(2, 1) = 0.0; // domega / dy_PCA
+  J(2, 2) = 0.0; // domega / dz_PCA
+
+  // domega / dpx
+  J(2, 3) = -omega * px / pt2; // domega / dpx
+
+  // domega / dpy
+  J(2, 4) = -omega * py / pt2; // domega / dpy
+
+  // domega / dpz
+  J(2, 5) = 0.0; // domega / dpz = 0
 
   // z0 = P^0_z - P^r_z
   J(3, 0) = 0.0; // dz0 / dx_PCA
@@ -1306,15 +1352,15 @@ TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_c
   TMatrixD Jt(TMatrixD::kTransposed, J);
   TMatrixD tmp = J * C_cartesian * Jt;
 
-  TMatrixDSym C_helix(6);
+  TMatrixDSym C_helix(5);
   C_helix.Zero();
-  for (int i = 0; i < 6; ++i) {
+  for (int i = 0; i < 5; ++i) {
     for (int j = 0; j <= i; ++j) {
       C_helix(i, j) = tmp(i, j);
     }
   }
-  for (int i = 0; i < 6; ++i) {
-    for (int j = i + 1; j < 6; ++j) {
+  for (int i = 0; i < 5; ++i) {
+    for (int j = i + 1; j < 5; ++j) {
       C_helix(i, j) = C_helix(j, i);
     }
   }
@@ -1393,10 +1439,11 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
   Edm4hepTrackState.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
   Edm4hepTrackState.location = location;
 
-  TMatrixDSym CovHelix = CovarianceMatrixCartesianToHelix(covariancePosMom, gen_momentum, Bz);
+  TMatrixDSym CovHelix = CovarianceMatrixCartesianToHelix(covariancePosMom, gen_position, gen_momentum,
+                                                          m_VP_referencePoint, m_charge_hypothesis, Bz);
 
-  // Conversion from TMatrixDSym(6x6) to lower-triangular packed format used in edm4hep::TrackState
-  for (int i = 0; i < 6; ++i) {
+  // Conversion from TMatrixDSym(5x5) to lower-triangular packed format used in edm4hep::TrackState
+  for (int i = 0; i < 5; ++i) {
     for (int j = 0; j <= i; ++j) {
       Edm4hepTrackState.setCovMatrix(static_cast<float>(CovHelix(i, j)), static_cast<edm4hep::TrackParams>(i),
                                      static_cast<edm4hep::TrackParams>(j));

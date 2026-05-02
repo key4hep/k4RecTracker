@@ -368,8 +368,14 @@ struct GenfitTrackFitter final
             debug() << "Track " << num_tracks - 1 << ": fit failed for single evaluation hypothesis, skipping track."
                     << endmsg;
             auto failedTrack = FittedTracks.create();
+            auto failedFittedTrack = FittedTracksWithFilteredHits.create();
+
             failedTrack.setChi2(-1);
             failedTrack.setNdf(-1);
+
+            failedFittedTrack.setChi2(-1);
+            failedFittedTrack.setNdf(-1);
+
             continue;
           }
 
@@ -382,8 +388,13 @@ struct GenfitTrackFitter final
             debug() << "Track " << num_tracks - 1 << ": fit failed for all hypotheses." << endmsg;
             number_failures += 1;
             auto failedTrack = FittedTracks.create();
+            auto failedFittedTrack = FittedTracksWithFilteredHits.create();
+
             failedTrack.setChi2(-1);
             failedTrack.setNdf(-1);
+
+            failedFittedTrack.setChi2(-1);
+            failedFittedTrack.setNdf(-1);
             continue;
 
           } else {
@@ -715,8 +726,8 @@ private:
         }
       }
 
-      FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);
       FittedHits = std::move(track_interface.GetFittedHits());
+      FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);
     }
 
     return true;
