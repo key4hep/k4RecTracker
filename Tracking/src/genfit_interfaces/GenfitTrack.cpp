@@ -1333,20 +1333,12 @@ TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_c
 
   // omega = q * a * Bz / pt, with pt = sqrt(px^2 + py^2)
   double pt2 = px * px + py * py;
-
-  // domega / dx_PCA, domega / dy_PCA, domega / dz_PCA
-  J(2, 0) = 0.0; // domega / dx_PCA
-  J(2, 1) = 0.0; // domega / dy_PCA
-  J(2, 2) = 0.0; // domega / dz_PCA
-
-  // domega / dpx
+  J(2, 0) = 0.0;               // domega / dx_PCA
+  J(2, 1) = 0.0;               // domega / dy_PCA
+  J(2, 2) = 0.0;               // domega / dz_PCA
   J(2, 3) = -omega * px / pt2; // domega / dpx
-
-  // domega / dpy
   J(2, 4) = -omega * py / pt2; // domega / dpy
-
-  // domega / dpz
-  J(2, 5) = 0.0; // domega / dpz = 0
+  J(2, 5) = 0.0;               // domega / dpz
 
   // z0 = P^0_z - P^r_z
   J(3, 0) = 0.0; // dz0 / dx_PCA
