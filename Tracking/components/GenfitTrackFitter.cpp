@@ -508,7 +508,7 @@ private:
 
   Gaudi::Property<double> m_sigma_d0{
       this, "Sigma_d0", 0.05,
-      "Initial uncertainty on d0 (cm) for the initial covariance matrix when InitializationType = 0,1,3."};
+      "Initial uncertainty on d0 (mm) for the initial covariance matrix when InitializationType = 0,1,3."};
   Gaudi::Property<double> m_sigma_phi{
       this, "Sigma_phi", 0.1,
       "Initial uncertainty on phi (rad) for the initial covariance matrix when InitializationType = 0,1,3."};
@@ -529,10 +529,10 @@ private:
                                             "Defines where the reference point and helix parameters are taken from"};
 
   Gaudi::Property<std::vector<double>> m_init_position{
-      this, "InitPosition", {0., 0., 0.}, "User-defined initial position for InitializationType = 3"};
+      this, "InitPosition", {0., 0., 0.}, "User-defined initial position [in mm] for InitializationType = 3"};
 
   Gaudi::Property<std::vector<double>> m_init_momentum{
-      this, "InitMomentum", {0., 0., 0.}, "User-defined initial momentum for InitializationType = 3"};
+      this, "InitMomentum", {0., 0., 0.}, "User-defined initial momentum [in GeV/c] for InitializationType = 3"};
 
   Gaudi::Property<double> m_epsilon{
       this, "Epsilon", 1e-4,
@@ -619,14 +619,16 @@ private:
     GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder,
                                                  m_genfitField.get());
 
-    TVector3 Init_position(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
+    TVector3 Init_position(m_init_position.value()[0] * dd4hep::mm, m_init_position.value()[1] * dd4hep::mm,
+                           m_init_position.value()[2] * dd4hep::mm);
 
     TVector3 Init_momentum(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
 
     track_interface.InitializeTrack(m_RadialThresholdPromptTrack.value(), m_useFirstHitAsReference, LimitHits,
                                     m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum,
-                                    m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value(), m_sigma_phi.value(),
-                                    m_omega_factor.value(), m_z0_factor.value(), m_sigma_tanLambda.value());
+                                    m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value() * dd4hep::mm,
+                                    m_sigma_phi.value(), m_omega_factor.value(), m_z0_factor.value(),
+                                    m_sigma_tanLambda.value());
 
     auto track_init = track_interface.GetInitialization();
 
@@ -776,7 +778,7 @@ private:
 
       track_interface.InitializeTrack(m_RadialThresholdPromptTrack.value(), m_useFirstHitAsReference, LimitHits,
                                       m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum,
-                                      m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value(),
+                                      m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value() * dd4hep::mm,
                                       m_sigma_phi.value(), m_omega_factor.value(), m_z0_factor.value(),
                                       m_sigma_tanLambda.value());
 
