@@ -116,9 +116,9 @@ public:
   }
 
   struct HelperInitialization {
-    TVector3 Position;
-    TVector3 Momentum;
-    TMatrixDSym CovMatrix;
+    TVector3 Position;     // in cm
+    TVector3 Momentum;     // in GeV/c
+    TMatrixDSym CovMatrix; // in cm and GeV units
     int Charge;
     int NumHits;
   };
@@ -134,7 +134,7 @@ private:
 
   struct PCAInfoHelper {
     TVector3 PCA;
-    int Phi0;
+    double Phi0;
   };
 
   void CheckInitialization();
@@ -142,11 +142,15 @@ private:
   void LimitNumberHits(double epsilon, int smoothWindow);
 
   TMatrixDSym CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_helix, TVector3 Position_cm, TVector3 Momentum_gev,
-                                               TVector3 RefPoint_cm, double Bz);
+                                               TVector3 RefPoint_cm, int charge, double Bz);
 
-  TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, std::optional<double> sigma_d0, std::optional<double> sigma_phi,
-                                             std::optional<double> sigma_omega, std::optional<double> sigma_z0,
-                                             std::optional<double> sigma_tanLambda);
+  TMatrixDSym CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6,
+                                               TVector3 Position_cm, TVector3 Momentum_gev, TVector3 RefPoint_cm,
+                                               int Charge, double Bz);
+
+  TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, int Charge, std::optional<double> sigma_d0,
+                                             std::optional<double> sigma_phi, std::optional<double> sigma_omega,
+                                             std::optional<double> sigma_z0, std::optional<double> sigma_tanLambda);
 
   HelperInitialization ComputeInitialParameters(double Bz);
 
