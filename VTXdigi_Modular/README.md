@@ -25,15 +25,15 @@ This is intended to be used to test the correct `u`/`v` orientation of the pixel
 #### `LookupTable`
 Shares charge among a hits surrounding pixels according to a lookup table. These lookup tables are generated from detailed simulations performed in sensor R&D. 
 
-**Requires** Gaudi property `LookupTableFile`.
+- **Requires** Gaudi property `LookupTableFile`.
 
-A validation of this algorithm on test beam data is in progress.
+- A validation of this algorithm on test beam data is in progress.
 
-An exemplary, Gaussian based LUT is placed in the examples folder.
+- An exemplary, Gaussian based LUT is placed in the examples folder.
 
-Further information:
-- This talk in the DRD3 WG4 (Simulation) Meeting contains more information on the implementation and preliminary results: https://indico.cern.ch/event/1658032/contributions/6968509/attachments/3239139/5776904/2026-03-16_DRD3-WG4.pdf
-- An older version was also held in the FCC Full Sim Working Meeting: https://indico.cern.ch/event/1613709/contributions/6814309/attachments/3190168/5677333/2025-12-10_FCC-FullSym-WorkingMeeting-3.pdf
+- Further information:
+    - This talk in the DRD3 WG4 (Simulation) Meeting contains more information on the implementation and preliminary results: https://indico.cern.ch/event/1658032/contributions/6968509/attachments/3239139/5776904/2026-03-16_DRD3-WG4.pdf
+    - A previous version of the talk was also held in the FCC Full Sim Working Meeting: https://indico.cern.ch/event/1613709/contributions/6814309/attachments/3190168/5677333/2025-12-10_FCC-FullSym-WorkingMeeting-3.pdf
 
 
 ## Gaudi Properties
@@ -47,10 +47,11 @@ Further information:
 - `Threshold` - Sets a pixel threshold. After charges in an event have been collected in pixels, all pixels with `collected charges < threshold` are ignored. In terms of e-. Defaults to 0.
 - `ChargeSmearing` - Sets the sigma of the Gaussian smearing that is applied to each pixels collected charge. In terms of e-. Defaults to 0, where no smearing is applied. Note that Pixels that do not collect any charge in an event are not smeared (eg. this can not be used to generate random pixel noise, only to smear the resolution on charge that is actually being collected), for performance.
 - `TimeSmearing` - Sets the sigma of the Gaussian smearing that is applied to each pixel hit's timestamp before clustering / creating per-pixel digiHits. **UNIT???**. Defaults to 0.
-- `ClusterPositionUncertainty` - Each digiHit has an estimate of it's spatial resolution uncertainty. To first order, this is simply the sensors spatial resolution in `u` and `v`. Yet, the spatial resolution changes with cluster shape and charge spread across the cluster (and with particle angle). Estimating a digiHits spatial resolution is important for the tracking algorithm, where a good estimation of the spatial resolution of each cluster allows for more precise refitting. Three different methods for estimating the spatial resolution are implemented:
+- `ClusterPositionUncertainty` - Each digiHit has an estimate of it's spatial resolution uncertainty. To first order, this is simply the sensors spatial resolution in `u` and `v`. Yet, the spatial resolution changes with cluster shape and charge spread across the cluster (and with particle angle). Estimating a digiHits spatial resolution is important for the tracking algorithm, where a good estimation of the spatial resolution of each cluster allows for more precise refitting. Three different methods for estimating the spatial resolution are implemented (defaults to `[]`):
     - Setting `[sigma_u, sigma_v]` simply applies the same spatial resolution to every digiHit. This is the most basic option.
-    - Setting `[sigma_u1, sigma_u2, sigma_u3, sigma_v1, sigma_v2, sigma_v3]` applies different residuals based on the cluster lengths in `u` and `v`. Clusters with a length above 3 will be assigned the `sigma_i3` as well. 
-    - Setting `[]` does a basic charge-weighted uncertainty estimation, acting as an upper limit on the spatial resolution. The charge-weighted uncertainty estimation is based on the assumption that single-pixel clusters have a resolution of pitch/sqrt(12), while larger clusters improve the resolution. This is, in turn, based on the assumption that the hit-distribution inside single-pixel clusters is completely flat, which does not hold for sensors with any significant charge sharing (such as small-pitch TPSCo 65nm CIS). With strong charge sharing, only hits close to the center of a pixel produce single-pixel clusters, while pixels closer to the edge produce multi-pixel clusters. This biases the resolution of single-pixel clusters, improving it. Because of the assumption, this method calculates an upper limit on a clusters spatial resolution. Importantly, this upper limit does not necessarily represent the dependence on the cluster size well, and can introduce a bias with better spatial resolution in multi-pixel clusters that might be unphysical.
+    - Setting `[]` does a basic charge-weighted uncertainty estimation, acting as an upper limit on the spatial resolution of a given digiHit. The charge-weighted uncertainty estimation is based on the assumption that single-pixel clusters have a resolution of pitch/sqrt(12), while larger clusters improve the resolution. This is, in turn, based on the assumption that the hit-distribution inside single-pixel clusters is completely flat, which does not hold for sensors with any significant charge sharing (such as small-pitch TPSCo 65nm CIS). With strong charge sharing, only hits close to the center of a pixel produce single-pixel clusters, while pixels closer to the edge produce multi-pixel clusters. This biases the resolution of single-pixel clusters, improving it. Because of the assumption, this method calculates an upper limit on a clusters spatial resolution. Importantly, this upper limit does not necessarily represent the dependence on the cluster size well, and can introduce a bias with better spatial resolution in multi-pixel clusters that might be unphysical.
+    - Setting `[sigma_u1, sigma_u2, sigma_u3, sigma_v1, sigma_v2, sigma_v3]` applies different residuals based on the cluster lengths in `u` and `v`. Clusters with a length above 3 will be assigned the `sigma_i3` as well. As of now, this is the most realistic estimate. The 
+
 - `DebugHistograms` - Set to `True` to enable producing debugging histograms with the `Gaudi__Histograming__Sink__Root` service. Can decrease performance significantly, but is useful for debugging. Defaults to `False`. Include the following in the options file to produce the histograms file: 
     ```
     from Configurables import Gaudi__Histograming__Sink__Root as RootHistoSink
@@ -63,6 +64,76 @@ Further information:
 - `LookupTableSegmentStepLength` - In the `LookupTable` charge collector implementation, a particles path through the sensor is sampled in smalls steps, sharing charges among surrounding pixels for each step. This sets that step length. Should be smaller than the LUT binning. In mm. Defaults to 0.0005 mm.
 - `DepletedRegionDepthCenter` - Depth of the depleted region center for charge collection (in mm), wrt to the pixel center at 0 mm. Used for plotting of the residuals, does not affect the charge collection & output collection. Necessary for realistic residual distributions for sensors that are not fully depleted: For particles traversing the sensor at a shallow angle, there is a systematic horizontal offset between (a) the simHit position, which is typically at the vertical center of the sensor and (b) the cluster center of gravity that is simulated around where charges are deposited. This offset is corrected for by shifting the truth position along the particle path to the given `DepletedRegionDepthCenter` (but not further than the path's ends). Sensors are typically centered around `w=0`, with `w` in `[-thickness/2 , thickness,2]` (check in the detector model). In mm. Defaults to 0.
 
+
+
+---
+## Steering File Changes
+The default steering files have very coarse Geant4 settings, which are not sufficient to use the full capability of precise digitisation. The following changes are necessary to achieve precise simulations:
+```python
+
+
+```
+
+
+
+
+---
+## Example Options File
+This is an example of the necessary changes to an options file. Can be used with the IDEA option 1, version 03 (o1v03) options file [run_digi_reco.py](https://github.com/HEP-FCC/FCC-config/blob/main/FCCee/FullSim/IDEA/IDEA_o1_v03/run_digi_reco.py).
+
+**Note** that in IDEA o1v03, the inner 3 VTX layers `[0,1,2]` have ARCADIA 20um pitch sensors, while the outer 2 VTX layers `[3,4]` have ATLASpix sensors. The digitizer can only handle one sensor type, so we digitize only the inner VTX. We would need another instance of the digitizer to digitize the outer VTX.
+
+```python
+from Configurables import VTXdigi_Modular
+
+innervtxb_digitizer = VTXdigi_Modular(
+    "VTXBdigitizer", 
+    
+    SimTrackHitCollectionName = ["VertexBarrelCollection"],
+    HeaderName = ["EventHeader"],
+    SimTrkHitRelationsCollection = ["VTXBSimDigiLinks"],
+    TrackerHitCollectionName = ["VTXBDigis"],
+    SubDetectorName = "Vertex",
+    SubDetectorChildName = "VertexBarrel",
+    
+    Layers = [0,1,2],
+    ChargeCollectionMethod = "LookupTable",
+    LookupTableFile = "PATH/TO/LOOKUPTABLE.init",
+    ClusterPositionUncertainty = [],
+    Threshold = 100, # in e
+    ChargeSmearing = 0, # in e
+    TimeSmearing = 0, # UNIT???
+
+    DebugHistograms = True,
+    OutputLevel = INFO)
+```
+To create the debug histograms, you need the corresponding service:
+```python
+from Configurables import Gaudi__Histograming__Sink__Root as RootHistoSink
+
+rootHistSvc = RootHistoSink(
+    "RootHistoSink",
+
+    FileName = "PATH/TO/WRITE/OUTPUTFILE.root"
+)
+```
+And finally, you need to add these services to the application manager:
+```python
+application_mgr = ApplicationMgr(
+    ...
+    TopAlg = [
+        ...
+        innervtxb_digitizer,
+        ...
+    ],
+    ExtSvc = [
+        ...
+        rootHistSvc,
+        ...
+    ],
+    ...
+)
+```
 
 
 ---
@@ -90,10 +161,13 @@ Further information:
 ### Preliminary UML diagram
 ![](UML.svg)
 
-### ToDo list
+### Futher improvements
 The code has a number of `TODO:` and `FIXME:` marked. Larger items are:
 - *(priority)* **Title** -- Description
-- *(medium)* **Hit position uncertainty estimation** -- So far, a clusters spatial resolution estimation is done either via the cluster length in *u* and *v*, or via basic charge-weighted uncertainty estimation. Both of these options are sub-optimal and produce results much worse than what is possible. Optimally, all cluster shape and charge sharing information would be taken into account in calculating a clusters position and position resolution. An ML model trained on truth information might be the easiest way to go, here. Alternatively, an eta-function based approach can be used to correct the hit position beyond simple center-of-gravity by applying an empirically-determined function that accounts for non-linear charge sharing effects. The numeric eta function can be determined from the LUT by projecting it onto the *uv*-plane and measuring the charge-sharing ratio between the central and neighboring pixels. With this, the charge-weighted uncertainty estimation can be improved to account for charge sharing even in single-pixel clusters. *(Talk to reconstruction experts about how this is and might be done for a better understanding of what the digitiser should do)*
+- *(medium)* **Hit position uncertainty estimation** -- So far, a clusters spatial resolution estimation is done either via the cluster length in *u* and *v*, or via basic charge-weighted uncertainty estimation. Both of these options are sub-optimal and produce results much worse than what is possible. Optimally, all cluster shape and charge sharing information would be taken into account in calculating a clusters position and position resolution. 
+    - An ML model trained on truth information might be the easiest way to go, here. 
+    - Alternatively, an eta-function based approach can be used to correct the hit position beyond simple center-of-gravity by applying an empirically-determined function that accounts for non-linear charge sharing effects. The numeric eta function can be determined from the LUT by projecting it onto the *uv*-plane and measuring the charge-sharing ratio between the central and neighboring pixels. With this, the charge-weighted uncertainty estimation can be improved to account for charge sharing even in single-pixel clusters. *(Talk to reconstruction experts about how this is and might be done for a better understanding of what the digitiser should do)*
+    - Another option is to assume all hits come as straight lines from the IP. This is used to reconstruct each hits incidence angle to the sensor. A lookup table describing the resolution in dependence on the incidence angle is supplied, from which each hits position uncertainty is calculated. These lookup tables are generated from ddsim simulations, where MIPs (eg. 10 GeV muons) are shot at a single sensor plane at different angles. 
 - *(medium)* **Transfer propagation-based digitiser** -- Transfer the propagation-based digitizer currently implemented in `VTXDigi_Detailed` to a `ChargeCollector` implementation. Making this possible is the reason this specific architecture was chosen. Not urgent, but will make maintaining the repo a bit simpler.
 - *(medium)* **Include some LUTs** -- We hope to include some LUTs for the Standard, n-Blanket and n-Gap layout of the TPSCo 65nm CIS chips in the repo. This is likely not a problem with NDAs, but has to be checked back with seniors.
 - *(low)* **N-bit charge information** -- Currently charge information is completely analogue (collected charge per pixel is stored as float). Enable purely digital (N=1) or semi-digital (N>1) readout where the charge information is stored in N bits. This is much closer to how charge information is handled in real systems.
