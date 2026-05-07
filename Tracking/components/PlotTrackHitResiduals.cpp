@@ -18,16 +18,6 @@
 // k4FWCore
 #include "k4FWCore/Consumer.h"
 
-#include "GAUDI_VERSION.h"
-
-#if GAUDI_MAJOR_VERSION < 39
-namespace Gaudi::Accumulators {
-template <unsigned int ND, atomicity Atomicity = atomicity::full, typename Arithmetic = double>
-using StaticHistogram = Gaudi::Accumulators::HistogramingCounterBase<ND, Atomicity, Arithmetic, naming::histogramString,
-                                                                     HistogramingAccumulator>;
-}
-#endif
-
 #include <string>
 
 /** @class PlotTrackHitDistances

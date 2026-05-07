@@ -31,7 +31,7 @@ geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detecto
 geoservice.OutputLevel = INFO
 
 from Configurables import DDPlanarDigi
-from Configurables import DCHdigi_v01
+from Configurables import DCHdigi_v02
 
 ############### Vertex Digitizer
 
@@ -124,25 +124,31 @@ siwrd_digitizer.ForceHitsOntoSurface = True
 
 ############### DCH Digitizer
 
-dch_digitizer = DCHdigi_v01(
-    "DCHdigi",
-    DCH_simhits=["DCHCollection"],
+dch_digitizer = DCHdigi_v02(
+    "DCHdigi2",
+    InputSimHitCollection=["DCHCollection"],
+    OutputDigihitCollection=["DCH_DigiCollection"],
+    OutputLinkCollection=["DCH_DigiSimAssociationCollection"],
     DCH_name="DCH_v2",
-    fileDataAlg="DataAlgFORGEANT.root",
-    calculate_dndx=False,  # cluster counting disabled (to be validated, see FCC-config#239)
-    create_debug_histograms=False,
-    zResolution_mm=30.0,  # in mm - Note: At this point, the z resolution comes without the stereo measurement
+    zResolution_mm=30.0,  # in mm
     xyResolution_mm=0.1,  # in mm
+    Deadtime_ns=400.0,  # in ns
+    GasType=0,  # 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
+    ReadoutWindowStartTime_ns=1.0,  # in ns (taking into account time of flight, drift, and signal travel)
+    ReadoutWindowDuration_ns=450.0,  # in ns
+    DriftVelocity_um_per_ns=-1.0,  # in um/ns, if negative, automatically chosen based on GasType
+    SignalVelocity_mm_per_ns=200.0,  # in mm/ns (Default: 2/3 of the speed of light)
+    OutputLevel=INFO,
 )
 
 ############### Track Finder
-from Configurables import GGTF_tracking
+from Configurables import GGTFTrackFinder
 
-GGTF = GGTF_tracking(
-    "GGTF_tracking",
+GGTF = GGTFTrackFinder(
+    "GGTFTrackFinder",
     InputPlanarHitCollections=["VTXBDigis", "VTXDDigis", "SiWrBDigis", "SiWrDDigis"],
     InputWireHitCollections=["DCH_DigiCollection"],
-    OutputTracksGGTF=["CDCHTracks"],
+    OutputTracksGGTF=["GGTFTracks"],
     ModelPath=args.modelPath,
     Tbeta=args.tbeta,
     Td=args.td,
