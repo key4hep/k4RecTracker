@@ -42,6 +42,15 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 
-SET(test_name "test_runVTXdigi_Modular")
-ADD_TEST(NAME ${test_name} COMMAND k4run test/runVTXdigi_Modular.py)
-set_test_env(${test_name})
+set(test_name "test_runVTXdigi_Modular")
+set(test_script "${CMAKE_CURRENT_SOURCE_DIR}/test/test.sh")
+add_test(NAME ${test_name}
+         COMMAND bash ${test_script}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(${test_name} PROPERTIES
+    ENVIRONMENT "SOURCE_DIR_TEST=${CMAKE_CURRENT_SOURCE_DIR}/test;K4RECTRACKER=${CMAKE_INSTALL_PREFIX}/share/k4RecTracker;PATH=${CMAKE_INSTALL_PREFIX}/bin:$ENV{PATH};PYTHONPATH=${CMAKE_INSTALL_PREFIX}/python:${CMAKE_CURRENT_SOURCE_DIR}/test:$ENV{PYTHONPATH};LD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX}/lib:${CMAKE_INSTALL_PREFIX}/lib64:$ENV{LD_LIBRARY_PATH}"
+)
+if(COMMAND set_test_env)
+  set_test_env(${test_name})
+endif()
