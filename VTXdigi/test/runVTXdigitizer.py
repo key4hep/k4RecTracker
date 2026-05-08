@@ -2,9 +2,10 @@ import os, math
 
 from Gaudi.Configuration import *
 
-from Configurables import FCCDataSvc
+from Configurables import EventDataSvc
+from k4FWCore import ApplicationMgr, IOSvc
 
-podioevent = FCCDataSvc("EventDataSvc")
+podioevent = EventDataSvc("EventDataSvc")
 
 from GaudiKernel.SystemOfUnits import MeV, GeV, tesla
 
@@ -314,14 +315,8 @@ idea_siwrd_digitizer = VTXdigitizer(
 # genfitter = GenFitter("GenFitter", inputHits = savetrackertool.SimTrackHits.Path.replace("sim", "digi"), outputTracks = "genfit_tracks")
 
 ################ Output
-from Configurables import PodioOutput
-
-out = PodioOutput("out", OutputLevel=INFO)
-out.outputCommands = ["keep *"]
-
-import uuid
-
-out.filename = (
+iosvc = IOSvc()
+iosvc.Output = (
     "output_vertex_"
     + str(magneticField)
     + "_pMin_"
@@ -335,6 +330,7 @@ out.filename = (
     + str(pdgCode)
     + ".root"
 )
+iosvc.outputCommands = ["keep *"]
 
 # CPU information
 from Configurables import AuditorSvc, ChronoAuditor
@@ -345,9 +341,6 @@ audsvc.Auditors = [chra]
 genAlg.AuditExecute = True
 hepmc_converter.AuditExecute = True
 geantsim.AuditExecute = True
-out.AuditExecute = True
-
-from Configurables import ApplicationMgr
 
 # # CLD
 # ApplicationMgr(
@@ -374,7 +367,6 @@ ApplicationMgr(
         idea_vtxd_digitizer,
         idea_siwrb_digitizer,
         idea_siwrd_digitizer,
-        out,
     ],
     EvtSel="NONE",
     EvtMax=10,
