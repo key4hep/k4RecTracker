@@ -2,9 +2,10 @@ import os
 
 from Gaudi.Configuration import *
 
-from Configurables import FCCDataSvc
+from Configurables import EventDataSvc
+from k4FWCore import ApplicationMgr, IOSvc
 
-podioevent = FCCDataSvc("EventDataSvc")
+podioevent = EventDataSvc("EventDataSvc")
 
 from GaudiKernel.SystemOfUnits import MeV, GeV, tesla
 
@@ -174,17 +175,8 @@ dch_digitizer = DCHsimpleDigitizerExtendedEdm(
 
 
 ################ Output
-from Configurables import PodioOutput
-
-out = PodioOutput("out", OutputLevel=INFO)
-out.outputCommands = ["keep *"]
-if not dch_digitizer.debugMode:
-    out.outputCommands.append("drop *HitSimHitDelta*")
-    out.outputCommands.append("drop outputDigiLocalHits")
-
-import uuid
-
-out.filename = (
+iosvc = IOSvc()
+iosvc.Output = (
     "output_simplifiedDriftChamber_MagneticField_"
     + str(magneticField)
     + "_pMin_"
@@ -198,6 +190,10 @@ out.filename = (
     + str(pdgCode)
     + "_stepLength_default.root"
 )
+iosvc.outputCommands = ["keep *"]
+if not dch_digitizer.debugMode:
+    iosvc.outputCommands.append("drop *HitSimHitDelta*")
+    iosvc.outputCommands.append("drop outputDigiLocalHits")
 
 # CPU information
 from Configurables import AuditorSvc, ChronoAuditor
@@ -208,9 +204,6 @@ audsvc.Auditors = [chra]
 genAlg.AuditExecute = True
 hepmc_converter.AuditExecute = True
 geantsim.AuditExecute = True
-out.AuditExecute = True
-
-from Configurables import ApplicationMgr
 
 ApplicationMgr(
     TopAlg=[
@@ -219,7 +212,6 @@ ApplicationMgr(
         geantsim,
         dch_digitizer,
         # dch_perf,
-        out,
     ],
     EvtSel="NONE",
     EvtMax=100,

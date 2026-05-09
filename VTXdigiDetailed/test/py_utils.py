@@ -21,7 +21,7 @@ from typing import Union, Optional, Dict, Any, List
 import importlib.util
 import importlib.abc
 from importlib.machinery import SourceFileLoader
-from Configurables import PodioOutput, MarlinProcessorWrapper
+from Configurables import MarlinProcessorWrapper
 from typing import Iterable
 from Gaudi.Configuration import WARNING
 

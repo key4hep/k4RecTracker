@@ -2,9 +2,10 @@ import os
 
 from Gaudi.Configuration import *
 
-from Configurables import FCCDataSvc
+from Configurables import EventDataSvc
+from k4FWCore import ApplicationMgr, IOSvc
 
-podioevent = FCCDataSvc("EventDataSvc")
+podioevent = EventDataSvc("EventDataSvc")
 
 from GaudiKernel.SystemOfUnits import MeV, GeV, tesla
 
@@ -142,14 +143,8 @@ dch_digitizer = DCHsimpleDigitizer(
 )
 
 ################ Output
-from Configurables import PodioOutput
-
-out = PodioOutput("out", OutputLevel=INFO)
-out.outputCommands = ["keep *"]
-
-import uuid
-
-out.filename = (
+iosvc = IOSvc()
+iosvc.Output = (
     "output_simplifiedDriftChamber_MagneticField_"
     + str(magneticField)
     + "_pMin_"
@@ -163,6 +158,7 @@ out.filename = (
     + str(pdgCode)
     + ".root"
 )
+iosvc.outputCommands = ["keep *"]
 
 # CPU information
 from Configurables import AuditorSvc, ChronoAuditor
@@ -173,12 +169,9 @@ audsvc.Auditors = [chra]
 genAlg.AuditExecute = True
 hepmc_converter.AuditExecute = True
 geantsim.AuditExecute = True
-out.AuditExecute = True
-
-from Configurables import ApplicationMgr
 
 ApplicationMgr(
-    TopAlg=[genAlg, hepmc_converter, geantsim, dch_digitizer, out],
+    TopAlg=[genAlg, hepmc_converter, geantsim, dch_digitizer],
     EvtSel="NONE",
     EvtMax=10,
     ExtSvc=[geoservice, podioevent, geantservice, audsvc],
