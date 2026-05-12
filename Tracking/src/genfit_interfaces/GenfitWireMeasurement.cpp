@@ -53,14 +53,15 @@ WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep:
   direction = direction.Unit();
 
   // Wire extremities
-  const int layer = decoder->get(cellid, "layer");
   const int superlayer = decoder->get(cellid, "superlayer");
+  const int layer = decoder->get(cellid, "layer");
+  const int sector = decoder->get(cellid, "sector");
   const int nphi = decoder->get(cellid, "nphi");
 
   const int ilayer = dch_info->CalculateILayerFromCellIDFields(layer, superlayer);
   const auto& l = dch_info->database.at(ilayer);
 
-  const int stereosign = l.StereoSign();
+  const int stereosign =  dch_info->StereoSign(l);
   const double rz0 = l.radius_sw_z0;
 
   const double dphi = dch_info->twist_angle;
@@ -70,7 +71,7 @@ WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep:
 
   TVector3 p2(rz0, stereosign * rz0 * kappa * dch_info->Lhalf, dch_info->Lhalf);
 
-  const double phi_z0 = dch_info->Calculate_wire_phi_z0(ilayer, nphi);
+  const double phi_z0 = dch_info->Get_cell_phi_angle(superlayer, ilayer, sector, nphi);
 
   p1.RotateZ(phi_z0);
   p2.RotateZ(phi_z0);

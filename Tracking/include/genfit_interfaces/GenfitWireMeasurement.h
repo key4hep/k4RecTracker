@@ -30,8 +30,9 @@
 #include <TrackPoint.h>
 #include <WirePointMeasurement.h>
 
-#include "DDRec/DCH_info.h"
 #include "DDSegmentation/BitFieldCoder.h"
+
+#include "detectorCommon/WireTracker_info.h"
 
 #include "edm4hep/SenseWireHitCollection.h"
 

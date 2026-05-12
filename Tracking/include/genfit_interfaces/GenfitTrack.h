@@ -47,6 +47,8 @@
 #include "DDRec/Vector3D.h"
 #include "DDSegmentation/BitFieldCoder.h"
 
+#include "detectorCommon/WireTracker_info.h"
+
 #include "edm4hep/MutableTrack.h"
 #include "edm4hep/TrackCollection.h"
 

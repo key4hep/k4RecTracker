@@ -68,7 +68,6 @@
 #include "detectorCommon/WireTracker_info.h"
 
 // k4Interface
-#include <Math/Vector2Dfwd.h>
 #include <k4Interface/IGeoSvc.h>
 #include <k4Interface/IUniqueIDGenSvc.h>
 
@@ -80,9 +79,6 @@
 
 // DD4hep
 #include "DDSegmentation/BitFieldCoder.h"
-
-// DDRec
-//#include "DDRec/DCH_info.h"
 
 // delphes
 #include "TrackCovariance/TrkUtil.h"
