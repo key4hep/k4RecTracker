@@ -57,7 +57,7 @@ namespace GenfitInterface {
 
 class WireMeasurement {
 public:
-  WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep::rec::DCH_info* dch_info,
+  WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep::rec::WireTracker_info* wire_info,
                   const dd4hep::DDSegmentation::BitFieldCoder* decoder, const int det_idx, const int hit_idx,
                   const int debug_lvl);
 

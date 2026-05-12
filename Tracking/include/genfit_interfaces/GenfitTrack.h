@@ -71,7 +71,7 @@
  *    - execute the GENFIT fitting procedure
  *
  *  The class maintains access to both the EDM4hep and GENFIT representations of the track, and stores
- *  relevant geometry information such as the drift chamber (DCH) description and segmentation decoder.
+ *  relevant geometry information such as the wire tracker info description and segmentation decoder.
  *
  *
  *  Author: Andrea De Vita
@@ -84,7 +84,7 @@ namespace GenfitInterface {
 class GenfitTrack {
 public:
   GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrdering = false,
-              const dd4hep::rec::DCH_info* dch_info = nullptr,
+              const dd4hep::rec::WireTracker_info* wire_info = nullptr,
               const dd4hep::DDSegmentation::BitFieldCoder* decoder = nullptr,
               const GenfitInterface::GenfitField* fieldMap = nullptr);
 
@@ -176,7 +176,7 @@ private:
 
   TVector3 m_VP_referencePoint{0., 0., 0.};
 
-  const dd4hep::rec::DCH_info* m_dch_info;
+  const dd4hep::rec::WireTracker_info* m_wire_info;
   const dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
   const GenfitInterface::GenfitField* m_fieldMap;
 };

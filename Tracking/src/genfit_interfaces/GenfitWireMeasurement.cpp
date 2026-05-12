@@ -21,7 +21,7 @@
 
 namespace GenfitInterface {
 
-WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep::rec::DCH_info* dch_info,
+WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep::rec::WireTracker_info* wire_info,
                                  const dd4hep::DDSegmentation::BitFieldCoder* decoder, const int det_idx,
                                  const int hit_idx, const int debug_lvl) {
 
@@ -58,20 +58,19 @@ WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep:
   const int sector = decoder->get(cellid, "sector");
   const int nphi = decoder->get(cellid, "nphi");
 
-  const int ilayer = dch_info->CalculateILayerFromCellIDFields(layer, superlayer);
-  const auto& l = dch_info->database.at(ilayer);
+  const int ilayer = wire_info->CalculateILayerFromCellIDFields(layer, superlayer);
+  const auto& l = wire_info->database.at(ilayer);
 
-  const int stereosign =  dch_info->StereoSign(l);
+  // following the logic form WireTracker_info
+  const double stereo =  l.stereo_sw_z0;
   const double rz0 = l.radius_sw_z0;
+  const double kappa = tan(stereo) / rz0;
+  const double dy = rz0 * kappa * wire_info->Lhalf; // m
 
-  const double dphi = dch_info->twist_angle;
-  const double kappa = (1. / dch_info->Lhalf) * std::tan(dphi / 2.);
+  TVector3 p1(rz0, -dy, -wire_info->Lhalf);
+  TVector3 p2(rz0, dy, wire_info->Lhalf);
 
-  TVector3 p1(rz0, -stereosign * rz0 * kappa * dch_info->Lhalf, -dch_info->Lhalf);
-
-  TVector3 p2(rz0, stereosign * rz0 * kappa * dch_info->Lhalf, dch_info->Lhalf);
-
-  const double phi_z0 = dch_info->Get_cell_phi_angle(superlayer, ilayer, sector, nphi);
+  const double phi_z0 = wire_info->Get_cell_phi_angle(superlayer, ilayer, sector, nphi);
 
   p1.RotateZ(phi_z0);
   p2.RotateZ(phi_z0);
