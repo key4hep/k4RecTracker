@@ -84,7 +84,7 @@ namespace GenfitInterface {
 class GenfitTrack {
 public:
   GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrdering = false,
-              const dd4hep::rec::WireTracker_info* wire_info = nullptr,
+              const dd4hep::rec::WireTracker_info_struct* wire_info = nullptr,
               const dd4hep::DDSegmentation::BitFieldCoder* decoder = nullptr,
               const GenfitInterface::GenfitField* fieldMap = nullptr);
 
@@ -176,7 +176,7 @@ private:
 
   TVector3 m_VP_referencePoint{0., 0., 0.};
 
-  const dd4hep::rec::WireTracker_info* m_wire_info;
+  const dd4hep::rec::WireTracker_info_struct* m_wire_info;
   const dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
   const GenfitInterface::GenfitField* m_fieldMap;
 };

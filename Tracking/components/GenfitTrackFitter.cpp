@@ -156,7 +156,7 @@ struct GenfitTrackFitter final
 
       std::string DCH_name(m_WireTracker_name.value());
       dd4hep::DetElement WireTracker_DE = m_geoSvc->getDetector()->detectors().at(DCH_name);
-      m_wire_info = WireTracker_DE.extension<dd4hep::rec::WireTracker_info>();
+      m_wire_info = WireTracker_DE.extension<dd4hep::rec::WireTracker_info_struct>();
       dd4hep::SensitiveDetector dch_sd = m_geoSvc->getDetector()->sensitiveDetector(DCH_name);
       dd4hep::Readout dch_readout = dch_sd.readout();
       m_dc_decoder = dch_readout.idSpec().decoder();
@@ -454,7 +454,7 @@ private:
   GenfitInterface::GenfitMaterialInterface* m_geoMaterial;
 
   dd4hep::rec::SurfaceManager* m_surfMan;
-  dd4hep::rec::WireTracker_info* m_wire_info;
+  dd4hep::rec::WireTracker_info_struct* m_wire_info;
   dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
 
   Gaudi::Property<std::string> m_WireTracker_name{

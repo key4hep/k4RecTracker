@@ -22,7 +22,7 @@
 namespace GenfitInterface {
 
 GenfitTrack::GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrdering,
-                         const dd4hep::rec::WireTracker_info* wire_info, const dd4hep::DDSegmentation::BitFieldCoder* decoder,
+                         const dd4hep::rec::WireTracker_info_struct* wire_info, const dd4hep::DDSegmentation::BitFieldCoder* decoder,
                          const GenfitInterface::GenfitField* fieldMap)
     : m_originalTrack(track), m_posInit(0., 0., 0.), m_momInit(0., 0., 0.), m_covInit(6), m_genfitTrackRep(nullptr),
       m_genfitTrack(nullptr), m_edm4hepTrack(),
