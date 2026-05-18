@@ -52,10 +52,20 @@ WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep:
   direction.RotateZ(wireAzimuthalAngle);
   direction = direction.Unit();
 
+  // Safe decoder wrapper to handle missing cellID fields, currently used only for sector
+  auto safe_decoder = [decoder, debug_lvl](int b, std::string f){
+    try {
+      return (int) decoder->get(b, f);
+    } catch (std::exception& e) {
+      if (debug_lvl > 0) std::cout << "WARNING: cannot decode "<<f<<" for cellID " << b << ": " << e.what() << std::endl;
+      return 0;
+    }
+  };
+
   // Wire extremities
   const int superlayer = decoder->get(cellid, "superlayer");
   const int layer = decoder->get(cellid, "layer");
-  const int sector = decoder->get(cellid, "sector");
+  const int sector = safe_decoder(cellid, "sector");
   const int nphi = decoder->get(cellid, "nphi");
 
   const int ilayer = wire_info->CalculateILayerFromCellIDFields(layer, superlayer);

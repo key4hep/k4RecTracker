@@ -166,9 +166,9 @@ private:
       "Together with ReadoutWindowStartTime_ns, defines the readout window. Any DigiHits with arrival time after "
       "ReadoutWindowStartTime_ns + ReadoutWindowDuration_ns are discarded."};
 
-  /// Convert EDM4hep Vector3d to TVector3
-  ROOT::Math::XYZVector toTVector3(const edm4hep::Vector3d& v) const { return {v[0], v[1], v[2]}; };
-  /// Convert TVector3 to EDM4hep Vector3d
+  /// Convert EDM4hep Vector3d to XYZVector
+  ROOT::Math::XYZVector toXYZVector(const edm4hep::Vector3d& v) const { return {v[0], v[1], v[2]}; };
+  /// Convert XYZVector to EDM4hep Vector3d
   edm4hep::Vector3d toEDM4hepVector(const ROOT::Math::XYZVector& v) const { return {v.x(), v.y(), v.z()}; };
 
   // /// Function to calculate the drift time from the distance to the wire

@@ -48,7 +48,8 @@ StatusCode DCHdigi_v01::initialize() {
   ///////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////  retrieve data extension     //////////////////////////
   ///////////////////////////////////////////////////////////////////////////////////
-  this->dch_data = DCH_DE.extension<dd4hep::rec::DCH_info>();
+  auto wt_info =  DCH_DE.extension<dd4hep::rec::WireTracker_info_struct>();
+  this->dch_data = dynamic_cast<dd4hep::rec::DCH_info*>(wt_info);
   if (not dch_data->IsValid())
     ThrowException("No valid data extension was found for detector <<" + DCH_name + ">>.");
 
@@ -131,19 +132,20 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
   // loop over hit collection
   for (const auto& input_sim_hit : input_sim_hits) {
     dd4hep::DDSegmentation::CellID cellid = input_sim_hit.getCellID();
+    int superlayer = this->CalculateLayerFromCellID(cellid);
     int ilayer = this->CalculateLayerFromCellID(cellid);
     int nphi = this->CalculateNphiFromCellID(cellid);
-    auto hit_position = Convert_EDM4hepVector_to_TVector3(input_sim_hit.getPosition(), MM_TO_CM);
+    auto hit_position = Convert_EDM4hepVector_to_XYZVector(input_sim_hit.getPosition(), MM_TO_CM);
 
     // -------------------------------------------------------------------------
     //      calculate hit position projection into the wire
-    TVector3 hit_to_wire_vector = this->dch_data->Calculate_hitpos_to_wire_vector(ilayer, nphi, hit_position);
-    TVector3 hit_projection_on_the_wire = hit_position + hit_to_wire_vector;
+    ROOT::Math::XYZVector hit_to_wire_vector = this->dch_data->Calculate_hitpos_to_wire_vector(superlayer,ilayer, /*isector=*/0, nphi, hit_position);
+    ROOT::Math::XYZVector hit_projection_on_the_wire = hit_position + hit_to_wire_vector;
     if (m_create_debug_histos.value()) {
-      double distance_hit_wire = hit_to_wire_vector.Mag();
+      double distance_hit_wire = hit_to_wire_vector.R();
       hDpw->Fill(distance_hit_wire);
     }
-    TVector3 wire_direction_ez = this->dch_data->Calculate_wire_vector_ez(ilayer, nphi);
+    ROOT::Math::XYZVector wire_direction_ez = this->dch_data->Calculate_wire_vector_ez(superlayer, ilayer, /*isector=*/0, nphi);
 
     // -------------------------------------------------------------------------
     //       smear the position
@@ -156,15 +158,15 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     hit_projection_on_the_wire += smearing_z * (wire_direction_ez.Unit());
     if (m_create_debug_histos.value()) {
       // the distance from the hit projection and the wire should be zero
-      TVector3 dummy_vector = this->dch_data->Calculate_hitpos_to_wire_vector(ilayer, nphi, hit_projection_on_the_wire);
-      hDww->Fill(dummy_vector.Mag());
+      ROOT::Math::XYZVector dummy_vector = this->dch_data->Calculate_hitpos_to_wire_vector(superlayer, ilayer, /*isector=*/0, nphi, hit_projection_on_the_wire);
+      hDww->Fill(dummy_vector.R());
     }
 
     //       smear position perpendicular to the wire
     double smearing_xy = gauss_xy_cm(rng_engine);
     if (m_create_debug_histos.value())
       hSxy->Fill(smearing_xy);
-    float distanceToWire_real = hit_to_wire_vector.Mag();
+    float distanceToWire_real = hit_to_wire_vector.R();
 
     // protect against negative values
     float distanceToWire_smeared = std::max(0.0, distanceToWire_real + smearing_xy);
@@ -173,8 +175,8 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     std::int32_t quality = 0;
     float eDepError = 0;
     // length units back to mm
-    auto positionSW = Convert_TVector3_to_EDM4hepVector(hit_projection_on_the_wire, 1. / MM_TO_CM);
-    // auto  directionSW    = Convert_TVector3_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
+    auto positionSW = Convert_XYZVector_to_EDM4hepVector(hit_projection_on_the_wire, 1. / MM_TO_CM);
+    // auto  directionSW    = Convert_XYZVector_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
     float distanceToWire = distanceToWire_smeared / MM_TO_CM;
 
     // The direction of the sense wires can be calculated as:
@@ -182,7 +184,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     // One point of the wire is for example the following:
     //   RotationZ(WireAzimuthalAngle) * Position(cell_rave_z0, 0 , 0)
     // variables aredefined below
-    auto WireAzimuthalAngle = this->dch_data->Get_cell_phi_angle(ilayer, nphi);
+    auto WireAzimuthalAngle = this->dch_data->Get_cell_phi_angle(superlayer, ilayer, /*isector=*/0, nphi);
     float WireStereoAngle = 0;
     {
       auto l = this->dch_data->database.at(ilayer);
@@ -191,7 +193,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
       // when building the twisted tube, the twist angle is defined as:
       //     cell_twistangle    = l.StereoSign() * DCH_i->twist_angle
       // which forces the stereoangle of the wire to have the oposite sign
-      WireStereoAngle = (-1.) * l.StereoSign() * dch_data->stereoangle_z0(cell_rave_z0);
+      WireStereoAngle = (-1.) * dch_data->StereoSign(l) * dch_data->stereoangle_z0(cell_rave_z0);
     }
 
     extension::MutableSenseWireHit oDCHdigihit;

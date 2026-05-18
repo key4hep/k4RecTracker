@@ -10,6 +10,7 @@
 #include "DD4hep/Detector.h"
 
 // STL
+#include <detectorCommon/WireTracker_info.h>
 #include <ranges>
 
 namespace {
@@ -58,7 +59,8 @@ StatusCode DCHdigi_v02::initialize() {
   // Retrieve the detector element
   dd4hep::DetElement dch_detelem = m_geoSvc->getDetector()->detectors().at(dch_name);
   // Retrieve the DCH_info data extension for the drift chamber
-  m_dch_info = dch_detelem.extension<dd4hep::rec::DCH_info>();
+  auto wt_info =  dch_detelem.extension<dd4hep::rec::WireTracker_info_struct>();
+  m_dch_info = dynamic_cast<dd4hep::rec::DCH_info*>(wt_info);
   if (not m_dch_info->IsValid()) {
     error() << "No valid data extension was found for detector <<" << dch_name << ">>." << endmsg;
     return StatusCode::FAILURE;
@@ -151,9 +153,9 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
       //////////////////////////
 
       // Get hit position to calculate distance to wire
-      // Need to convert to TVector3 to use the DCH_info methods
+      // Need to convert to XYZVector to use the DCH_info methods
       // Use dd4hep:mm as scale to convert into the dd4hep default units (_ddu)
-      auto simhit_position_ddu = this->toTVector3(simhit.getPosition()) * dd4hep::mm;
+      auto simhit_position_ddu = this->toXYZVector(simhit.getPosition()) * dd4hep::mm;
 
       auto hit_to_wire_vector_ddu = m_dch_info->Calculate_hitpos_to_wire_vector(superlayer, layer, /*isector=*/0, nphi, simhit_position_ddu);
       auto hit_projection_on_the_wire_ddu = simhit_position_ddu + hit_to_wire_vector_ddu;

@@ -55,12 +55,12 @@
 #include "DD4hep/Detector.h" // for dd4hep::VolumeManager
 #include "DDSegmentation/BitFieldCoder.h"
 
+// k4geo
+#include "detectorCommon/WireTracker_info.h"
+
 // STL
 #include <random>
 #include <string>
-
-// data extension for detector DCH_v2
-#include "DDRec/DCH_info.h"
 
 // ROOT headers
 #include "TFile.h"
@@ -142,10 +142,11 @@ private:
 
   int CalculateNphiFromCellID(dd4hep::DDSegmentation::CellID id) const { return m_decoder->get(id, "nphi"); }
 
-  TVector3 Convert_EDM4hepVector_to_TVector3(const edm4hep::Vector3d& v, double scale) const {
+  /// Convert EDM4hep Vector3d to XYZVector
+  ROOT::Math::XYZVector Convert_EDM4hepVector_to_XYZVector(const edm4hep::Vector3d& v, double scale) const {
     return {v[0] * scale, v[1] * scale, v[2] * scale};
   };
-  edm4hep::Vector3d Convert_TVector3_to_EDM4hepVector(const TVector3& v, double scale) const {
+  edm4hep::Vector3d Convert_XYZVector_to_EDM4hepVector(const  ROOT::Math::XYZVector& v, double scale) const {
     return {v.x() * scale, v.y() * scale, v.z() * scale};
   };
 
