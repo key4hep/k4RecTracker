@@ -378,7 +378,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
           m_pixelCount.first = std::round(pixelCountU);
           m_pixelCount.second = std::round(pixelCountV);
           membersDefined = true;
-          verbose() << "     - Found sensor: " << sensorKey << ", volumeID: " << sensorVolumeID << " (sensor " << sensorNumber << " in layer " << layer << "). Setting expected dimensions to (" << m_sensorLength.first << " x " << m_sensorLength.second << " x " << m_sensorThickness << ") mm3." << endmsg;
+          debug() << "     - Setting expected dimensions according to first found sensor. Key: " << sensorKey << ", volumeID: " << sensorVolumeID << " (sensor " << sensorNumber << " in layer " << layer << "). dimensions: (" << m_sensorLength.first << " x " << m_sensorLength.second << " x " << m_sensorThickness << ") mm3, innerThickness: " << surface->innerThickness()*10 << " mm, outerThickness: " << surface->outerThickness()*10 << " mm" << endmsg;
         } // if !membersDefined
         else {
           /* For all other sensors: check for consistency with first sensor */
