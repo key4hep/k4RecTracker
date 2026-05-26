@@ -50,12 +50,9 @@ public:
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
   inline float charge() const { return m_charge; }
   inline int layer() const { return m_layerNumber; }
-
-  inline bool isCreatedInGenerator() const { return !m_simTrackerHit.getParticle().isCreatedInSimulation(); }
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
-
 
 /* -- Pixel -- */
 
@@ -149,6 +146,13 @@ private:
 }; // class HitMap
 
 /* -- helpers -- */
+
+/** @brief Check if a MCParticle was created in the generator */
+bool CreatedInGenerator(const edm4hep::MCParticle& mcParticle);
+/** @brief Check if a simTrackerHit was created in the generator */
+bool CreatedInGenerator(const edm4hep::SimTrackerHit& simTrackerHit);
+/** @brief Check if a simHitWrapper was created in the generator */
+bool CreatedInGenerator(const SimHitWrapper& simHitWrapper);
 
 /** @brief Convert a dd4hep::rec::Vector3D to edm4hep::Vector3d and vice-versa */
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);

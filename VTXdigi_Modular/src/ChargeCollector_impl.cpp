@@ -368,7 +368,7 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
     }
   } // loop over segments
 
-  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix, simHit.isCreatedInGenerator()); // fill histograms once per sim hit, with info from the path (eg. travel vector, which contains info on the angle of incidence)
+  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix, VTXdigi_tools::CreatedInGenerator(simHit)); // fill histograms once per sim hit, with info from the path (eg. travel vector, which contains info on the angle of incidence)
 
   DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit);
 }

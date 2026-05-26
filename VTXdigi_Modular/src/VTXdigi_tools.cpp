@@ -11,6 +11,17 @@ SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::un
   m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
 }
 
+// SimulatorStatus bits (see https://edm4hep.web.cern.ch/classedm4hep_1_1_mutable_m_c_particle.html)
+// 29 : "Backscatter",
+// 30 : "CreatedInSimulation",
+// 26 : "DecayedInCalorimeter",
+// 27 : "DecayedInTracker",
+// 22 : "HandledInFastSim",
+// 25 : "LeftWorld",
+// 23 : "Overlay",
+// 24 : "Stopped",
+// 28 : "VertexIsNotEndpointOfParent",
+
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
   std::swap(a.m_simTrackerHit, b.m_simTrackerHit);
   std::swap(a.m_cellID, b.m_cellID);
@@ -19,6 +30,26 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 } // swap(Hit&, Hit&)
 
 /* -- helpers -- */
+
+/** @brief Check if a MCParticle was created in the generator */
+bool CreatedInGenerator(const edm4hep::MCParticle& mcParticle) {
+  int32_t simulatorStatus = mcParticle.getSimulatorStatus();
+  int mask_bit = edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
+  const int32_t mask = 1 << mask_bit; 
+
+  if ((simulatorStatus & mask) == 0) {
+    return true; // bit is not set -> created in generator
+  }
+  return false; // bit is set -> created in simulation
+}
+/** @brief Check if a simTrackerHit was created in the generator */
+bool CreatedInGenerator(const edm4hep::SimTrackerHit& simTrackerHit) {
+  return CreatedInGenerator(simTrackerHit.getParticle());
+}
+/** @brief Check if a simHitWrapper was created in the generator */
+bool CreatedInGenerator(const SimHitWrapper& simHitWrapper) {
+  return CreatedInGenerator(*simHitWrapper.hitPtr());
+}
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
   return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
@@ -239,7 +270,6 @@ inline bool HitMap::_OutOfBounds(std::pair<int, int> i_uv) const {
 /* -- Clusterization -- */
 
 std::pair<float, float> Cluster::ComputePos() const {
-
   std::pair<float, float> pos{0.f, 0.f};
   for (const Pixel* pix : pixels) {
     pos.first += pix->index.first * pix->charge;

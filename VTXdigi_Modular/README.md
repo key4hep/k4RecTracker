@@ -68,14 +68,13 @@ Shares charge among a hits surrounding pixels according to a lookup table. These
 
 ---
 ## Steering File Changes
-The default steering files have very coarse Geant4 settings, which are not sufficient to use the full capability of precise digitisation. The following changes are necessary to achieve precise simulations:
+The default steering files have very coarse (but fast) Geant4 settings that are not sufficient to use the full capability of precise digitisation. The following settings are necessary to achieve precise simulations:
 ```python
-
+TODO:
 
 ```
 
-
-
+*Make sure to apply these changes properly. Simply pasting them into the top o a default steering file will overwrite these with the existing settings that come later. Best is to use a minimal steering file and rely on the ddsim defaults.*
 
 ---
 ## Example Options File
@@ -159,7 +158,8 @@ application_mgr = ApplicationMgr(
 - `Energies` are given in keV, but deposited charge is always handled in terms of electron-hole pairs (3.65 eV per eh-pair). This is much more common in sensor R&D. 
 
 ### Preliminary UML diagram
-![](UML.svg)
+<img src="UML.svg" width="700" alt="Universal Modelling Language (UML) diagram of the VTXdigi_Modular code structure.">
+
 
 ### Futher improvements
 The code has a number of `TODO:` and `FIXME:` marked. Larger items are:

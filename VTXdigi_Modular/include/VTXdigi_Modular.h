@@ -159,12 +159,15 @@ private:
   /* -- Counters -- */
 
   mutable Gaudi::Accumulators::Counter<> m_counter_eventsRead{this, "Events read"};
-  mutable Gaudi::Accumulators::Counter<> m_counter_eventsRejected_noSimHits{this, "Events rejected (no simHits)"};
-  mutable Gaudi::Accumulators::Counter<> m_counter_eventsAccepted{this, "Events accepted"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_eventsRejected_noSimHits{this, " - Events rejected (no simHits)"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_eventsAccepted{this, " = Events accepted"};
 
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRead{this, "SimTrackerHits read"};
-  mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRejected_LayerNotToBeDigitized{this, "SimTrackerHits rejected (layer not to be digitized)"};
-  mutable Gaudi::Accumulators::Counter<> m_counter_simHitsAccepted{this, "SimTrackerHits accepted"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRejected_LayerNotToBeDigitized{this, " - SimTrackerHits rejected (layer not to be digitized)"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_simHitsAccepted{this, " = SimTrackerHits accepted"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_simHitsCreatedInGenerator{this, "( SimTrackerHits created in generator)"};
+
+
 
   mutable Gaudi::Accumulators::Counter<> m_counter_digiHitsCreated{this, "Digi hits created"};
 
@@ -176,9 +179,20 @@ private:
     hist1d_simHitMomentum_keV,
     hist1d_simHitMomentum_MeV,
     hist1d_simHitMomentum_GeV,
+    hist1d_simHit_x,
+    hist1d_simHit_y,
     hist1d_simHit_z,
     hist1d_simHit_z_createdInGenerator,
     hist1d_simHit_z_createdInSimulation,
+    hist1d_simHit_Vertex_x,
+    hist1d_simHit_Vertex_y,
+    hist1d_simHit_Vertex_z,
+    hist1d_simhit_MomentumDirection_x,
+    hist1d_simhit_MomentumDirection_y,
+    hist1d_simhit_MomentumDirection_z,
+    hist1d_simHit_InitialMomentumDirection_x,
+    hist1d_simHit_InitialMomentumDirection_y,
+    hist1d_simHit_InitialMomentumDirection_z,
     hist1d_digiHitCharge,
     hist1d_simHitPDG,
     hist1d_digiHitsPerSimHit,
@@ -255,6 +269,7 @@ private:
     hist2d_hitMap_simHits,
     hist2d_hitMap_simHits_createdInGenerator,
     hist2d_hitMap_simHits_createdInSimulation,
+    hist2d_hitMap_simHits_eDepAboveThreshold,
     hist2d_hitMap_pixelHits, 
     hist2d_clusterSize_vs_global_z,
     hist2d_clusterSize_u_vs_global_z,
