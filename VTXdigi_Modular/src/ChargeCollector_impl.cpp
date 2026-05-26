@@ -177,12 +177,20 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   const float eps = 1e-7f; // reasonable for number O(0.01) (like sensor thickness in mm) with float precision
 
   const float sensorThickness = std::stof(headerLineEntries.at(0)) / 1000.f; // convert from um to mm
-  if (std::abs(sensorThickness - digitizer.SensorDimensions().at(2)) > eps) 
-    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.SensorDimensions().at(2)) + " mm.");
+  if (std::abs(sensorThickness - digitizer.SensorDimensions().at(2)) > eps) {
+    if (!digitizer.LUT_ignorePitch())
+      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.SensorDimensions().at(2)) + " mm.");
+    else
+      digitizer.warning() << "Sensor thickness mismatch between LUT file and detector geometry. LUT file: " << sensorThickness << "mm, geometry: " << digitizer.SensorDimensions().at(2) << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
+  }
 
   const std::pair<float, float> pitch = {std::stof(headerLineEntries.at(1)) / 1000.f, std::stof(headerLineEntries.at(2)) / 1000.f};
-  if (std::abs(pitch.first - digitizer.PixelPitch().first) > eps || std::abs(pitch.second - digitizer.PixelPitch().second) > eps) 
-    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Pixel pitch mismatch between LUT file and detector geometry: LUT file specifies (" + std::to_string(pitch.first) + ", " + std::to_string(pitch.second) + ") mm, but geometry has (" + std::to_string(digitizer.PixelPitch().first) + ", " + std::to_string(digitizer.PixelPitch().second) + ") mm.");
+  if (std::abs(pitch.first - digitizer.PixelPitch().first) > eps || std::abs(pitch.second - digitizer.PixelPitch().second) > eps) {
+    if (!digitizer.LUT_ignorePitch())
+      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Pixel pitch mismatch between LUT file and detector geometry: LUT file specifies (" + std::to_string(pitch.first) + ", " + std::to_string(pitch.second) + ") mm, but geometry has (" + std::to_string(digitizer.PixelPitch().first) + ", " + std::to_string(digitizer.PixelPitch().second) + ") mm.");
+    else
+      digitizer.warning() << "Pixel pitch mismatch between LUT file and detector geometry. LUT file: " << pitch.first << "mm, geometry: " << digitizer.PixelPitch().first << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
+  }
 
   digitizer.debug() << "   - Found matching pixel pitch and sensor thickness in LUT file." << endmsg;
 

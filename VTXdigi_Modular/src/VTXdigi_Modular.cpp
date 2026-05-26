@@ -373,7 +373,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
           m_sensorLength.second = sensorLength_v;
           float pixelCountU = m_sensorLength.first / m_pixelPitch.first;
           float pixelCountV = m_sensorLength.second / m_pixelPitch.second;
-          if (abs(pixelCountU - std::round(pixelCountU)) > 0.001 || abs(pixelCountV - std::round(pixelCountV)) > 0.001)
+          if (abs(pixelCountU - std::round(pixelCountU)) > 0.0001 || abs(pixelCountV - std::round(pixelCountV)) > 0.0001)
             throw GaudiException("Sensor side length (" + std::to_string(m_sensorLength.first) + " x " + std::to_string(m_sensorLength.second) + ") mm and pixel pitch (" + std::to_string(m_pixelPitch.first) + " x " + std::to_string(m_pixelPitch.second) + ") mm result in a non-integer pixel count (" + std::to_string(pixelCountU) + " x " + std::to_string(pixelCountV) + ") in subDetector " + m_subDetName.value() + ".", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
           m_pixelCount.first = std::round(pixelCountU);
           m_pixelCount.second = std::round(pixelCountV);

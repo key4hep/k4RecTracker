@@ -60,6 +60,8 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
   inline float DepletedRegionDepthCenter() const { return m_depletedRegionDepthCenter; }
 
   inline float Threshold() const { return m_threshold; }
+
+  inline bool LUT_ignorePitch() const { return m_LUT_ignorePitch.value(); }
   
   /** @brief Draw a random number for charge smearing 
    * FIXME: this is not thread safe, but I don't know how this is done in Gaudi (while retaining thread safety & reproducibility with a given seed). 
@@ -132,6 +134,7 @@ private:
   /* LUT */
   Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
   Gaudi::Property<float> m_LUT_stepLength{this, "LookupTableSegmentStepLength", 0.0005f, "Length of the segments that a particle path through the sensor is split into. The deposited charge is distributed evenly over the segments, and each segments charge is distributed according to the in-pixel bin the segment center falls into. In mm. Defaults to 0.0005 mm."};
+  Gaudi::Property<bool> m_LUT_ignorePitch{this, "LookupTableIgnorePitch", false, "Ignore the sensor thickness and pixel pitch values stored in the LUT file. Useful for slightly stretching/shrinking the LUT to fit curved sensors where the sensor length is not an integer multiple of the pixel pitch. If empty, the LUT file values are used."};
   
   /* -- Services, geometry variables -- */
   
