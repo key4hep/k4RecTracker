@@ -178,10 +178,12 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
 
   const float sensorThickness = std::stof(headerLineEntries.at(0)) / 1000.f; // convert from um to mm
   if (std::abs(sensorThickness - digitizer.SensorDimensions().at(2)) > eps) {
-    if (!digitizer.LUT_ignorePitch())
+    if (!digitizer.LUT_ignorePitch()) {
       throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.SensorDimensions().at(2)) + " mm.");
-    else
+    }
+    else {
       digitizer.warning() << "Sensor thickness mismatch between LUT file and detector geometry. LUT file: " << sensorThickness << "mm, geometry: " << digitizer.SensorDimensions().at(2) << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
+    }
   }
 
   const std::pair<float, float> pitch = {std::stof(headerLineEntries.at(1)) / 1000.f, std::stof(headerLineEntries.at(2)) / 1000.f};

@@ -351,7 +351,17 @@ void VTXdigi_Modular::InitLayersAndSensors() {
       ++moduleNumber;
       for (const auto& [sensorKey, sensorObj] : moduleObj.children()) {
         ++sensorNumber;
+
         dd4hep::VolumeID sensorVolumeID = sensorObj.volumeID();
+        dd4hep::Volume sensorVolume = sensorObj.volume();
+        dd4hep::Solid sensorSolid = sensorVolume.solid();
+        dd4hep::Box sensorBox = sensorVolume.solid();
+
+        float sensorSize_x = sensorBox.x() * 2 * 10; // half-length in cm, convert to full length in mm
+        float sensorSize_y = sensorBox.y() * 2 * 10;
+        float sensorSize_z = sensorBox.z() * 2 * 10;
+
+        warning() << "     - Found sensor \"" << sensorKey << "\" (volumeID " << sensorVolumeID << ") in module " << moduleKey << " of layer " << layerKey << " with solid " << sensorSolid.name() << " and dimensions (" << sensorSize_x << ", " << sensorSize_y << ", " << sensorSize_z << ") mm. Checking geometry consistency..." << endmsg;
 
         const auto surfaceIt = m_surfaceMap->find(sensorObj.volumeID());
         if (surfaceIt == m_surfaceMap->end()) {
@@ -364,7 +374,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
 
         const float sensorLength_u = surface->length_along_u() * 10; // convert to mm
         const float sensorLength_v = surface->length_along_v() * 10; 
-        const float sensorThickness = (surface->innerThickness() + surface->outerThickness()) * 10; //
+        const float sensorThickness = (surface->innerThickness() + surface->outerThickness()) * 10;
 
         if (!membersDefined) {
           /* Set members based on the first sensor we find */
@@ -392,7 +402,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
   info() << " - Retrieved sensor parameters: area (" << m_sensorLength.first << " x " << m_sensorLength.second << ") mm, thickness " << m_sensorThickness << " mm, pixel pitch (" << m_pixelPitch.first << " x " << m_pixelPitch.second << ") mm, pixel count (" << m_pixelCount.first << " x " << m_pixelCount.second << "). All " << sensorNumber << " sensors in the relevant layers share these parameters." << endmsg;
 
   if (abs(m_depletedRegionDepthCenter) > m_sensorThickness/2.f)
-    warning() << "Depleted region depth center " << m_depletedRegionDepthCenter << " mm is outside the sensor (which is  " << m_sensorThickness << " mm thick). Note that DepletedRegionDepthCenter=0 lies in the middle of the sensor, ie. at half it's thickness." << endmsg;
+    throw GaudiException("Depleted region depth center " + std::to_string(m_depletedRegionDepthCenter) + " mm is outside the sensor (which is  " + std::to_string(m_sensorThickness) + " mm thick). Note that DepletedRegionDepthCenter=0 lies in the middle of the sensor, ie. at half it's thickness.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
 } // InitLayersAndSensors()
 
 void VTXdigi_Modular::InitHistograms() {
