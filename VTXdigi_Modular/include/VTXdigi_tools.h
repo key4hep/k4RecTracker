@@ -187,7 +187,7 @@ std::pair<int, int> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const 
 
 /** @brief Compute the in-pixel indices (j_u, j_v, j_w) for a given (local) position inside the pixel and layer index
  *  @note Assumption: each layer has only 1 type if sensor */
-std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<int, 3>& binCount, const std::pair<float, float>& pixelPitch, const std::array<float, 3>& sensorDimensions);
+std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<int, 3>& binCount, const std::pair<float, float>& pixelPitch, const std::array<float, 3>& activeVolumeDimensions);
 
 /** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,w) 
  * 

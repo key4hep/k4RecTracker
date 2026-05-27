@@ -262,7 +262,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
   * 
   * Sets the members: 
   *  - m_pixelPitch 
-  *  - m_sensorThickness
+  *  - m_sensorActiveThickness
   *  - m_layers
   *  - */
   verbose() << " - Retrieving layers, subdetector geometry, and sensor size and pitch..." << endmsg;
@@ -291,7 +291,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
     }
     debug() << "   - Digitizing only specific layers, as defined in Gaudi property by the user. All requested layers were found." << endmsg;
   }
-  info() << "   - Digitizing " << m_layers.value().size() << " layers: " << m_layers.value() << " in subdetector " << m_subDetName.value() << "." << endmsg;
+  info() << " - Digitizing " << m_layers.value().size() << " layers: " << m_layers.value() << " in subdetector " << m_subDetName.value() << "." << endmsg;
 
   /* Get pixel pitch from the segmentation (from the readout that matches our simHitCollection) 
   *  I don't know of a better way to do this (that also works for the IDEA detector model) */
@@ -352,17 +352,40 @@ void VTXdigi_Modular::InitLayersAndSensors() {
       for (const auto& [sensorKey, sensorObj] : moduleObj.children()) {
         ++sensorNumber;
 
+        // FIRST: find size of the active sensor volume. The directions 0,1,2 do not necessarily correspond to the local sensor u,v,w directions, but might be swapped.
         dd4hep::VolumeID sensorVolumeID = sensorObj.volumeID();
         dd4hep::Volume sensorVolume = sensorObj.volume();
-        dd4hep::Solid sensorSolid = sensorVolume.solid();
-        dd4hep::Box sensorBox = sensorVolume.solid();
+        
+        std::array<float, 3> sensorActiveSizes{}; // active sensor volume dimensions in mm. indexing is arbitrary
 
-        float sensorSize_x = sensorBox.x() * 2 * 10; // half-length in cm, convert to full length in mm
-        float sensorSize_y = sensorBox.y() * 2 * 10;
-        float sensorSize_z = sensorBox.z() * 2 * 10;
+        // sensorVolume.solid() returns a dd4hep::Solid_type<T> object, generalised as dd4hep::Solid. This can either be a box or a trapezoid (for sensors in IDEA / ALLEGRO)
+        try {
+          dd4hep::Box sensorBox = sensorVolume.solid();
+          sensorActiveSizes[0] = sensorBox.x() * 2 * 10; // half-length in cm, convert to full length in mm
+          sensorActiveSizes[1] = sensorBox.y() * 2 * 10;
+          sensorActiveSizes[2] = sensorBox.z() * 2 * 10;
+          verbose() << "     - Sensor \"" << sensorKey << "\" (layer " << layerKey << ", module " << moduleKey << ", volumeID " << sensorVolumeID << ") has a dd4hep::Box solid. Active volume dimensions (" << sensorActiveSizes[0] << ", " << sensorActiveSizes[1] << ", " << sensorActiveSizes[2] << ")mm" << endmsg;
+        }
+        catch (...) {
+          try {
+            dd4hep::Trd1 sensorTrd1 = sensorVolume.solid();
+            sensorActiveSizes[0] = (sensorTrd1.dX1()+sensorTrd1.dX2()) / 2 * 2 * 10; // half-length in cm, convert to full length in mm
+            sensorActiveSizes[1] = sensorTrd1.dY() * 2 * 10;
+            sensorActiveSizes[2] = sensorTrd1.dZ() * 2 * 10;
+            verbose() << "     - Sensor \"" << sensorKey << "\" (layer " << layerKey << ", module " << moduleKey << ", volumeID " << sensorVolumeID << ") has a dd4hep::Trd1 solid. Active volume dimensions (" << sensorActiveSizes[0] << ", " << sensorActiveSizes[1] << ", " << sensorActiveSizes[2] << ")mm" << endmsg;
+          }
+          catch (...) {
+            throw GaudiException("Unknown sensor solid type found (neither dd4hep::Box nor dd4hep::Trd1).", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+          }
+        }
 
-        warning() << "     - Found sensor \"" << sensorKey << "\" (volumeID " << sensorVolumeID << ") in module " << moduleKey << " of layer " << layerKey << " with solid " << sensorSolid.name() << " and dimensions (" << sensorSize_x << ", " << sensorSize_y << ", " << sensorSize_z << ") mm. Checking geometry consistency..." << endmsg;
+        // get dimensions of active sensor volume (thickness is the smallest of the three dimensions)
+        const uint sensorActiveThicknessIndex = std::distance(sensorActiveSizes.begin(), std::min_element(sensorActiveSizes.begin(), sensorActiveSizes.end()));
+        const float sensorActiveThickness = sensorActiveSizes[sensorActiveThicknessIndex];
+        const float sensorActiveLength_1 = sensorActiveSizes[(sensorActiveThicknessIndex+1)%3];
+        const float sensorActiveLength_2 = sensorActiveSizes[(sensorActiveThicknessIndex+2)%3];
 
+        // SECOND: find size of the total sensor volume, including inactive material on top and below
         const auto surfaceIt = m_surfaceMap->find(sensorObj.volumeID());
         if (surfaceIt == m_surfaceMap->end()) {
           throw GaudiException("Could not find surface for sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + " while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
@@ -372,15 +395,31 @@ void VTXdigi_Modular::InitLayersAndSensors() {
           throw GaudiException("Surface pointer for sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + " is null while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
         }
 
-        const float sensorLength_u = surface->length_along_u() * 10; // convert to mm
-        const float sensorLength_v = surface->length_along_v() * 10; 
-        const float sensorThickness = (surface->innerThickness() + surface->outerThickness()) * 10;
+        const float sensorTotalLength_u = surface->length_along_u() * 10; // convert cm to mm
+        const float sensorTotalLength_v = surface->length_along_v() * 10;
+        const float sensorTotalThickness = surface->innerThickness() * 10 + surface->outerThickness() * 10; // total thickness including inactive material
 
+        // THIRD: consistency checks on sensor thickness and size
+        if (sensorActiveThickness > sensorTotalThickness) {
+          throw GaudiException("Active sensor thickness " + std::to_string(sensorActiveThickness) + " mm is larger than total sensor thickness " + std::to_string(sensorTotalThickness) + " mm (including inactive material) in sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + ". This indicates an inconsistency in the geometry description.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+        }
+
+        if ( 
+          !((sensorActiveLength_1-sensorTotalLength_u < 1e-5) && (sensorActiveLength_2-sensorTotalLength_v < 1e-5)) &&
+          !((sensorActiveLength_2-sensorTotalLength_u < 1e-5) && (sensorActiveLength_1-sensorTotalLength_v < 1e-5))
+        ) {
+          throw GaudiException("Active sensor volume dimensions " + std::to_string(sensorActiveLength_1) + "mm and " + std::to_string(sensorActiveLength_2) + "mm could not be matched to total sensor dimensions (" + std::to_string(sensorTotalLength_u) + " x " + std::to_string(sensorTotalLength_v) + ") mm (including inactive material) in sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + ". This indicates an inconsistency in the geometry description.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+        }
+
+        // FOURTH: apply the parameters we found
         if (!membersDefined) {
-          /* Set members based on the first sensor we find */
-          m_sensorThickness = sensorThickness;
-          m_sensorLength.first = sensorLength_u; 
-          m_sensorLength.second = sensorLength_v;
+          // For the first sensor we find, set the digitizer class members
+          m_sensorActiveThickness = sensorActiveThickness;
+          m_inactiveMaterialAbove = surface->outerThickness() * 10 - sensorActiveThickness/2.f; 
+          m_inactiveMaterialBelow = surface->innerThickness() * 10 - sensorActiveThickness/2.f; 
+          m_sensorLength.first = sensorTotalLength_u; 
+          m_sensorLength.second = sensorTotalLength_v;
+
           float pixelCountU = m_sensorLength.first / m_pixelPitch.first;
           float pixelCountV = m_sensorLength.second / m_pixelPitch.second;
           if (abs(pixelCountU - std::round(pixelCountU)) > 0.0001 || abs(pixelCountV - std::round(pixelCountV)) > 0.0001)
@@ -388,21 +427,21 @@ void VTXdigi_Modular::InitLayersAndSensors() {
           m_pixelCount.first = std::round(pixelCountU);
           m_pixelCount.second = std::round(pixelCountV);
           membersDefined = true;
-          debug() << "     - Setting expected dimensions according to first found sensor. Key: " << sensorKey << ", volumeID: " << sensorVolumeID << " (sensor " << sensorNumber << " in layer " << layer << "). dimensions: (" << m_sensorLength.first << " x " << m_sensorLength.second << " x " << m_sensorThickness << ") mm3, innerThickness: " << surface->innerThickness()*10 << " mm, outerThickness: " << surface->outerThickness()*10 << " mm" << endmsg;
-        } // if !membersDefined
+          debug() << "     - Setting expected dimensions according to first found sensor. Key: " << sensorKey << ", volumeID: " << sensorVolumeID << " (sensor " << sensorNumber << " in layer " << layer << "). dimensions: (" << m_sensorLength.first << " x " << m_sensorLength.second << " x " << m_sensorActiveThickness << ") mm3, innerThickness: " << surface->innerThickness()*10 << " mm, outerThickness: " << surface->outerThickness()*10 << " mm" << endmsg;
+        }
         else {
-          /* For all other sensors: check for consistency with first sensor */
-          if (std::abs(sensorLength_u - m_sensorLength.first) > 0.001 || std::abs(sensorLength_v - m_sensorLength.second) > 0.001 || std::abs(sensorThickness - m_sensorThickness) > 0.001)
-            throw GaudiException("Sensor dimension mismatch found in sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + ": expected dimensions of (" + std::to_string(m_sensorLength.first) + " x " + std::to_string(m_sensorLength.second) + " x " + std::to_string(m_sensorThickness) + ") mm3, but found (" + std::to_string(sensorLength_u) + " x " + std::to_string(sensorLength_v) + " x " + std::to_string(sensorThickness) + ") mm3. This algorithm expects exactly one type of sensor per subDetector. Use different instances of the algorithm if different layers consist of different sensors.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
-        } // if membersDefined
+          // For all other sensors: check for consistency with first sensor
+          if (std::abs(sensorTotalLength_u - m_sensorLength.first) > 0.001 || std::abs(sensorTotalLength_v - m_sensorLength.second) > 0.001 || std::abs(sensorActiveThickness - m_sensorActiveThickness) > 0.001)
+            throw GaudiException("Sensor dimension mismatch found in sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + ": expected dimensions of (" + std::to_string(m_sensorLength.first) + " x " + std::to_string(m_sensorLength.second) + " x " + std::to_string(m_sensorActiveThickness) + ") mm3, but found (" + std::to_string(sensorTotalLength_u) + " x " + std::to_string(sensorTotalLength_v) + " x " + std::to_string(sensorActiveThickness) + ") mm3. This algorithm expects exactly one type of sensor per subDetector. Use different instances of the algorithm if different layers consist of different sensors.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+        }
       } // loop over sensors
     } // loop over modules
   } // loop over layers
   
-  info() << " - Retrieved sensor parameters: area (" << m_sensorLength.first << " x " << m_sensorLength.second << ") mm, thickness " << m_sensorThickness << " mm, pixel pitch (" << m_pixelPitch.first << " x " << m_pixelPitch.second << ") mm, pixel count (" << m_pixelCount.first << " x " << m_pixelCount.second << "). All " << sensorNumber << " sensors in the relevant layers share these parameters." << endmsg;
+  info() << " - Retrieved sensor parameters: area (" << m_sensorLength.first << " x " << m_sensorLength.second << ") mm2, thickness " << m_sensorActiveThickness << " mm with (" << m_inactiveMaterialAbove << "/" << m_inactiveMaterialBelow << ") mm of inactive material above/below, pixel pitch (" << m_pixelPitch.first << " x " << m_pixelPitch.second << ") mm, pixel count (" << m_pixelCount.first << " x " << m_pixelCount.second << "). All " << sensorNumber << " sensors in the relevant layers share these parameters." << endmsg;
 
-  if (abs(m_depletedRegionDepthCenter) > m_sensorThickness/2.f)
-    throw GaudiException("Depleted region depth center " + std::to_string(m_depletedRegionDepthCenter) + " mm is outside the sensor (which is  " + std::to_string(m_sensorThickness) + " mm thick). Note that DepletedRegionDepthCenter=0 lies in the middle of the sensor, ie. at half it's thickness.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+  if (abs(m_depletedRegionDepthCenter) > m_sensorActiveThickness/2.f)
+    throw GaudiException("Depleted region depth center " + std::to_string(m_depletedRegionDepthCenter) + " mm is outside the sensor (which is  " + std::to_string(m_sensorActiveThickness) + " mm thick). Note that DepletedRegionDepthCenter=0 lies in the middle of the sensor, ie. at half it's thickness.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
 } // InitLayersAndSensors()
 
 void VTXdigi_Modular::InitHistograms() {
@@ -418,8 +457,8 @@ void VTXdigi_Modular::InitHistograms() {
   
   Gaudi::Accumulators::Axis<float> axis_moduleID{2000, -0.5f, 1999.5f};
   Gaudi::Accumulators::Axis<float> axis_clusterSize{60, 0.5f, 60.5f};
-  Gaudi::Accumulators::Axis<float> axis_E{1000, 0, m_sensorThickness*2000.f};
-  Gaudi::Accumulators::Axis<float> axis_charge{1000, 0, m_sensorThickness*500000.f};
+  Gaudi::Accumulators::Axis<float> axis_E{1000, 0, m_sensorActiveThickness*2000.f};
+  Gaudi::Accumulators::Axis<float> axis_charge{1000, 0, m_sensorActiveThickness*500000.f};
   Gaudi::Accumulators::Axis<float> axis_momentum_keV{10000, 0.f, 1000.f};
   Gaudi::Accumulators::Axis<float> axis_momentum_MeV{10000, 0.f, 1000.f};
   Gaudi::Accumulators::Axis<float> axis_momentum_GeV{10000, 0.f, 1000.f};
@@ -439,8 +478,8 @@ void VTXdigi_Modular::InitHistograms() {
     -0.5f,
     static_cast<float>(m_pixelCount.second+0.5)};
 
-  Gaudi::Accumulators::Axis<float> axis_pathLength{500, 0.f, m_sensorThickness*1000.f*10.f};
-  Gaudi::Accumulators::Axis<float> axis_pathTravel{1000, -m_sensorThickness*1000.f*10.f, m_sensorThickness*1000.f*10.f};
+  Gaudi::Accumulators::Axis<float> axis_pathLength{500, 0.f, m_sensorActiveThickness*1000.f*10.f};
+  Gaudi::Accumulators::Axis<float> axis_pathTravel{1000, -m_sensorActiveThickness*1000.f*10.f, m_sensorActiveThickness*1000.f*10.f};
     
   /* Fill histograms per layer */
   for (int layer : m_layers.value()) {
@@ -1234,7 +1273,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     digiHit.setEDep(cluster.charge / VTXdigi_tools::kChargePerkeV);
     
 
-    // collect position
+    // position
     const std::pair<float, float> clusterPos_index = cluster.ComputePos();
     const dd4hep::rec::Vector3D clusterPos_local = VTXdigi_tools::ComputePosFromPixIndex_local(clusterPos_index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
     const dd4hep::rec::Vector3D clusterPos_global = VTXdigi_tools::LocalToGlobal(clusterPos_local, trafoMatrix);

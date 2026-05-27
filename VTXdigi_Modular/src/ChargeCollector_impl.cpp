@@ -37,28 +37,28 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
   trafoMatrix.MasterToLocalVect(momentum_global, momentum_local);
 
   /* Step 1 - travel vector */
-  const double scaleFactor_travel = digitizer.SensorDimensions().at(2) / std::abs(momentum_local[2]);
+  const double scaleFactor_travel = digitizer.ActiveVolumeDimensions().at(2) / std::abs(momentum_local[2]);
   path.travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]); 
 
   /* Step 2 - entry point */
-  if (std::abs(path.simPos.z()) > digitizer.SensorDimensions().at(2)/2.f + eps) {
-      digitizer.warning() << "SimHit position is outside the sensor volume (local w = " << path.simPos.z() << " mm, sensor thickness = " << digitizer.SensorDimensions().at(2) << " mm). This should never happen. Forcing it to w=0." << endmsg;
+  if (std::abs(path.simPos.z()) > digitizer.ActiveVolumeDimensions().at(2)/2.f + eps) {
+      digitizer.warning() << "SimHit position is outside the sensor volume (local w = " << path.simPos.z() << " mm, sensor thickness = " << digitizer.ActiveVolumeDimensions().at(2) << " mm). This should never happen. Forcing it to w=0." << endmsg;
     path.simPos.z() = 0.f; // ensures no divide by zero etc
   }
   float shiftDist_w;
   if (path.travel.z() >= 0.f) {
-    shiftDist_w = path.simPos.z() + 0.5f * digitizer.SensorDimensions().at(2);
+    shiftDist_w = path.simPos.z() + 0.5f * digitizer.ActiveVolumeDimensions().at(2);
   }
   else {
-    shiftDist_w = path.simPos.z() - 0.5f * digitizer.SensorDimensions().at(2);
+    shiftDist_w = path.simPos.z() - 0.5f * digitizer.ActiveVolumeDimensions().at(2);
   }
   const float scaleFactor_entry = shiftDist_w / path.travel.z();
   path.entry = path.simPos - scaleFactor_entry * path.travel;
 
   /* Step 3 - clip path to sensor edges (in u/v) */
   std::pair<float, float> t = std::make_pair(0.f, 1.f); // parametrize path as entry + t*travel; t in [0,1]
-  t = ComputePathClippingFactors(t, path.entry.x(), path.travel.x(), digitizer.SensorDimensions().at(0));
-  t = ComputePathClippingFactors(t, path.entry.y(), path.travel.y(), digitizer.SensorDimensions().at(1));
+  t = ComputePathClippingFactors(t, path.entry.x(), path.travel.x(), digitizer.ActiveVolumeDimensions().at(0));
+  t = ComputePathClippingFactors(t, path.entry.y(), path.travel.y(), digitizer.ActiveVolumeDimensions().at(1));
   if (t.first != 0.f || t.second != 1.f) { 
     if (0.f <= t.first && t.first < t.second && t.second <= 1.f) {
       /* valid clipping */
@@ -70,7 +70,7 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
     else [[unlikely]] {
       /* invalid clipping, shouldn't happen */
       digitizer.warning() << "VTXdigi_tools::Path::Path() - invalid clipping factors t = [" << t.first << ", " << t.second << "]. Path might lie completely outside the sensor." << endmsg;
-      digitizer.debug() << " -> entry (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, exit (" << path.entry.x() + path.travel.x() << ", " << path.entry.y() + path.travel.y() << ", " << path.entry.z() + path.travel.z() << ") mm, sensor dim. (+-" << digitizer.SensorDimensions().at(0)/2 << ", +-" << digitizer.SensorDimensions().at(1)/2 << ") mm" << endmsg;
+      digitizer.debug() << " -> entry (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, exit (" << path.entry.x() + path.travel.x() << ", " << path.entry.y() + path.travel.y() << ", " << path.entry.z() + path.travel.z() << ") mm, sensor dim. (+-" << digitizer.ActiveVolumeDimensions().at(0)/2 << ", +-" << digitizer.ActiveVolumeDimensions().at(1)/2 << ") mm" << endmsg;
       digitizer.debug() << " -> Path length " << static_cast<int>(path.travel.r()*1000) << " um, in G4 " << static_cast<int>(simHit.hitPtr()->getPathLength()*1000) << " um" << endmsg;
       return false;
     }
@@ -177,12 +177,12 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   const float eps = 1e-7f; // reasonable for number O(0.01) (like sensor thickness in mm) with float precision
 
   const float sensorThickness = std::stof(headerLineEntries.at(0)) / 1000.f; // convert from um to mm
-  if (std::abs(sensorThickness - digitizer.SensorDimensions().at(2)) > eps) {
+  if (std::abs(sensorThickness - digitizer.ActiveVolumeDimensions().at(2)) > eps) {
     if (!digitizer.LUT_ignorePitch()) {
-      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.SensorDimensions().at(2)) + " mm.");
+      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.ActiveVolumeDimensions().at(2)) + " mm active volume thickness.");
     }
     else {
-      digitizer.warning() << "Sensor thickness mismatch between LUT file and detector geometry. LUT file: " << sensorThickness << "mm, geometry: " << digitizer.SensorDimensions().at(2) << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
+      digitizer.warning() << "Sensor thickness mismatch between LUT file and detector geometry. LUT file: " << sensorThickness << "mm, geometry (active volume thickness): " << digitizer.ActiveVolumeDimensions().at(2) << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
     }
   }
 
@@ -393,7 +393,7 @@ Index_segment ChargeCollector_LUT::ComputeSegmentIndices(const int step, const i
 
   seg.i = ComputePixelIndices(pos, m_digitizer.PixelPitch(), m_digitizer.PixelCount());
 
-  seg.j = ComputeInPixelIndices(pos, m_LUT.GetBinCount(), m_digitizer.PixelPitch(), m_digitizer.SensorDimensions());
+  seg.j = ComputeInPixelIndices(pos, m_LUT.GetBinCount(), m_digitizer.PixelPitch(), m_digitizer.ActiveVolumeDimensions());
 
   return seg;
 }
@@ -475,7 +475,7 @@ void ChargeCollector_Debug::FillHit(const SimHitWrapper& simHit, HitMap& hitMap,
   m_digitizer.verbose() << "     - SimHit at local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ")" << endmsg;
   m_digitizer.verbose() << "       - and pixel indices      (" << i_uv.first << ", " << i_uv.second << ")" << endmsg;
   if (i_uv.first == -1 || i_uv.second == -1 || i_uv.first >= static_cast<int>(m_digitizer.PixelCount().first) || i_uv.second >= static_cast<int>(m_digitizer.PixelCount().second)) {
-    m_digitizer.warning() << "simHit local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ") is out of sensor bounds U: [" << -m_digitizer.SensorDimensions().at(0)/2 << ", " << m_digitizer.SensorDimensions().at(0)/2 << "], V: [" << -m_digitizer.SensorDimensions().at(1)/2 << ", " << m_digitizer.SensorDimensions().at(1)/2 << "]. This simHit will be skipped." << endmsg;
+    m_digitizer.warning() << "simHit local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ") is out of sensor bounds U: [" << -m_digitizer.ActiveVolumeDimensions().at(0)/2 << ", " << m_digitizer.ActiveVolumeDimensions().at(0)/2 << "], V: [" << -m_digitizer.ActiveVolumeDimensions().at(1)/2 << ", " << m_digitizer.ActiveVolumeDimensions().at(1)/2 << "]. This simHit will be skipped." << endmsg;
   }
   else {
     m_digitizer.verbose() << "       - Filling charge " << simHit.charge() << " e." << endmsg;

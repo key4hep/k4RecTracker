@@ -146,11 +146,11 @@ std::pair<int, int> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const 
   return {i_u, i_v};
 } // ComputePixelIndices()
 
-std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<int, 3>& binCount, const std::pair<float, float>& pixelPitch, const std::array<float, 3>& sensorDimensions) {
+std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<int, 3>& binCount, const std::pair<float, float>& pixelPitch, const std::array<float, 3>& activeVolumeDimensions) {
   std::array<int, 3> indices;
 
-  const float posShifted_u = pos.x() + 0.5 * sensorDimensions[0]; // shift to [0, length_u]
-  if (posShifted_u < 0.0 || posShifted_u > sensorDimensions[0]) {
+  const float posShifted_u = pos.x() + 0.5 * activeVolumeDimensions[0]; // shift to [0, length_u]
+  if (posShifted_u < 0.0 || posShifted_u > activeVolumeDimensions[0]) {
     indices[0] = -1; // out of bounds
   }
   else {
@@ -159,8 +159,8 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
     indices[0] = ComputeBinIndex(posInPixel_u, 0.0,  pixelPitch.first / binCount[0], binCount[0]);
   }
 
-  const float posShifted_v = pos.y() + 0.5 * sensorDimensions[1];
-  if (posShifted_v < 0.0 || posShifted_v > sensorDimensions[1]) {
+  const float posShifted_v = pos.y() + 0.5 * activeVolumeDimensions[1];
+  if (posShifted_v < 0.0 || posShifted_v > activeVolumeDimensions[1]) {
     indices[1] = -1; // out of bounds
   }
   else {
@@ -170,8 +170,8 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
   }
 
   // vertical (w) binning: shift to [0, thickness]
-  const float posShifted_w = pos.z() + 0.5 * sensorDimensions[2];
-  indices[2] = ComputeBinIndex(posShifted_w, 0.0, sensorDimensions[2] / binCount[2], binCount[2]); // no fmod, so out-of-bounds is caught
+  const float posShifted_w = pos.z() + 0.5 * activeVolumeDimensions[2];
+  indices[2] = ComputeBinIndex(posShifted_w, 0.0, activeVolumeDimensions[2] / binCount[2], binCount[2]); // no fmod, so out-of-bounds is caught
 
   return indices;
 } // ComputeInPixelIndices()
@@ -561,7 +561,7 @@ bool ToolTest() {
     const std::array<int, 3> binCount = { 4, 4, 4 };
     const std::pair<float, float> pixelPitch = { 1.0f, 2.0f }; // bin-width is 0.25 
 
-    const std::array<float, 3> sensorDimensions = { 10.0f, 20.0f, 1.0f };
+    const std::array<float, 3> activeVolumeDimensions = { 10.0f, 20.0f, 1.0f };
 
     std::array<dd4hep::rec::Vector3D, 10> inputs = {{dd4hep::rec::Vector3D(0.f, 0.f, 0.f)}};
     inputs = {
@@ -591,7 +591,7 @@ bool ToolTest() {
     }};
 
     for (size_t i = 0; i < inputs.size(); ++i) {
-      std::array<int, 3> result = ComputeInPixelIndices(inputs.at(i), binCount, pixelPitch, sensorDimensions);
+      std::array<int, 3> result = ComputeInPixelIndices(inputs.at(i), binCount, pixelPitch, activeVolumeDimensions);
       if (result != expectedOutputs[i]) {
         std::cout << " - FAILED " << std::endl << " | -> Expected in-pixel indices (" << expectedOutputs[i][0] << ", " << expectedOutputs[i][1] << ", " << expectedOutputs[i][2] << ") for (u,v,w)=(" << inputs.at(i).x() << ", " << inputs.at(i).y() << ", " << inputs.at(i).z() << "), got (" << result[0] << ", " << result[1] << ", " << result[2] << ")" << std::endl;
         passedInternal = false;
