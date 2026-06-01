@@ -802,6 +802,9 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
 
   auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
 
+  // Check wether the wire tracker has sectors
+  const bool has_sectors = m_dc_decoder->fieldDescription().find("sector") != std::string::npos;
+  
   int hit_idx(0);
   int detID(-1);
 
@@ -821,7 +824,7 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
     } else if (hit.isA<edm4hep::SenseWireHit>()) {
       detID = 1;
       auto wire_hit = hit.as<edm4hep::SenseWireHit>();
-      GenfitInterface::WireMeasurement measurement(wire_hit, m_wire_info, m_dc_decoder, detID, ++hit_idx, debug_lvl);
+      GenfitInterface::WireMeasurement measurement(wire_hit, m_wire_info, m_dc_decoder, has_sectors, detID, ++hit_idx, debug_lvl);
       m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack));
     } else {
       throw std::runtime_error("InitializeTrack: Unknown hit type encountered - Hit will be skipped.");

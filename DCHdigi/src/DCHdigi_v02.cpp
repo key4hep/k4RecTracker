@@ -153,9 +153,9 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
       //////////////////////////
 
       // Get hit position to calculate distance to wire
-      // Need to convert to XYZVector to use the DCH_info methods
+      // Need to convert to Vector3D to use the WireInfo_info methods
       // Use dd4hep:mm as scale to convert into the dd4hep default units (_ddu)
-      auto simhit_position_ddu = this->toXYZVector(simhit.getPosition()) * dd4hep::mm;
+      auto simhit_position_ddu = this->toVector3D(simhit.getPosition()) * dd4hep::mm;
 
       auto hit_to_wire_vector_ddu = m_dch_info->Calculate_hitpos_to_wire_vector(superlayer, layer, /*isector=*/0, nphi, simhit_position_ddu);
       auto hit_projection_on_the_wire_ddu = simhit_position_ddu + hit_to_wire_vector_ddu;

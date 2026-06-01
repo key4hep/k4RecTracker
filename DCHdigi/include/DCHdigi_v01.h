@@ -71,6 +71,8 @@
 // Class developed by Walaa for the CLS
 #include "AlgData.h"
 
+using Vector3D = dd4hep::rec::WireTracker_info::Vector3D;
+
 /// constant to convert from mm (EDM4hep) to DD4hep (cm)
 
 struct DCHdigi_v01 final
@@ -142,11 +144,11 @@ private:
 
   int CalculateNphiFromCellID(dd4hep::DDSegmentation::CellID id) const { return m_decoder->get(id, "nphi"); }
 
-  /// Convert EDM4hep Vector3d to XYZVector
-  ROOT::Math::XYZVector Convert_EDM4hepVector_to_XYZVector(const edm4hep::Vector3d& v, double scale) const {
+  /// Convert EDM4hep Vector3d to Vector3D as defined in WireTracker_info
+  Vector3D Convert_EDM4hepVector_to_Vector3D(const edm4hep::Vector3d& v, double scale) const {
     return {v[0] * scale, v[1] * scale, v[2] * scale};
   };
-  edm4hep::Vector3d Convert_XYZVector_to_EDM4hepVector(const  ROOT::Math::XYZVector& v, double scale) const {
+  edm4hep::Vector3d Convert_Vector3D_to_EDM4hepVector(const  Vector3D& v, double scale) const {
     return {v.x() * scale, v.y() * scale, v.z() * scale};
   };
 

@@ -135,17 +135,17 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     int superlayer = this->CalculateLayerFromCellID(cellid);
     int ilayer = this->CalculateLayerFromCellID(cellid);
     int nphi = this->CalculateNphiFromCellID(cellid);
-    auto hit_position = Convert_EDM4hepVector_to_XYZVector(input_sim_hit.getPosition(), MM_TO_CM);
+    auto hit_position = Convert_EDM4hepVector_to_Vector3D(input_sim_hit.getPosition(), MM_TO_CM);
 
     // -------------------------------------------------------------------------
     //      calculate hit position projection into the wire
-    ROOT::Math::XYZVector hit_to_wire_vector = this->dch_data->Calculate_hitpos_to_wire_vector(superlayer,ilayer, /*isector=*/0, nphi, hit_position);
-    ROOT::Math::XYZVector hit_projection_on_the_wire = hit_position + hit_to_wire_vector;
+    auto hit_to_wire_vector = this->dch_data->Calculate_hitpos_to_wire_vector(superlayer,ilayer, /*isector=*/0, nphi, hit_position);
+    auto hit_projection_on_the_wire = hit_position + hit_to_wire_vector;
     if (m_create_debug_histos.value()) {
       double distance_hit_wire = hit_to_wire_vector.R();
       hDpw->Fill(distance_hit_wire);
     }
-    ROOT::Math::XYZVector wire_direction_ez = this->dch_data->Calculate_wire_vector_ez(superlayer, ilayer, /*isector=*/0, nphi);
+    auto wire_direction_ez = this->dch_data->Calculate_wire_vector_ez(superlayer, ilayer, /*isector=*/0, nphi);
 
     // -------------------------------------------------------------------------
     //       smear the position
@@ -158,7 +158,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     hit_projection_on_the_wire += smearing_z * (wire_direction_ez.Unit());
     if (m_create_debug_histos.value()) {
       // the distance from the hit projection and the wire should be zero
-      ROOT::Math::XYZVector dummy_vector = this->dch_data->Calculate_hitpos_to_wire_vector(superlayer, ilayer, /*isector=*/0, nphi, hit_projection_on_the_wire);
+      auto dummy_vector = this->dch_data->Calculate_hitpos_to_wire_vector(superlayer, ilayer, /*isector=*/0, nphi, hit_projection_on_the_wire);
       hDww->Fill(dummy_vector.R());
     }
 
@@ -175,7 +175,7 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     std::int32_t quality = 0;
     float eDepError = 0;
     // length units back to mm
-    auto positionSW = Convert_XYZVector_to_EDM4hepVector(hit_projection_on_the_wire, 1. / MM_TO_CM);
+    auto positionSW = Convert_Vector3D_to_EDM4hepVector(hit_projection_on_the_wire, 1. / MM_TO_CM);
     // auto  directionSW    = Convert_XYZVector_to_EDM4hepVector(wire_direction_ez, 1. / MM_TO_CM);
     float distanceToWire = distanceToWire_smeared / MM_TO_CM;
 

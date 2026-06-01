@@ -86,6 +86,8 @@
 // ROOT
 #include "TRandom3.h"
 
+using Vector3D = dd4hep::rec::WireTracker_info::Vector3D;
+
 class DCHdigi_v02 final
     : public k4FWCore::MultiTransformer<
           std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>(
@@ -166,10 +168,10 @@ private:
       "Together with ReadoutWindowStartTime_ns, defines the readout window. Any DigiHits with arrival time after "
       "ReadoutWindowStartTime_ns + ReadoutWindowDuration_ns are discarded."};
 
-  /// Convert EDM4hep Vector3d to XYZVector
-  ROOT::Math::XYZVector toXYZVector(const edm4hep::Vector3d& v) const { return {v[0], v[1], v[2]}; };
-  /// Convert XYZVector to EDM4hep Vector3d
-  edm4hep::Vector3d toEDM4hepVector(const ROOT::Math::XYZVector& v) const { return {v.x(), v.y(), v.z()}; };
+  /// Convert EDM4hep Vector3d to Vector3D as defined in WireTracker_info
+  Vector3D toVector3D(const edm4hep::Vector3d& v) const { return {v[0], v[1], v[2]}; };
+  /// Convert Vector3D as defined in WireTracker_info to EDM4hep Vector3d
+  edm4hep::Vector3d toEDM4hepVector(const Vector3D& v) const { return {v.x(), v.y(), v.z()}; };
 
   // /// Function to calculate the drift time from the distance to the wire
   double get_drift_time_ns(double distance_to_wire_mm) const;

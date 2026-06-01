@@ -58,8 +58,8 @@ namespace GenfitInterface {
 class WireMeasurement {
 public:
   WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep::rec::WireTracker_info_struct* wire_info,
-                  const dd4hep::DDSegmentation::BitFieldCoder* decoder, const int det_idx, const int hit_idx,
-                  const int debug_lvl);
+                  const dd4hep::DDSegmentation::BitFieldCoder* decoder, const bool has_sectors, const int det_idx,
+                  const int hit_idx, const int debug_lvl);
 
   genfit::WirePointMeasurement* getGenFit() const { return m_genfitHit; };
 

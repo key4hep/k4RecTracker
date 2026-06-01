@@ -22,7 +22,7 @@
 namespace GenfitInterface {
 
 WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep::rec::WireTracker_info_struct* wire_info,
-                                 const dd4hep::DDSegmentation::BitFieldCoder* decoder, const int det_idx,
+                                 const dd4hep::DDSegmentation::BitFieldCoder* decoder, const bool has_sectors, const int det_idx,
                                  const int hit_idx, const int debug_lvl) {
 
   // NB: dd4hep::mm = 0.1.
@@ -52,20 +52,10 @@ WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep:
   direction.RotateZ(wireAzimuthalAngle);
   direction = direction.Unit();
 
-  // Safe decoder wrapper to handle missing cellID fields, currently used only for sector
-  auto safe_decoder = [decoder, debug_lvl](int b, std::string f){
-    try {
-      return (int) decoder->get(b, f);
-    } catch (std::exception& e) {
-      if (debug_lvl > 0) std::cout << "WARNING: cannot decode "<<f<<" for cellID " << b << ": " << e.what() << std::endl;
-      return 0;
-    }
-  };
-
   // Wire extremities
   const int superlayer = decoder->get(cellid, "superlayer");
   const int layer = decoder->get(cellid, "layer");
-  const int sector = safe_decoder(cellid, "sector");
+  const int sector = has_sectors ? decoder->get(cellid, "sector") : 0;
   const int nphi = decoder->get(cellid, "nphi");
 
   const int ilayer = wire_info->CalculateILayerFromCellIDFields(layer, superlayer);
