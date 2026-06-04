@@ -19,17 +19,17 @@
 
 // DD4HEP
 #include "DD4hep/Detector.h"
-#include "DDRec/Vector3D.h"
 #include "DDRec/SurfaceManager.h"
+#include "DDRec/Vector3D.h"
 #include "DDSegmentation/BitFieldCoder.h"
 
-#include <vector>
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <map>
 #include <set>
+#include <vector>
 
 /** @class MUONDigitizer
  *
@@ -64,23 +64,21 @@ public:
 
 private:
   // ---- Input / output collections --------------------------------------
-  mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{
-      "inputSimHits", Gaudi::DataHandle::Reader, this};
-  mutable k4FWCore::DataHandle<edm4hep::TrackerHitPlaneCollection> m_output_digi_hits{
-      "outputDigiHits", Gaudi::DataHandle::Writer, this};
+  mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits",
+                                                                                  Gaudi::DataHandle::Reader, this};
+  mutable k4FWCore::DataHandle<edm4hep::TrackerHitPlaneCollection> m_output_digi_hits{"outputDigiHits",
+                                                                                      Gaudi::DataHandle::Writer, this};
   mutable k4FWCore::DataHandle<edm4hep::TrackerHitSimTrackerHitLinkCollection> m_output_sim_digi_link{
       "outputSimDigiLink", Gaudi::DataHandle::Writer, this};
 
   // ---- Geometry --------------------------------------------------------
-  Gaudi::Property<std::string> m_detectorName{
-      this, "detectorName", "Muon-System",
-      "DD4hep detector name"};
-  Gaudi::Property<std::string> m_readoutName{
-      this, "readoutName", "MuonSystemCollection", "Name of the detector readout"};
+  Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Muon-System", "DD4hep detector name"};
+  Gaudi::Property<std::string> m_readoutName{this, "readoutName", "MuonSystemCollection",
+                                             "Name of the detector readout"};
   ServiceHandle<IGeoSvc> m_geoSvc;
   dd4hep::DDSegmentation::BitFieldCoder* m_decoder = nullptr;
   dd4hep::VolumeManager m_volman;
-  const dd4hep::rec::SurfaceMap* m_surfMap = nullptr;  // populated only when forceHitsOntoSurface is true
+  const dd4hep::rec::SurfaceMap* m_surfMap = nullptr; // populated only when forceHitsOntoSurface is true
 
   // ---- Smearing / efficiency / clustering knobs ------------------------
   // uRWELL is a planar 2D readout: the chamber-local x is the gas-gap normal
@@ -90,38 +88,35 @@ private:
                                "Spatial resolution along surface u (= local y, in-plane) [mm]"};
   FloatProperty m_v_resolution{this, "vResolution", 0.4,
                                "Spatial resolution along surface v (= local z, in-plane) [mm]"};
-  FloatProperty m_t_resolution{this, "tResolution", -1.0,
-                               "Time resolution [ns]; <=0 disables time smearing (digi time = earliest contributing SimHit time)"};
-  FloatProperty m_efficiency{this, "efficiency", 0.98,
-                             "Per-cluster detection efficiency"};
-  FloatProperty m_timeWindow{this, "timeWindow", 25.0,
-                             "Time window for grouping SimHits into the same cluster [ns]"};
+  FloatProperty m_t_resolution{
+      this, "tResolution", -1.0,
+      "Time resolution [ns]; <=0 disables time smearing (digi time = earliest contributing SimHit time)"};
+  FloatProperty m_efficiency{this, "efficiency", 0.98, "Per-cluster detection efficiency"};
+  FloatProperty m_timeWindow{this, "timeWindow", 25.0, "Time window for grouping SimHits into the same cluster [ns]"};
   Gaudi::Property<unsigned int> m_maxClusterSize{
-      this, "maxClusterSize", 3,
-      "Maximum number of distinct strip indices per view (Y and Z) inside one cluster"};
+      this, "maxClusterSize", 3, "Maximum number of distinct strip indices per view (Y and Z) inside one cluster"};
   BooleanProperty m_forceHitsOntoSurface{
       this, "forceHitsOntoSurface", false,
       "If true, project smeared digi positions that fall outside the chamber sensitive surface back onto it"};
   Gaudi::Property<unsigned int> m_printFrequency{
-      this, "printFrequency", 100,
-      "Print one INFO line every N events with the in/out hit count (0 = never)"};
+      this, "printFrequency", 100, "Print one INFO line every N events with the in/out hit count (0 = never)"};
 
   // ---- Validation outputs ----------------------------------------------
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceX{
-      "simDigiDifferenceX", Gaudi::DataHandle::Writer, this};
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceY{
-      "simDigiDifferenceY", Gaudi::DataHandle::Writer, this};
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceZ{
-      "simDigiDifferenceZ", Gaudi::DataHandle::Writer, this};
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<int>> m_clusterSizeY{
-      "clusterSizeY", Gaudi::DataHandle::Writer, this};
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<int>> m_clusterSizeZ{
-      "clusterSizeZ", Gaudi::DataHandle::Writer, this};
+  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceX{"simDigiDifferenceX",
+                                                                                       Gaudi::DataHandle::Writer, this};
+  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceY{"simDigiDifferenceY",
+                                                                                       Gaudi::DataHandle::Writer, this};
+  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceZ{"simDigiDifferenceZ",
+                                                                                       Gaudi::DataHandle::Writer, this};
+  mutable k4FWCore::DataHandle<podio::UserDataCollection<int>> m_clusterSizeY{"clusterSizeY", Gaudi::DataHandle::Writer,
+                                                                              this};
+  mutable k4FWCore::DataHandle<podio::UserDataCollection<int>> m_clusterSizeZ{"clusterSizeZ", Gaudi::DataHandle::Writer,
+                                                                              this};
 
   // ---- Random services -------------------------------------------------
   SmartIF<IRndmGenSvc> m_randSvc;
-  mutable Rndm::Numbers m_gauss_u;  // smear along surface u (local y)
-  mutable Rndm::Numbers m_gauss_v;  // smear along surface v (local z)
-  mutable Rndm::Numbers m_gauss_t;  // smear time if tResolution > 0
+  mutable Rndm::Numbers m_gauss_u; // smear along surface u (local y)
+  mutable Rndm::Numbers m_gauss_v; // smear along surface v (local z)
+  mutable Rndm::Numbers m_gauss_t; // smear time if tResolution > 0
   mutable Rndm::Numbers m_flat;
 };

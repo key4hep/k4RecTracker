@@ -6,11 +6,11 @@ namespace {
 // One readout cell that received at least one SimHit, plus the list of
 // SimHits that contributed to it.
 struct FiredCell {
-  int                                   yIndex;  // signed strip index in y
-  int                                   zIndex;  // signed strip index in z
-  double                                energy;  // sum of EDep over contributing SimHits
-  dd4hep::DDSegmentation::CellID        cellID;  // full cellID (used for the local transform)
-  std::vector<edm4hep::SimTrackerHit>   simHits; // contributing SimHits
+  int yIndex;                                  // signed strip index in y
+  int zIndex;                                  // signed strip index in z
+  double energy;                               // sum of EDep over contributing SimHits
+  dd4hep::DDSegmentation::CellID cellID;       // full cellID (used for the local transform)
+  std::vector<edm4hep::SimTrackerHit> simHits; // contributing SimHits
 };
 // 8-neighbour adjacency on the (y,z) strip grid.
 bool areAdjacent(const FiredCell& a, const FiredCell& b) {
@@ -18,7 +18,7 @@ bool areAdjacent(const FiredCell& a, const FiredCell& b) {
   const int deltaZ = std::abs(a.zIndex - b.zIndex);
   return deltaY <= 1 && deltaZ <= 1 && (deltaY + deltaZ) > 0;
 }
-}
+} // namespace
 
 MUONDigitizer::MUONDigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
     : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "MUONDigitizer") {
@@ -56,18 +56,18 @@ StatusCode MUONDigitizer::initialize() {
     return StatusCode::FAILURE;
   }
   m_decoder = m_geoSvc->getDetector()->readout(m_readoutName).idSpec().decoder();
-  m_volman  = m_geoSvc->getDetector()->volumeManager();
+  m_volman = m_geoSvc->getDetector()->volumeManager();
 
-  //check: the readout must carry a layer field
+  // check: the readout must carry a layer field
   if (m_decoder->fieldDescription().find("layer") == std::string::npos) {
     error() << "Readout " << m_readoutName << " does not contain a 'layer' id!" << endmsg;
     return StatusCode::FAILURE;
   }
 
-  // check surface map 
+  // check surface map
   if (m_forceHitsOntoSurface) {
     auto* theDetector = m_geoSvc->getDetector();
-    auto* surfMan     = theDetector->extension<dd4hep::rec::SurfaceManager>();
+    auto* surfMan = theDetector->extension<dd4hep::rec::SurfaceManager>();
     if (!surfMan) {
       error() << "No SurfaceManager extension available for the detector" << endmsg;
       return StatusCode::FAILURE;
@@ -90,8 +90,7 @@ StatusCode MUONDigitizer::initialize() {
          << " maxClusterSize=" << m_maxClusterSize << " strips/view (8-neighbour),"
          << " efficiency=" << m_efficiency
          << ", time smearing=" << (m_t_resolution > 0.f ? std::to_string(m_t_resolution) + " ns" : std::string("OFF"))
-         << ", forceHitsOntoSurface=" << (m_forceHitsOntoSurface.value() ? "ON" : "OFF")
-         << endmsg;
+         << ", forceHitsOntoSurface=" << (m_forceHitsOntoSurface.value() ? "ON" : "OFF") << endmsg;
   return StatusCode::SUCCESS;
 }
 
@@ -99,13 +98,13 @@ StatusCode MUONDigitizer::finalize() { return StatusCode::SUCCESS; }
 
 StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
   const auto* sim_hits = m_input_sim_hits.get();
-  auto*       digi_hits = m_output_digi_hits.createAndPut();
-  auto*       links = m_output_sim_digi_link.createAndPut();
-  auto*       diffX = m_simDigiDifferenceX.createAndPut();
-  auto*       diffY = m_simDigiDifferenceY.createAndPut();
-  auto*       diffZ = m_simDigiDifferenceZ.createAndPut();
-  auto*       clusterSizesY = m_clusterSizeY.createAndPut();
-  auto*       clusterSizesZ = m_clusterSizeZ.createAndPut();
+  auto* digi_hits = m_output_digi_hits.createAndPut();
+  auto* links = m_output_sim_digi_link.createAndPut();
+  auto* diffX = m_simDigiDifferenceX.createAndPut();
+  auto* diffY = m_simDigiDifferenceY.createAndPut();
+  auto* diffZ = m_simDigiDifferenceZ.createAndPut();
+  auto* clusterSizesY = m_clusterSizeY.createAndPut();
+  auto* clusterSizesZ = m_clusterSizeZ.createAndPut();
 
   debug() << "Event " << ctx.evt() << ": " << sim_hits->size() << " input SimHits" << endmsg;
 
@@ -120,21 +119,20 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
 
   for (const auto& sim : *sim_hits) {
     const auto cellID = sim.getCellID();
-    const int  yIdx   = m_decoder->get(cellID, "y");
-    const int  zIdx   = m_decoder->get(cellID, "z");
+    const int yIdx = m_decoder->get(cellID, "y");
+    const int zIdx = m_decoder->get(cellID, "z");
 
     // Build the chamber ID: same cellID, but with y and z set to 0.
     dd4hep::DDSegmentation::CellID chamberID = cellID;
     m_decoder->set(chamberID, "y", 0);
     m_decoder->set(chamberID, "z", 0);
 
-    const auto       tWindow    = static_cast<std::int64_t>(std::floor(sim.getTime() / m_timeWindow));
+    const auto tWindow = static_cast<std::int64_t>(std::floor(sim.getTime() / m_timeWindow));
     const CellWindow cellWindow{chamberID, tWindow};
 
     auto& cells = cellWindows[cellWindow];
-    auto  it    = std::find_if(cells.begin(), cells.end(), [&](const FiredCell& c) {
-      return c.yIndex == yIdx && c.zIndex == zIdx;
-    });
+    auto it = std::find_if(cells.begin(), cells.end(),
+                           [&](const FiredCell& c) { return c.yIndex == yIdx && c.zIndex == zIdx; });
     if (it == cells.end()) {
       cells.push_back({yIdx, zIdx, sim.getEDep(), cellID, {sim}});
     } else {
@@ -154,15 +152,16 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
 
     // We always pick the next seed as the highest-energy still-unused cell.
     while (true) {
-      int    seedIdx = -1;
-      double seedE   = -1.0;
+      int seedIdx = -1;
+      double seedE = -1.0;
       for (std::size_t i = 0; i < cells.size(); ++i) {
         if (!used[i] && cells[i].energy > seedE) {
-          seedE   = cells[i].energy;
+          seedE = cells[i].energy;
           seedIdx = static_cast<int>(i);
         }
       }
-      if (seedIdx < 0) break;  // no unused cells left in this cellWindow
+      if (seedIdx < 0)
+        break; // no unused cells left in this cellWindow
 
       std::vector<std::size_t> cluster = {static_cast<std::size_t>(seedIdx)};
       used[seedIdx] = true;
@@ -175,26 +174,33 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
       // 8-neighbour-adjacent and that does not push either view beyond
       // maxClusterSize distinct strips.
       while (true) {
-        int    bestIdx = -1;
-        double bestE   = -1.0;
+        int bestIdx = -1;
+        double bestE = -1.0;
         for (std::size_t i = 0; i < cells.size(); ++i) {
-          if (used[i]) continue;
+          if (used[i])
+            continue;
           bool adjacent = false;
           for (std::size_t j : cluster) {
-            if (areAdjacent(cells[i], cells[j])) { adjacent = true; break; }
+            if (areAdjacent(cells[i], cells[j])) {
+              adjacent = true;
+              break;
+            }
           }
-          if (!adjacent) continue;
+          if (!adjacent)
+            continue;
 
           const std::size_t newY = yUsed.count(cells[i].yIndex) ? yUsed.size() : yUsed.size() + 1;
           const std::size_t newZ = zUsed.count(cells[i].zIndex) ? zUsed.size() : zUsed.size() + 1;
-          if (newY > m_maxClusterSize || newZ > m_maxClusterSize) continue;
+          if (newY > m_maxClusterSize || newZ > m_maxClusterSize)
+            continue;
 
           if (cells[i].energy > bestE) {
-            bestE   = cells[i].energy;
+            bestE = cells[i].energy;
             bestIdx = static_cast<int>(i);
           }
         }
-        if (bestIdx < 0) break;
+        if (bestIdx < 0)
+          break;
         cluster.push_back(static_cast<std::size_t>(bestIdx));
         used[bestIdx] = true;
         yUsed.insert(cells[bestIdx].yIndex);
@@ -207,17 +213,17 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
       }
 
       // ---- Energy-weighted centroid of contributing SimHits (mm) --------
-      double totalEnergy      = 0.0;
-      double centroidGlobalX  = 0.0;
-      double centroidGlobalY  = 0.0;
-      double centroidGlobalZ  = 0.0;
+      double totalEnergy = 0.0;
+      double centroidGlobalX = 0.0;
+      double centroidGlobalY = 0.0;
+      double centroidGlobalZ = 0.0;
       for (std::size_t idx : cluster) {
         for (const auto& simHit : cells[idx].simHits) {
           const double eDep = simHit.getEDep();
           centroidGlobalX += simHit.getPosition().x * eDep;
           centroidGlobalY += simHit.getPosition().y * eDep;
           centroidGlobalZ += simHit.getPosition().z * eDep;
-          totalEnergy     += eDep;
+          totalEnergy += eDep;
         }
       }
       if (totalEnergy <= 0.0) {
@@ -226,7 +232,7 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
         centroidGlobalX = simHit.getPosition().x;
         centroidGlobalY = simHit.getPosition().y;
         centroidGlobalZ = simHit.getPosition().z;
-        totalEnergy     = std::max(totalEnergy, 0.0);
+        totalEnergy = std::max(totalEnergy, 0.0);
       } else {
         centroidGlobalX /= totalEnergy;
         centroidGlobalY /= totalEnergy;
@@ -235,19 +241,16 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
 
       // ---- Gaussian smear in the local frame of the seed cell -----------
       const auto& seedCellID = cells[seedIdx].cellID;
-      const auto  placement  = m_volman.lookupVolumePlacement(seedCellID);
-      const auto& xform      = placement.matrix();
+      const auto placement = m_volman.lookupVolumePlacement(seedCellID);
+      const auto& xform = placement.matrix();
 
-      double simGlobalPos_cm[3] = {centroidGlobalX * dd4hep::mm,
-                               centroidGlobalY * dd4hep::mm,
-                               centroidGlobalZ * dd4hep::mm};
-      double simLocalPos_cm[3]  = {0., 0., 0.};
+      double simGlobalPos_cm[3] = {centroidGlobalX * dd4hep::mm, centroidGlobalY * dd4hep::mm,
+                                   centroidGlobalZ * dd4hep::mm};
+      double simLocalPos_cm[3] = {0., 0., 0.};
       xform.MasterToLocal(simGlobalPos_cm, simLocalPos_cm);
 
-      const double smearedLocalPos_cm[3] = {
-          0.,
-          simLocalPos_cm[1] + m_gauss_u.shoot() * dd4hep::mm,
-          simLocalPos_cm[2] + m_gauss_v.shoot() * dd4hep::mm};
+      const double smearedLocalPos_cm[3] = {0., simLocalPos_cm[1] + m_gauss_u.shoot() * dd4hep::mm,
+                                            simLocalPos_cm[2] + m_gauss_v.shoot() * dd4hep::mm};
 
       double digiGlobalPos_cm[3] = {0., 0., 0.};
       xform.LocalToMaster(smearedLocalPos_cm, digiGlobalPos_cm);
@@ -260,7 +263,7 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
           const dd4hep::rec::ISurface* surf = it->second;
           dd4hep::rec::Vector3D smearedGlobal(digiGlobalPos_cm[0], digiGlobalPos_cm[1], digiGlobalPos_cm[2]);
           if (!surf->insideBounds(smearedGlobal)) {
-            const dd4hep::rec::Vector2D lv     = surf->globalToLocal(smearedGlobal);
+            const dd4hep::rec::Vector2D lv = surf->globalToLocal(smearedGlobal);
             const dd4hep::rec::Vector3D onSurf = surf->localToGlobal(lv);
             debug() << "  smeared hit fell outside surface bounds (distance "
                     << surf->distance(smearedGlobal) / dd4hep::mm << " mm); projecting back" << endmsg;
@@ -287,7 +290,8 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
       float hitTime = std::numeric_limits<float>::infinity();
       for (std::size_t idx : cluster) {
         for (const auto& simHit : cells[idx].simHits) {
-          if (simHit.getTime() < hitTime) hitTime = simHit.getTime();
+          if (simHit.getTime() < hitTime)
+            hitTime = simHit.getTime();
         }
       }
       if (m_t_resolution > 0.f) {
@@ -296,9 +300,8 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
 
       // ---- Emit digi hit ------------------------------------------------
       auto digi = digi_hits->create();
-      digi.setPosition({digiGlobalPos_cm[0] / dd4hep::mm,
-                        digiGlobalPos_cm[1] / dd4hep::mm,
-                        digiGlobalPos_cm[2] / dd4hep::mm});
+      digi.setPosition(
+          {digiGlobalPos_cm[0] / dd4hep::mm, digiGlobalPos_cm[1] / dd4hep::mm, digiGlobalPos_cm[2] / dd4hep::mm});
       digi.setCellID(seedCellID);
       digi.setTime(hitTime);
       digi.setEDep(totalEnergy);
@@ -319,14 +322,11 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
       }
 
       if (msgLevel(MSG::DEBUG)) {
-        debug() << "  cluster: cells=" << cluster.size()
-                << " (Y=" << yUsed.size() << ", Z=" << zUsed.size() << "),"
+        debug() << "  cluster: cells=" << cluster.size() << " (Y=" << yUsed.size() << ", Z=" << zUsed.size() << "),"
                 << " SimHits=" << nSimHits << ","
-                << " EDep=" << totalEnergy
-                << ", pos=(" << digiGlobalPos_cm[0] / dd4hep::mm
-                << ", "      << digiGlobalPos_cm[1] / dd4hep::mm
-                << ", "      << digiGlobalPos_cm[2] / dd4hep::mm << ") mm,"
-                << " t="     << hitTime << " ns" << endmsg;
+                << " EDep=" << totalEnergy << ", pos=(" << digiGlobalPos_cm[0] / dd4hep::mm << ", "
+                << digiGlobalPos_cm[1] / dd4hep::mm << ", " << digiGlobalPos_cm[2] / dd4hep::mm << ") mm,"
+                << " t=" << hitTime << " ns" << endmsg;
       }
 
       // ---- Validation outputs ------------------------------------------
@@ -345,8 +345,8 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
 
   // Per-event heartbeat (INFO). Emit every printFrequency events; 0 disables.
   if (m_printFrequency > 0 && (ctx.evt() % m_printFrequency == 0)) {
-    info() << "Event " << ctx.evt() << ": " << sim_hits->size() << " SimHits -> "
-           << digi_hits->size() << " digi clusters" << endmsg;
+    info() << "Event " << ctx.evt() << ": " << sim_hits->size() << " SimHits -> " << digi_hits->size()
+           << " digi clusters" << endmsg;
   }
 
   return StatusCode::SUCCESS;
