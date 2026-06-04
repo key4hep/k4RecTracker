@@ -56,6 +56,7 @@ add_subdirectory(DCHdigi)
 add_subdirectory(ARCdigi)
 add_subdirectory(VTXdigi)
 add_subdirectory(VTXdigiDetailed)
+add_subdirectory(MUONdigi)
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
 add_subdirectory(Tracking)
 
