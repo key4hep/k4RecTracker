@@ -60,7 +60,7 @@ geoservice = GeoSvc("GeoSvc")
 path_to_detector = os.environ.get("K4GEO", "")
 print("K4GEO =", path_to_detector)
 detectors_to_use = [
-    "FCCee/IDEA/compact/IDEA_o1_v03/IDEA_4L_50cm.xml",
+    "FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml",
 ]
 geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
 geoservice.OutputLevel = INFO
