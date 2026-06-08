@@ -257,7 +257,7 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
 
       // ---- Optional: project smeared digi onto the actual sensitive surface
       // when it falls outside the chamber's surface bounds.
-      if (m_forceHitsOntoSurface && m_surfMap) {
+      if (m_forceHitsOntoSurface) {
         auto it = m_surfMap->find(seedCellID);
         if (it != m_surfMap->end()) {
           const dd4hep::rec::ISurface* surf = it->second;
