@@ -182,6 +182,15 @@ int GetLayer(const edm4hep::SimTrackerHit& simTrackerHit, const std::unique_ptr<
  * @note Bins are 0-indexed (vs ROOT's 1-indexing) */
 int ComputeBinIndex(float x, float binX0, float binWidth, int binN);
 
+/** @brief Given a binning definition (x0, binWidth, nBins), compute the center position of a given bin index i in the histogram
+ * @return Float, the center position of the bin
+ * @note Bins are 0-indexed (vs ROOT's 1-indexing) */
+float ComputeBinCenter(int i, float binX0, float binWidth);
+/** @brief Given a binning definition (x0, x1, nBins), compute the center position of a given bin index i in the histogram
+ * @return Float, the center position of the bin
+ * @note Bins are 0-indexed (vs ROOT's 1-indexing) */
+float ComputeBinCenter(int i, float binX0, float binX1, int binN);
+
 /** @brief Compute the pixel indices (i_u, i_v) for a given (local) position inside the sensor */
 std::pair<int, int> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const std::pair<float, float> pixelPitch, const std::pair<size_t, size_t> pixelCount);
 

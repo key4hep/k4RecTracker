@@ -128,6 +128,21 @@ int ComputeBinIndex(float x, float binX0, float binWidth, int binN) {
   return static_cast<int>(relativePos);
 } // ComputeBinIndex()
 
+float ComputeBinCenter(int i, float binX0, float binWidth) {
+  if (i < 0) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): bin index must be non-negative");
+  if (binWidth <= 0.0) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): binWidth must be positive");
+
+  return binX0 + (static_cast<float>(i) + 0.5f) * binWidth; // add 0.5*binWidth to shift from lower edge to center
+} // ComputeBinCenter()
+float ComputeBinCenter(int i, float binX0, float binX1, int binN) {
+  if (binN <= 0) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): binN must be positive");
+  if (binX1 <= binX0) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): binX1 must be greater than binX0");
+  if (i < 0 || i >= binN) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): bin index out of bounds");
+
+  const float binWidth = (binX1 - binX0) / static_cast<float>(binN);  
+  return ComputeBinCenter(i, binX0, binWidth);
+} // ComputeBinCenter()
+
 std::pair<int, int> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const std::pair<float, float> pixelPitch, const std::pair<size_t, size_t> pixelCount) {
   const float length_u_half = 0.5 * pixelPitch.first * pixelCount.first;
   int i_u = ComputeBinIndex(

@@ -447,9 +447,6 @@ void VTXdigi_Modular::InitLayersAndSensors() {
   } // loop over layers
   
   info() << " - Retrieved sensor parameters: area (" << m_sensorLength.first << " x " << m_sensorLength.second << ") mm2, thickness " << m_sensorActiveThickness << " mm with (" << m_inactiveMaterialAbove << "/" << m_inactiveMaterialBelow << ") mm of inactive material above/below, pixel pitch (" << m_pixelPitch.first << " x " << m_pixelPitch.second << ") mm, pixel count (" << m_pixelCount.first << " x " << m_pixelCount.second << "). All " << sensorNumber << " sensors in the relevant layers share these parameters." << endmsg;
-
-  if (abs(m_depletedRegionDepthCenter) > m_sensorActiveThickness/2.f)
-    throw GaudiException("Depleted region depth center " + std::to_string(m_depletedRegionDepthCenter) + " mm is outside the sensor (which is  " + std::to_string(m_sensorActiveThickness) + " mm thick). Note that DepletedRegionDepthCenter=0 lies in the middle of the sensor, ie. at half it's thickness.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
 } // InitLayersAndSensors()
 
 void VTXdigi_Modular::InitHistograms() {
@@ -1283,7 +1280,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
 
     // position
     const std::pair<float, float> clusterPos_index = cluster.ComputePos();
-    const dd4hep::rec::Vector3D clusterPos_local = VTXdigi_tools::ComputePosFromPixIndex_local(clusterPos_index, m_sensorLength, m_pixelPitch, m_depletedRegionDepthCenter);
+    const dd4hep::rec::Vector3D clusterPos_local = VTXdigi_tools::ComputePosFromPixIndex_local(clusterPos_index, m_sensorLength, m_pixelPitch, m_chargeCollector->GetChargeCollectionDepthCenter());
     const dd4hep::rec::Vector3D clusterPos_global = VTXdigi_tools::LocalToGlobal(clusterPos_local, trafoMatrix);
     debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_index.first << ", " << clusterPos_index.second << "). Has " << cluster.simHits.size() << " contributing simHits." << endmsg;
     digiHit.setPosition(VTXdigi_tools::ConvertVector(clusterPos_global));

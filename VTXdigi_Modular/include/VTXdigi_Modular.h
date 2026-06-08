@@ -57,8 +57,6 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
 
   inline std::pair<size_t, size_t> PixelCount() const { return m_pixelCount; }
 
-  inline float DepletedRegionDepthCenter() const { return m_depletedRegionDepthCenter; }
-
   inline float Threshold() const { return m_threshold; }
 
   inline bool LUT_ignorePitch() const { return m_LUT_ignorePitch.value(); }
@@ -122,7 +120,6 @@ private:
   /* -- Properties and members related to the various charge collection algorithms-- */
 
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
-  Gaudi::Property<float> m_depletedRegionDepthCenter{this, "DepletedRegionDepthCenter", 0.0f, "Depth of the depleted region center for charge collection (in mm), inside the active volume of the sensor, wrt. the center of the active volume. This defines the position of the created digiHits along the sensor's normal direction."};
   Gaudi::Property<float> m_threshold{this, "Threshold", 0.0f, "Pixel threshold for firing (in e-)."};
   Gaudi::Property<std::vector<float>> m_positionUncertainty{this, "ClusterPositionUncertainty", {}, "Sensor spatial resolution in u and v direction (in mm). Used for the position uncertainty in digiHits"};
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Quadratically add pixel noise and threshold smearing if necessary."};

@@ -7,20 +7,39 @@ using ::VTXdigi_Modular; // "unqualified name introduction from global namespace
 using ::endmsg; // makes the Copilot autocomplete work better
 
 std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& digitizer, const std::string& algorithm) {
+  std::unique_ptr<IChargeCollector> chargeCollector;
+
   if (algorithm == "LookupTable") {
-    return std::make_unique<ChargeCollector_LUT>(digitizer);
+    chargeCollector = std::make_unique<ChargeCollector_LUT>(digitizer);
   } else if (algorithm == "Drift") {
-    // return std::make_unique<ChargeCollector_Drift>(digitizer);
     throw std::runtime_error("ChargeCollector_Drift not implemented yet.");
   } else if (algorithm == "Fast") {
-    // return std::make_unique<ChargeCollector_Fast>();
     throw std::runtime_error("ChargeCollector_Fast not implemented yet.");
   } else if (algorithm == "SinglePixel") {
-    return std::make_unique<ChargeCollector_SinglePixel>(digitizer);
+    chargeCollector = std::make_unique<ChargeCollector_SinglePixel>(digitizer);
   } else if (algorithm == "Debug") {
-    return std::make_unique<ChargeCollector_Debug>(digitizer);
+    chargeCollector = std::make_unique<ChargeCollector_Debug>(digitizer);
   }
-  throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
+  else {
+    throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
+  }
+
+  digitizer.info() << " - Created charge collector with algorithm " << algorithm << ". Charge collection depth center at " << chargeCollector->GetChargeCollectionDepthCenter() << " mm." << endmsg;
+  return chargeCollector;
+  // if (algorithm == "LookupTable") {
+  //   return std::make_unique<ChargeCollector_LUT>(digitizer);
+  // } else if (algorithm == "Drift") {
+  //   // return std::make_unique<ChargeCollector_Drift>(digitizer);
+  //   throw std::runtime_error("ChargeCollector_Drift not implemented yet.");
+  // } else if (algorithm == "Fast") {
+  //   // return std::make_unique<ChargeCollector_Fast>();
+  //   throw std::runtime_error("ChargeCollector_Fast not implemented yet.");
+  // } else if (algorithm == "SinglePixel") {
+  //   return std::make_unique<ChargeCollector_SinglePixel>(digitizer);
+  // } else if (algorithm == "Debug") {
+  //   return std::make_unique<ChargeCollector_Debug>(digitizer);
+  // }
+  // throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
 }
 
 bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular&  digitizer) {
@@ -232,7 +251,10 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   
   digitizer.debug() << "   - Parsing LUT file, filling into lookup table." << endmsg;
 
+  std::vector<float> matricesEntrySum_perWBin;
+  matricesEntrySum_perWBin.resize(m_binCount.at(2), 0.f);
   float matricesEntrySum = 0.f;
+
   lineNumber = headerLines + 1;
   while (std::getline(lutFile, line)) {
     if (line.empty() || line[0] == '#')
@@ -251,7 +273,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     if (static_cast<int>(lineEntries.size()) != 3 + m_matrixSize*m_matrixSize)
       throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Invalid number of entries in LUT file at line " + std::to_string(lineNumber+1) + ": found " + std::to_string(lineEntries.size()) + " entries, but expected " + std::to_string(3 + m_matrixSize*m_matrixSize) + " (3 for bin indices, " + std::to_string(m_matrixSize*m_matrixSize) + " for matrix values).");
 
-    /* First 3 lines are in-pixel binning indices */
+    /* First 3 entries are in-pixel binning indices */
     Index_inPix j_uvw({std::stoi(lineEntries[0])-1, std::stoi(lineEntries[1])-1, std::stoi(lineEntries[2])-1});// Allpix2 input is 1-indexed. Insane, I know.
 
     if (j_uvw.at(0) < 0 || j_uvw.at(0) >= m_binCount[0] ||
@@ -275,6 +297,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
       throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") contains NaN values (sum of entries is NaN).");
     
     matricesEntrySum += matrixEntrySum;
+    matricesEntrySum_perWBin[j_uvw.at(2)] += matrixEntrySum;
     SetMatrix(j_uvw, matrixEntries);
 
     lineNumber++;
@@ -283,8 +306,23 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   if (lineNumber - (headerLines+1) != m_binCount[0] * m_binCount[1] * m_binCount[2])
     throw std::runtime_error("Invalid number of matrices loaded from file: expected " + std::to_string(m_binCount[0] * m_binCount[1] * m_binCount[2]) + " matrices (inferred from bin count in header) but found " + std::to_string(lineNumber - headerLines) + " lines.");
 
-  matricesEntrySum /= static_cast<float>(lineNumber - headerLines);
-  digitizer.info() << " - Loaded lookup table from file. Contains " << (lineNumber - headerLines) << " matrices. " << matricesEntrySum*100 << " percent of charge deposited in the sensor volume is collected by the pixels (the rest is lost, eg. due to being outside of depletion or due to trapping)." << endmsg;
+  const float matrixNumber = static_cast<float>(lineNumber - headerLines);
+  
+  // From which w-level are charges collected?
+  float collectedFromW = 0.f;
+  for (int j_w = 0; j_w < m_binCount.at(2); j_w++) {
+    const float binHeight = sensorThickness / m_binCount.at(2);
+    const float w_bin_center = j_w*binHeight + 0.5f*binHeight - 0.5f*sensorThickness;
+    collectedFromW += matricesEntrySum_perWBin.at(j_w) * w_bin_center;
+  }
+  collectedFromW /= matricesEntrySum;
+
+  if (std::abs(collectedFromW) > 0.5f * sensorThickness) throw std::runtime_error("Invalid charge collection depth inferred from LUT file: " + std::to_string(collectedFromW) + " mm. This is outside the sensor volume, which extends from " + std::to_string(-0.5f*sensorThickness) + " mm to " + std::to_string(0.5f*sensorThickness) + " mm.");
+  if (std::abs(collectedFromW) >= 1.e-5f) {
+    m_chargeCollectionDepthCenter = collectedFromW; // the member is initalised to 0.f
+  }
+
+  digitizer.info() << " - Loaded lookup table from file. Matrices parsed: " << (lineNumber - headerLines) << ". Charge collected from sensitive volume: " << matricesEntrySum/matrixNumber*100 << " percent (rest is lost, eg recombination). The center of the collection region is at " << m_chargeCollectionDepthCenter << endmsg;
 }
 
 void LookupTable::SetMatrix(const Index_inPix& j_uvw, const std::vector<float>& weights) {
@@ -339,6 +377,7 @@ int LookupTable::FindIndex (const Index_inPix& j, const int col, const int row) 
 
 ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer), m_LUT(digitizer.LutFileName(), digitizer), m_stepLength(digitizer.LutStepLength()) {
   /* LUT is constructed in place (from file) */
+  m_chargeCollectionDepthCenter = m_LUT.GetChargeCollectionDepthCenter();
 
   m_digitizer.info() << " - ChargeCollector_LUT constructed successfully." << endmsg;
 }
@@ -351,7 +390,7 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
   if (!ConstructPath(path, simHit, trafoMatrix, m_digitizer)) [[unlikely]]
     return;
 
-  MoveTruthPosition(simHit, path); // shifts the sim hit position to the depth in the sensor where most charge is collected, to get useful residual plots
+  MoveTruthPosition(simHit, path); // shifts the sim hit position to the depth in the sensor where most charge is collected, to get usesful residual plots.
 
   const int stepCount = std::max(1, static_cast<int>(std::ceil(path.length / m_stepLength)));
   const float segmentCharge = simHit.charge() / stepCount;
@@ -427,13 +466,12 @@ void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_se
 }
 
 void ChargeCollector_LUT::MoveTruthPosition(const SimHitWrapper& simHit, const Path& path) const {
-  const float w_target = m_digitizer.DepletedRegionDepthCenter(); 
-  if (w_target == 0.f) 
+  if (m_chargeCollectionDepthCenter == 0.f) 
     return;
 
   /* shift the sim hit position along the path to the depth that is closest to the target w (ie. target depth) */
 
-  float t = (w_target - path.entry.z()) / path.travel.z(); // how far along the path do we need to go to get to the target depth? 
+  float t = (m_chargeCollectionDepthCenter - path.entry.z()) / path.travel.z(); // how far along the path do we need to go to get to the target depth? 
   // t in [0,1] means it's within the path, otherwise it's outside of the path and we will shift to the closest end (entry or exit)
 
   if (t < 0.f)

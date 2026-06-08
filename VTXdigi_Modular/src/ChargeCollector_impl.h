@@ -54,6 +54,7 @@ class LookupTable {
   int m_matrixSize;
   int m_matrixSize_half; // =(matrixSize-1)/2 (for better performance in hot loop)
   std::vector<float> m_matrices; // charge sharing matrices, one per in-pixel bin (flattened for better performance)
+  float m_chargeCollectionDepthCenter; 
 
 public:
 
@@ -61,6 +62,8 @@ public:
    * @note Checks that parameters from the LUT file match those in the digitiser */
   LookupTable(const std::string& lutFileName, const VTXdigi_Modular& digitizer); // load weights from file
   LookupTable() = default;
+
+  float GetChargeCollectionDepthCenter() const { return m_chargeCollectionDepthCenter; }
 
   /** @brief Set the charge sharing matrix for a specific in-pixel bin 
    * @param weights A flat vector containing the matrix weights in row-major order (ie. row-by-row) (length must be matrixSize*matrixSize) */
