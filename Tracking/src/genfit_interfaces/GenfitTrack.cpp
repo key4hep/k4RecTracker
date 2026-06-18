@@ -802,8 +802,11 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
 
   auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
 
-  // Check wether the wire tracker has sectors
-  const bool has_sectors = m_dc_decoder->fieldDescription().find("sector") != std::string::npos;
+  // Check whether the wire tracker has sectors.
+  // m_dc_decoder is nullptr when the geometry has no wire tracker; in that case
+  // there are no SenseWireHits either, so has_sectors is never actually consumed.
+  const bool has_sectors =
+      m_dc_decoder && (m_dc_decoder->fieldDescription().find("sector") != std::string::npos);
   
   int hit_idx(0);
   int detID(-1);
