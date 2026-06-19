@@ -29,6 +29,8 @@ jobs:
             image: ubuntu26
       fail-fast: false
     runs-on: ubuntu-latest
+    env:
+      CI_TYPE: ${{ matrix.build_type }}_${{ matrix.image }}
     steps:
     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd #v6
     - uses: key4hep/key4hep-actions/cache-external-data@main

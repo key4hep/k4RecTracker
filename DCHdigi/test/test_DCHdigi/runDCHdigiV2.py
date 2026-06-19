@@ -4,13 +4,18 @@
 # to execute:
 # k4run runDCHdigiV2.py
 
+
+import os
+
 from Gaudi.Configuration import INFO, DEBUG
 from Configurables import EventDataSvc, UniqueIDGenSvc
 from k4FWCore import ApplicationMgr, IOSvc
 
+CI_TYPE = os.environ.get('CI_TYPE', '')
+
 svc = IOSvc("IOSvc")
-svc.Input = ["dch_proton_10GeV.root"]
-svc.Output = "dch_proton_10GeV_digi.root"
+svc.Input = [f"dch_proton_10GeV_{CI_TYPE}.root"]
+svc.Output = f"dch_proton_10GeV_digi_{CI_TYPE}.root"
 
 from Configurables import GeoSvc
 

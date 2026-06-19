@@ -5,9 +5,11 @@ import os
 # Loading the output of the SIM step
 from k4FWCore import IOSvc
 
+CI_TYPE = os.environ.get('CI_TYPE', '')
+
 io_svc = IOSvc("IOSvc")
-io_svc.Input = "ddsim_output_edm4hep.root"
-io_svc.Output = "tracks_from_genParticle_output.root"
+io_svc.Input = f"ddsim_output_edm4hep_{CI_TYPE}.root"
+io_svc.Output = f"tracks_from_genParticle_output_{CI_TYPE}.root"
 
 # Geometry service
 from Configurables import GeoSvc
@@ -52,7 +54,7 @@ plotTrackHitDistances = PlotTrackHitDistances(
 
 hps = RootHistSvc("HistogramPersistencySvc")
 root_hist_svc = RootHistoSink("RootHistoSink")
-root_hist_svc.FileName = "TrackHitDistances.root"
+root_hist_svc.FileName = f"TrackHitDistances_{CI_TYPE}.root"
 
 # Set auditor service
 from Configurables import AuditorSvc, ChronoAuditor

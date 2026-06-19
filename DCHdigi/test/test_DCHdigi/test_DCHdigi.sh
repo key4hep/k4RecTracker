@@ -5,7 +5,7 @@
 # goal: run sim-digitizer of the DCH v2, and return code printed by check_DCHdigi_output.py
 
 # run simulation with the drift chamber alone
-ddsim --steeringFile sim_steering.py --outputFile 'dch_proton_10GeV.root' -N 10 --runType batch --random.seed 42
+ddsim --steeringFile sim_steering.py --outputFile 'dch_proton_10GeV_${CI_TYPE}.root' -N 10 --runType batch --random.seed 42
 
 # download file for cluster counting technique
 ifilename="https://fccsw.web.cern.ch/fccsw/filesForSimDigiReco/IDEA/DataAlgFORGEANT.root"
@@ -23,6 +23,3 @@ k4run runDCHdigi.py
 
 # check distribution of distance from hit position to the wire
 python3 check_DCHdigi_output.py
-
-# clean up temp files
-rm -f dch_proton_10GeV.root dch_proton_10GeV_digi.root dch_digi_alg_debug.root
