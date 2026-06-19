@@ -23,3 +23,6 @@ k4run runDCHdigi.py
 
 # check distribution of distance from hit position to the wire
 python3 check_DCHdigi_output.py
+
+# clean up temp files
+rm -f dch_proton_10GeV.root dch_proton_10GeV_digi.root dch_digi_alg_debug.root
