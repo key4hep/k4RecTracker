@@ -807,7 +807,7 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
   // there are no SenseWireHits either, so has_sectors is never actually consumed.
   const bool has_sectors =
       m_dc_decoder && (m_dc_decoder->fieldDescription().find("sector") != std::string::npos);
-  
+
   int hit_idx(0);
   int detID(-1);
 
