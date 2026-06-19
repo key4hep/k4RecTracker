@@ -59,7 +59,7 @@ StatusCode DCHdigi_v02::initialize() {
   // Retrieve the detector element
   dd4hep::DetElement dch_detelem = m_geoSvc->getDetector()->detectors().at(dch_name);
   // Retrieve the DCH_info data extension for the drift chamber
-  auto wt_info =  dch_detelem.extension<dd4hep::rec::WireTracker_info_struct>();
+  auto wt_info = dch_detelem.extension<dd4hep::rec::WireTracker_info_struct>();
   m_dch_info = dynamic_cast<dd4hep::rec::DCH_info*>(wt_info);
   if (not m_dch_info->IsValid()) {
     error() << "No valid data extension was found for detector <<" << dch_name << ">>." << endmsg;
@@ -120,7 +120,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
   for (const auto& [cellID, simhits] : cell_map) {
 
     // Some geometry values needed for the calculations below
-    int superlayer = m_decoder->get(cellID, "superlayer"); 
+    int superlayer = m_decoder->get(cellID, "superlayer");
     int layer = m_dch_info->CalculateILayerFromCellIDFields(m_decoder->get(cellID, "layer"), superlayer);
     int nphi = m_decoder->get(cellID, "nphi");
 
@@ -157,7 +157,8 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
       // Use dd4hep:mm as scale to convert into the dd4hep default units (_ddu)
       auto simhit_position_ddu = this->toVector3D(simhit.getPosition()) * dd4hep::mm;
 
-      auto hit_to_wire_vector_ddu = m_dch_info->Calculate_hitpos_to_wire_vector(superlayer, layer, /*isector=*/0, nphi, simhit_position_ddu);
+      auto hit_to_wire_vector_ddu =
+          m_dch_info->Calculate_hitpos_to_wire_vector(superlayer, layer, /*isector=*/0, nphi, simhit_position_ddu);
       auto hit_projection_on_the_wire_ddu = simhit_position_ddu + hit_to_wire_vector_ddu;
       double distance_to_wire_mm =
           hit_to_wire_vector_ddu.R() / dd4hep::mm; // Explicitly cast to mm, no matter what the default unit is
@@ -172,7 +173,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
 
       // z smearing
       double smearing_z_ddu = random_engine.Gaus(0.0, m_z_resolution_mm.value() * dd4hep::mm);
-      auto wire_direction_ez_ddu = (m_dch_info->Calculate_wire_vector_ez(superlayer, layer,/*sector=*/0, nphi)).Unit();
+      auto wire_direction_ez_ddu = (m_dch_info->Calculate_wire_vector_ez(superlayer, layer, /*sector=*/0, nphi)).Unit();
       hit_projection_on_the_wire_ddu +=
           smearing_z_ddu *
           wire_direction_ez_ddu; // Need to multiply smearing_z_ddu with dd4hep::mm to cast into default units

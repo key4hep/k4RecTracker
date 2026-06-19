@@ -21,9 +21,10 @@
 
 namespace GenfitInterface {
 
-WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep::rec::WireTracker_info_struct* wire_info,
-                                 const dd4hep::DDSegmentation::BitFieldCoder* decoder, const bool has_sectors, const int det_idx,
-                                 const int hit_idx, const int debug_lvl) {
+WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit,
+                                 const dd4hep::rec::WireTracker_info_struct* wire_info,
+                                 const dd4hep::DDSegmentation::BitFieldCoder* decoder, const bool has_sectors,
+                                 const int det_idx, const int hit_idx, const int debug_lvl) {
 
   // NB: dd4hep::mm = 0.1.
   // Therefore:
@@ -62,7 +63,7 @@ WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit, const dd4hep:
   const auto& l = wire_info->database.at(ilayer);
 
   // following the logic form WireTracker_info
-  const double stereo =  l.stereo_sw_z0;
+  const double stereo = l.stereo_sw_z0;
   const double rz0 = l.radius_sw_z0;
   const double kappa = tan(stereo) / rz0;
   const double dy = rz0 * kappa * wire_info->Lhalf; // m

@@ -48,7 +48,7 @@ StatusCode DCHdigi_v01::initialize() {
   ///////////////////////////////////////////////////////////////////////////////////
   ///////////////////////////  retrieve data extension     //////////////////////////
   ///////////////////////////////////////////////////////////////////////////////////
-  auto wt_info =  DCH_DE.extension<dd4hep::rec::WireTracker_info_struct>();
+  auto wt_info = DCH_DE.extension<dd4hep::rec::WireTracker_info_struct>();
   this->dch_data = dynamic_cast<dd4hep::rec::DCH_info*>(wt_info);
   if (not dch_data->IsValid())
     ThrowException("No valid data extension was found for detector <<" + DCH_name + ">>.");
@@ -139,7 +139,8 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
 
     // -------------------------------------------------------------------------
     //      calculate hit position projection into the wire
-    auto hit_to_wire_vector = this->dch_data->Calculate_hitpos_to_wire_vector(superlayer,ilayer, /*isector=*/0, nphi, hit_position);
+    auto hit_to_wire_vector =
+        this->dch_data->Calculate_hitpos_to_wire_vector(superlayer, ilayer, /*isector=*/0, nphi, hit_position);
     auto hit_projection_on_the_wire = hit_position + hit_to_wire_vector;
     if (m_create_debug_histos.value()) {
       double distance_hit_wire = hit_to_wire_vector.R();
@@ -158,7 +159,8 @@ DCHdigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input_sim_hits,
     hit_projection_on_the_wire += smearing_z * (wire_direction_ez.Unit());
     if (m_create_debug_histos.value()) {
       // the distance from the hit projection and the wire should be zero
-      auto dummy_vector = this->dch_data->Calculate_hitpos_to_wire_vector(superlayer, ilayer, /*isector=*/0, nphi, hit_projection_on_the_wire);
+      auto dummy_vector = this->dch_data->Calculate_hitpos_to_wire_vector(superlayer, ilayer, /*isector=*/0, nphi,
+                                                                          hit_projection_on_the_wire);
       hDww->Fill(dummy_vector.R());
     }
 

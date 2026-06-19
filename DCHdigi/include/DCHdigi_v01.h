@@ -148,7 +148,7 @@ private:
   Vector3D Convert_EDM4hepVector_to_Vector3D(const edm4hep::Vector3d& v, double scale) const {
     return {v[0] * scale, v[1] * scale, v[2] * scale};
   };
-  edm4hep::Vector3d Convert_Vector3D_to_EDM4hepVector(const  Vector3D& v, double scale) const {
+  edm4hep::Vector3d Convert_Vector3D_to_EDM4hepVector(const Vector3D& v, double scale) const {
     return {v.x() * scale, v.y() * scale, v.z() * scale};
   };
 
