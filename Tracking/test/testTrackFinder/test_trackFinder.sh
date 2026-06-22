@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# clean up previous output files
+rm -f Tracking/test/testTrackFinder/out_sim_edm4hep.root
+rm -f Tracking/test/testTrackFinder/out_tracks.root
+
 MODEL_PATH=$1
 
 XML_FILE=$K4GEO/FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml
@@ -14,7 +18,7 @@ ddsim --steeringFile $STEERING_FILE \
       -G --gun.distribution uniform --gun.particle mu- \
       --random.seed 42 \
       --numberOfEvents 1 \
-      --outputFile Tracking/test/testTrackFinder/out_sim_edm4hep_${CI_TYPE}.root
+      --outputFile Tracking/test/testTrackFinder/out_sim_edm4hep.root
 
-k4run Tracking/test/testTrackFinder/runTestTrackFinder.py --inputFile Tracking/test/testTrackFinder/out_sim_edm4hep_${CI_TYPE}.root --outputFile Tracking/test/testTrackFinder/out_tracks_${CI_TYPE}.root --modelPath $MODEL_PATH --tbeta $TBETA --td $TD
+k4run Tracking/test/testTrackFinder/runTestTrackFinder.py --inputFile Tracking/test/testTrackFinder/out_sim_edm4hep.root --outputFile Tracking/test/testTrackFinder/out_tracks.root --modelPath $MODEL_PATH --tbeta $TBETA --td $TD
 
