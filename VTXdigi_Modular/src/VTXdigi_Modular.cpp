@@ -28,7 +28,7 @@ StatusCode VTXdigi_Modular::initialize() {
   if (m_debugHistograms)
     InitHistograms();
 
-  // This needs to come in after the properties, geometry and services have all been initialized 
+  // This needs to come in after the properties, geometry and services have all been initialized
   verbose() << "Initializing charge collection method: " << m_chargeCollectionMethod.value() << endmsg;
   m_chargeCollector = VTXdigi_tools::CreateChargeCollector(*this, m_chargeCollectionMethod);
 
@@ -59,13 +59,17 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
 
   std::unordered_map<dd4hep::DDSegmentation::CellID, std::vector<VTXdigi_tools::SimHitWrapper>> sensorSimHits; // map from sensor (shortened cellID) to hits
   for (const edm4hep::SimTrackerHit& simTrackerHit : simTrackerHits) {
-    if (VTXdigi_tools::CreatedInGenerator(simTrackerHit)) {
-      ++m_counter_simHitsCreatedInGenerator;
-    }
+
 
     if (CheckSimhitLayer(simTrackerHit)){
       const dd4hep::DDSegmentation::CellID cellID = VTXdigi_tools::GetCellID_short(simTrackerHit);
       sensorSimHits[cellID].emplace_back(simTrackerHit, m_cellIdDecoder); // simTrackerHits are copied here. Pointers to these are passed around (eg. in hit/pixel/cluster objects).
+      if (VTXdigi_tools::CreatedInGenerator(simTrackerHit)) {
+        ++m_counter_accSimHitsCreatedInGenerator;
+      }
+      if (!simTrackerHit.isProducedBySecondary()) { // this is the same as SimHitWrapper::hasDirectMcParticleLink()
+        ++m_counter_accSimHitsDirectMcParticleLink;
+      }
     }
   }
   debug() << " - Found " << simTrackerHits.size() << " simTrackerHits on " << sensorSimHits.size() << " individual sensors. Digitising sensor-wise..." << endmsg;
@@ -73,13 +77,13 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
   auto digiHits = edm4hep::TrackerHitPlaneCollection();
   auto digiHitLinks = edm4hep::TrackerHitSimTrackerHitLinkCollection();
   std::vector<VTXdigi_tools::SimHitWrapper> hitsSensor;
-  
+
   /* loop over sensors */
   for (const auto& [cellID, simHits] : sensorSimHits) {
     debug() << "   - Processing sensor with cellID " << cellID << " (layer " << simHits.back().layer() << "). Has " << simHits.size() << " simHits." << endmsg;
-  
+
     const TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation); // transformation from global detector to local sensor frame
-    
+
     /* Fill hit map with charge from all simHits on this sensor, using the selected charge collection method */
     VTXdigi_tools::HitMap hitMap(m_pixelCount);
 
@@ -94,8 +98,8 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
         FillHistograms_perSimHit(simHit);
     }
 
-    
-    if (m_smearing_charge.value() > 0.f) 
+
+    if (m_smearing_charge.value() > 0.f)
       hitMap.ApplyChargeSmearing(m_rndm_charge);
     if (m_threshold.value() > 0.f)
       hitMap.ApplyThreshold(m_threshold.value());
@@ -103,8 +107,10 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
     std::vector<VTXdigi_tools::Cluster> clusters = Clusterize(hitMap);
 
     CreateDigiHits(digiHits, digiHitLinks, cellID, trafoMatrix, clusters);
+    if (m_debugHistograms.value())
+      FillHistograms_perSensor(simHits, digiHits, trafoMatrix, cellID);
   } /* loop over sensors */
-  
+
   debug() << " - Finished digitization. Created " << digiHits.size() << " digiHits from " << simTrackerHits.size() << " simTrackerHits." << endmsg;
   return std::make_tuple(std::move(digiHits), std::move(digiHitLinks));
 } // operator()
@@ -112,7 +118,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
 /* ---- Initialization & finalization functions ---- */
 
 void VTXdigi_Modular::InitServicesAndGeometry() {
-  /* Sets the members: 
+  /* Sets the members:
    *  - m_uidService
    *  - m_geoService
    *  - m_cellIdDecoder
@@ -141,31 +147,31 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     throw GaudiException("Property ClusterPositionUncertainty must be either empty (for charge-weighted estimation), have exactly 2 values (for fixed uncertainty in u and v), or six values (for cluster-length based estimation).", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   m_randomService = service("RndmGenSvc", false);
-  if (!m_randomService) 
+  if (!m_randomService)
     throw GaudiException("Unable to get RndmGenSvc.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   if (m_rndm_charge.initialize(m_randomService, Rndm::Gauss(0., m_smearing_charge.value())).isFailure())
     throw GaudiException("Unable to initialize random number generator for charge smearing.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
   if (m_rndm_time.initialize(m_randomService, Rndm::Gauss(0., m_smearing_time.value())).isFailure())
     throw GaudiException("Unable to initialize random number generator for time smearing.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-  
+
   if (m_subDetName.value() == m_undefinedString)
     throw GaudiException("Property SubDetectorName is not set!", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   m_geoService = serviceLocator()->service(m_geoServiceName);
   if (!m_geoService)
     throw GaudiException("Unable to retrieve the GeoSvc", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-  
+
   /* TODO: get cellID without using geoService, a la Jessy (if this is advantageous) */
   std::string cellIDstr = m_geoService->constantAsString(m_encodingStringVariable.value());
   m_cellIdDecoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(cellIDstr);
   if (!m_cellIdDecoder)
     throw GaudiException("Unable to retrieve the cellID decoder", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-  
+
   m_detector = m_geoService->getDetector();
   if (!m_detector)
     throw GaudiException("Unable to retrieve the DD4hep detector from GeoSvc", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-  
+
   const dd4hep::rec::SurfaceManager* surfaceManager = m_detector->extension<dd4hep::rec::SurfaceManager>();
   if (!surfaceManager)
     throw GaudiException("Unable to retrieve the SurfaceManager from the DD4hep detector", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
@@ -178,23 +184,23 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (!m_volumeManager.isValid())
     throw GaudiException("Unable to retrieve the VolumeManager from the DD4hep detector", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
-  
+
   { /* DD4hep has a transformation from the global detector coordinates to each sensors local system. The definition of the local system might change.
-    * We have to make sure that a sensor always sits in the u-v plane in the local system, eg. we might have to swap the axes of the local system. 
+    * We have to make sure that a sensor always sits in the u-v plane in the local system, eg. we might have to swap the axes of the local system.
     * We accomplish this with a transformation matrix. This is valid for all sensors in the subdetector */
-    
+
     /* Set the sensor local transformation matrix, st. the sensors normal vector is parallel to w-axis (by simply looking at the first sensor in the map) */
     auto surfaceMapIter = m_surfaceMap->begin();
     if (surfaceMapIter == m_surfaceMap->end())
       throw GaudiException("Surface map for subdetector " + m_subDetName.value() + " is empty.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
     const unsigned long cellID = surfaceMapIter->first;
     const dd4hep::rec::ISurface* surface = surfaceMapIter->second;
-  
+
     TGeoHMatrix sensorTrafoMatrix = m_volumeManager.lookupDetElement(cellID).nominal().worldTransformation();
     double tempVec[3];
-    
+
     const double epsilon = 1.0e-6; // reasonable for comparing to 1
-    
+
     /* first: rotate sensor normal onto W-axis*/
     sensorTrafoMatrix.MasterToLocalVect(surface->normal().unit(), tempVec);
     dd4hep::rec::Vector3D n_local(tempVec[0], tempVec[1], tempVec[2]);
@@ -202,15 +208,15 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     if (std::abs(n_local.x() - 1.0) < epsilon) {
       debug() << "   - Local sensor normal vector is (1,0,0). Defining rotation matrix to rotate it to (0,0,1)." << endmsg;
       m_sensorNormalRotation = TGeoRotation("rot",90.,90.,0.);
-    } 
+    }
     else if (std::abs(n_local.y() - 1.0) < epsilon) {
       debug() << "   - Local sensor normal vector is (0,1,0). Defining rotation matrix to rotate it to (0,0,1)." << endmsg;
       m_sensorNormalRotation = TGeoRotation("rot",0.,-90.,0.);
-    } 
+    }
     else if (std::abs(n_local.z() - 1.0) < epsilon) {
       debug() << "   - Local sensor normal vector is already parallel to (0,0,1)." << endmsg;
       // no rotation needed
-    } 
+    }
     else {
       error() << "Sensor local normal vector is not aligned with any local axis!" << endmsg;
     }
@@ -230,10 +236,10 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
       warning() << "After rotation, local sensor normal direction (" << tempVec[0] << "," << tempVec[1] << "," << tempVec[2] << ") is not parallel to (0,0,1) axis!" << endmsg;
   }
 
-  /* IDEA / Allegro: 
-   *   - subDet is child of detector, eg. Vertex 
+  /* IDEA / Allegro:
+   *   - subDet is child of detector, eg. Vertex
    *   - subDetChild is child of subDet, eg. VertexBarrel
-   *   - subDetChildChild are layers 
+   *   - subDetChildChild are layers
    * If this is not the case, layers might be direct children of subDet: */
 
   debug() << " - Retrieving subdetector " << m_subDetName.value() << " from DD4hep detector..." << endmsg;
@@ -259,9 +265,9 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
 
 void VTXdigi_Modular::InitLayersAndSensors() {
   /* Get the detector & sensor geometry information from the DD4hep detector
-  * 
-  * Sets the members: 
-  *  - m_pixelPitch 
+  *
+  * Sets the members:
+  *  - m_pixelPitch
   *  - m_sensorActiveThickness
   *  - m_layers
   *  - */
@@ -293,7 +299,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
   }
   info() << " - Digitizing " << m_layers.value().size() << " layers: " << m_layers.value() << " in subdetector " << m_subDetName.value() << "." << endmsg;
 
-  /* Get pixel pitch from the segmentation (from the readout that matches our simHitCollection) 
+  /* Get pixel pitch from the segmentation (from the readout that matches our simHitCollection)
   *  I don't know of a better way to do this (that also works for the IDEA detector model) */
   std::string simHitCollectionName;
   if (this->getProperty("SimTrackHitCollectionName", simHitCollectionName).isFailure())
@@ -352,7 +358,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
       for (const auto& [sensorKey, sensorObj] : moduleObj.children()) {
         ++sensorNumber;
 
-        // FIRST: find thickness of the active sensor volume 
+        // FIRST: find thickness of the active sensor volume
         // using the active volume solid of this sensor
         dd4hep::VolumeID sensorVolumeID = sensorObj.volumeID();
         dd4hep::Volume sensorVolume = sensorObj.volume();
@@ -386,7 +392,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
         const float solidLength_0 = solidDimensions.at((thicknessIndex+1) % 3);
         const float solidLength_1 = solidDimensions.at((thicknessIndex+2) % 3);
 
-        // SECOND: find lengths of the sensor (these will match the segmentation), and amount of inactive material above and below 
+        // SECOND: find lengths of the sensor (these will match the segmentation), and amount of inactive material above and below
         // using the sensitive surface of this sensor (which lies in the middle of the active volume)
         const auto surfaceIt = m_surfaceMap->find(sensorObj.volumeID());
         if (surfaceIt == m_surfaceMap->end()) {
@@ -399,7 +405,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
 
         const float surfaceLength_u = surface->length_along_u() * 10; // convert cm to mm
         const float surfaceLength_v = surface->length_along_v() * 10;
-        const float surfaceThickness_above = surface->outerThickness() * 10; // sensor thickness measured from w=0 upwards, including inactive material above the active volume. 
+        const float surfaceThickness_above = surface->outerThickness() * 10; // sensor thickness measured from w=0 upwards, including inactive material above the active volume.
         const float surfaceThickness_below = surface->innerThickness() * 10; // same, but below
         //Note: the sensor local coordinate system (u,v,w) is centered on the active volume, so inactive material upper/lower might be assymetric
 
@@ -409,7 +415,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
         }
 
         float tolerance = 0.01f; // 10 um should be small enough to find geometry inconsistencies, but does not trip on trapezoid weirdness in IDEA ultra light in O(2 um)
-        if ( 
+        if (
           !(( std::abs(solidLength_0-surfaceLength_u) < tolerance) && (std::abs(solidLength_1-surfaceLength_v) < tolerance)) &&
           !((std::abs(solidLength_1-surfaceLength_u) < tolerance) && (std::abs(solidLength_0-surfaceLength_v) < tolerance))
         )
@@ -421,9 +427,9 @@ void VTXdigi_Modular::InitLayersAndSensors() {
         if (!membersDefined) {
           // For the first sensor we find, set the digitizer class members
           m_sensorActiveThickness = solidThickness;
-          m_inactiveMaterialAbove = surfaceThickness_above - solidThickness/2.f; 
-          m_inactiveMaterialBelow = surfaceThickness_below - solidThickness/2.f; 
-          m_sensorLength.first = surfaceLength_u; 
+          m_inactiveMaterialAbove = surfaceThickness_above - solidThickness/2.f;
+          m_inactiveMaterialBelow = surfaceThickness_below - solidThickness/2.f;
+          m_sensorLength.first = surfaceLength_u;
           m_sensorLength.second = surfaceLength_v;
 
           float pixelCountU = m_sensorLength.first / m_pixelPitch.first;
@@ -445,7 +451,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
       } // loop over sensors
     } // loop over modules
   } // loop over layers
-  
+
   info() << " - Retrieved sensor parameters: area (" << m_sensorLength.first << " x " << m_sensorLength.second << ") mm2, thickness " << m_sensorActiveThickness << " mm with (" << m_inactiveMaterialAbove << "/" << m_inactiveMaterialBelow << ") mm of inactive material above/below, pixel pitch (" << m_pixelPitch.first << " x " << m_pixelPitch.second << ") mm, pixel count (" << m_pixelCount.first << " x " << m_pixelCount.second << "). All " << sensorNumber << " sensors in the relevant layers share these parameters." << endmsg;
 } // InitLayersAndSensors()
 
@@ -457,18 +463,19 @@ void VTXdigi_Modular::InitHistograms() {
   Gaudi::Accumulators::Axis<float> axis_cosTheta{100, 0, 1};
   Gaudi::Accumulators::Axis<float> axis_theta{4*180, 0, 180};
   Gaudi::Accumulators::Axis<float> axis_phi{4*180, -180, 180};
-  
+
   Gaudi::Accumulators::Axis<float> axis_MomentumFraction{400, -1.0001f, 1.0001f};
-  
+
   Gaudi::Accumulators::Axis<float> axis_moduleID{2000, -0.5f, 1999.5f};
   Gaudi::Accumulators::Axis<float> axis_clusterSize{60, 0.5f, 60.5f};
   Gaudi::Accumulators::Axis<float> axis_E{1000, 0, m_sensorActiveThickness*2000.f};
   Gaudi::Accumulators::Axis<float> axis_charge{1000, 0, m_sensorActiveThickness*500000.f};
+  Gaudi::Accumulators::Axis<float> axis_particleE{1000, 0, 10.f}; // GeV
   Gaudi::Accumulators::Axis<float> axis_momentum_keV{10000, 0.f, 1000.f};
   Gaudi::Accumulators::Axis<float> axis_momentum_MeV{10000, 0.f, 1000.f};
   Gaudi::Accumulators::Axis<float> axis_momentum_GeV{10000, 0.f, 1000.f};
   Gaudi::Accumulators::Axis<float> axis_time{1000, 0.f, 1000.f};
-  
+
   Gaudi::Accumulators::Axis<float> axis_residual{1600, -200.f, 200.f};
   Gaudi::Accumulators::Axis<float> axis_residual_abs{800, 0.f, 200.f};
   Gaudi::Accumulators::Axis<float> axis_residual_pixels{2020, -50.5f, 50.5f}; // 20 in-pix bins
@@ -485,7 +492,7 @@ void VTXdigi_Modular::InitHistograms() {
 
   Gaudi::Accumulators::Axis<float> axis_pathLength{500, 0.f, m_sensorActiveThickness*1000.f*10.f};
   Gaudi::Accumulators::Axis<float> axis_pathTravel{1000, -m_sensorActiveThickness*1000.f*10.f, m_sensorActiveThickness*1000.f*10.f};
-    
+
   /* Fill histograms per layer */
   for (int layer : m_layers.value()) {
     if (layer == 0) {
@@ -588,7 +595,7 @@ void VTXdigi_Modular::InitHistograms() {
       }
     );
 
-    
+
     hist1d.at(hist1d_simhit_MomentumDirection_x).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/simHit_MomentumDirection_x",
@@ -633,7 +640,7 @@ void VTXdigi_Modular::InitHistograms() {
       }
     );
 
-    
+
 
 
 
@@ -704,6 +711,41 @@ void VTXdigi_Modular::InitHistograms() {
         axis_residual
       }
     );
+    hist1d.at(hist1d_residual_u_maxEParticleOnSensor).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_maxEParticleOnSensor",
+        "Residual (u_digiHit - u_simHit) in local u direction, to the simHit with the highest energy MCParticle on the sensor - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_u_noParents).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_noParents",
+        "Residual (u_digiHit - u_simHit) in local u direction, for simHits without any parents - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_u_directMcParticleLink).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_directMcParticleLink",
+        "Residual (u_digiHit - u_simHit) in local u direction, for simHits with a direct MC particle link (vs via an intermediate MCParticle, that was removed to save space) - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_u_mcOriginFarFromSimHit).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_mcOriginFarFromSimHit",
+        "Residual (u_digiHit - u_simHit) in local u direction, for simHits from MCParticles that were created more than 500 um from the simHit - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_u_directMcParticleLink_mcOriginFarFromSimHit).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_u_directMcParticleLink_mcOriginFarFromSimHit",
+        "Residual (u_digiHit - u_simHit) in local u direction, for simHits with a direct MC particle link that were created more than 500 um from the simHit - Layer " + std::to_string(layer) + ";Residual u [um];Entries",
+        axis_residual
+      }
+    );
     hist1d.at(hist1d_residual_u_singlePixelCluster).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_residual_u_singlePixelCluster",
@@ -736,6 +778,41 @@ void VTXdigi_Modular::InitHistograms() {
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_residual_v",
         "Residual (v_digiHit - v_simHit) in local v direction - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_v_maxEParticleOnSensor).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_maxEParticleOnSensor",
+        "Residual (v_digiHit - v_simHit) in local v direction, to the simHit with the highest energy MCParticle on the sensor - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_v_noParents).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_noParents",
+        "Residual (v_digiHit - v_simHit) in local v direction, for simHits without any parents - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_v_directMcParticleLink).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_directMcParticleLink",
+        "Residual (v_digiHit - v_simHit) in local v direction, for simHits with a direct MC particle link (vs via an intermediate MCParticle, that was removed to save space) - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_v_mcOriginFarFromSimHit).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_mcOriginFarFromSimHit",
+        "Residual (v_digiHit - v_simHit) in local v direction, for simHits with a direct MC particle link and MCParticles that were created more than 500 um from the simHit - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_residual_v_directMcParticleLink_mcOriginFarFromSimHit).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_v_directMcParticleLink_mcOriginFarFromSimHit",
+        "Residual (v_digiHit - v_simHit) in local v direction, for simHits with a direct MC particle link and MCParticles that were created more than 500 um from the simHit - Layer " + std::to_string(layer) + ";Residual v [um];Entries",
         axis_residual
       }
     );
@@ -774,6 +851,13 @@ void VTXdigi_Modular::InitHistograms() {
         axis_residual
       }
     );
+    hist1d.at(hist1d_residual_w_noParents).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_residual_w_noParents",
+        "Residual (w_digiHit - w_simHit) in local w direction, for simHits without any parents - Layer " + std::to_string(layer) + ";Residual w [um];Entries",
+        axis_residual
+      }
+    );
     hist1d.at(hist1d_residual_r).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_residual_r",
@@ -789,10 +873,24 @@ void VTXdigi_Modular::InitHistograms() {
         axis_residual
       }
     );
+    hist1d.at(hist1d_clusterPosUncertainty_u_noParents).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterPosUncertainty_u_noParents",
+        "DigiHit position uncertainty in u direction, for simHits without any parents - Layer " + std::to_string(layer) + ";Position uncertainty u [um];Entries",
+        axis_residual
+      }
+    );
     hist1d.at(hist1d_clusterPosUncertainty_v).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_clusterPosUncertainty_v",
         "DigiHit position uncertainty in v direction - Layer " + std::to_string(layer) + ";Position uncertainty v [um];Entries",
+        axis_residual
+      }
+    );
+    hist1d.at(hist1d_clusterPosUncertainty_v_noParents).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_clusterPosUncertainty_v_noParents",
+        "DigiHit position uncertainty in v direction, for simHits without any parents - Layer " + std::to_string(layer) + ";Position uncertainty v [um];Entries",
         axis_residual
       }
     );
@@ -832,7 +930,7 @@ void VTXdigi_Modular::InitHistograms() {
         "Path travel length inside the sensor active volume - Layer " + std::to_string(layer) + ";Path length [um];Entries",
         axis_pathLength
       }
-    ); 
+    );
 
     hist1d.at(hist1d_simHitTimeStamp).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
@@ -840,14 +938,33 @@ void VTXdigi_Modular::InitHistograms() {
         "SimHit time stamp - Layer " + std::to_string(layer) + ";Time [?s];Entries",
         axis_time
       }
-    ); 
+    );
     hist1d.at(hist1d_digiHitTimeStamp).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_timeStamp",
         "Cluster time stamp - Layer " + std::to_string(layer) + ";Time [?s];Entries",
         axis_time
       }
-    ); 
+    );
+
+
+    hist1d.at(hist1d_simHitsPerDigiHit).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_numberOfSimHits",
+        "Number of simHits per digiHit - Layer " + std::to_string(layer) + ";Number of SimHits;Entries",
+        axis_clusterSize // not technically correct, but works
+      }
+    );
+
+    hist1d.at(hist1d_highestEnergyParticleOnSensor_energy).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_highestEnergyParticleOnSensor_energy",
+        "Energy of the particle with the highest energy on the sensor - Layer " + std::to_string(layer) + ";Energy [GeV];Entries",
+        axis_particleE
+      }
+    );
+
+
 
     m_hist1d.emplace(layer, std::move(hist1d));
 
@@ -1221,18 +1338,14 @@ bool VTXdigi_Modular::CheckEventSetup(const edm4hep::SimTrackerHitCollection& si
   return true;
 }
 
-bool VTXdigi_Modular::CheckSimhitLayer(const edm4hep::SimTrackerHit& simHit) const {
+bool VTXdigi_Modular::CheckSimhitLayer(const edm4hep::SimTrackerHit& simTrackerHit) const {
   ++m_counter_simHitsRead;
-  const int layer = m_cellIdDecoder->get(simHit.getCellID(), "layer");
-  if (m_layers.value().size()>0) { 
+  const int layer = m_cellIdDecoder->get(simTrackerHit.getCellID(), "layer");
+  if (m_layers.value().size()>0) {
     if (std::find(m_layers.value().begin(), m_layers.value().end(),  layer) == m_layers.value().end()) {
-      // verbose() << " - Dismissing simHit in layer " << layer << ". (not in the list of layers to digitize)" << endmsg;
       ++m_counter_simHitsRejected_LayerNotToBeDigitized;
       return false;
     }
-  }
-  else {
-    // verbose() << " - All layers are to be digitized, as property \"LayersToDigitize\" is not set ." << endmsg;
   }
 
   ++m_counter_simHitsAccepted;
@@ -1276,7 +1389,6 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     /* TODO: do we want cellID with segmentation? (instead of using the short cellID that only encodes the sensor and not the pixel) */
     digiHit.setCellID(cellID);
     digiHit.setEDep(cluster.charge / VTXdigi_tools::kChargePerkeV);
-    
 
     // position
     const std::pair<float, float> clusterPos_index = cluster.ComputePos();
@@ -1284,7 +1396,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     const dd4hep::rec::Vector3D clusterPos_global = VTXdigi_tools::LocalToGlobal(clusterPos_local, trafoMatrix);
     debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_index.first << ", " << clusterPos_index.second << "). Has " << cluster.simHits.size() << " contributing simHits." << endmsg;
     digiHit.setPosition(VTXdigi_tools::ConvertVector(clusterPos_global));
-    
+
     // pos uncertainty
     digiHit.setU(direction_u);
     digiHit.setV(direction_v);
@@ -1331,12 +1443,12 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     digiHit.setTime(timeStamp);
 
     // Create links to simHits
-    for (const auto& simHit : cluster.simHits) { 
+    for (const auto& simHit : cluster.simHits) {
       auto link = digiHitLinks.create();
       link.setFrom(digiHit);
       link.setTo(*(simHit->hitPtr()));
     }
-    
+
     if (m_debugHistograms.value()) {
       FillHistograms_perDigiHit(cluster.simHits, digiHit, trafoMatrix, cluster.pixels.size(), cluster.GetSize(0), cluster.GetSize(1));
 
@@ -1358,16 +1470,16 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   const dd4hep::rec::Vector3D simHitPos_local = VTXdigi_tools::GlobalToLocal(simHitPos_global, trafoMatrix);
   const dd4hep::rec::Vector3D simHitProdVertex_global = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getParticle().getVertex());
   const std::pair<int, int> i_uv = VTXdigi_tools::ComputePixelIndices(simHitPos_local, m_pixelPitch, m_pixelCount);
-  
+
   const dd4hep::rec::Vector3D simHitMomentum = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getMomentum()); // in GeV
   const dd4hep::rec::Vector3D simHitMomentumInitial = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getParticle().getMomentum()); // in GeV
 
-  ++(*m_hist1d.at(layer).at(hist1d_simHitE))[simHit.hitPtr()->getEDep() * (dd4hep::GeV / dd4hep::keV)]; 
-  ++(*m_hist1d.at(layer).at(hist1d_simHitCharge))[simHit.charge()]; 
-  ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_keV))[simHitMomentum.r() * 1.E6]; 
-  ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_MeV))[simHitMomentum.r() * 1.E3]; 
-  ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_GeV))[simHitMomentum.r()]; 
-  
+  ++(*m_hist1d.at(layer).at(hist1d_simHitE))[simHit.hitPtr()->getEDep() * (dd4hep::GeV / dd4hep::keV)];
+  ++(*m_hist1d.at(layer).at(hist1d_simHitCharge))[simHit.charge()];
+  ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_keV))[simHitMomentum.r() * 1.E6];
+  ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_MeV))[simHitMomentum.r() * 1.E3];
+  ++(*m_hist1d.at(layer).at(hist1d_simHitMomentum_GeV))[simHitMomentum.r()];
+
   ++(*m_hist1d.at(layer).at(hist1d_simHitTimeStamp))[simHit.hitPtr()->getTime()];
 
   ++(*m_hist1d.at(layer).at(hist1d_simHit_x))[simHitPos_global.x()];
@@ -1377,16 +1489,16 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   ++(*m_hist1d.at(layer).at(hist1d_simHit_Vertex_x))[simHitProdVertex_global.x()];
   ++(*m_hist1d.at(layer).at(hist1d_simHit_Vertex_y))[simHitProdVertex_global.y()];
   ++(*m_hist1d.at(layer).at(hist1d_simHit_Vertex_z))[simHitProdVertex_global.z()];
-  
+
   ++(*m_hist1d.at(layer).at(hist1d_simhit_MomentumDirection_x))[simHitMomentum.x() / simHitMomentum.r()];
   ++(*m_hist1d.at(layer).at(hist1d_simhit_MomentumDirection_y))[simHitMomentum.y() / simHitMomentum.r()];
   ++(*m_hist1d.at(layer).at(hist1d_simhit_MomentumDirection_z))[simHitMomentum.z() / simHitMomentum.r()];
-  
+
   ++(*m_hist1d.at(layer).at(hist1d_simHit_InitialMomentumDirection_x))[simHitMomentumInitial.x() / simHitMomentumInitial.r()];
   ++(*m_hist1d.at(layer).at(hist1d_simHit_InitialMomentumDirection_y))[simHitMomentumInitial.y() / simHitMomentumInitial.r()];
   ++(*m_hist1d.at(layer).at(hist1d_simHit_InitialMomentumDirection_z))[simHitMomentumInitial.z() / simHitMomentumInitial.r()];
 
-  if ( VTXdigi_tools::CreatedInGenerator(simHit) ) {
+  if ( simHit.CreatedInGenerator() ) {
     ++(*m_hist1d.at(layer).at(hist1d_simHit_z_createdInGenerator))[simHitPos_global.z()];
     ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits_createdInGenerator))[{i_uv.first, i_uv.second}];
   }
@@ -1400,9 +1512,9 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   }
 
   ++(*m_hist1d.at(layer).at(hist1d_simHitPDG))[simHit.hitPtr()->getParticle().getPDG()];
-  
+
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits))[{i_uv.first, i_uv.second}];
-  
+
   ++(*m_hist2d.at(layer).at(hist2d_simHit_xy))[{simHitPos_global.x(), simHitPos_global.y()}];
   ++(*m_hist2d.at(layer).at(hist2d_simHit_xz))[{simHitPos_global.x(), simHitPos_global.z()}];
   ++(*m_hist2d.at(layer).at(hist2d_simHit_yz))[{simHitPos_global.y(), simHitPos_global.z()}];
@@ -1416,7 +1528,7 @@ void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::Cell
 
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_pixelHits))[{i_uv.first, i_uv.second}];
 
-  if (clusterPos_local.first != 0 && clusterPos_local.second != 0) { 
+  if (clusterPos_local.first != 0 && clusterPos_local.second != 0) {
     /* cluster at (0,0) means that hits weren't clustered */
     const float distToClusterCenter_u = static_cast<float>(pix.index.first) - clusterPos_local.first; // in pix
     const float distToClusterCenter_v = static_cast<float>(pix.index.second) - clusterPos_local.second;
@@ -1431,17 +1543,17 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
   const int layer = VTXdigi_tools::GetLayer(digiHit.getCellID(), m_cellIdDecoder);
   const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(digiHit.getPosition());
   const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::GlobalToLocal(pos_global, trafoMatrix);
-  
-  ++(*m_hist1d.at(layer).at(hist1d_digiHitCharge))[digiHit.getEDep() * VTXdigi_tools::kChargePerkeV]; 
+
+  ++(*m_hist1d.at(layer).at(hist1d_digiHitCharge))[digiHit.getEDep() * VTXdigi_tools::kChargePerkeV];
 
   ++(*m_hist1d.at(layer).at(hist1d_clusterSize))[clusterSize];
   ++(*m_hist1d.at(layer).at(hist1d_clusterSize_u))[clusterSize_u];
   ++(*m_hist1d.at(layer).at(hist1d_clusterSize_v))[clusterSize_v];
-  
+
   (*m_histProfile1d.at(layer).at(histProfile1d_clusterSize_vs_global_z))[pos_global.z()] += clusterSize;
   (*m_histProfile1d.at(layer).at(histProfile1d_clusterSize_u_vs_global_z))[pos_global.z()] += clusterSize_u;
   (*m_histProfile1d.at(layer).at(histProfile1d_clusterSize_v_vs_global_z))[pos_global.z()] += clusterSize_v;
-  
+
   ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_global_z))[{pos_global.z(), clusterSize}];
   ++(*m_hist2d.at(layer).at(hist2d_clusterSize_u_vs_global_z))[{pos_global.z(), clusterSize_u}];
   ++(*m_hist2d.at(layer).at(hist2d_clusterSize_v_vs_global_z))[{pos_global.z(), clusterSize_v}];
@@ -1451,17 +1563,18 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
 
   ++(*m_hist1d.at(layer).at(hist1d_digiHitTimeStamp))[ digiHit.getTime() ];
 
-  /* per simhit that is connected to this digiHit (cluster) */
+  ++(*m_hist1d.at(layer).at(hist1d_simHitsPerDigiHit))[ simHits.size() ];
+
+  // per simhit that is contributing to this digiHit (cluster)
   for (const auto& simHit : simHits) {
+    const edm4hep::MCParticle mcParticle = simHit->hitPtr()->getParticle();
+
     const dd4hep::rec::Vector3D simHitPos_local = simHit->truthPos();
     const dd4hep::rec::Vector3D simHitPos_global = VTXdigi_tools::LocalToGlobal(simHitPos_local, trafoMatrix);
-    // const dd4hep::rec::Vector3D simHitPos_global = VTXdigi_tools::ConvertVector(simHit->hitPtr()->getPosition());
-    // const dd4hep::rec::Vector3D simHitPos_local = VTXdigi_tools::GlobalToLocal(simHitPos_global, trafoMatrix); 
-
     const dd4hep::rec::Vector3D residual_local = pos_local - simHitPos_local; // residual = observed - predicted
 
     const float hit_z = simHitPos_global.z();
-    
+
     (*m_histProfile1d.at(layer).at(histProfile1d_residual_u_vs_global_z))[hit_z] += residual_local.x()*1000.f; // convert from mm to um
     (*m_histProfile1d.at(layer).at(histProfile1d_residual_v_vs_global_z))[hit_z] += residual_local.y()*1000.f;
     (*m_histProfile1d.at(layer).at(histProfile1d_residual_r_vs_global_z))[hit_z] += residual_local.r()*1000.f;
@@ -1474,7 +1587,7 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
     ++(*m_hist1d.at(layer).at(hist1d_residual_v))[ residual_local.y()*1000.f ];
     ++(*m_hist1d.at(layer).at(hist1d_residual_w))[ residual_local.z()*1000.f ];
     ++(*m_hist1d.at(layer).at(hist1d_residual_r))[ residual_local.r()*1000.f ];
-    
+
     ++(*m_hist2d.at(layer).at(hist2d_residual_vs_clusterPosUncertainty_u))[{std::abs(digiHit.getDu()) * 1000.f, std::abs(residual_local.x())*1000.f}]; // convert to um
     ++(*m_hist2d.at(layer).at(hist2d_residual_vs_clusterPosUncertainty_v))[{std::abs(digiHit.getDv()) * 1000.f, std::abs(residual_local.y())*1000.f}];
 
@@ -1487,7 +1600,7 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
       ++(*m_hist1d.at(layer).at(hist1d_residual_v_multiPixelCluster))[ residual_local.y()*1000.f ];
     }
 
-    if ( VTXdigi_tools::CreatedInGenerator(*simHit) ) {
+    if ( simHit->CreatedInGenerator() ) {
       ++(*m_hist1d.at(layer).at(hist1d_clusterSize_createdInGenerator))[clusterSize];
       ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_global_z_createdInGenerator))[{hit_z, clusterSize}];
 
@@ -1501,8 +1614,77 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const std::unordered_set<const V
       ++(*m_hist1d.at(layer).at(hist1d_residual_u_createdInSimulation))[ residual_local.x()*1000.f ];
       ++(*m_hist1d.at(layer).at(hist1d_residual_v_createdInSimulation))[ residual_local.y()*1000.f ];
     }
+
+    if (mcParticle.parents_size() == 0) {
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_noParents))[ residual_local.x()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_noParents))[ residual_local.y()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_w_noParents))[ residual_local.z()*1000.f ];
+
+      ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_u_noParents))[ digiHit.getDu() * 1000.f ]; // convert to um
+      ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_v_noParents))[ digiHit.getDv() * 1000.f ];
+    }
+
+    const bool hasDirectMcParticleLink = simHit->hasDirectMcParticleLink();
+
+    const dd4hep::rec::Vector3D mcParticleProdVertex_global = VTXdigi_tools::ConvertVector(mcParticle.getVertex());
+    const dd4hep::rec::Vector3D mcParticleProdVertex_difference = pos_global - mcParticleProdVertex_global;
+    const float mcParticleDistance = mcParticleProdVertex_difference.r();
+
+    const bool mcOriginFarFromSimHit = mcParticleDistance > 0.5f; // in mm
+
+    if (hasDirectMcParticleLink) {
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_directMcParticleLink))[ residual_local.x()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_directMcParticleLink))[ residual_local.y()*1000.f ];
+    }
+    if (mcOriginFarFromSimHit) {
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_mcOriginFarFromSimHit))[ residual_local.x()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_mcOriginFarFromSimHit))[ residual_local.y()*1000.f ];
+    }
+    if (hasDirectMcParticleLink && mcOriginFarFromSimHit) {
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_directMcParticleLink_mcOriginFarFromSimHit))[ residual_local.x()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_directMcParticleLink_mcOriginFarFromSimHit))[ residual_local.y()*1000.f ];
+    }
+  } // loop over contributing simHits
+}
+
+void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::CellID& cellID) const {
+  /* executed once for each sensor, after all clusters have been created */
+  const int layer = VTXdigi_tools::GetLayer(cellID, m_cellIdDecoder);
+
+  if (simHits.empty()) {
+    debug() << " - No simHits found on this sensor." << endmsg;
+    return;
   }
 
+  // among simHits, find the one with the MCParticle with the highest energy
+  // (needed for comparing to Allpix Squared residuals, when simulating single sensor with particle gun)
+  size_t maxE_index = 0;
+  float maxE = simHits.at(0).hitPtr()->getParticle().getEnergy(); // assume this is in GeV. Documentation is not clear
+
+  for (size_t i = 1; i < simHits.size(); ++i) {
+    const VTXdigi_tools::SimHitWrapper& simHit = simHits.at(i);
+    const edm4hep::MCParticle mcParticle = simHit.hitPtr()->getParticle();
+    if (mcParticle.getEnergy() > maxE && simHit.hasDirectMcParticleLink()) {
+      // we want to find the primary particle (assuming we only shot a single particle in the simulation) -> neede to reject simHits with indirect MCParticle link
+      maxE_index = i;
+      maxE = mcParticle.getEnergy();
+    }
+  } // loop to find simHit with highest MCParticle energy.
+
+  const VTXdigi_tools::SimHitWrapper& simHit = simHits.at(maxE_index);
+  const dd4hep::rec::Vector3D simHitPos_local = simHit.truthPos();
+
+  ++(*m_hist1d.at(layer).at(hist1d_highestEnergyParticleOnSensor_energy))[ maxE ]; // in GeV
+
+  for (const auto& digiHit : digiHits) {
+    const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(digiHit.getPosition());
+    const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::GlobalToLocal(pos_global, trafoMatrix);
+
+    const dd4hep::rec::Vector3D residual_local = pos_local - simHitPos_local; // residual = observed - predicted
+
+    ++(*m_hist1d.at(layer).at(hist1d_residual_u_maxEParticleOnSensor))[ residual_local.x()*1000.f ];
+    ++(*m_hist1d.at(layer).at(hist1d_residual_v_maxEParticleOnSensor))[ residual_local.y()*1000.f ];
+  }
 }
 
 void VTXdigi_Modular::FillHistograms_fromChargeCollector_perSimHit(const int layer, const dd4hep::rec::Vector3D& pathTravel, const float pathLength_Geant4, const dd4hep::rec::Vector3D& truthPos_local, const TGeoHMatrix& trafoMatrix, const bool createdInGenerator) const {
@@ -1511,17 +1693,17 @@ void VTXdigi_Modular::FillHistograms_fromChargeCollector_perSimHit(const int lay
   const float pathLength = pathTravel.r(); // in mm
   const float factor_um_per_mm = 1000.f;
   const dd4hep::rec::Vector3D truthPos_global = VTXdigi_tools::LocalToGlobal(truthPos_local, trafoMatrix);
-  
+
   ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r))[pathLength*factor_um_per_mm]; // convert from mm to um
   ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r_Geant4))[pathLength_Geant4*factor_um_per_mm];
   if (pathLength_Geant4 != 0.f) {
     ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r_ratio))[pathLength / pathLength_Geant4];
   }
-    
+
   ++(*m_hist1d.at(layer).at(hist1d_pathTravel_u))[pathTravel.x()*factor_um_per_mm];
   ++(*m_hist1d.at(layer).at(hist1d_pathTravel_v))[pathTravel.y()*factor_um_per_mm];
   ++(*m_hist1d.at(layer).at(hist1d_pathTravel_r))[pathLength*factor_um_per_mm];
-    
+
   (*m_histProfile1d.at(layer).at(histProfile1d_pathTravel_u_vs_global_z))[truthPos_global.z()] += pathTravel.x()*factor_um_per_mm;
   (*m_histProfile1d.at(layer).at(histProfile1d_pathTravel_v_vs_global_z))[truthPos_global.z()] += pathTravel.y()*factor_um_per_mm;
   (*m_histProfile1d.at(layer).at(histProfile1d_pathTravel_r_vs_global_z))[truthPos_global.z()] += pathLength*factor_um_per_mm;
@@ -1544,7 +1726,7 @@ void VTXdigi_Modular::FillHistograms_fromChargeCollector_perSimHit(const int lay
 }
 
 void VTXdigi_Modular::PrintCountersSummary() const {
-  const int colWidths[] = {65, 10};  
+  const int colWidths[] = {65, 10};
   info() << " Counters summary: " << endmsg;
   info() << " | " << std::setw(colWidths[0]) << std::left << "Events read"
          << " | " << std::setw(colWidths[1]) << std::right << m_counter_eventsRead.value() << " |" << endmsg;
@@ -1559,10 +1741,11 @@ void VTXdigi_Modular::PrintCountersSummary() const {
          << " | " << std::setw(colWidths[1]) << std::right << m_counter_simHitsRejected_LayerNotToBeDigitized.value() << " |" << endmsg;
   info() << " | " << std::setw(colWidths[0]) << std::left << "SimTrackerHits accepted"
          << " | " << std::setw(colWidths[1]) << std::right << m_counter_simHitsAccepted.value() << " |" << endmsg;
-  info() << " | " << std::setw(colWidths[0]) << std::left << "( SimTrackerHits created in generator )"
-         << " | " << std::setw(colWidths[1]) << std::right << m_counter_simHitsCreatedInGenerator.value() << " |" << endmsg;
+  info() << " | " << std::setw(colWidths[0]) << std::left << "( accepted SimTrackerHits from particles created in generator )"
+         << " | " << std::setw(colWidths[1]) << std::right << m_counter_accSimHitsCreatedInGenerator.value() << " |" << endmsg;
+  info() << " | " << std::setw(colWidths[0]) << std::left << "( accepted SimTrackerHits with direct link to MCParticle )"
+         << " | " << std::setw(colWidths[1]) << std::right << m_counter_accSimHitsDirectMcParticleLink.value() << " |" << endmsg;
 
   info()	<<	" | "	<<	std::setw(colWidths[0])	<<	std::left	<<	"Digi hits created"
          << " | " << std::setw(colWidths[1]) << std::right << m_counter_digiHitsCreated.value() << " |" << endmsg;
 }
-

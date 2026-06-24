@@ -5,10 +5,10 @@ Developed by Jona Dilg (jona.dilg@cern.ch), Armin Ilg. 2026.
 The vertex digitizer creates digiHits from simHits by `TrackerHitPlane` by simulating the deposition and subsequent collection of charges in the sensor. The exact implementation of charge collection is user-definable.
 
 ### Output
-Produces EDM4hep `TrackerHitPlane` hits (referred to as digiHits), either per pixel hit or per cluster. For each `TrackerHitPlane`, creates a `TrackerHitSimTrackerHitLink` to each `SimTrackerHit` that contributed charge to any involved pixel. 
+Produces EDM4hep `TrackerHitPlane` hits (referred to as digiHits), either per pixel hit or per cluster. For each `TrackerHitPlane`, creates a `TrackerHitSimTrackerHitLink` to each `SimTrackerHit` that contributed charge to any involved pixel.
 
 ### Charge Collector Implementations
-The algorithm allows a choice of different charge collectors, defined by the `ChargeCollectionMethod` Gaudi property. 
+The algorithm allows a choice of different charge collectors, defined by the `ChargeCollectionMethod` Gaudi property.
 
 Each charge collector implements a method to distribute a simHit's deposited charge to the pixels around that simHit.
 
@@ -23,7 +23,7 @@ Takes the pixel that the simHit position lies in as the central pixel. Deposited
 This is intended to be used to test the correct `u`/`v` orientation of the pixel
 
 #### `LookupTable`
-Shares charge among a hits surrounding pixels according to a lookup table. These lookup tables are generated from detailed simulations performed in sensor R&D. 
+Shares charge among a hits surrounding pixels according to a lookup table. These lookup tables are generated from detailed simulations performed in sensor R&D.
 
 - **Requires** Gaudi property `LookupTableFile`.
 
@@ -50,9 +50,9 @@ Shares charge among a hits surrounding pixels according to a lookup table. These
 - `ClusterPositionUncertainty` - Each digiHit has an estimate of it's spatial resolution uncertainty. To first order, this is simply the sensors spatial resolution in `u` and `v`. Yet, the spatial resolution changes with cluster shape and charge spread across the cluster (and with particle angle). Estimating a digiHits spatial resolution is important for the tracking algorithm, where a good estimation of the spatial resolution of each cluster allows for more precise refitting. Three different methods for estimating the spatial resolution are implemented (defaults to `[]`):
     - Setting `[sigma_u, sigma_v]` simply applies the same spatial resolution to every digiHit. This is the most basic option.
     - Setting `[]` does a basic charge-weighted uncertainty estimation, acting as an upper limit on the spatial resolution of a given digiHit. The charge-weighted uncertainty estimation is based on the assumption that single-pixel clusters have a resolution of pitch/sqrt(12), while larger clusters improve the resolution. This is, in turn, based on the assumption that the hit-distribution inside single-pixel clusters is completely flat, which does not hold for sensors with any significant charge sharing (such as small-pitch TPSCo 65nm CIS). With strong charge sharing, only hits close to the center of a pixel produce single-pixel clusters, while pixels closer to the edge produce multi-pixel clusters. This biases the resolution of single-pixel clusters, improving it. Because of the assumption, this method calculates an upper limit on a clusters spatial resolution. Importantly, this upper limit does not necessarily represent the dependence on the cluster size well, and can introduce a bias with better spatial resolution in multi-pixel clusters that might be unphysical.
-    - Setting `[sigma_u1, sigma_u2, sigma_u3, sigma_v1, sigma_v2, sigma_v3]` applies different residuals based on the cluster lengths in `u` and `v`. Clusters with a length above 3 will be assigned the `sigma_i3` as well. As of now, this is the most realistic estimate. The 
+    - Setting `[sigma_u1, sigma_u2, sigma_u3, sigma_v1, sigma_v2, sigma_v3]` applies different residuals based on the cluster lengths in `u` and `v`. Clusters with a length above 3 will be assigned the `sigma_i3` as well. As of now, this is the most realistic estimate. This is only a good assumption if the particle incidence angle is close to vertical, as the cluster length is strongly dependent on the incidence angle. **Needs to be tested for shallow angles.**
 
-- `DebugHistograms` - Set to `True` to enable producing debugging histograms with the `Gaudi__Histograming__Sink__Root` service. Can decrease performance significantly, but is useful for debugging. Defaults to `False`. Include the following in the options file to produce the histograms file: 
+- `DebugHistograms` - Set to `True` to enable producing debugging histograms with the `Gaudi__Histograming__Sink__Root` service. Can decrease performance significantly, but is useful for debugging. Defaults to `False`. Include the following in the options file to produce the histograms file:
     ```
     from Configurables import Gaudi__Histograming__Sink__Root as RootHistoSink
     rootHistSvc = RootHistoSink("RootHistoSink")
@@ -85,15 +85,15 @@ This is an example of the necessary changes to an options file. Can be used with
 from Configurables import VTXdigi_Modular
 
 innervtxb_digitizer = VTXdigi_Modular(
-    "VTXBdigitizer", 
-    
+    "VTXBdigitizer",
+
     SimTrackHitCollectionName = ["VertexBarrelCollection"],
     HeaderName = ["EventHeader"],
     SimTrkHitRelationsCollection = ["VTXBSimDigiLinks"],
     TrackerHitCollectionName = ["VTXBDigis"],
     SubDetectorName = "Vertex",
     SubDetectorChildName = "VertexBarrel",
-    
+
     Layers = [0,1,2],
     ChargeCollectionMethod = "LookupTable",
     LookupTableFile = "PATH/TO/LOOKUPTABLE.init",
@@ -139,7 +139,7 @@ application_mgr = ApplicationMgr(
 - **Reference frames**
     - The global detector reference frame uses `x,y,z`, `z` points along the beams and `y` points upwards
     - The local sensor frame is `u,v,w` where `u,v` span the sensor plane and `w` is the sensors normal vector. For barrel sensors, `v` is typically parallel to `z`
-- **Vectors** can be given as 
+- **Vectors** can be given as
     1) `dd4hep::rec::Vector3D` - fully featured vector, overloads operators `*+-` etc
     2) `edm4hep::Vector3d` - natively used by edm4hep (where simHit, digiHit are from)
     -> generally use `dd4hep::rec::Vector3D`, convert via `ConvertVector()` where `edm4hep::Vector3d` is needed
@@ -154,7 +154,7 @@ application_mgr = ApplicationMgr(
     Conversion: [A] = cm, [B] = mm
     - `A = dd4hep::mm * B`
     - `B = 1/dd4hep::mm * A`
-- `Energies` are given in keV, but deposited charge is always handled in terms of electron-hole pairs (3.65 eV per eh-pair). This is much more common in sensor R&D. 
+- `Energies` are given in keV, but deposited charge is always handled in terms of electron-hole pairs (3.65 eV per eh-pair). This is much more common in sensor R&D.
 
 ### Preliminary UML diagram
 <img src="UML.svg" width="700" alt="Universal Modelling Language (UML) diagram of the VTXdigi_Modular code structure.">
@@ -163,13 +163,13 @@ application_mgr = ApplicationMgr(
 ### Futher improvements
 The code has a number of `TODO:` and `FIXME:` marked. Larger items are:
 - *(priority)* **Title** -- Description
-- *(medium)* **Hit position uncertainty estimation** -- So far, a clusters spatial resolution estimation is done either via the cluster length in *u* and *v*, or via basic charge-weighted uncertainty estimation. Both of these options are sub-optimal and produce results much worse than what is possible. Optimally, all cluster shape and charge sharing information would be taken into account in calculating a clusters position and position resolution. 
-    - An ML model trained on truth information might be the easiest way to go, here. 
+- *(medium)* **Hit position uncertainty estimation** -- So far, a clusters spatial resolution estimation is done either via the cluster length in *u* and *v*, or via basic charge-weighted uncertainty estimation. Both of these options are sub-optimal and produce results much worse than what is possible. Optimally, all cluster shape and charge sharing information would be taken into account in calculating a clusters position and position resolution.
+    - An ML model trained on truth information might be the easiest way to go, here.
     - Alternatively, an eta-function based approach can be used to correct the hit position beyond simple center-of-gravity by applying an empirically-determined function that accounts for non-linear charge sharing effects. The numeric eta function can be determined from the LUT by projecting it onto the *uv*-plane and measuring the charge-sharing ratio between the central and neighboring pixels. With this, the charge-weighted uncertainty estimation can be improved to account for charge sharing even in single-pixel clusters. *(Talk to reconstruction experts about how this is and might be done for a better understanding of what the digitiser should do)*
-    - Another option is to assume all hits come as straight lines from the IP. This is used to reconstruct each hits incidence angle to the sensor. A lookup table describing the resolution in dependence on the incidence angle is supplied, from which each hits position uncertainty is calculated. These lookup tables are generated from ddsim simulations, where MIPs (eg. 10 GeV muons) are shot at a single sensor plane at different angles. 
+    - Another option is to assume all hits come as straight lines from the IP. This is used to reconstruct each hits incidence angle to the sensor. A lookup table describing the resolution in dependence on the incidence angle is supplied, from which each hits position uncertainty is calculated. These lookup tables are generated from ddsim simulations, where MIPs (eg. 10 GeV muons) are shot at a single sensor plane at different angles.
 - *(medium)* **Transfer propagation-based digitiser** -- Transfer the propagation-based digitizer currently implemented in `VTXDigi_Detailed` to a `ChargeCollector` implementation. Making this possible is the reason this specific architecture was chosen. Not urgent, but will make maintaining the repo a bit simpler.
 - *(medium)* **Include some LUTs** -- We hope to include some LUTs for the Standard, n-Blanket and n-Gap layout of the TPSCo 65nm CIS chips in the repo. This is likely not a problem with NDAs, but has to be checked back with seniors.
 - *(low)* **N-bit charge information** -- Currently charge information is completely analogue (collected charge per pixel is stored as float). Enable purely digital (N=1) or semi-digital (N>1) readout where the charge information is stored in N bits. This is much closer to how charge information is handled in real systems.
 - *(low)* **Timing information in LUT** -- Currently, LUTs do not store any information on the signal shape charges in a given voxel will produce on the electrodes. Timestamps are simply taken from the simHits and smeared. Yet, charges from different voxels can take drastically different times (TPSCo 65nm CIS: O(ns)) to collect. Thus, the timestamps and amplitude of pixel hits might be changed. To simulate this, each LUT entry would need to encode not only the amount of shared charge, but also a parametrisation of the pixel response function. This is computationally expensive, and not implemented in Allpix Squared either. An exact algorithm on how to implement this time encoding is not yet clear.
 - *(low)* **Gaussian-smearing based digitizer** -- Implementing such an algorithm here would simplify repository. Because the charge collector acts on pixels (and not on positions like the Gaussian-smearing), this is non-trivial and would require a check in the beginning of the event loop.
-- 
+-

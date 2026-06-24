@@ -48,8 +48,8 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
   path.simPos = simHit.truthPos();
 
   double momentum_global[3] = {
-    static_cast<double>(simHit.hitPtr()->getMomentum().x), 
-    static_cast<double>(simHit.hitPtr()->getMomentum().y), 
+    static_cast<double>(simHit.hitPtr()->getMomentum().x),
+    static_cast<double>(simHit.hitPtr()->getMomentum().y),
     static_cast<double>(simHit.hitPtr()->getMomentum().z)
   };
   double momentum_local[3];
@@ -57,7 +57,7 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
 
   /* Step 1 - travel vector */
   const double scaleFactor_travel = digitizer.ActiveVolumeDimensions().at(2) / std::abs(momentum_local[2]);
-  path.travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]); 
+  path.travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]);
 
   /* Step 2 - entry point */
   if (std::abs(path.simPos.z()) > digitizer.ActiveVolumeDimensions().at(2)/2.f + eps) {
@@ -78,7 +78,7 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
   std::pair<float, float> t = std::make_pair(0.f, 1.f); // parametrize path as entry + t*travel; t in [0,1]
   t = ComputePathClippingFactors(t, path.entry.x(), path.travel.x(), digitizer.ActiveVolumeDimensions().at(0));
   t = ComputePathClippingFactors(t, path.entry.y(), path.travel.y(), digitizer.ActiveVolumeDimensions().at(1));
-  if (t.first != 0.f || t.second != 1.f) { 
+  if (t.first != 0.f || t.second != 1.f) {
     if (0.f <= t.first && t.first < t.second && t.second <= 1.f) {
       /* valid clipping */
       digitizer.debug() << "       - Clipping SimHitPath with t [" << t.first << ", " << t.second << "]. PathLength changed to " << static_cast<int>((t.second - t.first) * path.travel.r()*1000) << " um from " << static_cast<int>(path.travel.r()*1000) << " um" << endmsg;
@@ -113,7 +113,7 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
     path.travel = (t_max - t_min) * path.travel;
   }
   path.length = path.travel.r();
-  
+
 
   digitizer.debug() << "       - Constructed path, length " << path.travel.r()*1000 << " um (G4-length " << path.lengthG4*1000 << " um), entry (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, exit (" << path.entry.x() + path.travel.x() << ", " << path.entry.y() + path.travel.y() << ", " << path.entry.z() + path.travel.z() << ") mm, " << endmsg;
   return true; // indicate valid path constructed
@@ -156,12 +156,12 @@ std::pair<float, float> ComputePathClippingFactors(std::pair<float,float> t, con
 LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& digitizer) {
   digitizer.debug() << " - Constructing LUT from file \"" << lutFileName << "\"." << endmsg;
 
-  /* This implements parsing the default Allpix2 LUT file format.
-  * See https://indico.cern.ch/event/1489052/contributions/6475539/attachments/3063712/5418424/Allpix_workshop_Lemoine.pdf (slide 10) for more info on fields in the LUT file */
+  /* parse the LUT in Allpix Squared format
+   * See https://indico.cern.ch/event/1489052/contributions/6475539/attachments/3063712/5418424/Allpix_workshop_Lemoine.pdf (slide 10) for more info on fields in the LUT file */
 
   if (lutFileName.empty())
     throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): LUT file name is empty. A LUT file must be given to load the lookup table.");
-  
+
   const int headerLines = 5;
 
   digitizer.debug() << "   - Opening LUT file \"" << lutFileName << "\"." << endmsg;
@@ -232,7 +232,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
 
   /* set up mapping from Allpix2 LUT format
   *   (row-major, starts on bottom left)
-  * to the format expected by the LookupTable class 
+  * to the format expected by the LookupTable class
   *   (row-major, starts on top-left) */
   std::unordered_map<int, int> indexMapping; // i: index in local format; indexMapping[i]: index in Allpix2 format
   for (int i_u = 0; i_u < m_matrixSize; i_u++) {
@@ -248,7 +248,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   lutFile.seekg(0, std::ios::beg);
   for (int i=0; i<headerLines; ++i) // advance past header again
   std::getline(lutFile, line);
-  
+
   digitizer.debug() << "   - Parsing LUT file, filling into lookup table." << endmsg;
 
   std::vector<float> matricesEntrySum_perWBin;
@@ -259,7 +259,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   while (std::getline(lutFile, line)) {
     if (line.empty() || line[0] == '#')
       throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " + std::to_string(lineNumber+1) + ". All lines (past the 5 header lines) must contain valid matrix data.");
-    
+
     std::istringstream stringStream(line);
     std::vector<std::string> lineEntries;
     std::string entryString;
@@ -291,11 +291,11 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
         entry = 0.f; // avoid very small entries for performace
       matrixEntries[i] = entry;
       matrixEntrySum += entry;
-    } 
+    }
     digitizer.verbose() << "   - Parsed matrix for in-pixel bin (" << j_uvw.at(0) << ", " << j_uvw.at(1) << ", " << j_uvw.at(2) << "), entry sum " << std::to_string(matrixEntrySum) << ", setting it now..." << endmsg;
     if (std::isnan(matrixEntrySum))
       throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") contains NaN values (sum of entries is NaN).");
-    
+
     matricesEntrySum += matrixEntrySum;
     matricesEntrySum_perWBin[j_uvw.at(2)] += matrixEntrySum;
     SetMatrix(j_uvw, matrixEntries);
@@ -307,7 +307,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     throw std::runtime_error("Invalid number of matrices loaded from file: expected " + std::to_string(m_binCount[0] * m_binCount[1] * m_binCount[2]) + " matrices (inferred from bin count in header) but found " + std::to_string(lineNumber - headerLines) + " lines.");
 
   const float matrixNumber = static_cast<float>(lineNumber - headerLines);
-  
+
   // From which w-level are charges collected?
   float collectedFromW = 0.f;
   for (int j_w = 0; j_w < m_binCount.at(2); j_w++) {
@@ -343,7 +343,7 @@ void LookupTable::SetMatrix(const Index_inPix& j_uvw, const std::vector<float>& 
 
   for (int row = 0; row < m_matrixSize; ++row) {
     for (int col = 0; col < m_matrixSize; ++col) {
-      /* weights are given in row-major order, starting at top left. 
+      /* weights are given in row-major order, starting at top left.
         * We store charge sharing matrices in col-major order, starting at bottom left (lowest bin index) */
       m_matrices.at(FindIndex(j_uvw, col, row)) = weights.at((m_matrixSize-1-row)*m_matrixSize + col);
     }
@@ -361,7 +361,7 @@ void LookupTable::SetAllMatrices(const std::vector<float>& weights) {
 }
 
 int LookupTable::FindIndex (const Index_inPix& j, const int col, const int row) const {
-  if (j[0] < 0 || j[0] >= m_binCount[0] 
+  if (j[0] < 0 || j[0] >= m_binCount[0]
     || j[1] < 0 || j[1] >= m_binCount[1]
     || j[2] < 0 || j[2] >= m_binCount[2] ) [[unlikely]] {
     throw std::runtime_error("VTXdigi_tools::LookupTable::FindIndex: in-pix bin out of range");
@@ -375,7 +375,11 @@ int LookupTable::FindIndex (const Index_inPix& j, const int col, const int row) 
   return index_matrix * m_matrixSize * m_matrixSize + index_element;
 }
 
-ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer), m_LUT(digitizer.LutFileName(), digitizer), m_stepLength(digitizer.LutStepLength()) {
+ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer),
+  m_LUT(digitizer.LutFileName(), digitizer),
+  m_stepLength(digitizer.LutStepLength()),
+  m_shiftTruthPos(digitizer.LUT_shiftTruthPos()) {
+
   /* LUT is constructed in place (from file) */
   m_chargeCollectionDepthCenter = m_LUT.GetChargeCollectionDepthCenter();
 
@@ -383,18 +387,19 @@ ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : ICh
 }
 
 void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
-  /* TODO: implement voxel-traversal instead of numerically splitting the charge. 
+  /* TODO: implement voxel-traversal instead of numerically splitting the charge.
   I would start from the simple algo here: https://www.redblobgames.com/grids/line-drawing.html */
 
   Path path;
   if (!ConstructPath(path, simHit, trafoMatrix, m_digitizer)) [[unlikely]]
     return;
 
-  MoveTruthPosition(simHit, path); // shifts the sim hit position to the depth in the sensor where most charge is collected, to get usesful residual plots.
+  if (m_shiftTruthPos) {
+    MoveTruthPosition(simHit, path); // shifts the sim hit position to the depth in the sensor where most charge is collected, to get usesful residual plots.
+  }
 
   const int stepCount = std::max(1, static_cast<int>(std::ceil(path.length / m_stepLength)));
   const float segmentCharge = simHit.charge() / stepCount;
-
 
   Index_segment nextSeg, seg = ComputeSegmentIndices(0, stepCount, path);
   int segmentsInBin = 1;
@@ -409,15 +414,15 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
       // m_digitizer.verbose() << "     - Segment lies in the same pixel and in-pixel bin as previous segment, continuing." << endmsg;
       ++segmentsInBin;
       continue;
-    } 
+    }
     else {
-      DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit); 
+      DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit);
       seg = nextSeg;
       segmentsInBin = 1;
     }
   } // loop over segments
 
-  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix, VTXdigi_tools::CreatedInGenerator(simHit)); // fill histograms once per sim hit, with info from the path (eg. travel vector, which contains info on the angle of incidence)
+  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix, simHit.CreatedInGenerator()); // fill histograms once per sim hit, with info from the path (eg. travel vector, which contains info on the angle of incidence)
 
   DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit);
 }
@@ -458,7 +463,7 @@ void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_se
 
     for (int row = row_min; row < row_max; ++row) {
       const int i_v = i_v_origin + row;
-        
+
       const float chargeToAdd = m_LUT.GetWeight(i_seg.j, col, row) * charge;
       hitMap.FillCharge({i_u, i_v}, chargeToAdd, simHit);
     }
@@ -466,12 +471,12 @@ void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_se
 }
 
 void ChargeCollector_LUT::MoveTruthPosition(const SimHitWrapper& simHit, const Path& path) const {
-  if (m_chargeCollectionDepthCenter == 0.f) 
+  if (m_chargeCollectionDepthCenter == 0.f)
     return;
 
   /* shift the sim hit position along the path to the depth that is closest to the target w (ie. target depth) */
 
-  float t = (m_chargeCollectionDepthCenter - path.entry.z()) / path.travel.z(); // how far along the path do we need to go to get to the target depth? 
+  float t = (m_chargeCollectionDepthCenter - path.entry.z()) / path.travel.z(); // how far along the path do we need to go to get to the target depth?
   // t in [0,1] means it's within the path, otherwise it's outside of the path and we will shift to the closest end (entry or exit)
 
   if (t < 0.f)
@@ -520,12 +525,12 @@ void ChargeCollector_Debug::FillHit(const SimHitWrapper& simHit, HitMap& hitMap,
 
     hitMap.FillCharge(i_uv, 0.5*charge, simHit);
     if (i_uv.first + 1 < static_cast<int>(m_digitizer.PixelCount().first))
-      hitMap.FillCharge({i_uv.first + 1, i_uv.second}, 0.3*charge, simHit); 
+      hitMap.FillCharge({i_uv.first + 1, i_uv.second}, 0.3*charge, simHit);
     if (i_uv.second + 1 < static_cast<int>(m_digitizer.PixelCount().second))
       hitMap.FillCharge({i_uv.first, i_uv.second + 1}, 0.1*charge, simHit);
     if (i_uv.second + 2 < static_cast<int>(m_digitizer.PixelCount().second))
       hitMap.FillCharge({i_uv.first, i_uv.second + 2}, 0.1*charge, simHit);
-      
+
     m_digitizer.verbose() << "       - Total charge collected in hitMap: " << hitMap.GetTotalCharge() << " e." << endmsg;
   }
 }

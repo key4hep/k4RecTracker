@@ -22,6 +22,11 @@ bool ToolTest();
 
 /* -- SimHitWrapper -- */
 
+/** @brief Check if a MCParticle was created in the generator */
+bool CreatedInGenerator(const edm4hep::MCParticle& mcParticle);
+/** @brief Check if a simTrackerHit was created in the generator */
+inline bool CreatedInGenerator(const edm4hep::SimTrackerHit& simTrackerHit) { return CreatedInGenerator(simTrackerHit.getParticle()); };
+
 /** @brief Class to contain all information about a simTrackerHit that is needed for the digitization.
  * @note this is where the simTrackerHit is actually stored, everything else (pixelHit / cluster) will store pointers to this. */
 class SimHitWrapper {
@@ -50,9 +55,18 @@ public:
   inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
   inline float charge() const { return m_charge; }
   inline int layer() const { return m_layerNumber; }
+
+  /** @brief Check if the simHit particle was created in the generator (via MCParticle, which might not be the "real" particle, if SaveAllParticles is turned off in ddsim) */
+  inline bool CreatedInGenerator() const { return ::VTXdigi_tools::CreatedInGenerator(m_simTrackerHit); }
+
+  /** @brief Check if the linked MC particle is the particle that produced this hit. If false, the hit was produced by a secondary particle, which had no MC particle  */
+  inline bool hasDirectMcParticleLink() const { return !m_simTrackerHit.isProducedBySecondary(); }
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
+
+/** @brief Find simHits from different MCParticles. If two simHits originate from the same MCParticle (eg. have shared parents), return only the one from the MCParticle further up the family tree. */
+// std::unordered_set<const VTXdigi_tools::SimHitWrapper*>  FindSimHitsWithIndividualParents(const std::vector<SimHitWrapper>& simHits); 
 
 /* -- Pixel -- */
 
@@ -146,13 +160,6 @@ private:
 }; // class HitMap
 
 /* -- helpers -- */
-
-/** @brief Check if a MCParticle was created in the generator */
-bool CreatedInGenerator(const edm4hep::MCParticle& mcParticle);
-/** @brief Check if a simTrackerHit was created in the generator */
-bool CreatedInGenerator(const edm4hep::SimTrackerHit& simTrackerHit);
-/** @brief Check if a simHitWrapper was created in the generator */
-bool CreatedInGenerator(const SimHitWrapper& simHitWrapper);
 
 /** @brief Convert a dd4hep::rec::Vector3D to edm4hep::Vector3d and vice-versa */
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);

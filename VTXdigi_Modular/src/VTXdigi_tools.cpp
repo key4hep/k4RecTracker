@@ -11,6 +11,63 @@ SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::un
   m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
 }
 
+void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
+  std::swap(a.m_simTrackerHit, b.m_simTrackerHit);
+  std::swap(a.m_cellID, b.m_cellID);
+  std::swap(a.m_charge, b.m_charge);
+  std::swap(a.m_layerNumber, b.m_layerNumber);
+} // swap(Hit&, Hit&)
+
+// std::unordered_set<const VTXdigi_tools::SimHitWrapper*> FindSimHitsWithIndividualParents(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*> simHits) {
+//   // TODO: implement this function, which is needed to find simHits from different MCParticles. If two simHits originate from the same MCParticle, return only the one from the MCParticle further up the family tree.
+
+//   std::unordered_set<const VTXdigi_tools::SimHitWrapper*> individualSimHits;
+
+//   for (const auto* simHit : simHits) {
+//     // if no simHit in individualSimHits shares a parent with simHit, add simHit to individualSimHits
+    
+//     for (const auto* otherSimHit : individualSimHits) {
+//       const edm4hep::MCParticle& mcP = simHit->hitPtr()->getParticle();
+//       const edm4hep::MCParticle& otherMcP = otherSimHit->hitPtr()->getParticle();
+
+//       // first: check obvious cases
+//       if (mcP == otherMcP) {
+//         // no need to do anything, simHits are from the same MCParticle
+//         break;
+//       }
+
+//       // second: check if simHit and otherSimHit are direct children of each other?
+//       if (mcP.parents_size() == 1) {
+//         const edm4hep::MCParticle& mcP_parent = mcP.getParents()[0];
+//         if (mcP_parent == otherMcP) {
+//           // no need to do anything, other is created by the parent of simHit
+//           break;
+//         }
+//       }
+//       if (otherMcP.parents_size() == 1) {
+//         const edm4hep::MCParticle& otherMcP_parent = otherMcP.getParents()[0];
+//         if (otherMcP_parent == mcP) {
+//           // replace otherSimHit with simHit, because simHit is from a parent of the otherSimHit
+
+//           break;
+//         }
+//       }
+
+
+
+//       if (simHit->hitPtr()->getParticle().getParents()[0] == otherSimHit->hitPtr()->getParticle().getParents()[0]) {
+//         hasSharedParent = true;
+//         break;
+//       }
+//     }
+//     if (!hasSharedParent) {
+//       individualSimHits.insert(simHit);
+//     }
+//   }
+
+// }
+
+
 // SimulatorStatus bits (see https://edm4hep.web.cern.ch/classedm4hep_1_1_mutable_m_c_particle.html)
 // 29 : "Backscatter",
 // 30 : "CreatedInSimulation",
@@ -21,13 +78,6 @@ SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::un
 // 23 : "Overlay",
 // 24 : "Stopped",
 // 28 : "VertexIsNotEndpointOfParent",
-
-void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
-  std::swap(a.m_simTrackerHit, b.m_simTrackerHit);
-  std::swap(a.m_cellID, b.m_cellID);
-  std::swap(a.m_charge, b.m_charge);
-  std::swap(a.m_layerNumber, b.m_layerNumber);
-} // swap(Hit&, Hit&)
 
 /* -- helpers -- */
 
@@ -41,14 +91,6 @@ bool CreatedInGenerator(const edm4hep::MCParticle& mcParticle) {
     return true; // bit is not set -> created in generator
   }
   return false; // bit is set -> created in simulation
-}
-/** @brief Check if a simTrackerHit was created in the generator */
-bool CreatedInGenerator(const edm4hep::SimTrackerHit& simTrackerHit) {
-  return CreatedInGenerator(simTrackerHit.getParticle());
-}
-/** @brief Check if a simHitWrapper was created in the generator */
-bool CreatedInGenerator(const SimHitWrapper& simHitWrapper) {
-  return CreatedInGenerator(*simHitWrapper.hitPtr());
 }
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {

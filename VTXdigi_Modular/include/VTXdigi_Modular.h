@@ -1,7 +1,7 @@
 // VTXdigi_Modular/include/VTXdigi_Modular.h
 #pragma once
 
-#include "IChargeCollector.h" 
+#include "IChargeCollector.h"
 #include "VTXdigi_tools.h"
 
 // GAUDI
@@ -40,7 +40,7 @@ namespace VTXdigi_tools {
 struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> (const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
 
   VTXdigi_Modular(const std::string& name, ISvcLocator* svcLoc);
-  
+
   StatusCode initialize() override;
   StatusCode finalize() override;
 
@@ -60,16 +60,18 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
   inline float Threshold() const { return m_threshold; }
 
   inline bool LUT_ignorePitch() const { return m_LUT_ignorePitch.value(); }
-  
-  /** @brief Draw a random number for charge smearing 
-   * FIXME: this is not thread safe, but I don't know how this is done in Gaudi (while retaining thread safety & reproducibility with a given seed). 
+
+  inline bool LUT_shiftTruthPos() const { return m_LUT_shiftTruthPos.value(); }
+
+  /** @brief Draw a random number for charge smearing
+   * FIXME: this is not thread safe, but I don't know how this is done in Gaudi (while retaining thread safety & reproducibility with a given seed).
   */
   inline float DrawChargeSmearingNumber() const { return static_cast<float>(m_rndm_charge()); }
 
   inline std::string LutFileName() const { return m_LUT_FileName; }
   inline float LutStepLength() const { return m_LUT_stepLength; }
 
-private: 
+private:
 
   /* ---- Initialization & finalization functions ---- */
 
@@ -96,11 +98,12 @@ private:
 
   /** @brief Create a digiHit per cluster */
   void CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const;
-  
+
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
   void FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
   void FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize, const int clusterSize_u, const int clusterSize_v) const;
-  
+  void FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::CellID& cellID) const;
+
   /* -- Properties -- */
 
   const std::string m_undefinedString = "UNDEFINED";
@@ -124,7 +127,7 @@ private:
   Gaudi::Property<std::vector<float>> m_positionUncertainty{this, "ClusterPositionUncertainty", {}, "Sensor spatial resolution in u and v direction (in mm). Used for the position uncertainty in digiHits"};
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Quadratically add pixel noise and threshold smearing if necessary."};
   Gaudi::Property<float> m_smearing_time{this, "TimeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels time (in ns). Applied to the digiHits time stamp. If 0, no time smearing is applied."};
-  
+
   Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false, "Flag to create and fill debug histograms. Not recommended for multithreading, might lead to crashes. Default is false."};
   Gaudi::Property<int> m_infoPrintInterval{this, "InfoPrintInterval", 100, "Interval for printing information during processing."};
 
@@ -132,9 +135,10 @@ private:
   Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
   Gaudi::Property<float> m_LUT_stepLength{this, "LookupTableSegmentStepLength", 0.0005f, "Length of the segments that a particle path through the sensor is split into. The deposited charge is distributed evenly over the segments, and each segments charge is distributed according to the in-pixel bin the segment center falls into. In mm. Defaults to 0.0005 mm."};
   Gaudi::Property<bool> m_LUT_ignorePitch{this, "LookupTableIgnorePitch", false, "Ignore the sensor thickness and pixel pitch values stored in the LUT file. Useful for slightly stretching/shrinking the LUT to fit curved sensors where the sensor length is not an integer multiple of the pixel pitch. If empty, the LUT file values are used."};
-  
+  Gaudi::Property<bool> m_LUT_shiftTruthPos{this, "LookupTableShiftTruthPosition", false, "Internally shift the truth position of the simHit. Only affects the output histograms, does not affect any collection. If turned to false, angled particle trajectories will bias the residual plots in case of LUT tables with uneven charge collection across the sensor thickness."};
+
   /* -- Services, geometry variables -- */
-  
+
   SmartIF<IRndmGenSvc> m_randomService;
   SmartIF<IGeoSvc> m_geoService;
   std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_cellIdDecoder;
@@ -142,12 +146,12 @@ private:
   const dd4hep::rec::SurfaceMap* m_surfaceMap; // map from cellID (unsigned long, without segmentation bits) to simSurface (dd4hep::rec::ISurface*)
   dd4hep::VolumeManager m_volumeManager; // volume manager to get the physical cell sensitive volume
   dd4hep::DetElement m_subDetector; // subdetector DetElement. contains layers as children
-  
+
   /* -- Member variables -- */
 
   std::unique_ptr<VTXdigi_tools::IChargeCollector> m_chargeCollector = nullptr;
 
-  std::pair<size_t, size_t> m_pixelCount = {0, 0}; 
+  std::pair<size_t, size_t> m_pixelCount = {0, 0};
   std::pair<float, float> m_pixelPitch = {0.0f, 0.0f};
   float m_sensorActiveThickness = 0.0f; // also in mm
   float m_inactiveMaterialAbove = 0.0f; // in mm, inactive material above the active volume in sensor normal direction
@@ -168,7 +172,8 @@ private:
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRead{this, "SimTrackerHits read"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRejected_LayerNotToBeDigitized{this, " - SimTrackerHits rejected (layer not to be digitized)"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsAccepted{this, " = SimTrackerHits accepted"};
-  mutable Gaudi::Accumulators::Counter<> m_counter_simHitsCreatedInGenerator{this, "( SimTrackerHits created in generator)"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_accSimHitsCreatedInGenerator{this, "( accepted SimTrackerHits from particles created in generator)"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_accSimHitsDirectMcParticleLink{this, "( accepted SimTrackerHits with direct MC particle link)"};
 
 
 
@@ -176,8 +181,8 @@ private:
 
   /* -- Histograms -- */
 
-  enum { 
-    hist1d_simHitE, 
+  enum {
+    hist1d_simHitE,
     hist1d_simHitCharge,
     hist1d_simHitMomentum_keV,
     hist1d_simHitMomentum_MeV,
@@ -204,20 +209,33 @@ private:
     hist1d_clusterSize_v,
     hist1d_clusterSize_createdInGenerator,
     hist1d_clusterSize_createdInSimulation,
-    hist1d_residual_u, 
-    hist1d_residual_u_singlePixelCluster, 
-    hist1d_residual_u_multiPixelCluster, 
-    hist1d_residual_u_createdInGenerator, 
+    hist1d_residual_u,
+    hist1d_residual_u_maxEParticleOnSensor,
+    hist1d_residual_u_noParents,
+    hist1d_residual_u_directMcParticleLink,
+    hist1d_residual_u_mcOriginFarFromSimHit,
+    hist1d_residual_u_directMcParticleLink_mcOriginFarFromSimHit,
+    hist1d_residual_u_singlePixelCluster,
+    hist1d_residual_u_multiPixelCluster,
+    hist1d_residual_u_createdInGenerator,
     hist1d_residual_u_createdInSimulation,
-    hist1d_residual_v, 
-    hist1d_residual_v_singlePixelCluster, 
-    hist1d_residual_v_multiPixelCluster, 
-    hist1d_residual_v_createdInGenerator, 
+    hist1d_residual_v,
+    hist1d_residual_v_maxEParticleOnSensor,
+    hist1d_residual_v_noParents,
+    hist1d_residual_v_directMcParticleLink,
+    hist1d_residual_v_mcOriginFarFromSimHit,
+    hist1d_residual_v_directMcParticleLink_mcOriginFarFromSimHit,
+    hist1d_residual_v_singlePixelCluster,
+    hist1d_residual_v_multiPixelCluster,
+    hist1d_residual_v_createdInGenerator,
     hist1d_residual_v_createdInSimulation,
-    hist1d_residual_w, 
-    hist1d_residual_r, 
+    hist1d_residual_w,
+    hist1d_residual_w_noParents,
+    hist1d_residual_r,
     hist1d_clusterPosUncertainty_u,
+    hist1d_clusterPosUncertainty_u_noParents,
     hist1d_clusterPosUncertainty_v,
+    hist1d_clusterPosUncertainty_v_noParents,
     hist1d_pixelDistToClusterCenter_u,
     hist1d_pixelDistToClusterCenter_v,
     hist1d_pathTravel_u,
@@ -225,14 +243,16 @@ private:
     hist1d_pathTravel_r,
     hist1d_simHitTimeStamp,
     hist1d_digiHitTimeStamp,
+    hist1d_simHitsPerDigiHit,
+    hist1d_highestEnergyParticleOnSensor_energy,
     hist1dArrayLen
-  }; 
+  };
   mutable std::unordered_map<
     int, // layer number
     std::array<
       std::unique_ptr<
         Gaudi::Accumulators::StaticHistogram<
-          1, 
+          1,
           Gaudi::Accumulators::atomicity::full,
           float
         >
@@ -249,7 +269,7 @@ private:
     histProfile1d_residual_u_vs_global_z,
     histProfile1d_residual_v_vs_global_z,
     histProfile1d_residual_r_vs_global_z,
-    histProfile1d_pathTravel_u_vs_global_z, 
+    histProfile1d_pathTravel_u_vs_global_z,
     histProfile1d_pathTravel_v_vs_global_z,
     histProfile1d_pathTravel_r_vs_global_z,
     histProfile1dArrayLen };
@@ -258,7 +278,7 @@ private:
     std::array<
       std::unique_ptr<
         Gaudi::Accumulators::StaticProfileHistogram<
-          1, 
+          1,
           Gaudi::Accumulators::atomicity::full,
           float
         >
@@ -267,13 +287,13 @@ private:
     >
   > m_histProfile1d;
 
-  enum { 
+  enum {
     hist2d_digiHitCharge_vs_global_z,
     hist2d_hitMap_simHits,
     hist2d_hitMap_simHits_createdInGenerator,
     hist2d_hitMap_simHits_createdInSimulation,
     hist2d_hitMap_simHits_eDepAboveThreshold,
-    hist2d_hitMap_pixelHits, 
+    hist2d_hitMap_pixelHits,
     hist2d_clusterSize_vs_global_z,
     hist2d_clusterSize_u_vs_global_z,
     hist2d_clusterSize_v_vs_global_z,
@@ -313,7 +333,7 @@ private:
     >
   > m_hist2d;
 
-  enum { 
+  enum {
     hist1dglobal_pathTravel_r,
     hist1dglobal_pathTravel_r_Geant4,
     hist1dglobal_pathTravel_r_ratio,
@@ -322,7 +342,7 @@ private:
   std::array<
     std::unique_ptr<
       Gaudi::Accumulators::StaticHistogram<
-        1, 
+        1,
         Gaudi::Accumulators::atomicity::full,
         float
       >
