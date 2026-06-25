@@ -11,8 +11,8 @@ from k4FWCore.parseArgs import parser
 
 
 ################## Parser
-parser.add_argument("--inputFile", default="ddsim_output_edm4hep.root", help="InputFile")
-parser.add_argument("--outputFile", default="output_digi.root", help="OutputFile")
+parser.add_argument("--inputFile", help="InputFile")
+parser.add_argument("--outputFile", help="OutputFile")
 parser.add_argument("--modelPath", default="", help="model path for the track finder")
 parser.add_argument("--tbeta", default=0.6, help="tbeta clustering parameter")
 parser.add_argument("--td", default=0.3, help="td clustering parameter")

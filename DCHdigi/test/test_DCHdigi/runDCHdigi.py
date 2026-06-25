@@ -8,6 +8,7 @@ from Gaudi.Configuration import INFO, DEBUG
 from Configurables import EventDataSvc, UniqueIDGenSvc
 from k4FWCore import ApplicationMgr, IOSvc
 
+
 svc = IOSvc("IOSvc")
 svc.Input = ["dch_proton_10GeV.root"]
 svc.Output = "dch_proton_10GeV_digi.root"
@@ -25,6 +26,7 @@ DCHdigi.DCH_name = "DCH_v2"
 DCHdigi.fileDataAlg = "DataAlgFORGEANT.root"
 DCHdigi.calculate_dndx = True
 DCHdigi.create_debug_histograms = True
+DCHdigi.out_debug_filename = "dch_digi_alg_debug.root"
 DCHdigi.zResolution_mm = 1
 DCHdigi.xyResolution_mm = 0.1
 

@@ -64,6 +64,9 @@
 // k4FWCore
 #include "k4FWCore/Transformer.h"
 
+// k4geo
+#include "detectorCommon/WireTracker_info.h"
+
 // k4Interface
 #include <k4Interface/IGeoSvc.h>
 #include <k4Interface/IUniqueIDGenSvc.h>
@@ -77,14 +80,13 @@
 // DD4hep
 #include "DDSegmentation/BitFieldCoder.h"
 
-// DDRec
-#include "DDRec/DCH_info.h"
-
 // delphes
 #include "TrackCovariance/TrkUtil.h"
 
 // ROOT
 #include "TRandom3.h"
+
+using Vector3D = dd4hep::rec::WireTracker_info::Vector3D;
 
 class DCHdigi_v02 final
     : public k4FWCore::MultiTransformer<
@@ -166,10 +168,10 @@ private:
       "Together with ReadoutWindowStartTime_ns, defines the readout window. Any DigiHits with arrival time after "
       "ReadoutWindowStartTime_ns + ReadoutWindowDuration_ns are discarded."};
 
-  /// Convert EDM4hep Vector3d to TVector3
-  TVector3 toTVector3(const edm4hep::Vector3d& v) const { return {v[0], v[1], v[2]}; };
-  /// Convert TVector3 to EDM4hep Vector3d
-  edm4hep::Vector3d toEDM4hepVector(const TVector3& v) const { return {v.x(), v.y(), v.z()}; };
+  /// Convert EDM4hep Vector3d to Vector3D as defined in WireTracker_info
+  Vector3D toVector3D(const edm4hep::Vector3d& v) const { return {v[0], v[1], v[2]}; };
+  /// Convert Vector3D as defined in WireTracker_info to EDM4hep Vector3d
+  edm4hep::Vector3d toEDM4hepVector(const Vector3D& v) const { return {v.x(), v.y(), v.z()}; };
 
   // /// Function to calculate the drift time from the distance to the wire
   double get_drift_time_ns(double distance_to_wire_mm) const;

@@ -9,8 +9,8 @@ from Configurables import EventDataSvc
 ################ parser
 from k4FWCore.parseArgs import parser
 
-parser.add_argument("--inputFile", default="output_tracks.root", help="InputFile")
-parser.add_argument("--outputFile", default="testFitter.root", help="OutputFile")
+parser.add_argument("--inputFile", help="InputFile")
+parser.add_argument("--outputFile", help="OutputFile")
 parser.add_argument(
     "--Beta_init",
     default=100,

@@ -37,6 +37,7 @@ gaudi_add_module(${PackageName}
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
   k4FWCore::k4Interface
+  k4geo::detectorCommon
   extensionDict
   onnxruntime::onnxruntime
   torch

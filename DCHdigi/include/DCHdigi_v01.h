@@ -55,12 +55,12 @@
 #include "DD4hep/Detector.h" // for dd4hep::VolumeManager
 #include "DDSegmentation/BitFieldCoder.h"
 
+// k4geo
+#include "detectorCommon/WireTracker_info.h"
+
 // STL
 #include <random>
 #include <string>
-
-// data extension for detector DCH_v2
-#include "DDRec/DCH_info.h"
 
 // ROOT headers
 #include "TFile.h"
@@ -70,6 +70,8 @@
 
 // Class developed by Walaa for the CLS
 #include "AlgData.h"
+
+using Vector3D = dd4hep::rec::WireTracker_info::Vector3D;
 
 /// constant to convert from mm (EDM4hep) to DD4hep (cm)
 
@@ -142,10 +144,11 @@ private:
 
   int CalculateNphiFromCellID(dd4hep::DDSegmentation::CellID id) const { return m_decoder->get(id, "nphi"); }
 
-  TVector3 Convert_EDM4hepVector_to_TVector3(const edm4hep::Vector3d& v, double scale) const {
+  /// Convert EDM4hep Vector3d to Vector3D as defined in WireTracker_info
+  Vector3D Convert_EDM4hepVector_to_Vector3D(const edm4hep::Vector3d& v, double scale) const {
     return {v[0] * scale, v[1] * scale, v[2] * scale};
   };
-  edm4hep::Vector3d Convert_TVector3_to_EDM4hepVector(const TVector3& v, double scale) const {
+  edm4hep::Vector3d Convert_Vector3D_to_EDM4hepVector(const Vector3D& v, double scale) const {
     return {v.x() * scale, v.y() * scale, v.z() * scale};
   };
 

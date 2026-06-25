@@ -22,12 +22,13 @@
 namespace GenfitInterface {
 
 GenfitTrack::GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrdering,
-                         const dd4hep::rec::DCH_info* dch_info, const dd4hep::DDSegmentation::BitFieldCoder* decoder,
+                         const dd4hep::rec::WireTracker_info_struct* wire_info,
+                         const dd4hep::DDSegmentation::BitFieldCoder* decoder,
                          const GenfitInterface::GenfitField* fieldMap)
     : m_originalTrack(track), m_posInit(0., 0., 0.), m_momInit(0., 0., 0.), m_covInit(6), m_genfitTrackRep(nullptr),
       m_genfitTrack(nullptr), m_edm4hepTrack(),
 
-      m_dch_info(dch_info), m_dc_decoder(decoder), m_fieldMap(fieldMap)
+      m_wire_info(wire_info), m_dc_decoder(decoder), m_fieldMap(fieldMap)
 
 {
 
@@ -802,6 +803,11 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
 
   auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
 
+  // Check whether the wire tracker has sectors.
+  // m_dc_decoder is nullptr when the geometry has no wire tracker; in that case
+  // there are no SenseWireHits either, so has_sectors is never actually consumed.
+  const bool has_sectors = m_dc_decoder && (m_dc_decoder->fieldDescription().find("sector") != std::string::npos);
+
   int hit_idx(0);
   int detID(-1);
 
@@ -821,7 +827,8 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
     } else if (hit.isA<edm4hep::SenseWireHit>()) {
       detID = 1;
       auto wire_hit = hit.as<edm4hep::SenseWireHit>();
-      GenfitInterface::WireMeasurement measurement(wire_hit, m_dch_info, m_dc_decoder, detID, ++hit_idx, debug_lvl);
+      GenfitInterface::WireMeasurement measurement(wire_hit, m_wire_info, m_dc_decoder, has_sectors, detID, ++hit_idx,
+                                                   debug_lvl);
       m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack));
     } else {
       throw std::runtime_error("InitializeTrack: Unknown hit type encountered - Hit will be skipped.");

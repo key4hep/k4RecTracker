@@ -154,9 +154,9 @@ struct GenfitTrackFitter final
     // If the detector doesn't have a drift chamber, this part will be skipped
     try {
 
-      std::string DCH_name(m_DCH_name.value());
-      dd4hep::DetElement DCH_DE = m_geoSvc->getDetector()->detectors().at(DCH_name);
-      m_dch_info = DCH_DE.extension<dd4hep::rec::DCH_info>();
+      std::string DCH_name(m_WireTracker_name.value());
+      dd4hep::DetElement WireTracker_DE = m_geoSvc->getDetector()->detectors().at(DCH_name);
+      m_wire_info = WireTracker_DE.extension<dd4hep::rec::WireTracker_info_struct>();
       dd4hep::SensitiveDetector dch_sd = m_geoSvc->getDetector()->sensitiveDetector(DCH_name);
       dd4hep::Readout dch_readout = dch_sd.readout();
       m_dc_decoder = dch_readout.idSpec().decoder();
@@ -454,12 +454,12 @@ private:
   GenfitInterface::GenfitMaterialInterface* m_geoMaterial;
 
   dd4hep::rec::SurfaceManager* m_surfMan;
-  dd4hep::rec::DCH_info* m_dch_info;
+  dd4hep::rec::WireTracker_info_struct* m_wire_info;
   dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
 
-  Gaudi::Property<std::string> m_DCH_name{
-      this, "DCHName", "DCH_v2",
-      "DCHName in the detector description (used to retrieve DCH geometry and material information)"};
+  Gaudi::Property<std::string> m_WireTracker_name{
+      this, "WireTrackerName", "DCH_v2",
+      "WireTrackerName in the detector description (used to retrieve Wire Tracker geometry and material information)"};
 
   // ====================== ECAL Geometry Parameters ======================
   double m_eCalBarrelInnerR;
@@ -616,7 +616,7 @@ private:
                     edm4hep::TrackCollection& FittedTracks, edm4hep::TrackCollection& FittedTracksWithFilteredHits,
                     edm4hep::TrackerHitPlaneCollection& FittedHits, bool runCalorimeterExtrapolation) const {
 
-    GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder,
+    GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_wire_info, m_dc_decoder,
                                                  m_genfitField.get());
 
     TVector3 Init_position(m_init_position.value()[0] * dd4hep::mm, m_init_position.value()[1] * dd4hep::mm,
@@ -773,7 +773,7 @@ private:
 
     for (int pdgCode : m_particleHypothesis) {
 
-      GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_dch_info, m_dc_decoder,
+      GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_wire_info, m_dc_decoder,
                                                    m_genfitField.get());
 
       track_interface.InitializeTrack(m_RadialThresholdPromptTrack.value(), m_useFirstHitAsReference, LimitHits,
