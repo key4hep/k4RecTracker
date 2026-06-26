@@ -2,7 +2,7 @@
 # file: test_DCHdigi.sh
 # author: Alvaro Tolosa-Delgado, CERN 2024
 # to run: sh + test_DCHdigi.sh
-# goal: run sim-digitizer of the DCH v2, and return code printed by check_DCHdigi_output.py
+# goal: run sim-digitizer of the DCH v3, and return code printed by check_DCHdigi_output.py
 
 # clean up previous output files
 rm -f dch_proton_10GeV.root
@@ -21,8 +21,14 @@ if [[ ! -f "$(basename $ifilename)" ]]; then
     exit 1
 fi
 
+if [[ ! -f "par.root" ]]; then
+    echo "Error: File 'par.root' not found."
+    exit 1
+fi
+
 # run digitizer for position smearing and cluster counting calculation
-k4run runDCHdigi.py
+# and a full digitized waveform generation
+k4run runDCHdigiV3.py
 
 # check distribution of distance from hit position to the wire
 python3 check_DCHdigi_output.py
