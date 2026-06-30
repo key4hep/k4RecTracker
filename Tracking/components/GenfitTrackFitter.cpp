@@ -315,95 +315,108 @@ struct GenfitTrackFitter final
     // Loop over the tracks created by the pattern recognition step
     for (const auto& track : tracks_input) {
 
-      num_tracks += 1;
+      // Guard the whole per-track fit: a GenFit exception (e.g. an
+      // ill-conditioned covariance during the fit or the extrapolation to the
+      // IP) should skip just this track, not abort the entire event loop.
+      try {
 
-      // Skip unmatched tracks if the option is enabled
-      // Consider unmatched tracks those with type = 0
-      if (m_ListOfTypesToSkip.size() > 0 && std::find(m_ListOfTypesToSkip.begin(), m_ListOfTypesToSkip.end(),
-                                                      track.getType()) != m_ListOfTypesToSkip.end()) {
-        num_skip += 1;
-        warning() << "Skipping track " << num_tracks - 1 << " with type " << track.getType() << "\n" << endmsg;
-        continue; // skip unmatched tracks
-      }
+        num_tracks += 1;
 
-      if (track.getTrackerHits().size() < 3) {
-        num_skip += 1;
-        warning() << "Track " << num_tracks - 1 << ": less than 3 hits, skipping fit.\n" << endmsg;
-        continue; // skip tracks with less then 3 hits (seed initialization needs 3 hits)
-      }
-
-      num_processed_tracks += 1;
-
-      int isSuccess = 0;
-      if (m_singleEvaluation) {
-
-        isSuccess = ProcessTrack(track, false, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits,
-                                 FittedHits, m_runCalorimeterExtrapolation.value());
-
-      } else {
-
-        int winning_hypothesis = FindBestHypothesis(track, false);
-
-        if (winning_hypothesis == -1) {
-          debug() << "Track " << num_tracks - 1 << ": fit failed for all hypotheses, trying with less hits." << endmsg;
-        } else {
-
-          isSuccess = 1;
-          int pdgCode = winning_hypothesis;
-          ProcessTrack(track, false, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits,
-                       m_runCalorimeterExtrapolation.value());
+        // Skip unmatched tracks if the option is enabled
+        // Consider unmatched tracks those with type = 0
+        if (m_ListOfTypesToSkip.size() > 0 && std::find(m_ListOfTypesToSkip.begin(), m_ListOfTypesToSkip.end(),
+                                                        track.getType()) != m_ListOfTypesToSkip.end()) {
+          num_skip += 1;
+          warning() << "Skipping track " << num_tracks - 1 << " with type " << track.getType() << "\n" << endmsg;
+          continue; // skip unmatched tracks
         }
-      }
 
-      if (!isSuccess) {
+        if (track.getTrackerHits().size() < 3) {
+          num_skip += 1;
+          warning() << "Track " << num_tracks - 1 << ": less than 3 hits, skipping fit.\n" << endmsg;
+          continue; // skip tracks with less then 3 hits (seed initialization needs 3 hits)
+        }
 
+        num_processed_tracks += 1;
+
+        int isSuccess = 0;
         if (m_singleEvaluation) {
 
-          isSuccess = ProcessTrack(track, true, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits,
+          isSuccess = ProcessTrack(track, false, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits,
                                    FittedHits, m_runCalorimeterExtrapolation.value());
-
-          if (!isSuccess) {
-
-            number_failures += 1;
-            debug() << "Track " << num_tracks - 1 << ": fit failed for single evaluation hypothesis, skipping track."
-                    << endmsg;
-            auto failedTrack = FittedTracks.create();
-            auto failedFittedTrack = FittedTracksWithFilteredHits.create();
-
-            failedTrack.setChi2(-1);
-            failedTrack.setNdf(-1);
-
-            failedFittedTrack.setChi2(-1);
-            failedFittedTrack.setNdf(-1);
-
-            continue;
-          }
 
         } else {
 
-          int winning_hypothesis = FindBestHypothesis(track, true);
+          int winning_hypothesis = FindBestHypothesis(track, false);
 
           if (winning_hypothesis == -1) {
-
-            debug() << "Track " << num_tracks - 1 << ": fit failed for all hypotheses." << endmsg;
-            number_failures += 1;
-            auto failedTrack = FittedTracks.create();
-            auto failedFittedTrack = FittedTracksWithFilteredHits.create();
-
-            failedTrack.setChi2(-1);
-            failedTrack.setNdf(-1);
-
-            failedFittedTrack.setChi2(-1);
-            failedFittedTrack.setNdf(-1);
-            continue;
-
+            debug() << "Track " << num_tracks - 1 << ": fit failed for all hypotheses, trying with less hits."
+                    << endmsg;
           } else {
 
+            isSuccess = 1;
             int pdgCode = winning_hypothesis;
-            ProcessTrack(track, true, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits,
+            ProcessTrack(track, false, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits,
                          m_runCalorimeterExtrapolation.value());
           }
         }
+
+        if (!isSuccess) {
+
+          if (m_singleEvaluation) {
+
+            isSuccess = ProcessTrack(track, true, m_particleHypothesis[0], FittedTracks, FittedTracksWithFilteredHits,
+                                     FittedHits, m_runCalorimeterExtrapolation.value());
+
+            if (!isSuccess) {
+
+              number_failures += 1;
+              debug() << "Track " << num_tracks - 1 << ": fit failed for single evaluation hypothesis, skipping track."
+                      << endmsg;
+              auto failedTrack = FittedTracks.create();
+              auto failedFittedTrack = FittedTracksWithFilteredHits.create();
+
+              failedTrack.setChi2(-1);
+              failedTrack.setNdf(-1);
+
+              failedFittedTrack.setChi2(-1);
+              failedFittedTrack.setNdf(-1);
+
+              continue;
+            }
+
+          } else {
+
+            int winning_hypothesis = FindBestHypothesis(track, true);
+
+            if (winning_hypothesis == -1) {
+
+              debug() << "Track " << num_tracks - 1 << ": fit failed for all hypotheses." << endmsg;
+              number_failures += 1;
+              auto failedTrack = FittedTracks.create();
+              auto failedFittedTrack = FittedTracksWithFilteredHits.create();
+
+              failedTrack.setChi2(-1);
+              failedTrack.setNdf(-1);
+
+              failedFittedTrack.setChi2(-1);
+              failedFittedTrack.setNdf(-1);
+              continue;
+
+            } else {
+
+              int pdgCode = winning_hypothesis;
+              ProcessTrack(track, true, pdgCode, FittedTracks, FittedTracksWithFilteredHits, FittedHits,
+                           m_runCalorimeterExtrapolation.value());
+            }
+          }
+        }
+
+      } catch (const std::exception& e) {
+        number_failures += 1;
+        warning() << "Track " << num_tracks - 1
+                  << ": GenFit exception during fit/extrapolation, skipping track: " << e.what() << endmsg;
+        continue;
       }
     }
 
