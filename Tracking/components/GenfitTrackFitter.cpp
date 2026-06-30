@@ -315,6 +315,11 @@ struct GenfitTrackFitter final
     // Loop over the tracks created by the pattern recognition step
     for (const auto& track : tracks_input) {
 
+      // Guard the whole per-track fit: a GenFit exception (e.g. an
+      // ill-conditioned covariance during the fit or the extrapolation to the
+      // IP) should skip just this track, not abort the entire event loop.
+      try {
+
       num_tracks += 1;
 
       // Skip unmatched tracks if the option is enabled
@@ -404,6 +409,13 @@ struct GenfitTrackFitter final
                          m_runCalorimeterExtrapolation.value());
           }
         }
+      }
+
+      } catch (const std::exception& e) {
+        number_failures += 1;
+        warning() << "Track " << num_tracks - 1
+                  << ": GenFit exception during fit/extrapolation, skipping track: " << e.what() << endmsg;
+        continue;
       }
     }
 
