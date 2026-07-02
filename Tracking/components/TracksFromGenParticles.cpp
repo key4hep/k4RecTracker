@@ -191,8 +191,21 @@ struct TracksFromGenParticles final
       if (genParticle.getCharge() == 0)
         continue;
 
+      // Build tracks only for charged particles that reach the calorimeter face.
+      // isDecayedInTracker() (endpoint inside the tracker) rejects the particles
+      // whose helix extrapolation to the calo is a ghost: in-flight-decay parents,
+      // unstable baryons and low-pT curlers that stop in the tracker.  Real
+      // calo-reaching daughters/secondaries are kept regardless of generatorStatus.
+      if (m_onlyCaloReachingParticles && genParticle.isDecayedInTracker())
+        continue;
+
       // skip low momentum particles that cannot be reconstructed in tracker
       if (pmag < m_minParticleMomentum)
+        continue;
+
+      // A charged particle with exactly zero transverse momentum travels along the beam axis;
+      // its helix is singular (omega = qB/pt, tanLambda = pz/pt, Z0 all diverge to non-finite).  Skip it.
+      if (p.x * p.x + p.y * p.y < std::numeric_limits<double>::epsilon())
         continue;
 
       // build an helix out of MCParticle properties and B field
@@ -431,6 +444,14 @@ private:
   Gaudi::Property<float> m_minParticleMomentum{
       this, "MinimumParticleMomentum", 0.010,
       "Keep only particles with momentum (in GeV) greater than MinimumParticleMomentum"};
+
+  /// Build tracks only for charged particles reaching the calorimeter, i.e. NOT
+  /// isDecayedInTracker() (rejects in-flight-decay parents, unstable baryons and
+  /// low-pT curlers whose helix extrapolation to the calo is a ghost).  When
+  /// false a track is built for every charged particle with a matched SimTrackerHit.
+  Gaudi::Property<bool> m_onlyCaloReachingParticles{this, "OnlyCaloReachingParticles", true,
+                                                    "Build tracks only for charged particles reaching the calorimeter "
+                                                    "(not isDecayedInTracker)"};
 
   /// Configurable property listing the systemIDs of the variuos tracker subdetectors
   Gaudi::Property<std::vector<int>> m_trackerIDs{this, "TrackerIDs", {}, "System IDs of tracking subdetectors"};
