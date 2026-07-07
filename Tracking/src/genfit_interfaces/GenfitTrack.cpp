@@ -1063,22 +1063,43 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
 
     genfit::MeasuredStateOnPlane fittedState;
 
+    // getFittedState() averages the forward/backward Kalman states and can throw
+    // a genfit::Exception (e.g. an ill-conditioned covariance); guard the three
+    // calls so a bad track is treated as a failed fit instead of aborting the job.
     // trackState First Hit
-    fittedState = genfitTrack.getFittedState();
+    try {
+      fittedState = genfitTrack.getFittedState();
+    } catch (const genfit::Exception& e) {
+      std::cerr << "Exception retrieving fitted state: " << e.what() << std::endl;
+      m_edm4hepTrack.setChi2(-1);
+      m_edm4hepTrack.setNdf(-1);
+      m_trackWithFit.setChi2(-1);
+      m_trackWithFit.setNdf(-1);
+      return false;
+    }
     edm4hep::TrackState trackStateFirstHit = UpdateTrackState(fittedState, edm4hep::TrackState::AtFirstHit);
 
     // trackState lastHit
-    fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
+    try {
+      fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
+    } catch (const genfit::Exception& e) {
+      std::cerr << "Exception retrieving fitted state: " << e.what() << std::endl;
+      m_edm4hepTrack.setChi2(-1);
+      m_edm4hepTrack.setNdf(-1);
+      m_trackWithFit.setChi2(-1);
+      m_trackWithFit.setNdf(-1);
+      return false;
+    }
     edm4hep::TrackState trackStateLastHit = UpdateTrackState(fittedState, edm4hep::TrackState::AtLastHit);
 
     // Extrapolation to IP
     genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
     auto* fi = static_cast<genfit::KalmanFitterInfo*>(tp->getFitterInfo(trackRep));
-    fittedState = fi->getFittedState(true);
 
     try {
+      fittedState = fi->getFittedState(true);
       trackRep->extrapolateToLine(fittedState, TVector3(0, 0, 0), TVector3(0, 0, 1));
-    } catch (const std::exception& e) {
+    } catch (const genfit::Exception& e) {
       std::cerr << "Exception during extrapolation to IP: " << e.what() << std::endl;
 
       m_edm4hepTrack.setChi2(-1);
