@@ -92,4 +92,9 @@ set_test_env(${test_name})
 set_tests_properties(${test_name} PROPERTIES DEPENDS test_TrackFinder)
 set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackFitter")
 
+SET(test_name "test_TrackMerger")
+ADD_TEST(NAME ${test_name} COMMAND python3 test_track_merger.py)
+set_test_env(${test_name})
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
+
 #endif()
