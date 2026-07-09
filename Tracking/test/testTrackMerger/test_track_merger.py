@@ -4,8 +4,8 @@ Minimalistic test for the TrackMerger Gaudi processor.
 What it does
 ------------
 1. Creates a small EDM4hep input file containing:
-   - SiTracksCT     : 2 tracks
-   - ClupatraTracks : 2 tracks
+   - InnerTracks : 2 tracks
+   - OuterTracks : 2 tracks
 
    Track pair 0 is set up to MATCH  (|d0_diff| <= 0.5, |z0_diff| <= 2.5).
    Track pair 1 is set up to NOT match (large d0/z0 offsets).
@@ -33,8 +33,8 @@ from edm4hep import TrackState as TS
 # ---------------------------------------------------------------------------
 # Constants that mirror the TrackMerger defaults
 # ---------------------------------------------------------------------------
-SI_COLL = "SiTracksCT"
-CLU_COLL = "ClupatraTracks"
+INNER_COLL = "InnerTracks"
+OUTER_COLL = "OuterTracks"
 OUT_COLL = "MyCandidateMergedTracks"
 
 # Match thresholds (from TrackMerger.cpp)
@@ -77,28 +77,28 @@ def write_input_file(path: str) -> None:
 
     frame = podio.Frame()
 
-    si_tracks = edm4hep.TrackCollection()
-    clu_tracks = edm4hep.TrackCollection()
+    inner_tracks = edm4hep.TrackCollection()
+    outer_tracks = edm4hep.TrackCollection()
 
-    si_hits = edm4hep.TrackerHit3DCollection()
-    clu_hits = edm4hep.TrackerHit3DCollection()
+    inner_hits = edm4hep.TrackerHit3DCollection()
+    outer_hits = edm4hep.TrackerHit3DCollection()
 
     # --- Pair 0: should MATCH ---
-    # SiTrack needs AtLastHit; CluTrack needs AtFirstHit
+    # Inner track needs AtLastHit; Outer track needs AtFirstHit
     # Using identical d0/z0 -> diff = 0, well within tolerance
     d0_match, z0_match = 1.0, 5.0
-    add_track(si_tracks, si_hits, TS.AtLastHit, d0_match, z0_match)
-    add_track(clu_tracks, clu_hits, TS.AtFirstHit, d0_match, z0_match)
+    add_track(inner_tracks, inner_hits, TS.AtLastHit, d0_match, z0_match)
+    add_track(outer_tracks, outer_hits, TS.AtFirstHit, d0_match, z0_match)
 
     # --- Pair 1: should NOT match ---
     # Offsets deliberately exceed both thresholds
-    add_track(si_tracks, si_hits, TS.AtLastHit, 10.0, 100.0)
-    add_track(clu_tracks, clu_hits, TS.AtFirstHit, 50.0, 500.0)
+    add_track(inner_tracks, inner_hits, TS.AtLastHit, 10.0, 100.0)
+    add_track(outer_tracks, outer_hits, TS.AtFirstHit, 50.0, 500.0)
 
-    frame.put(si_tracks, SI_COLL)
-    frame.put(clu_tracks, CLU_COLL)
-    frame.put(si_hits, "SiHits")
-    frame.put(clu_hits, "CluHits")
+    frame.put(inner_tracks, INNER_COLL)
+    frame.put(outer_tracks, OUTER_COLL)
+    frame.put(inner_hits, "InnerHits")
+    frame.put(outer_hits, "OuterHits")
 
     writer.write_frame(frame, "events")
     writer.finish()
@@ -117,10 +117,10 @@ iosvc.Input  = "{input}"
 iosvc.Output = "{output}"
 
 merger = TrackMerger("TrackMerger",
-    InputInnerTracks  = "{si_coll}",
-    InputOuterTracks = "{clu_coll}",
-    OutTracks      = "{out_coll}",
-    Greedy         = True,
+    InputInnerTracks = "{inner_coll}",
+    InputOuterTracks = "{outer_coll}",
+    OutTracks         = "{out_coll}",
+    Greedy            = True,
 )
 
 ApplicationMgr(
@@ -136,8 +136,8 @@ def write_steering_file(path: str, input_file: str, output_file: str) -> None:
     content = STEERING_TEMPLATE.format(
         input=input_file,
         output=output_file,
-        si_coll=SI_COLL,
-        clu_coll=CLU_COLL,
+        inner_coll=INNER_COLL,
+        outer_coll=OUTER_COLL,
         out_coll=OUT_COLL,
     )
     Path(path).write_text(content)
@@ -187,14 +187,14 @@ def check_output(output_file: str) -> None:
     # --- the merged track must link back to both parent tracks ---
     parent_tracks = list(merged_track.getTracks())
     assert len(parent_tracks) == 2, (
-        f"Merged track should carry 2 sub-tracks (SiTrack + CluTrack), got {len(parent_tracks)}"
+        f"Merged track should carry 2 sub-tracks (inner + outer), got {len(parent_tracks)}"
     )
 
     # --- it must aggregate hits from both parents ---
     total_parent_hits = sum(len(list(p.getTrackerHits())) for p in parent_tracks)
     merged_hits = len(list(merged_track.getTrackerHits()))
     assert merged_hits == total_parent_hits, (
-        f"Merged track should have {total_parent_hits} hits (1 from Si + 1 from Clu), "
+        f"Merged track should have {total_parent_hits} hits (1 from inner + 1 from outer), "
         f"got {merged_hits}"
     )
 
