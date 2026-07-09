@@ -44,6 +44,25 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
 
   Gaudi::Property<bool> m_greedy{this, "Greedy", true, "If true, each track is used only once."};
 
+  // Per-parameter matching tolerances. A negative value disables that parameter for matching,
+  // i.e. it is not considered when deciding whether two tracks belong together.
+  // Defaults reproduce the original matching criterion: only D0 and Z0 are considered.
+  Gaudi::Property<float> m_d0Tolerance{
+      this, "D0Tolerance", 0.5f,
+      "Maximum allowed |D0(inner) - D0(outer)| for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_z0Tolerance{
+      this, "Z0Tolerance", 2.5f,
+      "Maximum allowed |Z0(inner) - Z0(outer)| for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_phiTolerance{
+      this, "PhiTolerance", -1.f,
+      "Maximum allowed |phi(inner) - phi(outer)| for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_omegaTolerance{
+      this, "OmegaTolerance", -1.f,
+      "Maximum allowed |omega(inner) - omega(outer)| for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_tanLambdaTolerance{
+      this, "TanLambdaTolerance", -1.f,
+      "Maximum allowed |tanLambda(inner) - tanLambda(outer)| for a match. Negative disables this criterion."};
+
   TrackColl operator()(const TrackColl& inputInnerTracks, const TrackColl& inputOuterTracks) const override {
     auto outTracks = TrackColl();
 
@@ -77,8 +96,8 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
         // compare trackInner and trackOuter at their respective track states (Inner: last hit, Outer: first hit)
         // to determine if they likely originate from the same particle
         if (isMatch(trackInner, TS::AtLastHit, trackOuter, TS::AtFirstHit)) {
-          debug() << fmt::format("  [MATCH] Inner track {} matched with Outer track {}. Creating merged track.",
-                                 iInner, iOuter)
+          debug() << fmt::format("  [MATCH] Inner track {} matched with Outer track {}. Creating merged track.", iInner,
+                                 iOuter)
                   << endmsg;
 
           auto newTrack = outTracks.create();
@@ -125,27 +144,35 @@ private:
       return false;
     }
 
-    // Define matching criteria based on d0 and z0 differences
+    // Define matching criteria based on differences of the individual track parameters.
+    // Parameters whose tolerance is negative are not considered (always pass).
     const float d0_diff = std::abs(ts1->D0 - ts2->D0);
     const float z0_diff = std::abs(ts1->Z0 - ts2->Z0);
-    const bool match = (d0_diff <= 0.5f && z0_diff <= 2.5f);
+    const float phi_diff = std::abs(ts1->phi - ts2->phi);
+    const float omega_diff = std::abs(ts1->omega - ts2->omega);
+    const float tanLambda_diff = std::abs(ts1->tanLambda - ts2->tanLambda);
 
-    debug() << fmt::format("    Comparing Loc {} vs {}: d0_diff={:.4f}, z0_diff={:.4f} -> Match: {}", loc1, loc2,
-                           d0_diff, z0_diff, match)
+    const bool match = withinTolerance(d0_diff, m_d0Tolerance) && withinTolerance(z0_diff, m_z0Tolerance) &&
+                       withinTolerance(phi_diff, m_phiTolerance) && withinTolerance(omega_diff, m_omegaTolerance) &&
+                       withinTolerance(tanLambda_diff, m_tanLambdaTolerance);
+
+    debug() << fmt::format("    Comparing Loc {} vs {}: d0_diff={:.4f}, z0_diff={:.4f}, phi_diff={:.4f}, "
+                           "omega_diff={:.4f}, tanLambda_diff={:.4f} -> Match: {}",
+                           loc1, loc2, d0_diff, z0_diff, phi_diff, omega_diff, tanLambda_diff, match)
             << endmsg;
 
     return match;
   }
 
-  std::optional<const TS> getTrackState(const Track& track, const int loc) const {
-    const auto& trackStates = track.getTrackStates();
+  // A negative tolerance means the corresponding parameter is not considered for matching.
+  static bool withinTolerance(float diff, float tolerance) { return tolerance < 0.f || diff <= tolerance; }
 
-    if (auto it = std::ranges::find(trackStates, loc, &TS::location); it != trackStates.end()) {
-      return *it;
-    } else {
+  std::optional<TS> getTrackState(Track track, const int loc) const {
+    auto ts = track.getTrackState(loc);
+    if (!ts.has_value()) {
       warning() << std::format("No track state at location {} found!", loc) << endmsg;
-      return std::nullopt;
     }
+    return ts;
   }
 };
 

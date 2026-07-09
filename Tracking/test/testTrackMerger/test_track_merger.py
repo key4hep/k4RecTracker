@@ -10,7 +10,10 @@ What it does
    Track pair 0 is set up to MATCH  (|d0_diff| <= 0.5, |z0_diff| <= 2.5).
    Track pair 1 is set up to NOT match (large d0/z0 offsets).
 
-2. Runs TrackMerger via a minimal Gaudi job (k4run).
+2. Runs TrackMerger via a minimal Gaudi job (k4run), explicitly setting all 5
+   per-parameter tolerances (D0Tolerance, Z0Tolerance, PhiTolerance,
+   OmegaTolerance, TanLambdaTolerance) to exercise their configurability from
+   the steering file.
 
 3. Reads the output file and asserts that exactly 1 merged track was produced,
    that it carries hits from both parent tracks, and that it links back to both
@@ -37,9 +40,13 @@ INNER_COLL = "InnerTracks"
 OUTER_COLL = "OuterTracks"
 OUT_COLL = "MyCandidateMergedTracks"
 
-# Match thresholds (from TrackMerger.cpp)
+# Match thresholds (mirroring TrackMerger.cpp defaults).
+# Negative disables that parameter for matching.
 D0_TOL = 0.5
 Z0_TOL = 2.5
+PHI_TOL = -1.0
+OMEGA_TOL = -1.0
+TAN_LAMBDA_TOL = -1.0
 
 
 # ---------------------------------------------------------------------------
@@ -117,10 +124,15 @@ iosvc.Input  = "{input}"
 iosvc.Output = "{output}"
 
 merger = TrackMerger("TrackMerger",
-    InputInnerTracks = "{inner_coll}",
-    InputOuterTracks = "{outer_coll}",
-    OutTracks         = "{out_coll}",
-    Greedy            = True,
+    InputInnerTracks   = "{inner_coll}",
+    InputOuterTracks   = "{outer_coll}",
+    OutTracks          = "{out_coll}",
+    Greedy             = True,
+    D0Tolerance        = {d0_tol},
+    Z0Tolerance        = {z0_tol},
+    PhiTolerance       = {phi_tol},
+    OmegaTolerance     = {omega_tol},
+    TanLambdaTolerance = {tan_lambda_tol},
 )
 
 ApplicationMgr(
@@ -139,6 +151,11 @@ def write_steering_file(path: str, input_file: str, output_file: str) -> None:
         inner_coll=INNER_COLL,
         outer_coll=OUTER_COLL,
         out_coll=OUT_COLL,
+        d0_tol=D0_TOL,
+        z0_tol=Z0_TOL,
+        phi_tol=PHI_TOL,
+        omega_tol=OMEGA_TOL,
+        tan_lambda_tol=TAN_LAMBDA_TOL,
     )
     Path(path).write_text(content)
     print(f"[setup] Wrote steering file: {path}")
