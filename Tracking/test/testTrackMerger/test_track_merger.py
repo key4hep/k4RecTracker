@@ -117,8 +117,8 @@ iosvc.Input  = "{input}"
 iosvc.Output = "{output}"
 
 merger = TrackMerger("TrackMerger",
-    InputSiTracks  = "{si_coll}",
-    InputCluTracks = "{clu_coll}",
+    InputInnerTracks  = "{si_coll}",
+    InputOuterTracks = "{clu_coll}",
     OutTracks      = "{out_coll}",
     Greedy         = True,
 )

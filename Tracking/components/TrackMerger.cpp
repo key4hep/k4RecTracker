@@ -37,77 +37,79 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
   TrackMerger(const std::string& name, ISvcLocator* svcLoc)
       : Transformer(name, svcLoc,
                     {
-                        KeyValue("InputSiTracks", {"SiTracksCT"}),
-                        KeyValue("InputCluTracks", {"ClupatraTracks"}),
+                        KeyValue("InputInnerTracks", {"InnerTracks"}),
+                        KeyValue("InputOuterTracks", {"OuterTracks"}),
                     },
                     {KeyValue("OutTracks", {"MyCandidateMergedTracks"})}) {}
 
   Gaudi::Property<bool> m_greedy{this, "Greedy", true, "If true, each track is used only once."};
 
-  TrackColl operator()(const TrackColl& inSiTracks, const TrackColl& inCluTracks) const override {
+  TrackColl operator()(const TrackColl& inputInnerTracks, const TrackColl& inputOuterTracks) const override {
     auto outTracks = TrackColl();
 
-    debug() << "Received SiTracks collection with " << inSiTracks.size() << " tracks" << endmsg;
-    debug() << "Received ClupatraTracks collection with " << inCluTracks.size() << " tracks" << endmsg;
+    debug() << "Received InnerTracks collection with " << inputInnerTracks.size() << " tracks" << endmsg;
+    debug() << "Received OuterTracks collection with " << inputOuterTracks.size() << " tracks" << endmsg;
 
     // 1. Check if both input collections have at least one entry
-    if (inSiTracks.empty() || inCluTracks.empty()) {
-      warning() << "One of the input collections is empty. SiTracks: " << inSiTracks.size()
-                << ", CluTracks: " << inCluTracks.size() << ". Skipping track merging for this event." << endmsg;
+    if (inputInnerTracks.empty() || inputOuterTracks.empty()) {
+      warning() << "One of the input collections is empty. InnerTracks: " << inputInnerTracks.size()
+                << ", OuterTracks: " << inputOuterTracks.size() << ". Skipping track merging for this event." << endmsg;
       return outTracks; // Returns empty collection
     }
 
-    // Flag to ensure each Clupatra track is only merged once
-    std::vector<bool> cluUsed(inCluTracks.size(), false);
+    // Flag to ensure each outer track is only merged once
+    std::vector<bool> usedOuterTracks(inputOuterTracks.size(), false);
 
-    // Loop over Silicon tracks with index for debug output
-    for (size_t iSi = 0; iSi < inSiTracks.size(); iSi++) {
-      const auto trackSi = inSiTracks[iSi];
+    // Loop over inner tracks with index for debug output
+    for (size_t iInner = 0; iInner < inputInnerTracks.size(); iInner++) {
+      const auto trackInner = inputInnerTracks[iInner];
       bool matched = false;
 
-      // Explicit index loop for Clupatra tracks to manage 'cluUsed' and debug indexing
+      // Explicit index loop for outer tracks to manage 'usedOuterTracks' and debug indexing
       // LOGIC NOTE: This algorithm accepts the FIRST match found within tolerances.
       // It does not perform a global chi2 minimization or search for the "best" match.
-      for (size_t iClu = 0; iClu < inCluTracks.size(); iClu++) {
-        if (m_greedy && cluUsed[iClu])
+      for (size_t iOuter = 0; iOuter < inputOuterTracks.size(); iOuter++) {
+        if (m_greedy && usedOuterTracks[iOuter])
           continue;
 
-        const auto trackClu = inCluTracks[iClu];
+        const auto trackOuter = inputOuterTracks[iOuter];
 
-        // compare trackSi and trackClu at their respective track states (Si: last hit (closest to TPC), Clu: first hit
-        // (closest to Si)) to determine if they likely originate from the same particle
-        if (isMatch(trackSi, TS::AtLastHit, trackClu, TS::AtFirstHit)) {
-          debug() << fmt::format("  [MATCH] SiTrack {} matched with CluTrack {}. Creating merged track.", iSi, iClu)
+        // compare trackInner and trackOuter at their respective track states (Inner: last hit, Outer: first hit)
+        // to determine if they likely originate from the same particle
+        if (isMatch(trackInner, TS::AtLastHit, trackOuter, TS::AtFirstHit)) {
+          debug() << fmt::format("  [MATCH] Inner track {} matched with Outer track {}. Creating merged track.",
+                                 iInner, iOuter)
                   << endmsg;
 
           auto newTrack = outTracks.create();
 
-          // Combine hits from both sub-detectors
-          for (const auto& hit : trackSi.getTrackerHits())
+          // Combine hits from both tracks
+          for (const auto& hit : trackInner.getTrackerHits())
             newTrack.addToTrackerHits(hit);
-          for (const auto& hit : trackClu.getTrackerHits())
+          for (const auto& hit : trackOuter.getTrackerHits())
             newTrack.addToTrackerHits(hit);
 
           // Maintain navigation/provenance by linking parent tracks
-          newTrack.addToTracks(trackSi);
-          newTrack.addToTracks(trackClu);
+          newTrack.addToTracks(trackInner);
+          newTrack.addToTracks(trackOuter);
 
           matched = true;
           if (m_greedy) {
-            cluUsed[iClu] = true;
-            break; // Exit inner loop: current SiTrack is satisfied
+            usedOuterTracks[iOuter] = true;
+            break; // Exit inner loop: current inner track is satisfied
           }
         }
       }
 
       if (!matched) {
-        debug() << fmt::format("  [INFO] SiTrack {} found no matching Clupatra track within tolerances.", iSi)
+        debug() << fmt::format("  [INFO] Inner track {} found no matching outer track within tolerances.", iInner)
                 << endmsg;
       }
     }
 
-    debug() << fmt::format("Event processing complete. Created {} merged tracks from {} SiTracks and {} CluTracks.",
-                           outTracks.size(), inSiTracks.size(), inCluTracks.size())
+    debug() << fmt::format(
+                   "Event processing complete. Created {} merged tracks from {} InnerTracks and {} OuterTracks.",
+                   outTracks.size(), inputInnerTracks.size(), inputOuterTracks.size())
             << endmsg;
     return outTracks;
   }
