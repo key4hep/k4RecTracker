@@ -66,7 +66,7 @@ public:
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
 
 /** @brief Find simHits from different MCParticles. If two simHits originate from the same MCParticle (eg. have shared parents), return only the one from the MCParticle further up the family tree. */
-// std::unordered_set<const VTXdigi_tools::SimHitWrapper*>  FindSimHitsWithIndividualParents(const std::vector<SimHitWrapper>& simHits); 
+// std::unordered_set<const VTXdigi_tools::SimHitWrapper*>  FindSimHitsWithIndividualParents(const std::vector<SimHitWrapper>& simHits);
 
 /* -- Pixel -- */
 
@@ -91,13 +91,13 @@ struct Cluster {
   std::vector<const Pixel*> pixels; // raw pointer into HitMap::Pixels. Valid as long as the HitMap is not modified after clustering. See HitMap::ComputeClusters() for details.
   std::unordered_set<const SimHitWrapper*> simHits;
   float charge = 0.f;
-  
+
   inline int GetSize() const { return pixels.size(); };
-  int GetSize(const int axis) const; // axis = 0 for u, 1 for v. 
+  int GetSize(const int axis) const; // axis = 0 for u, 1 for v.
 
   /** @brief Compute the center position of a cluster via charge-weighed center of gravity in terms of pixel indices */
   std::pair<float, float> ComputePos() const;
-  
+
   /** @brief Compute the uncertainty of the cluster position via charge-weighed center of gravity in terms of pixel indices */
   std::pair<float, float> ComputePosUncertainty_ChargeWeighted() const;
   std::pair<float, float> ComputePosUncertainty_ChargeWeighted(const std::pair<float, float>& clusterPos) const;
@@ -105,6 +105,7 @@ struct Cluster {
 
 /** @brief Get the indices of all direct neighbors of a pixel */
 std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
+std::array<std::pair<int, int>, 8> GetNeighbors(const std::pair<int, int>& i_uv);
 
 /* -- HitMap -- */
 
@@ -120,7 +121,7 @@ using PixelMap = std::unordered_map<std::pair<int, int>, Pixel, Hash_PairInt>;
  * @note uses a std::unordered_map to only store pixels that have charge, which is more memory efficient for large pixel counts and low occupancy. */
 class HitMap {
   /* I tried implementing a vector that contains every pixel, but for large pixel counts this is very memory-inefficient. Instead, this class uses a std::map to only store pixels that have charge. This is more memory efficient for sparse hits, with O(1) simHit/sensor/event this is at least a factor 100 faster that the vector approach. Maybe not the case to ttbar run with O(0.1%) pixel occupancy. */
-  
+
   PixelMap m_pixels; // hit pixels, stored by value
   std::pair<size_t, size_t> m_pixCount; // size of the sensor in pixels
 
@@ -130,8 +131,12 @@ public:
   /** @brief Add charge and a simHit to a pixel */
   void FillCharge(std::pair<int, int> i_uv, float charge, const SimHitWrapper& simHitWrapper);
 
+  /** @brief For each pixel with charge, vary the charge by an amount drawn from the supplied random generator */
   void ApplyChargeSmearing(const Rndm::Numbers& rndm_charge);
-  void ApplyThreshold(const float threshold);
+
+  /** @brief Erase pixels below threshold. If rndm_threshold is given, a per-pixel Gaussian
+   *  dispersion is drawn from it and added to the threshold before comparison. */
+  void ApplyThreshold(const float threshold, const Rndm::Numbers* rndm_threshold = nullptr);
 
   /** @brief Get one pixel's collected charge */
   float GetCharge(std::pair<int, int> i_uv) const;
@@ -145,7 +150,7 @@ public:
   /** @brief Return the number of pixels with charge */
   inline int GetTotalPixelsWithCharge() const { return m_pixels.size(); };
 
-  /** @brief Clusterize hit pixels in the HitMap, using direct neighbors 
+  /** @brief Clusterize hit pixels in the HitMap, using direct neighbors
    * @note Returns Cluster objects whose `pixels` members hold raw pointers into m_pixels. This is safe because ComputeClusters() is const and called only after all FillCharge() insertions are complete -> the map will not rehash while the returned Clusters are alive. Do not call FillCharge() on this HitMap after calling ComputeClusters(). */
   std::vector<Cluster> ComputeClusters() const;
 
@@ -205,8 +210,8 @@ std::pair<int, int> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const 
  *  @note Assumption: each layer has only 1 type if sensor */
 std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const std::array<int, 3>& binCount, const std::pair<float, float>& pixelPitch, const std::array<float, 3>& activeVolumeDimensions);
 
-/** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,w) 
- * 
+/** @brief Compute the center position of a given pixel (i_u,i_v) in sensor-local coordinates (u,v,w)
+ *
  * @note The w coordinate is set to depletedRegionDepthCenter. 0 for center, +25 for sensor surface, +20 for TPSCo 65nm maps.
 */
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter);
@@ -214,13 +219,13 @@ dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pix
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch);
 
 /** @brief Compute the position of a given (pixel-)index (i_u,i_v) in sensor-local coordinates (u,v,0) .
- * @note index 0 indicates the center of the pixel, index -0.5 the lower edge and +0.5 the upper edge.  
+ * @note index 0 indicates the center of the pixel, index -0.5 the lower edge and +0.5 the upper edge.
  * @note Does not check if the position is within the sensor bounds!
  * @note The w coordinate is set to depletedRegionDepthCenter. 0 for center, +25 for sensor surface, +20 for TPSCo 65nm maps.
  */
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter);
 /** @brief Compute the position of a given (pixel-)index (i_u,i_v) in sensor-local coordinates (u,v,0) .
- * @note index 0 indicates the center of the pixel, index -0.5 the lower edge and +0.5 the upper edge.  
+ * @note index 0 indicates the center of the pixel, index -0.5 the lower edge and +0.5 the upper edge.
  * @note Does not check if the position is within the sensor bounds!
  */
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch);

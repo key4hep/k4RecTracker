@@ -102,7 +102,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
     if (m_smearing_charge.value() > 0.f)
       hitMap.ApplyChargeSmearing(m_rndm_charge);
     if (m_threshold.value() > 0.f)
-      hitMap.ApplyThreshold(m_threshold.value());
+      hitMap.ApplyThreshold(m_threshold.value(), m_smearing_threshold.value() > 0.f ? &m_rndm_threshold : nullptr);
 
     std::vector<VTXdigi_tools::Cluster> clusters = Clusterize(hitMap);
 
@@ -132,8 +132,8 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (m_smearing_charge.value() < 0.f)
     throw GaudiException("Charge smearing sigma " + std::to_string(m_smearing_charge.value()) + " e- is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
-  if (m_threshold.value() <= 5 * m_smearing_charge.value())
-    warning() << "Threshold " << m_threshold.value() << " e- is less than 5 times the charge smearing sigma " << m_smearing_charge.value() << " e-. This digitiser does only apply smearing to pixels that collect any charge from simHits, so it cannot simulate random firing pixels. (doing this by drawing a noise for every pixel in the detector for every event would be INCREDIBLY slow. A work-around to simulate random pixels firing might be implemented in the future)." << endmsg;
+  if (m_threshold.value()*m_threshold.value() <= sqrt(25*m_smearing_charge.value()*m_smearing_charge.value() + 25*m_smearing_threshold.value()*m_smearing_threshold.value()))
+    warning() << "Threshold " << m_threshold.value() << " e- is less than 5 times the charge smearing and threshold dispersion sigma: sqrt(" << m_smearing_charge.value() << "^2 + " << m_smearing_threshold.value() << "^2) e-. This digitiser only applies smearing to pixels that have collected charge from simHits (a tiny bit is enough), so it does not simulate random firing of pixels. (doing this by drawing a noise for every pixel in the detector for every event would be INCREDIBLY slow. A work-around to simulate random pixels firing might be implemented in another algorith)." << endmsg;
   if (m_smearing_time.value() < 0.f)
     throw GaudiException("Time smearing sigma " + std::to_string(m_smearing_time.value()) + " ns is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
@@ -150,8 +150,11 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (!m_randomService)
     throw GaudiException("Unable to get RndmGenSvc.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
+  // initialize random number generators
   if (m_rndm_charge.initialize(m_randomService, Rndm::Gauss(0., m_smearing_charge.value())).isFailure())
     throw GaudiException("Unable to initialize random number generator for charge smearing.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+  if (m_rndm_threshold.initialize(m_randomService, Rndm::Gauss(0., m_smearing_threshold.value())).isFailure())
+    throw GaudiException("Unable to initialize random number generator for threshold smearing.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
   if (m_rndm_time.initialize(m_randomService, Rndm::Gauss(0., m_smearing_time.value())).isFailure())
     throw GaudiException("Unable to initialize random number generator for time smearing.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 

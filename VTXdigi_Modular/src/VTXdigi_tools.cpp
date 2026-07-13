@@ -6,7 +6,7 @@ namespace VTXdigi_tools {
 SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simTrackerHit(simTrackerHit) {
   m_cellID = GetCellID_short(m_simTrackerHit);
 
-  m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * kChargePerkeV); // convert energy deposit (in keV) to number of electrons 
+  m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * kChargePerkeV); // convert energy deposit (in keV) to number of electrons
 
   m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
 }
@@ -25,7 +25,7 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 
 //   for (const auto* simHit : simHits) {
 //     // if no simHit in individualSimHits shares a parent with simHit, add simHit to individualSimHits
-    
+
 //     for (const auto* otherSimHit : individualSimHits) {
 //       const edm4hep::MCParticle& mcP = simHit->hitPtr()->getParticle();
 //       const edm4hep::MCParticle& otherMcP = otherSimHit->hitPtr()->getParticle();
@@ -85,7 +85,7 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 bool CreatedInGenerator(const edm4hep::MCParticle& mcParticle) {
   int32_t simulatorStatus = mcParticle.getSimulatorStatus();
   int mask_bit = edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
-  const int32_t mask = 1 << mask_bit; 
+  const int32_t mask = 1 << mask_bit;
 
   if ((simulatorStatus & mask) == 0) {
     return true; // bit is not set -> created in generator
@@ -108,7 +108,7 @@ TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::CellID& cellI
 
   /* rotate the local coordinate system st. sensor U is (1,0,0), V is (0,1,0) and normal vector is (0,0,1) */
   M.Multiply(sensorNormalRotation);
-  
+
   /* rotation is unitless, but need to convert translation from cm to mm (dd4hep::mm = 0.1) */
   double* transl = M.GetTranslation();
   transl[0] = transl[0] / dd4hep::mm;
@@ -144,7 +144,7 @@ dd4hep::DDSegmentation::CellID GetCellID_short(const dd4hep::DDSegmentation::Cel
 
 int GetLayer(const dd4hep::DDSegmentation::CellID& cellID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
   return static_cast<int>(cellIdDecoder->get(cellID, "layer"));
-} 
+}
 int GetLayer(const edm4hep::SimTrackerHit& simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
   return GetLayer(GetCellID_short(simTrackerHit), cellIdDecoder);
 }
@@ -163,7 +163,7 @@ int ComputeBinIndex(float x, float binX0, float binWidth, int binN) {
   if (binWidth <= 0.0) throw std::runtime_error("VTXdigi_tools::ComputeBinIndex(): binWidth must be positive");
 
   float relativePos = (x - binX0) / binWidth; // shift to [0, binN]
-  if (relativePos < 0.0f || relativePos > static_cast<float>(binN)) 
+  if (relativePos < 0.0f || relativePos > static_cast<float>(binN))
     return -1;
   if (relativePos == static_cast<float>(binN))
     return binN - 1; // include upper edge in last bin (makes sense for pixels)
@@ -181,7 +181,7 @@ float ComputeBinCenter(int i, float binX0, float binX1, int binN) {
   if (binX1 <= binX0) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): binX1 must be greater than binX0");
   if (i < 0 || i >= binN) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): bin index out of bounds");
 
-  const float binWidth = (binX1 - binX0) / static_cast<float>(binN);  
+  const float binWidth = (binX1 - binX0) / static_cast<float>(binN);
   return ComputeBinCenter(i, binX0, binWidth);
 } // ComputeBinCenter()
 
@@ -192,7 +192,7 @@ std::pair<int, int> ComputePixelIndices(const dd4hep::rec::Vector3D& pos, const 
     -length_u_half,
     pixelPitch.first,
     pixelCount.first);
-    
+
   const float length_v_half = 0.5 * pixelPitch.second * pixelCount.second;
   int i_v = ComputeBinIndex(
     pos.y(),
@@ -235,12 +235,12 @@ std::array<int, 3> ComputeInPixelIndices(const dd4hep::rec::Vector3D& pos, const
 
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
-  
+
   float u = (static_cast<float>(pixelIndex.first) + 0.5f) * pixelPitch.first - 0.5f * sensorLength.first; // in mm
   float v = (static_cast<float>(pixelIndex.second) + 0.5f) * pixelPitch.second - 0.5f * sensorLength.second;
   float w = depletedRegionDepthCenter;
-  
-  return dd4hep::rec::Vector3D(u, v, w); 
+
+  return dd4hep::rec::Vector3D(u, v, w);
 }
 
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pixelIndex, const std::pair<float, float> sensorLength, const std::pair<float, float> pixelPitch) {
@@ -249,12 +249,12 @@ dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<int, int> pix
 
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch, float depletedRegionDepthCenter) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
-  
+
   float u = (index.first + 0.5f) * pixelPitch.first - 0.5f * sensorLength.first; // in mm. Add 0.5*pixelPitch to shift from pixel edge to center, since index 0 is defined as the center of the pixel.
   float v = (index.second + 0.5f) * pixelPitch.second - 0.5f * sensorLength.second;
   float w = depletedRegionDepthCenter;
-  
-  return dd4hep::rec::Vector3D(u, v, w); 
+
+  return dd4hep::rec::Vector3D(u, v, w);
 }
 
 dd4hep::rec::Vector3D ComputePosFromPixIndex_local(const std::pair<float, float> index, const std::pair<float, float> sensorLength,  const std::pair<float, float> pixelPitch) {
@@ -276,7 +276,7 @@ void HitMap::FillCharge(std::pair<int, int> i_uv, float charge, const SimHitWrap
 
   auto [iter, inserted] = m_pixels.try_emplace(i_uv, Pixel(i_uv));
   iter->second.charge += charge;
-  iter->second.simHits.insert(&simHitWrapper); 
+  iter->second.simHits.insert(&simHitWrapper);
 }
 
 void HitMap::ApplyChargeSmearing(const Rndm::Numbers& rndm_charge) {
@@ -287,10 +287,12 @@ void HitMap::ApplyChargeSmearing(const Rndm::Numbers& rndm_charge) {
   }
 }
 
-void HitMap::ApplyThreshold(const float threshold) {
+void HitMap::ApplyThreshold(const float threshold, const Rndm::Numbers* rndm_threshold) {
   auto hitIter = m_pixels.begin();
   while (hitIter != m_pixels.end()) {
-    if (hitIter->second.charge < threshold)
+    // optionally disperse the threshold per pixel (drawn per event per sensor per pixel)
+    const float pixThreshold = rndm_threshold ? threshold + static_cast<float>((*rndm_threshold)()) : threshold;
+    if (hitIter->second.charge < pixThreshold)
       hitIter = m_pixels.erase(hitIter); // erase returns the iterator to the next element, so this is safe to do while iterating
     else
       ++hitIter;
@@ -315,7 +317,7 @@ float HitMap::GetTotalCharge() const {
   return totalCharge;
 }
 
-inline bool HitMap::_OutOfBounds(std::pair<int, int> i_uv) const { 
+inline bool HitMap::_OutOfBounds(std::pair<int, int> i_uv) const {
   return (
     i_uv.first < 0
     || i_uv.first >= static_cast<int>(m_pixCount.first)
@@ -386,6 +388,19 @@ std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>&
     {i_uv.first, i_uv.second + 1}  // up
   }};
 }
+std::array<std::pair<int, int>, 8> GetNeighbors(const std::pair<int, int>& i_uv) {
+  return {{
+    {i_uv.first - 1, i_uv.second}, // left
+    {i_uv.first - 1, i_uv.second + 1}, // upper left
+    {i_uv.first, i_uv.second + 1}, // up
+    {i_uv.first + 1, i_uv.second + 1}, // upper right
+    {i_uv.first + 1, i_uv.second}, // right
+    {i_uv.first + 1, i_uv.second - 1}, // lower right
+    {i_uv.first, i_uv.second - 1}, // lower
+    {i_uv.first - 1, i_uv.second - 1}, // lower left
+  }};
+}
+
 
 std::vector<Cluster> HitMap::ComputeClusters_singePixels() const {
   std::vector<Cluster> clusters;
@@ -409,7 +424,7 @@ std::vector<Cluster> HitMap::ComputeClusters() const {
 
   std::vector<Cluster> clusters;
   std::unordered_set<std::pair<int,int>, Hash_PairInt> visited;
-  
+
   for (const auto& p : m_pixels) {
     const std::pair<int,int> seed_uv = p.first;
     if (visited.contains(seed_uv))
@@ -417,7 +432,7 @@ std::vector<Cluster> HitMap::ComputeClusters() const {
 
     clusters.emplace_back(); // create new cluster
     clusters.back().pixels.reserve(10); // 10 should include >90% of clusters. i guess.
-    
+
     std::queue<std::pair<int,int>> queue;
     queue.push(seed_uv);
     visited.insert(seed_uv);
@@ -425,7 +440,7 @@ std::vector<Cluster> HitMap::ComputeClusters() const {
     while (!queue.empty()) {
       const std::pair<int,int> current_uv = queue.front();
       queue.pop();
-      
+
       /* Add pixl to cluster */
       const Pixel* pixel = &(m_pixels.at(current_uv)); // get pixel pointer from map
       clusters.back().pixels.push_back(pixel);
@@ -434,7 +449,8 @@ std::vector<Cluster> HitMap::ComputeClusters() const {
         clusters.back().simHits.insert(simHitWrapper);
       }
       /* Add all neighboring pixels to queue */
-      for (const auto& neighbor_uv : GetDirectNeighbors(current_uv)) {
+      // for (const auto& neighbor_uv : GetDirectNeighbors(current_uv)) {
+      for (const auto& neighbor_uv : GetNeighbors(current_uv)) {
         if (!m_pixels.contains(neighbor_uv))
           continue;
         if (visited.contains(neighbor_uv))
@@ -453,7 +469,7 @@ std::vector<Cluster> HitMap::ComputeClusters() const {
 bool ToolTest() {
   std::cout << " | Running VTXdigi tool tests" << std::endl;
   bool passed = true;
-  
+
   std::cout << " | VTXdigi_tools::ComputeBinIndex()";
   {
     bool passedInternal = true;
@@ -491,7 +507,7 @@ bool ToolTest() {
       dd4hep::rec::Vector3D(-5.0f, -10.0f, 0.0f), // edge tests
       dd4hep::rec::Vector3D(5.0f, 10.0f, 0.0f),
       dd4hep::rec::Vector3D(-5.1f, 0.0f, 0.0f), // out of bounds tests
-      dd4hep::rec::Vector3D(5.1f, 0.0f, 0.0f), 
+      dd4hep::rec::Vector3D(5.1f, 0.0f, 0.0f),
       dd4hep::rec::Vector3D(0.0f, -10.1f, 0.0f),
       dd4hep::rec::Vector3D(0.0f, 10.1f, 0.0f),
       dd4hep::rec::Vector3D(5.1f, 10.1f, 0.0f),
@@ -548,7 +564,7 @@ bool ToolTest() {
       dd4hep::rec::Vector3D( -5.5, -11.0, 0.0 ),
       dd4hep::rec::Vector3D( 5.5, 11.0, 0.0 ),
     }};
-    
+
     for (size_t i = 0; i < inputs.size(); ++i) {
       dd4hep::rec::Vector3D result = ComputePosFromPixIndex_local(inputs.at(i), sensorLength, pixelPitch);
       if (std::abs(result.x() - expectedOutputs[i].x()) > 1e-6 || std::abs(result.y() - expectedOutputs[i].y()) > 1e-6) {
@@ -595,7 +611,7 @@ bool ToolTest() {
       dd4hep::rec::Vector3D( -5.5, -11.0, 0.0 ),
       dd4hep::rec::Vector3D( 5.5, 11.0, 0.0 ),
     }};
-    
+
     for (size_t i = 0; i < inputs.size(); ++i) {
       dd4hep::rec::Vector3D result = ComputePosFromPixIndex_local(inputs.at(i), sensorLength, pixelPitch);
       if (std::abs(result.x() - expectedOutputs[i].x()) > 1e-6 || std::abs(result.y() - expectedOutputs[i].y()) > 1e-6) {
@@ -616,7 +632,7 @@ bool ToolTest() {
     bool passedInternal = true;
 
     const std::array<int, 3> binCount = { 4, 4, 4 };
-    const std::pair<float, float> pixelPitch = { 1.0f, 2.0f }; // bin-width is 0.25 
+    const std::pair<float, float> pixelPitch = { 1.0f, 2.0f }; // bin-width is 0.25
 
     const std::array<float, 3> activeVolumeDimensions = { 10.0f, 20.0f, 1.0f };
 
@@ -680,7 +696,7 @@ bool ToolTest() {
       passedInternal = false;
     }
     if (hitMap.GetTotalCharge() != 3) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 3, got " << hitMap.GetTotalCharge() << std::endl; 
+      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 3, got " << hitMap.GetTotalCharge() << std::endl;
       passedInternal = false;
     }
 
@@ -691,7 +707,7 @@ bool ToolTest() {
       passedInternal = false;
     }
     if (hitMap.GetTotalCharge() != 103) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 103, got " << hitMap.GetTotalCharge() << std::endl; 
+      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 103, got " << hitMap.GetTotalCharge() << std::endl;
       passedInternal = false;
     }
 
@@ -723,10 +739,10 @@ bool ToolTest() {
     hitMap.Reset();
 
     if (hitMap.GetTotalCharge() != 0) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 0 after Reset(), got " << hitMap.GetTotalCharge() << std::endl; 
+      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 0 after Reset(), got " << hitMap.GetTotalCharge() << std::endl;
       passedInternal = false;
     }
-    
+
     if (passedInternal)
       std::cout << " - PASSED" << std::endl;
     passed = passed && passedInternal;
