@@ -305,13 +305,12 @@ struct GenfitTrackFitter final
   std::tuple<edm4hep::TrackCollection, edm4hep::TrackCollection, edm4hep::TrackerHitPlaneCollection>
   operator()(const edm4hep::TrackCollection& tracks_input) const override {
 
-   debug() << "Event number: " << event_counter++ << endmsg;
+    debug() << "Event number: " << event_counter++ << endmsg;
 
     // These collections store the output of the fit
     edm4hep::TrackCollection FittedTracks;
     edm4hep::TrackCollection FittedTracksWithFilteredHits;
     edm4hep::TrackerHitPlaneCollection FittedHits;
-
 
     // Loop over the tracks created by the pattern recognition step
     for (const auto& track : tracks_input) {
