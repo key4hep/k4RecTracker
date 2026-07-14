@@ -66,32 +66,31 @@ PlanarMeasurement::PlanarMeasurement(const edm4hep::TrackerHitPlane& hit, const 
 
   auto cellID0 = hit.getCellID();
 
-  // if (debug_lvl > 0) {
+  if (debug_lvl > 0) {
 
-  //   std::cout << "\n========== Planar Measurement Debug ==========\n";
+    std::cout << "\n========== Planar Measurement Debug ==========\n";
 
-  //   std::cout << "Global position [cm] : (" << globalPos.X() << ", " << globalPos.Y() << ", " << globalPos.Z() <<
-  //   ")\n";
+    std::cout << "Global position [cm] : (" << globalPos.X() << ", " << globalPos.Y() << ", " << globalPos.Z() << ")\n";
 
-  //   std::cout << "Origin [cm]          : (" << Origin.X() << ", " << Origin.Y() << ", " << Origin.Z() << ")\n";
+    std::cout << "Origin [cm]          : (" << Origin.X() << ", " << Origin.Y() << ", " << Origin.Z() << ")\n";
 
-  //   std::cout << "U direction          : (" << U.X() << ", " << U.Y() << ", " << U.Z() << ")\n";
+    std::cout << "U direction          : (" << U.X() << ", " << U.Y() << ", " << U.Z() << ")\n";
 
-  //   std::cout << "V direction          : (" << V.X() << ", " << V.Y() << ", " << V.Z() << ")\n\n";
+    std::cout << "V direction          : (" << V.X() << ", " << V.Y() << ", " << V.Z() << ")\n\n";
 
-  //   std::cout << "Local coordinates [cm]:\n";
-  //   rawHitCoords.Print();
+    std::cout << "Local coordinates [cm]:\n";
+    rawHitCoords.Print();
 
-  //   std::cout << "Covariance matrix [cm^2]:\n";
-  //   rawHitCov.Print();
+    std::cout << "Covariance matrix [cm^2]:\n";
+    rawHitCov.Print();
 
-  //   std::cout << "\nIdentifiers:\n";
-  //   std::cout << "  detId   : " << det_idx << "\n";
-  //   std::cout << "  hitID   : " << hit_idx << "\n";
-  //   std::cout << "  planeID : " << cellID0 << "\n";
+    std::cout << "\nIdentifiers:\n";
+    std::cout << "  detId   : " << det_idx << "\n";
+    std::cout << "  hitID   : " << hit_idx << "\n";
+    std::cout << "  planeID : " << cellID0 << "\n";
 
-  //   std::cout << "==============================================\n\n";
-  // }
+    std::cout << "==============================================\n\n";
+  }
 
   // Create genfit::PlanarMeasurement
 

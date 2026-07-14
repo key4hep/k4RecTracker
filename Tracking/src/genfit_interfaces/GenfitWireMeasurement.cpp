@@ -121,36 +121,36 @@ WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit,
   //   construct it is also released
   m_genfitHit = new genfit::WirePointMeasurement(rawHitCoords, rawHitCov, det_idx, hit_idx, nullptr);
 
-  // if (debug_lvl > 0) {
+  if (debug_lvl > 0) {
 
-  //   std::cout << "\n========== Wire Measurement Debug ==========\n";
+    std::cout << "\n========== Wire Measurement Debug ==========\n";
 
-  //   std::cout << "Hit global position [cm]      : (" << position.X() << ", " << position.Y() << ", " << position.Z()
-  //             << ")\n";
+    std::cout << "Hit global position [cm]      : (" << position.X() << ", " << position.Y() << ", " << position.Z()
+              << ")\n";
 
-  //   std::cout << "Distance to wire [cm]         : " << distanceToWire << "  ±  " << distanceToWireError << "\n";
+    std::cout << "Distance to wire [cm]         : " << distanceToWire << "  ±  " << distanceToWireError << "\n";
 
-  //   std::cout << "Position along wire error [cm]: " << positionAlongWireError << "\n";
+    std::cout << "Position along wire error [cm]: " << positionAlongWireError << "\n";
 
-  //   std::cout << "\nrawHitCoords (8D) [cm]: [ ";
-  //   for (int i = 0; i < rawHitCoords.GetNrows(); ++i) {
-  //     std::cout << rawHitCoords[i];
-  //     if (i != rawHitCoords.GetNrows() - 1)
-  //       std::cout << ", ";
-  //   }
-  //   std::cout << " ]\n";
+    std::cout << "\nrawHitCoords (8D) [cm]: [ ";
+    for (int i = 0; i < rawHitCoords.GetNrows(); ++i) {
+      std::cout << rawHitCoords[i];
+      if (i != rawHitCoords.GetNrows() - 1)
+        std::cout << ", ";
+    }
+    std::cout << " ]\n";
 
-  //   std::cout << "\nUncertainties [cm]:\n";
-  //   std::cout << "  Wire geometry sigma : " << sigmaWire << "\n";
-  //   std::cout << "  Drift distance sigma: " << distanceToWireError << "\n";
-  //   std::cout << "  z_reco sigma        : " << positionAlongWireError << "\n";
+    std::cout << "\nUncertainties [cm]:\n";
+    std::cout << "  Wire geometry sigma : " << sigmaWire << "\n";
+    std::cout << "  Drift distance sigma: " << distanceToWireError << "\n";
+    std::cout << "  z_reco sigma        : " << positionAlongWireError << "\n";
 
-  //   std::cout << "\nIdentifiers:\n";
-  //   std::cout << "  detID : " << det_idx << "\n";
-  //   std::cout << "  hitID : " << hit_idx << "\n";
+    std::cout << "\nIdentifiers:\n";
+    std::cout << "  detID : " << det_idx << "\n";
+    std::cout << "  hitID : " << hit_idx << "\n";
 
-  //   std::cout << "============================================\n\n";
-  // }
+    std::cout << "============================================\n\n";
+  }
 }
 
 } // namespace GenfitInterface
