@@ -84,9 +84,6 @@
  *  @author Andrea De Vita, Maria Dolores Garcia, Brieuc Francois
  *  @date   2025-11
  *
- *  @note Convention for the "type" flag on output tracks:
- *    0 : unclustered / noise (cluster id 0 from the clustering step)
- *    1 : clustered, i.e. a genuine reconstructed track
  */
 
 struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::TrackCollection>(
@@ -136,6 +133,10 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
 
     info() << "Processing event number: " << m_indexCounter++ << endmsg;
 
+    /////////////////////////////
+    ///// Hit Preprocessing /////
+    /////////////////////////////
+
     HitBatch batch;
     appendPlanarHits(inputPlanarHitCollections, batch);
     appendWireHits(inputWireHitCollections, batch);
@@ -151,8 +152,16 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
       return std::make_tuple(std::move(outputTracks));
     }
 
+    ////////////////////////////
+    ///// Run Track Finder /////
+    ////////////////////////////
+
     const std::vector<float> modelOutput = runInference(batch.features, batch.nHits);
     const torch::Tensor clusterIds = get_clustering(modelOutput, batch.nHits, m_tbeta, m_td);
+
+    //////////////////////////
+    ///// Output Results /////
+    //////////////////////////
 
     buildTracks(clusterIds, batch, inputPlanarHitCollections, inputWireHitCollections, outputTracks);
 

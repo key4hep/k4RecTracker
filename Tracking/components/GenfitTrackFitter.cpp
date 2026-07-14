@@ -436,7 +436,10 @@ public:
   mutable int number_failures = 0;      // Number of track fits that failed
 
 private:
-  // ====================== Debug & Printout ======================
+  //////////////////////
+  // Debug & Printout //
+  //////////////////////
+
   // Debug level for track fitting and initialization printouts
   // 0       : no printouts
   // INFO    : prints fit results
@@ -444,7 +447,10 @@ private:
   // VERBOSE : prints detailed internal fit information
   uint m_printoutLevel;
 
-  // ====================== Geometry & Detector ======================
+  /////////////////////////
+  // Geometry & Detector //
+  /////////////////////////
+
   ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
   dd4hep::Detector* m_detector{nullptr}; // Detector instance
 
@@ -461,7 +467,7 @@ private:
       this, "WireTrackerName", "DCH_v2",
       "WireTrackerName in the detector description (used to retrieve Wire Tracker geometry and material information)"};
 
-  // ====================== ECAL Geometry Parameters ======================
+  // ECAL Geometry Parameters
   double m_eCalBarrelInnerR;
   double m_eCalBarrelMaxZ;
   double m_eCalEndCapInnerR;
@@ -469,7 +475,9 @@ private:
   double m_eCalEndCapInnerZ;
   double m_eCalEndCapOuterZ;
 
-  // ====================== Fitter Settings ======================
+  /////////////////////
+  // Fitter Settings //
+  /////////////////////
 
   Gaudi::Property<bool> m_useBrems{this, "UseBrems", false, "Include Bremsstrahlung energy loss and noise in the fit"};
 
@@ -487,7 +495,10 @@ private:
                                     "Number of steps in the annealing schedule (if m_Fitter_type == 'DAF') "
                                     "[https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf]"};
 
-  // ====================== Track Initialization ======================
+  //////////////////////////
+  // Track Initialization //
+  //////////////////////////
+
   Gaudi::Property<std::vector<int>> m_particleHypothesis{
       this,
       "ParticleHypothesisList",
@@ -543,7 +554,10 @@ private:
       this, "SmoothWindow", 5,
       "Number of hits used for smoothing before computing the first derivative in track initialization"};
 
-  // ====================== Track Filtering & Evaluation ======================
+  ////////////////////////////////////
+  // Track Filtering and Evaluation //
+  ////////////////////////////////////
+
   Gaudi::Property<bool> m_skipTrackOrdering{this, "SkipTrackOrdering", false, "Skip hit ordering before fitting"};
 
   Gaudi::Property<std::vector<int>> m_ListOfTypesToSkip{
@@ -567,7 +581,10 @@ private:
       "and the corresponding track states are stored in the output track."
       "This is applied only if a non-zero magnetic field (Bz > 0) is found at the last hit position."};
 
-  // ====================== Track Classification ======================
+  //////////////////////////
+  // Track Classification //
+  //////////////////////////
+
   Gaudi::Property<double> m_RadialThresholdPromptTrack{
       this, "RadialThresholdPromptTrack", 100.,
       "Radius [mm] defining a spherical region centered at {0,0,0}. "
@@ -577,7 +594,9 @@ private:
       "using the PCA "
       "of the first hit."};
 
-  // ====================== Fit Helpers ======================
+  /////////////////
+  // Fit Helpers //
+  /////////////////
 
   /**
    * @brief Process and fit a reconstructed track using Genfit, with optional hit filtering
