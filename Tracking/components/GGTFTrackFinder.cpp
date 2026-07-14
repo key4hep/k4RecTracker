@@ -67,9 +67,10 @@
  *
  * Gaudi MultiTransformer that generates a Track collection by analyzing the digitalized hits through the
  * GGTFTrackFinder. The first step takes the raw hits and it returns a collection of 4-dimensional points inside an
- * embedding space. Eeach 4-dim point has 3 geometric coordinates and 1 charge, the meaning of which can be described
- * intuitively by a potential, which attracts hits belonging to the same cluster and drives away those that do not. This
- * collection of 4-dim points is analysed by a clustering step, which groups together hits belonging to the same track.
+ * embedding space. Each 4-dim point has 3 geometric coordinates and 1 charge, the meaning of which can be described
+ * intuitively by a potential, which attracts hits belonging to the same cluster and drives away those that do not.
+ * This collection of 4-dim points is analysed by a clustering step, which groups together hits belonging to the
+ * same track.
  *
  *  input:
  *    - digitalized hits from DC (global coordinates) : edm4hep::SenseWireHitCollection
@@ -83,6 +84,9 @@
  *  @author Andrea De Vita, Maria Dolores Garcia, Brieuc Francois
  *  @date   2025-11
  *
+ *  @note Convention for the "type" flag on output tracks:
+ *    0 : unclustered / noise (cluster id 0 from the clustering step)
+ *    1 : clustered, i.e. a genuine reconstructed track
  */
 
 struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::TrackCollection>(
@@ -109,34 +113,19 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
     ///// ONNX Initialization /////
     ///////////////////////////////
 
-    // Initialize the ONNX memory info object for CPU memory allocation.
     m_fInfo = std::make_unique<Ort::MemoryInfo>(Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault));
+    m_fEnv = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "ONNX_Runtime");
 
-    // Create and initialize the ONNX environment with a logging level set to WARNING.
-    auto envLocal = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "ONNX_Runtime");
-    m_fEnv = std::move(envLocal);
-
-    // Set the session options to configure the ONNX inference session.
     m_fSessionOptions.SetIntraOpNumThreads(1);
-
-    // Disable all graph optimizations to keep the model execution as close to the original as possible.
     m_fSessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_DISABLE_ALL);
 
-    // Create an ONNX inference session to load the model specified by the `modelPath`.
-    auto sessionLocal = std::make_unique<Ort::Session>(*m_fEnv, m_modelPath.value().c_str(), m_fSessionOptions);
-    m_fSession = std::move(sessionLocal);
+    m_fSession = std::make_unique<Ort::Session>(*m_fEnv, m_modelPath.value().c_str(), m_fSessionOptions);
 
-    // Create an ONNX allocator with default options to manage memory allocations during runtime.
     Ort::AllocatorWithDefaultOptions allocator;
-
-    // Get the name of the first input node (index i) from the ONNX model and store it.
-    // Get the name of the first output node (index i) from the ONNX model and store it.
-    std::size_t i = 0;
-    const auto inputNames = m_fSession->GetInputNameAllocated(i, allocator).release();
-    const auto outputNames = m_fSession->GetOutputNameAllocated(i, allocator).release();
-
-    m_fInames.push_back(inputNames);
-    m_fOnames.push_back(outputNames);
+    m_inputNamesOwned.emplace_back(m_fSession->GetInputNameAllocated(0, allocator).get());
+    m_outputNamesOwned.emplace_back(m_fSession->GetOutputNameAllocated(0, allocator).get());
+    m_fInames.push_back(m_inputNamesOwned.back().c_str());
+    m_fOnames.push_back(m_outputNamesOwned.back().c_str());
 
     return StatusCode::SUCCESS;
   }
@@ -145,248 +134,28 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
   operator()(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& inputPlanarHitCollections,
              const std::vector<const edm4hep::SenseWireHitCollection*>& inputWireHitCollections) const override {
 
-    ////////////////////////////////////////
-    ////////// DATA PREPROCESSING //////////
-    ////////////////////////////////////////
-
     info() << "Processing event number: " << m_indexCounter++ << endmsg;
 
-    // Vector to store the global input values for all hits.
-    // This will contain position and other hit-specific data to be used as input for the model.
-    std::vector<float> listGlobalInputs;
-    int globalHitIndex = 0;
+    HitBatch batch;
+    appendPlanarHits(inputPlanarHitCollections, batch);
+    appendWireHits(inputWireHitCollections, batch);
 
-    /// Processing hits from the Silicon Detectors
-    std::vector<int64_t> listHitTypePlanar;
-    int planarHitIndex = 0;
-    std::vector<int64_t> listPlanarHitIndices;
-    int planarHitCollectionIndex = 0;
-    for (const auto& inputHitCollection : inputPlanarHitCollections) {
-
-      int planarHitSubCollectionIndex = 0;
-      for (const auto& inputHit : *inputHitCollection) {
-
-        // Add the 3D position of the hit to the global input list.
-        listGlobalInputs.push_back(inputHit.getPosition().x);
-        listGlobalInputs.push_back(inputHit.getPosition().y);
-        listGlobalInputs.push_back(inputHit.getPosition().z);
-
-        // Add placeholder values for additional input dimensions.
-        listGlobalInputs.push_back(1.0);
-        listGlobalInputs.push_back(0.0);
-        listGlobalInputs.push_back(0.0);
-        listGlobalInputs.push_back(0.0);
-
-        listHitTypePlanar.push_back(globalHitIndex);
-
-        listPlanarHitIndices.push_back(planarHitCollectionIndex);
-        listPlanarHitIndices.push_back(planarHitSubCollectionIndex);
-
-        globalHitIndex += 1;
-        planarHitIndex += 1;
-        planarHitSubCollectionIndex += 1;
-      }
-
-      planarHitCollectionIndex += 1;
-    }
-    // Convert listHitTypePlanar to a Torch tensor for use in PyTorch models.
-    torch::Tensor listHitTypePlanarTensor =
-        torch::from_blob(listHitTypePlanar.data(), {planarHitIndex}, torch::kFloat32);
-
-    torch::Tensor listPlanarHitIndices_tensor =
-        torch::from_blob(listPlanarHitIndices.data(), {planarHitIndex, 2}, torch::kInt64);
-
-    /// Processing hits from gaseous detectors
-    std::vector<int64_t> listHitTypeWire;
-    int wireHitIndex = 0;
-    std::vector<int64_t> listWireHitIndices;
-    int wireHitCollectionIndex = 0;
-    for (const auto& inputHitCollection : inputWireHitCollections) {
-      int wireHitSubCollectionIndex = 0;
-      for (const auto& inputHit : *inputHitCollection) {
-
-        // position along the wire, wire direction and drift distance
-        edm4hep::Vector3d wirePos = inputHit.getPosition();
-        TVector3 wirePosVector(static_cast<float>(wirePos.x), static_cast<float>(wirePos.y),
-                               static_cast<float>(wirePos.z));
-
-        double distanceToWire = inputHit.getDistanceToWire();
-        double wireAzimuthalAngle = inputHit.getWireAzimuthalAngle();
-        double wireStereoAngle = inputHit.getWireStereoAngle();
-
-        // Direction of the wire: z'
-        TVector3 direction(0, 0, 1);
-        direction.RotateX(wireStereoAngle);
-        direction.RotateZ(wireAzimuthalAngle);
-
-        TVector3 zPrime;
-        zPrime = direction.Unit();
-
-        // x' axis, orthogonal to z'
-        TVector3 xPrime(1.0, 0.0, -direction.X() / direction.Z());
-        xPrime = xPrime.Unit();
-
-        // y' axis = z' × x'
-        TVector3 yPrime = zPrime.Cross(xPrime);
-        yPrime = yPrime.Unit();
-
-        // Define the local left/right positions
-        TVector3 leftLocalPos(-distanceToWire, 0.0, 0.0);
-        TVector3 rightLocalPos(distanceToWire, 0.0, 0.0);
-
-        // Transform to global
-        TVector3 leftGlobalPos =
-            xPrime * leftLocalPos.X() + yPrime * leftLocalPos.Y() + zPrime * leftLocalPos.Z() + wirePosVector;
-        TVector3 rightGlobalPos =
-            xPrime * rightLocalPos.X() + yPrime * rightLocalPos.Y() + zPrime * rightLocalPos.Z() + wirePosVector;
-
-        // Add the 3D position of the left hit to the global input list.
-        listGlobalInputs.push_back(leftGlobalPos.X());
-        listGlobalInputs.push_back(leftGlobalPos.Y());
-        listGlobalInputs.push_back(leftGlobalPos.Z());
-
-        // Add the difference between the right and left hit positions to the global input list.
-        listGlobalInputs.push_back(0.0);
-        listGlobalInputs.push_back(rightGlobalPos.X() - leftGlobalPos.X());
-        listGlobalInputs.push_back(rightGlobalPos.Y() - leftGlobalPos.Y());
-        listGlobalInputs.push_back(rightGlobalPos.Z() - leftGlobalPos.Z());
-
-        listHitTypeWire.push_back(globalHitIndex);
-
-        listWireHitIndices.push_back(wireHitCollectionIndex);
-        listWireHitIndices.push_back(wireHitSubCollectionIndex);
-
-        globalHitIndex += 1;
-        wireHitIndex += 1;
-        wireHitSubCollectionIndex += 1;
-      }
-    }
-    // Convert ListHitType_CDC to a Torch tensor for use in PyTorch models.
-    torch::Tensor listHitTypeWireTensor = torch::from_blob(listHitTypeWire.data(), {wireHitIndex}, torch::kFloat32);
-
-    torch::Tensor listWireHitIndicesTensor =
-        torch::from_blob(listWireHitIndices.data(), {wireHitIndex, 2}, torch::kInt64);
-
-    torch::Tensor planarTypeTensor = torch::zeros({planarHitIndex, 1}, torch::kInt64);
-    torch::Tensor wireTypeTensor = torch::ones({wireHitIndex, 1}, torch::kInt64);
-
-    torch::Tensor planarTypeIndexTensor = torch::cat({planarTypeTensor, listPlanarHitIndices_tensor}, 1);
-    torch::Tensor wireTypeIndexTensor = torch::cat({wireTypeTensor, listWireHitIndicesTensor}, 1);
-    torch::Tensor listHitIndicesGlobal = torch::cat({planarTypeIndexTensor, wireTypeIndexTensor}, 0);
-
-    //////////////////////////////////
-    ////////// TRACK FINDER //////////
-    //////////////////////////////////
-
-    // Create a new TrackCollection and TrackerHit3DCollection for storing the output tracks and hits
     edm4hep::TrackCollection outputTracks;
-    constexpr int kMaxHits = 20000;
-    if (globalHitIndex > 0 && globalHitIndex < kMaxHits) {
 
-      ///////////////////////////////
-      ////////// GATR STEP //////////
-      ///////////////////////////////
-
-      // Calculate the total size of the input tensor, based on the number of hits (it) and the
-      // number of features per hit (7: x, y, z, and four placeholders).
-      size_t inputTensorTotalSize = globalHitIndex * 7;
-      std::vector<int64_t> inputTensorShape = {globalHitIndex, 7};
-
-      // Create a vector to store the input tensors that will be fed into the ONNX model.
-      std::vector<Ort::Value> inputModelTensors;
-      inputModelTensors.emplace_back(Ort::Value::CreateTensor<float>(
-          *m_fInfo, listGlobalInputs.data(), inputTensorTotalSize, inputTensorShape.data(), inputTensorShape.size()));
-
-      // Run the ONNX inference session with the provided input tensor.
-      auto outputModelTensors = m_fSession->Run(Ort::RunOptions{nullptr}, m_fInames.data(), inputModelTensors.data(),
-                                                m_fInames.size(), m_fOnames.data(), m_fOnames.size());
-      float* floatarr = outputModelTensors.front().GetTensorMutableData<float>();
-      std::vector<float> outputModelVector(floatarr, floatarr + globalHitIndex * 4);
-
-      /////////////////////////////////////
-      ////////// CLUSTERING STEP //////////
-      /////////////////////////////////////
-
-      auto clusteringIndeces = get_clustering(outputModelVector, globalHitIndex, m_tbeta, m_td);
-      torch::Tensor uniqueTensor;
-      torch::Tensor inverseIndices;
-      std::tie(uniqueTensor, inverseIndices) = at::_unique(clusteringIndeces, true, true);
-
-      /////////////////////////////////
-      ////////// OUTPUT STEP //////////
-      /////////////////////////////////
-
-      // NB: In this implementation, for each track the flag "type" is defined as follows:
-      //     0 : unclustered
-      //     1 : clustered
-      //
-      // Here, "unclustered" refers to hits that are not associated with any reconstructed track.
-      // This may occur either because the hit originates from background activity or due to
-      // an inefficiency/mistake in the track-finding algorithm.
-
-      // Get the total number of unique tracks based on the uniqueTensor size
-      int64_t numTracks = uniqueTensor.numel();
-      bool has_zero = (uniqueTensor == 0).any().item<bool>();
-      if (!has_zero) {
-        auto outputTrack = outputTracks.create();
-        outputTrack.setType(0);
-      }
-
-      // Loop through each unique track ID
-      for (int i = 0; i < numTracks; ++i) {
-
-        // Create a new track in the output collection and set its type to the current track ID
-        auto outputTrack = outputTracks.create();
-        outputTrack.setType(1);
-
-        // Select all hits belonging to the current track
-        auto idTrack = uniqueTensor.index({i});
-        torch::Tensor mask = (clusteringIndeces == idTrack);
-        torch::Tensor indices = torch::nonzero(mask).flatten();
-
-        auto listHitIndicesGlobalView = listHitIndicesGlobal.accessor<int64_t, 2>();
-        auto indicesView = indices.accessor<int64_t, 1>();
-
-        for (int64_t j = 0; j < indices.size(0); ++j) {
-          int64_t row = indicesView[j];
-          int64_t type = listHitIndicesGlobalView[row][0];
-          int64_t idx1 = listHitIndicesGlobalView[row][1];
-          int64_t idx2 = listHitIndicesGlobalView[row][2];
-
-          if (type == 0) {
-            // planar hit
-            auto planarCollection = inputPlanarHitCollections[idx1];
-            auto hit = planarCollection->at(idx2);
-            outputTrack.addToTrackerHits(hit);
-
-          } else {
-            // wire hit
-            auto wireCollection = inputWireHitCollections[idx1];
-            auto hit = wireCollection->at(idx2);
-            outputTrack.addToTrackerHits(hit);
-          }
-        }
-      }
-
-      inverseIndices.reset();
-      uniqueTensor.reset();
-      clusteringIndeces.reset();
-
-      inputModelTensors.clear();
-      outputModelTensors.clear();
+    if (batch.nHits == 0) {
+      return std::make_tuple(std::move(outputTracks));
+    }
+    if (batch.nHits >= kMaxHits) {
+      warning() << "Event " << m_indexCounter << " has " << batch.nHits << " hits, exceeding the configured limit of "
+                << kMaxHits << " - skipping." << endmsg;
+      return std::make_tuple(std::move(outputTracks));
     }
 
-    listHitTypePlanarTensor.reset();
-    listPlanarHitIndices_tensor.reset();
-    listHitTypeWireTensor.reset();
-    listWireHitIndicesTensor.reset();
+    const std::vector<float> modelOutput = runInference(batch.features, batch.nHits);
+    const torch::Tensor clusterIds = get_clustering(modelOutput, batch.nHits, m_tbeta, m_td);
 
-    std::vector<int64_t>().swap(listHitTypePlanar);
-    std::vector<int64_t>().swap(listPlanarHitIndices);
-    std::vector<int64_t>().swap(listHitTypeWire);
-    std::vector<int64_t>().swap(listWireHitIndices);
+    buildTracks(clusterIds, batch, inputPlanarHitCollections, inputWireHitCollections, outputTracks);
 
-    // Return the output collections as a tuple
     return std::make_tuple(std::move(outputTracks));
   }
 
@@ -403,29 +172,174 @@ public:
   mutable int m_indexCounter = 0;
 
 private:
-  // Pointer to the ONNX environment.
-  // This object manages the global state of the ONNX runtime, such as logging and threading.
+  // Flattened per-event hit buffer
+  struct HitBatch {
+    std::vector<float> features;          // size = nHits * 7
+    std::vector<int64_t> hitType;         // 0 = planar, 1 = wire
+    std::vector<int64_t> collectionIndex; // which input collection the hit came from
+    std::vector<int64_t> subIndex;        // index of the hit within that collection
+    int64_t nHits = 0;
+  };
+
+  void appendPlanarHits(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& collections,
+                        HitBatch& batch) const {
+    int64_t collIdx = 0;
+    for (const auto* collection : collections) {
+      batch.features.reserve(batch.features.size() + collection->size() * 7);
+      int64_t subIdx = 0;
+      for (const auto& hit : *collection) {
+        const auto pos = hit.getPosition();
+        batch.features.push_back(static_cast<float>(pos.x));
+        batch.features.push_back(static_cast<float>(pos.y));
+        batch.features.push_back(static_cast<float>(pos.z));
+        batch.features.push_back(1.0f);
+        batch.features.push_back(0.0f);
+        batch.features.push_back(0.0f);
+        batch.features.push_back(0.0f);
+
+        batch.hitType.push_back(0);
+        batch.collectionIndex.push_back(collIdx);
+        batch.subIndex.push_back(subIdx);
+
+        ++batch.nHits;
+        ++subIdx;
+      }
+      ++collIdx;
+    }
+  }
+
+  void appendWireHits(const std::vector<const edm4hep::SenseWireHitCollection*>& collections, HitBatch& batch) const {
+    int64_t collIdx = 0;
+    for (const auto* collection : collections) {
+      batch.features.reserve(batch.features.size() + collection->size() * 7);
+      int64_t subIdx = 0;
+      for (const auto& hit : *collection) {
+
+        const edm4hep::Vector3d wirePos = hit.getPosition();
+        const TVector3 wirePosVector(wirePos.x, wirePos.y, wirePos.z);
+
+        const double distanceToWire = hit.getDistanceToWire();
+        const double wireAzimuthalAngle = hit.getWireAzimuthalAngle();
+        const double wireStereoAngle = hit.getWireStereoAngle();
+
+        TVector3 zPrime, xPrime, yPrime;
+        const double dx = std::sin(wireStereoAngle) * std::sin(wireAzimuthalAngle);
+        const double dy = -std::sin(wireStereoAngle) * std::cos(wireAzimuthalAngle);
+        const double dz = std::cos(wireStereoAngle);
+        zPrime = TVector3(dx, dy, dz).Unit();
+        xPrime = TVector3(1.0, 0.0, -dx / dz).Unit(); // x' = normalize([1, 0, -dx/dz])
+        yPrime = zPrime.Cross(xPrime).Unit();         // y' = z' x x'
+
+        const TVector3 leftLocal(-distanceToWire, 0.0, 0.0);
+        const TVector3 rightLocal(distanceToWire, 0.0, 0.0);
+
+        const TVector3 leftGlobal =
+            xPrime * leftLocal.X() + yPrime * leftLocal.Y() + zPrime * leftLocal.Z() + wirePosVector;
+        const TVector3 rightGlobal =
+            xPrime * rightLocal.X() + yPrime * rightLocal.Y() + zPrime * rightLocal.Z() + wirePosVector;
+
+        batch.features.push_back(static_cast<float>(leftGlobal.X()));
+        batch.features.push_back(static_cast<float>(leftGlobal.Y()));
+        batch.features.push_back(static_cast<float>(leftGlobal.Z()));
+        batch.features.push_back(0.0f);
+        batch.features.push_back(static_cast<float>(rightGlobal.X() - leftGlobal.X()));
+        batch.features.push_back(static_cast<float>(rightGlobal.Y() - leftGlobal.Y()));
+        batch.features.push_back(static_cast<float>(rightGlobal.Z() - leftGlobal.Z()));
+
+        batch.hitType.push_back(1);
+        batch.collectionIndex.push_back(collIdx);
+        batch.subIndex.push_back(subIdx);
+
+        ++batch.nHits;
+        ++subIdx;
+      }
+      ++collIdx;
+    }
+  }
+
+  std::vector<float> runInference(std::vector<float>& features, int64_t nHits) const {
+    const std::vector<int64_t> inputShape = {nHits, 7};
+
+    std::vector<Ort::Value> inputs;
+    inputs.emplace_back(Ort::Value::CreateTensor<float>(*m_fInfo, features.data(), features.size(), inputShape.data(),
+                                                        inputShape.size()));
+
+    auto outputs = m_fSession->Run(Ort::RunOptions{nullptr}, m_fInames.data(), inputs.data(), m_fInames.size(),
+                                   m_fOnames.data(), m_fOnames.size());
+
+    const float* raw = outputs.front().GetTensorMutableData<float>();
+    return std::vector<float>(raw, raw + nHits * 4);
+  }
+
+  // Groups hits by cluster id and emits one output track per cluster.
+  void buildTracks(const torch::Tensor& clusterIds, const HitBatch& batch,
+                   const std::vector<const edm4hep::TrackerHitPlaneCollection*>& planarCollections,
+                   const std::vector<const edm4hep::SenseWireHitCollection*>& wireCollections,
+                   edm4hep::TrackCollection& outputTracks) const {
+
+    const auto ids = clusterIds.to(torch::kInt64).contiguous();
+    const int64_t n = ids.size(0);
+    if (n == 0) {
+      return;
+    }
+
+    const auto order = torch::argsort(ids);
+    const auto sortedIds = ids.index_select(0, order);
+
+    const auto orderAcc = order.accessor<int64_t, 1>();
+    const auto sortedIdsAcc = sortedIds.accessor<int64_t, 1>();
+
+    int64_t start = 0;
+    while (start < n) {
+      int64_t end = start + 1;
+      while (end < n && sortedIdsAcc[end] == sortedIdsAcc[start]) {
+        ++end;
+      }
+
+      // Noise/unclustered hits (cluster id 0) do not produce a track.
+      if (sortedIdsAcc[start] == 0) {
+        start = end;
+        continue;
+      }
+
+      auto outputTrack = outputTracks.create();
+      outputTrack.setType(1);
+
+      for (int64_t k = start; k < end; ++k) {
+        const int64_t row = orderAcc[k];
+        if (batch.hitType[row] == 0) {
+          outputTrack.addToTrackerHits(planarCollections[batch.collectionIndex[row]]->at(batch.subIndex[row]));
+        } else {
+          outputTrack.addToTrackerHits(wireCollections[batch.collectionIndex[row]]->at(batch.subIndex[row]));
+        }
+      }
+
+      start = end;
+    }
+  }
+
+private:
+  static constexpr int64_t kMaxHits = 20000;
+
+  // Pointer to the ONNX environment. Manages global state such as logging and threading.
   std::unique_ptr<Ort::Env> m_fEnv;
 
-  // Pointer to the ONNX inference session.
-  // This session is used to execute the model for inference.
+  // Pointer to the ONNX inference session used to execute the model.
   std::unique_ptr<Ort::Session> m_fSession;
 
   // ONNX session options.
   Ort::SessionOptions m_fSessionOptions;
 
-  // ONNX memory info.
-  // This object provides information about memory allocation and is used during the creation of
-  // ONNX tensors. It specifies the memory type and device (e.g., CPU, GPU).
+  // ONNX memory info, describing memory type/device for tensor creation.
   std::unique_ptr<Ort::MemoryInfo> m_fInfo;
 
-  // Stores the input and output names for the ONNX model.
-  // These vectors contain the names of the inputs (fInames) and outputs (fOnames) that the model expects.
+  // Owned storage for input/output names
+  std::vector<std::string> m_inputNamesOwned;
+  std::vector<std::string> m_outputNamesOwned;
   std::vector<const char*> m_fInames;
   std::vector<const char*> m_fOnames;
 
   // Property to specify the path to the ONNX model file.
-  // This is a configurable property that defines the location of the ONNX model file on the filesystem.
   Gaudi::Property<std::string> m_modelPath{this, "ModelPath", "", "ModelPath"};
 
   // Properties of the clustering step.

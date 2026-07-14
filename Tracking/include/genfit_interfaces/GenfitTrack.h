@@ -98,14 +98,14 @@ public:
                        std::optional<double> sigma_z0, std::optional<double> sigma_tanLambda);
 
   void CreateGenFitTrack(int particle_hypotesis, int debug_lvl);
-  bool Fit(std::string FitterType, int debug_lvl, std::optional<double> Beta_init, std::optional<double> Beta_final,
-           std::optional<int> Beta_steps, std::optional<bool> FilterHits);
+  bool Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::string FitterType, int debug_lvl,
+           std::optional<double> Beta_init, std::optional<double> Beta_final, std::optional<int> Beta_steps,
+           std::optional<bool> FilterHits);
 
   genfit::Track* GetTrack_genfit() { return m_genfitTrack; }
   genfit::AbsTrackRep* GetRep_genfit() { return m_genfitTrackRep; }
   edm4hep::MutableTrack& GetTrack_edm4hep() { return m_edm4hepTrack; }
   edm4hep::MutableTrack& GetTrackWithFit_edm4hep() { return m_trackWithFit; }
-  edm4hep::TrackerHitPlaneCollection& GetFittedHits() { return m_fittedHits; }
 
   int GetCharge() { return m_charge_hypothesis; }
 
@@ -172,7 +172,6 @@ private:
 
   edm4hep::MutableTrack m_edm4hepTrack;
   edm4hep::MutableTrack m_trackWithFit;
-  edm4hep::TrackerHitPlaneCollection m_fittedHits;
 
   TVector3 m_VP_referencePoint{0., 0., 0.};
 
