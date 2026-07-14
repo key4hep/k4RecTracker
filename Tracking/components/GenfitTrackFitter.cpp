@@ -318,18 +318,18 @@ struct GenfitTrackFitter final
       num_tracks += 1;
 
       // Skip unmatched tracks if the option is enabled
-      // Consider unmatched tracks those with type = 0
       if (m_ListOfTypesToSkip.size() > 0 && std::find(m_ListOfTypesToSkip.begin(), m_ListOfTypesToSkip.end(),
                                                       track.getType()) != m_ListOfTypesToSkip.end()) {
         num_skip += 1;
         warning() << "Skipping track " << num_tracks - 1 << " with type " << track.getType() << "\n" << endmsg;
-        continue; // skip unmatched tracks
+        continue;
       }
 
+      // skip tracks with less then 3 hits (seed initialization needs 3 hits)
       if (track.getTrackerHits().size() < 3) {
         num_skip += 1;
         warning() << "Track " << num_tracks - 1 << ": less than 3 hits, skipping fit.\n" << endmsg;
-        continue; // skip tracks with less then 3 hits (seed initialization needs 3 hits)
+        continue;
       }
 
       num_processed_tracks += 1;
