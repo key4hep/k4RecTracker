@@ -305,8 +305,8 @@ struct GenfitTrackFitter final
   std::tuple<edm4hep::TrackCollection, edm4hep::TrackCollection, edm4hep::TrackerHitPlaneCollection>
   operator()(const edm4hep::TrackCollection& tracks_input) const override {
 
-    debug() << "Event number: " << event_counter++  << endmsg;
-    
+    debug() << "Event number: " << event_counter++ << endmsg;
+
     // These collections store the output of the fit
     edm4hep::TrackCollection FittedTracks;
     edm4hep::TrackCollection FittedTracksWithFilteredHits;
@@ -347,7 +347,8 @@ struct GenfitTrackFitter final
         int winning_hypothesis = FindBestHypothesis(track, FittedHits, false);
 
         if (winning_hypothesis == -1) {
-          debug() << "Track " << num_track_event - 1 << ": fit failed for all hypotheses, trying with less hits." << endmsg;
+          debug() << "Track " << num_track_event - 1 << ": fit failed for all hypotheses, trying with less hits."
+                  << endmsg;
         } else {
 
           isSuccess = 1;
@@ -367,8 +368,8 @@ struct GenfitTrackFitter final
           if (!isSuccess) {
 
             number_failures += 1;
-            debug() << "Track " << num_track_event - 1 << ": fit failed for single evaluation hypothesis, skipping track."
-                    << endmsg;
+            debug() << "Track " << num_track_event - 1
+                    << ": fit failed for single evaluation hypothesis, skipping track." << endmsg;
             auto failedTrack = FittedTracks.create();
             auto failedFittedTrack = FittedTracksWithFilteredHits.create();
 
