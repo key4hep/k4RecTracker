@@ -19,6 +19,8 @@
 
 #include "GenfitTrack.h"
 
+#include <TGeoManager.h>
+
 namespace GenfitInterface {
 
 GenfitTrack::GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrdering,
@@ -908,6 +910,14 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
   if (debug_lvl > 1)
     debug_lvl_fit = 0;
   genfitFitter->setDebugLvl(debug_lvl_fit);
+
+  // Reset the global TGeoManager navigator to a canonical state before fitting.
+  // The navigator (current node, point, direction, safety/step caches) is process-global
+  // and is mutated by every material lookup during extrapolation. Without this reset,
+  // the material resolved for on-boundary points can depend on the track fitted
+  // previously (even in an earlier event), making fit results order-dependent.
+  gGeoManager->CdTop();
+  gGeoManager->FindNode(m_posInit.X(), m_posInit.Y(), m_posInit.Z()); // seed position, in cm
 
   // Process track
   genfit::Track genfitTrack = *m_genfitTrack;
