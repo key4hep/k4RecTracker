@@ -2,6 +2,10 @@
 
 #include "../src/ChargeCollector_impl.h"
 
+#include <algorithm>
+#include <cmath>
+#include <limits>
+
 namespace VTXdigi_tools {
 using ::VTXdigi_Modular; // "unqualified name introduction from global namespace" (just so I remember what to call this in C++ speak)
 using ::endmsg; // makes the Copilot autocomplete work better
@@ -112,7 +116,6 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
     path.entry = path.entry + t_min * path.travel;
     path.travel = (t_max - t_min) * path.travel;
   }
-  path.length = path.travel.r();
 
 
   digitizer.debug() << "       - Constructed path, length " << path.travel.r()*1000 << " um (G4-length " << path.lengthG4*1000 << " um), entry (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, exit (" << path.entry.x() + path.travel.x() << ", " << path.entry.y() + path.travel.y() << ", " << path.entry.z() + path.travel.z() << ") mm, " << endmsg;
@@ -377,18 +380,40 @@ int LookupTable::FindIndex (const Index_inPix& j, const int col, const int row) 
 
 ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer),
   m_LUT(digitizer.LutFileName(), digitizer),
-  m_stepLength(digitizer.LutStepLength()),
   m_shiftTruthPos(digitizer.LUT_shiftTruthPos()) {
 
   /* LUT is constructed in place (from file) */
   m_chargeCollectionDepthCenter = m_LUT.GetChargeCollectionDepthCenter();
 
+  /* fine grid for the voxel traversal, fixed per job (all sensors share pitch & dimensions, checked at init) */
+  const Index_inPix binCount = m_LUT.GetBinCount();
+  const std::pair<float, float> pitch = digitizer.PixelPitch();
+  const std::pair<size_t, size_t> pixelCount = digitizer.PixelCount();
+  const float activeThickness = digitizer.ActiveVolumeDimensions().at(2);
+
+  m_cellSize = {
+    pitch.first / binCount[0],
+    pitch.second / binCount[1],
+    activeThickness / binCount[2]};
+  m_gridOrigin = {
+    -0.5f * pitch.first * static_cast<float>(pixelCount.first),
+    -0.5f * pitch.second * static_cast<float>(pixelCount.second),
+    -0.5f * activeThickness};
+  m_gridBinCount = {
+    static_cast<int>(pixelCount.first) * binCount[0],
+    static_cast<int>(pixelCount.second) * binCount[1],
+    binCount[2]};
+
   m_digitizer.info() << " - ChargeCollector_LUT constructed successfully." << endmsg;
 }
 
 void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const {
-  /* TODO: implement voxel-traversal instead of numerically splitting the charge.
-  I would start from the simple algo here: https://www.redblobgames.com/grids/line-drawing.html */
+  /* Amanatides-Woo voxel traversal ("A Fast Voxel Traversal Algorithm for Ray Tracing", 1987):
+   * walk the path boundary-to-boundary through the fine grid of LUT voxels (pixel grid x in-pixel bins).
+   * Each voxel receives charge proportional to the exact chord length of the path inside it, so there is
+   * no discretization error and no step-length parameter (unlike the segment-splitting this replaces).
+   * The path is parametrized as pos(t) = entry + t*travel with t in [0,1]. Per axis, tMax holds the t of
+   * the next voxel-boundary crossing and tDelta the t needed to cross one full voxel. */
 
   Path path;
   if (!ConstructPath(path, simHit, trafoMatrix, m_digitizer)) [[unlikely]]
@@ -398,59 +423,97 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
     MoveTruthPosition(simHit, path); // shifts the sim hit position to the depth in the sensor where most charge is collected, to get usesful residual plots.
   }
 
-  const int stepCount = std::max(1, static_cast<int>(std::ceil(path.length / m_stepLength)));
-  const float segmentCharge = simHit.charge() / stepCount;
+  const Index_inPix binCount = m_LUT.GetBinCount();
+  const std::array<float, 3> entry = {path.entry.x(), path.entry.y(), path.entry.z()};
+  const std::array<float, 3> travel = {path.travel.x(), path.travel.y(), path.travel.z()};
 
-  Index_segment nextSeg, seg = ComputeSegmentIndices(0, stepCount, path);
-  int segmentsInBin = 1;
+  std::array<int, 3> g; // fine-grid bin index per axis, of the voxel the path currently is in
+  std::array<int, 3> step; // direction (+1/-1) the bin index moves along each axis
+  std::array<float, 3> tMax; // t at which the path crosses the next bin boundary on each axis
+  std::array<float, 3> tDelta; // t needed to cross one full bin on each axis
+  int iterationsLeft = 1; // upper bound on voxels crossed; guards against float quirks causing an endless loop
 
-  /* TODO: currently, DistributeSegmentCharge is THE bottleneck. Optimise this by collecting all entries from each vector in a local size x size matrix, and copy that to m_LUT once all segments in a pixel have been filled. */
+  for (int ax = 0; ax < 3; ++ax) {
+    /* entry/exit lie exactly on sensor faces by construction (ConstructPath), so float rounding can place
+     * them epsilon outside the grid -> clamp the index instead of trusting floor */
+    g[ax] = std::clamp(static_cast<int>(std::floor((entry[ax] - m_gridOrigin[ax]) / m_cellSize[ax])), 0, m_gridBinCount[ax] - 1);
 
-  for (int i_next = 1; i_next < stepCount; ++i_next) {
-    nextSeg = ComputeSegmentIndices(i_next, stepCount, path);
-
-    /* collect segments in same bin */
-    if (seg == nextSeg) {
-      // m_digitizer.verbose() << "     - Segment lies in the same pixel and in-pixel bin as previous segment, continuing." << endmsg;
-      ++segmentsInBin;
-      continue;
+    if (travel[ax] != 0.f) {
+      step[ax] = (travel[ax] > 0.f) ? 1 : -1;
+      tDelta[ax] = m_cellSize[ax] / std::abs(travel[ax]);
+      const float nextBoundary = m_gridOrigin[ax] + (g[ax] + (step[ax] > 0 ? 1 : 0)) * m_cellSize[ax];
+      tMax[ax] = std::max(0.f, (nextBoundary - entry[ax]) / travel[ax]); // clamp to 0: the index clamping above can put the first boundary marginally behind the entry point
+      iterationsLeft += static_cast<int>(std::abs(travel[ax]) / m_cellSize[ax]) + 2;
     }
     else {
-      DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit);
-      seg = nextSeg;
-      segmentsInBin = 1;
+      /* no movement along this axis. Explicit infinity avoids 0/0 = NaN when the entry lies exactly on a bin boundary */
+      step[ax] = 0;
+      tDelta[ax] = std::numeric_limits<float>::infinity();
+      tMax[ax] = std::numeric_limits<float>::infinity();
     }
-  } // loop over segments
+  }
+
+  Index_voxel vox;
+  vox.i = {g[0] / binCount[0], g[1] / binCount[1]};
+  vox.j = {g[0] % binCount[0], g[1] % binCount[1], g[2]};
+
+  /* TODO: currently, DistributeVoxelCharge is THE bottleneck. Optimise this by collecting all entries from each vector in a local size x size matrix, and copy that to the hitMap once all voxels in a pixel have been filled. The carry logic below tells us exactly when the pixel changes. */
+
+  float tPrev = 0.f;
+  while (iterationsLeft-- > 0) {
+    const int ax = (tMax[0] < tMax[1]) ? (tMax[0] < tMax[2] ? 0 : 2) : (tMax[1] < tMax[2] ? 1 : 2); // axis of the nearest boundary crossing. Corner ties are broken arbitrarily: the "wrong" voxel is visited with zero chord length, ie. zero charge
+    const float tNext = std::min(tMax[ax], 1.f);
+
+    if (tNext > tPrev) // skip zero-length chords (from corner ties or a path starting exactly on a boundary)
+      DistributeVoxelCharge(hitMap, vox, (tNext - tPrev) * simHit.charge(), simHit);
+
+    if (tMax[ax] >= 1.f)
+      break; // path ends inside the current voxel
+
+    tPrev = tMax[ax];
+    tMax[ax] += tDelta[ax];
+
+    g[ax] += step[ax];
+    if (g[ax] < 0 || g[ax] >= m_gridBinCount[ax]) [[unlikely]] {
+      /* stepped off the grid. The path is clipped to the sensor volume, so this only happens through
+       * float rounding at the exit face, where the remaining charge is O(epsilon) -> drop it */
+      if (1.f - tPrev > 1.e-4f)
+        m_digitizer.warning() << "ChargeCollector_LUT::FillHit: path left the voxel grid with a path fraction of " << 1.f - tPrev << " remaining. Dropping the corresponding charge." << endmsg;
+      break;
+    }
+
+    /* advance pixel & in-pixel indices with carry (keeps j in range without div/mod or float floor) */
+    if (ax == 2) {
+      vox.j[2] += step[2]; // w has no pixel index; g range check above keeps j[2] valid
+    }
+    else {
+      vox.j[ax] += step[ax];
+      int& pixelIndex = (ax == 0) ? vox.i.first : vox.i.second;
+      if (vox.j[ax] == binCount[ax]) {
+        vox.j[ax] = 0;
+        ++pixelIndex;
+      }
+      else if (vox.j[ax] < 0) {
+        vox.j[ax] = binCount[ax] - 1;
+        --pixelIndex;
+      }
+    }
+  } // voxel traversal
+
+  if (iterationsLeft < 0) [[unlikely]]
+    m_digitizer.warning() << "ChargeCollector_LUT::FillHit: voxel traversal did not terminate within the expected number of steps. Some charge may have been dropped." << endmsg;
 
   m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix, simHit.CreatedInGenerator()); // fill histograms once per sim hit, with info from the path (eg. travel vector, which contains info on the angle of incidence)
-
-  DistributeSegmentCharge(hitMap, seg, segmentCharge, segmentsInBin, simHit);
 }
 
-Index_segment ChargeCollector_LUT::ComputeSegmentIndices(const int step, const int stepCount, const Path& path) const {
-  if (step < 0 || step >= stepCount)
-    throw std::runtime_error("VTXdigi_tools::ChargeCollector_LUT::ComputeSegmentIndices: step (=" + std::to_string(step) + ") out of range [0, " + std::to_string(stepCount-1) + "].");\
-
-  Index_segment seg;
-  float t = (step + 0.5f) / stepCount; // +0.5 to get center of segment
-  const dd4hep::rec::Vector3D pos = path.entry + t * path.travel;
-
-  seg.i = ComputePixelIndices(pos, m_digitizer.PixelPitch(), m_digitizer.PixelCount());
-
-  seg.j = ComputeInPixelIndices(pos, m_LUT.GetBinCount(), m_digitizer.PixelPitch(), m_digitizer.ActiveVolumeDimensions());
-
-  return seg;
-}
-
-void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float segmentCharge, const int segmentsInBin, const SimHitWrapper& simHit) const {
+void ChargeCollector_LUT::DistributeVoxelCharge(HitMap& hitMap, const Index_voxel& i_vox, const float charge, const SimHitWrapper& simHit) const {
 
   /* cache things, this is the hottest loop */
   const int lutSize = m_LUT.GetSize();
-  const int i_u_origin = i_seg.i.first - m_LUT.GetSizeHalf(); // pix index of leftmost pixel in LUT matrix
-  const int i_v_origin = i_seg.i.second - m_LUT.GetSizeHalf();
+  const int i_u_origin = i_vox.i.first - m_LUT.GetSizeHalf(); // pix index of leftmost pixel in LUT matrix
+  const int i_v_origin = i_vox.i.second - m_LUT.GetSizeHalf();
   const int pixelCount_u = static_cast<int>(m_digitizer.PixelCount().first);
   const int pixelCount_v = static_cast<int>(m_digitizer.PixelCount().second);
-  const float charge = segmentCharge * segmentsInBin;
 
   const int col_min = std::max(0, -i_u_origin);
   const int col_max = std::min(lutSize, pixelCount_u - i_u_origin);
@@ -464,7 +527,7 @@ void ChargeCollector_LUT::DistributeSegmentCharge(HitMap& hitMap, const Index_se
     for (int row = row_min; row < row_max; ++row) {
       const int i_v = i_v_origin + row;
 
-      const float chargeToAdd = m_LUT.GetWeight(i_seg.j, col, row) * charge;
+      const float chargeToAdd = m_LUT.GetWeight(i_vox.j, col, row) * charge;
       hitMap.FillCharge({i_u, i_v}, chargeToAdd, simHit);
     }
   }

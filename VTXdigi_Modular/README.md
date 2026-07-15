@@ -23,7 +23,7 @@ Takes the pixel that the simHit position lies in as the central pixel. Deposited
 This is intended to be used to test the correct `u`/`v` orientation of the pixel
 
 #### `LookupTable`
-Shares charge among a hits surrounding pixels according to a lookup table. These lookup tables are generated from detailed simulations performed in sensor R&D.
+Shares charge among a hits surrounding pixels according to a lookup table. These lookup tables are generated from detailed simulations performed in sensor R&D. A particle's path through the sensor is walked voxel-by-voxel (Amanatides-Woo traversal), depositing charge in each LUT voxel in proportion to the exact chord length the path travels through it. (This is exact regardless of voxel size and needs no step-length parameter anymore).
 
 - **Requires** Gaudi property `LookupTableFile`.
 
@@ -46,6 +46,7 @@ Shares charge among a hits surrounding pixels according to a lookup table. These
 - `Layers` - Select which layers of the (sub)detector to be digitized (eg. `[0, 1, 2]`). Defaults to digitizing all layers of the subdetector.
 - `Threshold` - Sets a pixel threshold. After charges in an event have been collected in pixels, all pixels with `collected charges < threshold` are ignored. In terms of e-. Defaults to 0.
 - `ChargeSmearing` - Sets the sigma of the Gaussian smearing that is applied to each pixels collected charge. In terms of e-. Defaults to 0, where no smearing is applied. Note that Pixels that do not collect any charge in an event are not smeared (eg. this can not be used to generate random pixel noise, only to smear the resolution on charge that is actually being collected), for performance.
+- `ThresholdDispersion` - Sets the sigma of the Gaussian smearing that is applied to each pixels threshold. In terms of e-. Defaults to 0, where no smearing is applied.
 - `TimeSmearing` - Sets the sigma of the Gaussian smearing that is applied to each pixel hit's timestamp before clustering / creating per-pixel digiHits. **UNIT???**. Defaults to 0.
 - `ClusterPositionUncertainty` - Each digiHit has an estimate of it's spatial resolution uncertainty. To first order, this is simply the sensors spatial resolution in `u` and `v`. Yet, the spatial resolution changes with cluster shape and charge spread across the cluster (and with particle angle). Estimating a digiHits spatial resolution is important for the tracking algorithm, where a good estimation of the spatial resolution of each cluster allows for more precise refitting. Three different methods for estimating the spatial resolution are implemented (defaults to `[]`):
     - Setting `[sigma_u, sigma_v]` simply applies the same spatial resolution to every digiHit. This is the most basic option.
@@ -62,7 +63,6 @@ Shares charge among a hits surrounding pixels according to a lookup table. These
 - `InfoPrintInterval` - Set the interval at which the event number is printed to the `INFO` debug level at the start of the event. In terms of events. Defaults to 100.
 
 - `LookupTableFile` - Lookup table file, necessary for the `LookupTable` charge collector.
-- `LookupTableSegmentStepLength` - In the `LookupTable` charge collector implementation, a particles path through the sensor is sampled in smalls steps, sharing charges among surrounding pixels for each step. This sets that step length. Should be smaller than the LUT binning. In mm. Defaults to 0.0005 mm.
 - `LookupTableIgnorePitch` - Ignore the sensor thickness and pixel pitch values stored in the LUT file. Useful for slightly stretching/shrinking the LUT to fit curved sensors where the sensor length is not an integer multiple of the pixel pitch. Defaults to `False`, where an error is thrown if the values from the detector geometry do not match the LUT file. If set to `True`, only a warning is printed is in case of a mismatch.
 
 ---
@@ -99,7 +99,8 @@ innervtxb_digitizer = VTXdigi_Modular(
     LookupTableFile = "PATH/TO/LOOKUPTABLE.init",
     ClusterPositionUncertainty = [],
     Threshold = 100, # in e
-    ChargeSmearing = 0, # in e
+    ThresholdSmearing = 5, # in e
+    ChargeSmearing =10, # in e
     TimeSmearing = 0, # UNIT???
 
     DebugHistograms = True,
@@ -168,6 +169,7 @@ The code has a number of `TODO:` and `FIXME:` marked. Larger items are:
     - Alternatively, an eta-function based approach can be used to correct the hit position beyond simple center-of-gravity by applying an empirically-determined function that accounts for non-linear charge sharing effects. The numeric eta function can be determined from the LUT by projecting it onto the *uv*-plane and measuring the charge-sharing ratio between the central and neighboring pixels. With this, the charge-weighted uncertainty estimation can be improved to account for charge sharing even in single-pixel clusters. *(Talk to reconstruction experts about how this is and might be done for a better understanding of what the digitiser should do)*
     - Another option is to assume all hits come as straight lines from the IP. This is used to reconstruct each hits incidence angle to the sensor. A lookup table describing the resolution in dependence on the incidence angle is supplied, from which each hits position uncertainty is calculated. These lookup tables are generated from ddsim simulations, where MIPs (eg. 10 GeV muons) are shot at a single sensor plane at different angles.
 - *(medium)* **Transfer propagation-based digitiser** -- Transfer the propagation-based digitizer currently implemented in `VTXDigi_Detailed` to a `ChargeCollector` implementation. Making this possible is the reason this specific architecture was chosen. Not urgent, but will make maintaining the repo a bit simpler.
+- *(medium)* **Realistic charge distribution along path** -- In the LUT charge collector implementation, the charge is distributed evenly alon the particle's path through the sensor. But, in reality, the charge is deposited in distinct "charge-clusters" along the path by the individual interactions between the particle and the sensor medium. In the digitiser, the distance between interactions & the amount of charge deposited in an interaction could be sampled from an approximation of the underlying distribution, making sure the total deposited charge of all interactions of a simHit add up to that simHits total deposited charge. Doing so might model the efficieny and spatial resolution for thin sensors better. 
 - *(medium)* **Include some LUTs** -- We hope to include some LUTs for the Standard, n-Blanket and n-Gap layout of the TPSCo 65nm CIS chips in the repo. This is likely not a problem with NDAs, but has to be checked back with seniors.
 - *(low)* **N-bit charge information** -- Currently charge information is completely analogue (collected charge per pixel is stored as float). Enable purely digital (N=1) or semi-digital (N>1) readout where the charge information is stored in N bits. This is much closer to how charge information is handled in real systems.
 - *(low)* **Timing information in LUT** -- Currently, LUTs do not store any information on the signal shape charges in a given voxel will produce on the electrodes. Timestamps are simply taken from the simHits and smeared. Yet, charges from different voxels can take drastically different times (TPSCo 65nm CIS: O(ns)) to collect. Thus, the timestamps and amplitude of pixel hits might be changed. To simulate this, each LUT entry would need to encode not only the amount of shared charge, but also a parametrisation of the pixel response function. This is computationally expensive, and not implemented in Allpix Squared either. An exact algorithm on how to implement this time encoding is not yet clear.

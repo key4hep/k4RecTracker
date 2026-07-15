@@ -13,14 +13,10 @@ using Index_inPix = std::array<int, 3>;
 constexpr float kPathLengthTolerance = 1.05f; // tolerance factor for how much longer the computed path can be compared to the Geant4 path length. If the computed path is longer than the Geant4 path, either the linear path approximation breaks down, or the particle begins or ends inside the sensor volume
 constexpr float kLutEntryMinimum = 1.e-3f; // LUT entries below this value are set to zero, to minimise unnecessary computations in hot loop. result is quite sensitive to this, so choose carefully. 1e-5 seems to be a good compromise between accuracy and performance for the TPSCo 65nm CIS LUT
 
-/** @brief holds pixel indices i and in-pixel bin indices j (eg. for a segment) */
-struct Index_segment {
+/** @brief holds pixel indices i and in-pixel bin indices j (identifying one voxel of the charge-sharing grid) */
+struct Index_voxel {
   Index_pix i;
   Index_inPix j;
-
-  inline bool operator==(const Index_segment& other) const {
-    return (i == other.i) && (j == other.j);
-  }
 };
 
 /** @brief Computes & then holds position & information about a simHits path through the sensor */
@@ -31,10 +27,7 @@ struct Path {
   dd4hep::rec::Vector3D travel; // in local coordinates, in mm
   dd4hep::rec::Vector3D simPos; // in local coordinates, in mm
 
-  float length; // in mm
   float lengthG4;
-  int nSegments;
-  float charge;
 };
 
 /** @brief Compute the factors by which to clip a path along a given axis (to clip it to the sensor volume) */
@@ -94,8 +87,14 @@ private:
 class ChargeCollector_LUT : public IChargeCollector {
 
   LookupTable m_LUT;
-  const float m_stepLength; // in mm
   const bool m_shiftTruthPos; // if true, the truth position in the simHitWrapper is shifted to the depth in the sensor where most charge is collected, to get useful residual plots. Mirrors VTXdigi_Modular::m_LUT_shiftTruthPosition Gaudi property.
+
+  /* fine grid over the whole sensor (pixel grid x in-pixel bins), used by the voxel traversal in FillHit().
+   * Anchored to the pixel grid (pitch*pixelCount) like ComputePixelIndices(), which matches the active volume
+   * length within the tolerance checked in VTXdigi_Modular::InitLayersAndSensors(). */
+  std::array<float, 3> m_cellSize; // size of one voxel per (u,v,w) axis, in mm
+  std::array<float, 3> m_gridOrigin; // lower corner of the fine grid, in local coordinates, in mm
+  std::array<int, 3> m_gridBinCount; // total fine-grid bins per axis (= pixelCount * in-pixel binCount for u/v)
 
 public:
 
@@ -104,11 +103,8 @@ public:
 
 private:
 
-  /** @brief Compute the pixel- and in-pixel bin indices for a given segment in a path */
-  Index_segment ComputeSegmentIndices(const int step, const int stepCount, const Path& path) const;
-
   /** @brief Fill charge into the hitmap, according to a in-pixel bin's charge sharing weights */
-  void DistributeSegmentCharge(HitMap& hitMap, const Index_segment& i_seg, const float charge, const int segmentsInBin, const SimHitWrapper& simHit) const;
+  void DistributeVoxelCharge(HitMap& hitMap, const Index_voxel& i_vox, const float charge, const SimHitWrapper& simHit) const;
 
   /** @brief Move the truth position in the simHitWrapper along the computed path to the depleted region center (as defined by the digitizer Gaudi property)
    * @note This is necessary to get meaningful residual plots for sensors where charge is not collected across the whole sensor thickness. In TPSCo 65nm CIS the depletion region only extends ~10 um down into the sensor, so charges are only collected close to the upper sensor surface. For tracks passing through the sensor, the simHit position is defined at the sensor center. So for angled tracks, the residual (which is truth - reco) would be dominated by the track angle instead of the charge collection effects we want to study. By moving the truth position to the depleted region center, we get residuals that are dominated by charge collection effects.

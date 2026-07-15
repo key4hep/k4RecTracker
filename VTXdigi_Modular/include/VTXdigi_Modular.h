@@ -68,7 +68,6 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
   inline float DrawChargeSmearingNumber() const { return static_cast<float>(m_rndm_charge()); }
 
   inline std::string LutFileName() const { return m_LUT_FileName; }
-  inline float LutStepLength() const { return m_LUT_stepLength; }
 
 private:
 
@@ -133,7 +132,6 @@ private:
 
   /* LUT */
   Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
-  Gaudi::Property<float> m_LUT_stepLength{this, "LookupTableSegmentStepLength", 0.0005f, "Length of the segments that a particle path through the sensor is split into. The deposited charge is distributed evenly over the segments, and each segments charge is distributed according to the in-pixel bin the segment center falls into. In mm. Defaults to 0.0005 mm."};
   Gaudi::Property<bool> m_LUT_ignorePitch{this, "LookupTableIgnorePitch", false, "Ignore the sensor thickness and pixel pitch values stored in the LUT file. Useful for slightly stretching/shrinking the LUT to fit curved sensors where the sensor length is not an integer multiple of the pixel pitch. If empty, the LUT file values are used."};
   Gaudi::Property<bool> m_LUT_shiftTruthPos{this, "LookupTableShiftTruthPosition", false, "Internally shift the truth position of the simHit. Only affects the output histograms, does not affect any collection. If turned to false, angled particle trajectories will bias the residual plots in case of LUT tables with uneven charge collection across the sensor thickness."};
 
