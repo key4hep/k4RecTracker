@@ -533,7 +533,7 @@ private:
   Gaudi::Property<double> m_z0_factor{
       this, "Z0Factor", 0.1,
       "Scaling factor for z0 uncertainty for the initial covariance matrix when InitializationType = 0,1,3."
-      "The actual sigma_z0 is computed as Z0Factor * |z0 (in cm)|"};
+      "The actual sigma_z0 is computed as Z0Factor * |z0 (in mm)|"};
   Gaudi::Property<double> m_sigma_tanLambda{
       this, "Sigma_tanLambda", 0.1,
       "Initial uncertainty on tanLambda for the initial covariance matrix when InitializationType = 0,1,3."};
@@ -646,11 +646,12 @@ private:
 
     TVector3 Init_momentum(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
 
-    track_interface.InitializeTrack(m_RadialThresholdPromptTrack.value(), m_useFirstHitAsReference, LimitHits,
+    double RadialThresholdPromptTrack_cm = m_RadialThresholdPromptTrack.value() * dd4hep::mm;
+
+    track_interface.InitializeTrack(RadialThresholdPromptTrack_cm, m_useFirstHitAsReference, LimitHits,
                                     m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum,
-                                    m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value() * dd4hep::mm,
-                                    m_sigma_phi.value(), m_omega_factor.value(), m_z0_factor.value(),
-                                    m_sigma_tanLambda.value());
+                                    m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value(), m_sigma_phi.value(),
+                                    m_omega_factor.value(), m_z0_factor.value(), m_sigma_tanLambda.value());
 
     auto track_init = track_interface.GetInitialization();
 
@@ -786,9 +787,12 @@ private:
   int FindBestHypothesis(const edm4hep::Track& track, edm4hep::TrackerHitPlaneCollection& fittedHits,
                          bool LimitHits) const {
 
-    TVector3 Init_position(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
+    TVector3 Init_position(m_init_position.value()[0] * dd4hep::mm, m_init_position.value()[1] * dd4hep::mm,
+                           m_init_position.value()[2] * dd4hep::mm);
 
     TVector3 Init_momentum(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
+
+    double RadialThresholdPromptTrack_cm = m_RadialThresholdPromptTrack.value() * dd4hep::mm;
 
     int winning_hypothesis = -1;
     double winning_chi2_ndf = std::numeric_limits<double>::max();
@@ -798,9 +802,9 @@ private:
       GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_wire_info, m_dc_decoder,
                                                    m_genfitField.get());
 
-      track_interface.InitializeTrack(m_RadialThresholdPromptTrack.value(), m_useFirstHitAsReference, LimitHits,
+      track_interface.InitializeTrack(RadialThresholdPromptTrack_cm, m_useFirstHitAsReference, LimitHits,
                                       m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum,
-                                      m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value() * dd4hep::mm,
+                                      m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value(),
                                       m_sigma_phi.value(), m_omega_factor.value(), m_z0_factor.value(),
                                       m_sigma_tanLambda.value());
 

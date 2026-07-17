@@ -109,6 +109,15 @@ public:
 
   int GetCharge() { return m_charge_hypothesis; }
 
+  static TMatrixDSym InitialCovarianceMatrixHelixToCartesian(const TMatrixDSym& helixCovariance,
+                                                             const TVector3& positionCm, const TVector3& momentumGeV,
+                                                             const TVector3& referencePointCm, int charge,
+                                                             double magneticFieldTesla);
+
+  TMatrixDSym CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6,
+                                               TVector3 Position_cm, TVector3 Momentum_gev, TVector3 RefPoint_cm,
+                                               int Charge, double Bz);
+
   void PrintTrack_init() {
 
     std::cout << "GENFIT Initial position: (" << m_posInit.X() << ", " << m_posInit.Y() << ", " << m_posInit.Z() << ")"
@@ -142,13 +151,7 @@ private:
   void CheckInitialization();
   void OrderHits(const edm4hep::Track& track, bool skipTrackOrdering);
   void LimitNumberHits(double epsilon, int smoothWindow);
-
-  TMatrixDSym CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_helix, TVector3 Position_cm, TVector3 Momentum_gev,
-                                               TVector3 RefPoint_cm, int charge, double Bz);
-
-  TMatrixDSym CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6,
-                                               TVector3 Position_cm, TVector3 Momentum_gev, TVector3 RefPoint_cm,
-                                               int Charge, double Bz);
+  void SetVPPosition(TVector3 referencePoint) { m_VP_referencePoint = referencePoint; };
 
   TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, int Charge, std::optional<double> sigma_d0,
                                              std::optional<double> sigma_phi, std::optional<double> sigma_omega,
