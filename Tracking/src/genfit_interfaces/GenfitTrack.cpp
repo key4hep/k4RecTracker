@@ -334,8 +334,8 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
 
         // Reconstruct the PCA described by this exact TrackState (here phi is assumed to be equal to phi0 because the
         // initial position is the PCA to VP)
-        m_posInit = TVector3(m_VP_referencePoint.X() + ts.D0 * std::sin(ts.phi) * dd4hep::mm,
-                             m_VP_referencePoint.Y() - ts.D0 * std::cos(ts.phi) * dd4hep::mm,
+        m_posInit = TVector3(m_VP_referencePoint.X() - ts.D0 * std::sin(ts.phi) * dd4hep::mm,
+                             m_VP_referencePoint.Y() + ts.D0 * std::cos(ts.phi) * dd4hep::mm,
                              m_VP_referencePoint.Z() + ts.Z0 * dd4hep::mm);
         m_charge_hypothesis = (Bz / ts.omega >= 0.) ? 1 : -1;
 
@@ -1170,7 +1170,7 @@ TMatrixDSym GenfitTrack::InitialCovarianceMatrixHelixToCartesian(const TMatrixDS
   const double yMm = positionCm.Y() / dd4hep::mm;
   const double referenceXMm = referencePointCm.X() / dd4hep::mm;
   const double referenceYMm = referencePointCm.Y() / dd4hep::mm;
-  const double d0Mm = -(referenceXMm - xMm) * std::sin(phi) + (referenceYMm - yMm) * std::cos(phi);
+  const double d0Mm = -(xMm - referenceXMm) * std::sin(phi) + (yMm - referenceYMm) * std::cos(phi);
   const double omegaPerMm =
       (magneticFieldTesla * charge < 0. ? -1. : 1.) * std::abs(ConversionUnits::a_lcio * magneticFieldTesla / pt);
 
@@ -1181,20 +1181,20 @@ TMatrixDSym GenfitTrack::InitialCovarianceMatrixHelixToCartesian(const TMatrixDS
   // These definitions are taken from
   // https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
   //
-  // d0 = -(Xr - x_PCA)*sin(phi0) + (Yr - y_PCA)*cos(phi0)
-  // => x_PCA = Xr + d0*sin(phi0), y_PCA = Yr - d0*cos(phi0)   [all in mm]
+  // d0 = -(x_PCA - Xr)*sin(phi0) + (y_PCA - Yr)*cos(phi0)
+  // => x_PCA = Xr - d0*sin(phi0), y_PCA = Yr + d0*cos(phi0)   [all in mm]
 
-  J(0, 0) = sin(phi);        // dx / dd0
-  J(0, 1) = d0Mm * cos(phi); // dx / dphi0
-  J(0, 2) = 0.0;             // dx / domega
-  J(0, 3) = 0.0;             // dx / dz0
-  J(0, 4) = 0.0;             // dx / dtanLambda
+  J(0, 0) = -sin(phi);        // dx / dd0
+  J(0, 1) = -d0Mm * cos(phi); // dx / dphi0
+  J(0, 2) = 0.0;              // dx / domega
+  J(0, 3) = 0.0;              // dx / dz0
+  J(0, 4) = 0.0;              // dx / dtanLambda
 
-  J(1, 0) = -cos(phi);       // dy / dd0
-  J(1, 1) = d0Mm * sin(phi); // dy / dphi0
-  J(1, 2) = 0.0;             // dy / domega
-  J(1, 3) = 0.0;             // dy / dz0
-  J(1, 4) = 0.0;             // dy / dtanLambda
+  J(1, 0) = cos(phi);         // dy / dd0
+  J(1, 1) = -d0Mm * sin(phi); // dy / dphi0
+  J(1, 2) = 0.0;              // dy / domega
+  J(1, 3) = 0.0;              // dy / dz0
+  J(1, 4) = 0.0;              // dy / dtanLambda
 
   // z = z_PCA = z0 + P^r_z   [mm]
   J(2, 0) = 0.0; // dz / dd0
@@ -1311,13 +1311,13 @@ TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_c
   // These definitions are taken from
   // https://flc.desy.de/lcnotes/notes/localfsExplorer_read?currentPath=/afs/desy.de/group/flc/lcnotes/LC-DET-2006-004.pdf
 
-  // d0 = -(Xr - x)*sin(phi0) + (Yr - y)*cos(phi0)
-  J(0, 0) = sin(phi0);  // dd0 / dx
-  J(0, 1) = -cos(phi0); // dd0 / dy
+  // d0 = -(x - Xr)*sin(phi0) + (y - Yr)*cos(phi0)
+  J(0, 0) = -sin(phi0); // dd0 / dx
+  J(0, 1) = cos(phi0);  // dd0 / dy
   J(0, 2) = 0.0;        // dd0 / dz
 
   // chain rule via phi0 = atan2(py, px)
-  double dd0_dphi = -(RefX_mm - x_PCA_mm) * cos(phi0) - (RefY_mm - y_PCA_mm) * sin(phi0);
+  double dd0_dphi = (RefX_mm - x_PCA_mm) * cos(phi0) + (RefY_mm - y_PCA_mm) * sin(phi0);
 
   J(0, 3) = dd0_dphi * (-py / pt2); // dd0 / dpx
   J(0, 4) = dd0_dphi * (px / pt2);  // dd0 / dpy
@@ -1420,8 +1420,8 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
   auto infoComputeD0Z0_firstHit =
       PCAInfo(gen_position, gen_momentum, m_charge_hypothesis, m_VP_referencePoint, Bz); // in cm
 
-  double d0 = ((-(m_VP_referencePoint.X() - infoComputeD0Z0_firstHit.PCA.X())) * sin(infoComputeD0Z0_firstHit.Phi0) +
-               (m_VP_referencePoint.Y() - infoComputeD0Z0_firstHit.PCA.Y()) * cos(infoComputeD0Z0_firstHit.Phi0)) /
+  double d0 = (-(infoComputeD0Z0_firstHit.PCA.X() - m_VP_referencePoint.X()) * sin(infoComputeD0Z0_firstHit.Phi0) +
+               (infoComputeD0Z0_firstHit.PCA.Y() - m_VP_referencePoint.Y()) * cos(infoComputeD0Z0_firstHit.Phi0)) /
               dd4hep::mm;                                                                // mm
   double z0 = (infoComputeD0Z0_firstHit.PCA.Z() - m_VP_referencePoint.Z()) / dd4hep::mm; // mm
   double phi = gen_momentum.Phi();                                                       // rad
