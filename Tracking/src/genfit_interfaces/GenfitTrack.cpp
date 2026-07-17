@@ -1441,8 +1441,8 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
   Edm4hepTrackState.referencePoint = edm4hep::Vector3f(x_ref / dd4hep::mm, y_ref / dd4hep::mm, z_ref / dd4hep::mm);
   Edm4hepTrackState.location = location;
 
-  TMatrixDSym CovHelix = CovarianceMatrixCartesianToHelix(covariancePosMom, gen_position, gen_momentum, m_VP_referencePoint,
-                                                          m_charge_hypothesis, Bz);
+  TMatrixDSym CovHelix = CovarianceMatrixCartesianToHelix(covariancePosMom, gen_position, gen_momentum,
+                                                          m_VP_referencePoint, m_charge_hypothesis, Bz);
 
   // Conversion from TMatrixDSym(5x5) to lower-triangular packed format used in edm4hep::TrackState
   for (int i = 0; i < 5; ++i) {
