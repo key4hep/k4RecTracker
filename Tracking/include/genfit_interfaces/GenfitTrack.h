@@ -159,7 +159,8 @@ private:
 
   HelperInitialization ComputeInitialParameters(double Bz);
 
-  edm4hep::TrackState UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState, int location);
+  edm4hep::TrackState UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState, TVector3 ReferencePoint,
+                                       int location);
 
   PCAInfoHelper PCAInfo(TVector3 position, TVector3 momentum, int charge, TVector3 refPoint, double Bz);
 
@@ -177,6 +178,8 @@ private:
   edm4hep::MutableTrack m_trackWithFit;
 
   TVector3 m_VP_referencePoint{0., 0., 0.};
+  TVector3 m_FirstHit_referencePoint{0., 0., 0.};
+  TVector3 m_LastHit_referencePoint{0., 0., 0.};
 
   const dd4hep::rec::WireTracker_info_struct* m_wire_info;
   const dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
