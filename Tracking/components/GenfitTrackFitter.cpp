@@ -463,8 +463,8 @@ private:
   GenfitInterface::GenfitMaterialInterface* m_geoMaterial;
 
   dd4hep::rec::SurfaceManager* m_surfMan;
-  dd4hep::rec::WireTracker_info_struct* m_wire_info;
-  dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
+  dd4hep::rec::WireTracker_info_struct* m_wire_info{nullptr};
+  dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder{nullptr};
 
   Gaudi::Property<std::string> m_WireTracker_name{
       this, "WireTrackerName", "DCH_v2",
