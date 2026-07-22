@@ -171,7 +171,9 @@ private:
   TVector3 m_momInit = TVector3(0., 0., 0.);
   TMatrixDSym m_covInit;
 
+  // Non-owning alias: ownership is transferred to m_genfitTrack when it is constructed.
   genfit::AbsTrackRep* m_genfitTrackRep = nullptr;
+  // Owns its TrackReps, TrackPoints, and measurements.
   genfit::Track* m_genfitTrack = nullptr;
 
   edm4hep::MutableTrack m_edm4hepTrack;

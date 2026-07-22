@@ -36,7 +36,10 @@ GenfitTrack::GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrderi
   OrderHits(track, skipTrackOrdering);
 }
 
-GenfitTrack::~GenfitTrack() {}
+GenfitTrack::~GenfitTrack() {
+  // genfit::Track owns its TrackReps, TrackPoints, and measurements.
+  delete m_genfitTrack;
+}
 
 /**
  * @brief Check if required Genfit components are properly initialized.
@@ -771,7 +774,6 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
 void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
 
   delete m_genfitTrack;
-  delete m_genfitTrackRep;
   m_genfitTrack = nullptr;
   m_genfitTrackRep = nullptr;
 
