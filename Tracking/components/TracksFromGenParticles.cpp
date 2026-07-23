@@ -191,11 +191,8 @@ struct TracksFromGenParticles final
       if (genParticle.getCharge() == 0)
         continue;
 
-      // Build tracks only for charged particles that reach the calorimeter face.
-      // isDecayedInTracker() (endpoint inside the tracker) rejects the particles
-      // whose helix extrapolation to the calo is a ghost: in-flight-decay parents,
-      // unstable baryons and low-pT curlers that stop in the tracker.  Real
-      // calo-reaching daughters/secondaries are kept regardless of generatorStatus.
+      // Build tracks only for charged particles that reach the calorimeter face
+      // if m_onlyCaloReachingParticles is set to True
       if (m_onlyCaloReachingParticles && genParticle.isDecayedInTracker())
         continue;
 
