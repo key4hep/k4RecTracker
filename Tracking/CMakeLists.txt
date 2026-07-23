@@ -93,8 +93,29 @@ set_tests_properties(${test_name} PROPERTIES DEPENDS test_TrackFinder)
 set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackFitter")
 
 SET(test_name "test_TrackMerger")
-ADD_TEST(NAME ${test_name} COMMAND python3 test_track_merger.py)
-set_test_env(${test_name})
-set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
+SET(test_dir "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
+
+ADD_TEST(NAME ${test_name}_run
+  COMMAND python3 test_track_merger.py run --input input.root --output output.root)
+set_test_env(${test_name}_run)
+set_tests_properties(${test_name}_run PROPERTIES
+  WORKING_DIRECTORY "${test_dir}"
+  FIXTURES_SETUP ${test_name}_fixture
+)
+
+ADD_TEST(NAME ${test_name}_check
+  COMMAND python3 test_track_merger.py check --output output.root)
+set_test_env(${test_name}_check)
+set_tests_properties(${test_name}_check PROPERTIES
+  WORKING_DIRECTORY "${test_dir}"
+  FIXTURES_REQUIRED ${test_name}_fixture
+)
+
+ADD_TEST(NAME ${test_name}_cleanup
+  COMMAND ${CMAKE_COMMAND} -E rm -f input.root output.root)
+set_tests_properties(${test_name}_cleanup PROPERTIES
+  WORKING_DIRECTORY "${test_dir}"
+  FIXTURES_CLEANUP ${test_name}_fixture
+)
 
 #endif()

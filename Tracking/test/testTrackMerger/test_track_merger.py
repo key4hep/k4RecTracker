@@ -3,21 +3,29 @@ Minimalistic test for the TrackMerger Gaudi processor.
 
 What it does
 ------------
-1. Creates a small EDM4hep input file containing:
+1. (run step) Creates a small EDM4hep input file containing:
    - InnerTracks : 2 tracks
    - OuterTracks : 2 tracks
 
    Track pair 0 is set up to MATCH  (|d0_diff| <= 0.5, |z0_diff| <= 2.5).
    Track pair 1 is set up to NOT match (large d0/z0 offsets).
 
-2. Runs TrackMerger via a minimal Gaudi job (k4run), explicitly setting all 5
-   per-parameter tolerances (D0Tolerance, Z0Tolerance, PhiTolerance,
-   OmegaTolerance, TanLambdaTolerance) to exercise their configurability from
-   the steering file.
+   Then runs TrackMerger via test_track_merger_steer.py (k4run), which sets
+   all 5 per-parameter tolerances (D0Tolerance, Z0Tolerance, PhiTolerance,
+   OmegaTolerance, TanLambdaTolerance) to exercise their configurability.
 
-3. Reads the output file and asserts that exactly 1 merged track was produced,
-   that it carries hits from both parent tracks, and that it links back to both
-   parent tracks.
+2. (check step) Reads the output file and asserts that exactly 1 merged track
+   was produced, that it carries hits from both parent tracks, and that it
+   links back to both parent tracks.
+
+The run and check steps are split into two subcommands so that CMake can run
+them as separate tests with a fixture dependency between them, while sharing
+all collection names/tolerances defined once in this file.
+
+Usage
+-----
+    python3 test_track_merger.py run   --input input.root --output output.root
+    python3 test_track_merger.py check --output output.root
 
 Requirements
 ------------
@@ -25,8 +33,8 @@ Requirements
   k4run must be on PATH
 """
 
+import argparse
 import subprocess
-import tempfile
 from pathlib import Path
 
 import edm4hep
@@ -34,19 +42,14 @@ import podio
 from edm4hep import TrackState as TS
 
 # ---------------------------------------------------------------------------
-# Constants that mirror the TrackMerger defaults
+# Constants that mirror the TrackMerger defaults.
+# Must be kept in sync with the constants in test_track_merger_steer.py.
 # ---------------------------------------------------------------------------
 INNER_COLL = "InnerTracks"
 OUTER_COLL = "OuterTracks"
 OUT_COLL = "MyCandidateMergedTracks"
 
-# Match thresholds (mirroring TrackMerger.cpp defaults).
-# Negative disables that parameter for matching.
-D0_TOL = 0.5
-Z0_TOL = 2.5
-PHI_TOL = -1.0
-OMEGA_TOL = -1.0
-TAN_LAMBDA_TOL = -1.0
+STEERING_FILE = Path(__file__).parent / "test_track_merger_steer.py"
 
 
 # ---------------------------------------------------------------------------
@@ -113,60 +116,11 @@ def write_input_file(path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 2 - write a minimal Gaudi steering file on-the-fly
+# Step 2 - run Gaudi via the standalone steering file
 # ---------------------------------------------------------------------------
-STEERING_TEMPLATE = """\
-from Configurables import TrackMerger
-from k4FWCore import ApplicationMgr, IOSvc
-
-iosvc = IOSvc()
-iosvc.Input  = "{input}"
-iosvc.Output = "{output}"
-
-merger = TrackMerger("TrackMerger",
-    InputInnerTracks   = "{inner_coll}",
-    InputOuterTracks   = "{outer_coll}",
-    OutTracks          = "{out_coll}",
-    Greedy             = True,
-    D0Tolerance        = {d0_tol},
-    Z0Tolerance        = {z0_tol},
-    PhiTolerance       = {phi_tol},
-    OmegaTolerance     = {omega_tol},
-    TanLambdaTolerance = {tan_lambda_tol},
-)
-
-ApplicationMgr(
-    TopAlg  = [merger],
-    EvtSel  = "NONE",
-    EvtMax  = 1,
-    ExtSvc  = [iosvc],
-)
-"""
-
-
-def write_steering_file(path: str, input_file: str, output_file: str) -> None:
-    content = STEERING_TEMPLATE.format(
-        input=input_file,
-        output=output_file,
-        inner_coll=INNER_COLL,
-        outer_coll=OUTER_COLL,
-        out_coll=OUT_COLL,
-        d0_tol=D0_TOL,
-        z0_tol=Z0_TOL,
-        phi_tol=PHI_TOL,
-        omega_tol=OMEGA_TOL,
-        tan_lambda_tol=TAN_LAMBDA_TOL,
-    )
-    Path(path).write_text(content)
-    print(f"[setup] Wrote steering file: {path}")
-
-
-# ---------------------------------------------------------------------------
-# Step 3 - run Gaudi
-# ---------------------------------------------------------------------------
-def run_gaudi(steering_file: str) -> None:
+def run_gaudi(input_file: str, output_file: str) -> None:
     result = subprocess.run(
-        ["k4run", steering_file],
+        ["k4run", str(STEERING_FILE), "--input", input_file, "--output", output_file],
         capture_output=True,
         text=True,
     )
@@ -178,7 +132,7 @@ def run_gaudi(steering_file: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 4 - read back & assert
+# Step 3 - read back & assert
 # ---------------------------------------------------------------------------
 def check_output(output_file: str) -> None:
     reader = podio.root_io.Reader(output_file)
@@ -222,19 +176,27 @@ def check_output(output_file: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Entry point (also works as a standalone script)
+# Entry point
 # ---------------------------------------------------------------------------
-def test_track_merger():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_file = str(Path(tmpdir) / "input.root")
-        output_file = str(Path(tmpdir) / "output.root")
-        steering_file = str(Path(tmpdir) / "steer.py")
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="step", required=True)
 
-        write_input_file(input_file)
-        write_steering_file(steering_file, input_file, output_file)
-        run_gaudi(steering_file)
-        check_output(output_file)
+    run_parser = subparsers.add_parser("run", help="Write input file and run TrackMerger")
+    run_parser.add_argument("--input", default="input.root")
+    run_parser.add_argument("--output", default="output.root")
+
+    check_parser = subparsers.add_parser("check", help="Check the TrackMerger output file")
+    check_parser.add_argument("--output", default="output.root")
+
+    args = parser.parse_args()
+
+    if args.step == "run":
+        write_input_file(args.input)
+        run_gaudi(args.input, args.output)
+    elif args.step == "check":
+        check_output(args.output)
 
 
 if __name__ == "__main__":
-    test_track_merger()
+    main()
