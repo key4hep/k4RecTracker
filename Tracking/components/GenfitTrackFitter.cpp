@@ -348,8 +348,7 @@ struct GenfitTrackFitter final
         int winning_hypothesis = FindBestHypothesis(track, FittedHits, false);
 
         if (winning_hypothesis == -1) {
-          debug() << "Track " << num_track_event << ": fit failed for all hypotheses, trying with less hits."
-                  << endmsg;
+          debug() << "Track " << num_track_event << ": fit failed for all hypotheses, trying with less hits." << endmsg;
         } else {
 
           isSuccess = 1;
@@ -369,8 +368,8 @@ struct GenfitTrackFitter final
           if (!isSuccess) {
 
             number_failures += 1;
-            debug() << "Track " << num_tracks_event
-                    << ": fit failed for single evaluation hypothesis, skipping track." << endmsg;
+            debug() << "Track " << num_tracks_event << ": fit failed for single evaluation hypothesis, skipping track."
+                    << endmsg;
             auto failedTrack = FittedTracks.create();
             auto failedFittedTrack = FittedTracksWithFilteredHits.create();
 
