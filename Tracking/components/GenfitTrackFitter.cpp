@@ -306,6 +306,7 @@ struct GenfitTrackFitter final
   operator()(const edm4hep::TrackCollection& tracks_input) const override {
 
     debug() << "Event number: " << event_counter++ << endmsg;
+    num_tracks_event = 0;
 
     // These collections store the output of the fit
     edm4hep::TrackCollection FittedTracks;
@@ -317,20 +318,20 @@ struct GenfitTrackFitter final
     for (const auto& track : tracks_input) {
 
       num_tracks++;
-      num_track_event++;
+      num_tracks_event++;
 
       // Skip unmatched tracks if the option is enabled
       if (m_ListOfTypesToSkip.size() > 0 && std::find(m_ListOfTypesToSkip.begin(), m_ListOfTypesToSkip.end(),
                                                       track.getType()) != m_ListOfTypesToSkip.end()) {
         num_skip += 1;
-        warning() << "Skipping track " << num_track_event - 1 << " with type " << track.getType() << "\n" << endmsg;
+        warning() << "Skipping track " << num_tracks_event << " with type " << track.getType() << "\n" << endmsg;
         continue;
       }
 
       // skip tracks with less then 3 hits (seed initialization needs 3 hits)
       if (track.getTrackerHits().size() < 3) {
         num_skip += 1;
-        warning() << "Track " << num_track_event - 1 << ": less than 3 hits, skipping fit.\n" << endmsg;
+        warning() << "Track " << num_tracks_event << ": less than 3 hits, skipping fit.\n" << endmsg;
         continue;
       }
 
@@ -347,7 +348,7 @@ struct GenfitTrackFitter final
         int winning_hypothesis = FindBestHypothesis(track, FittedHits, false);
 
         if (winning_hypothesis == -1) {
-          debug() << "Track " << num_track_event - 1 << ": fit failed for all hypotheses, trying with less hits."
+          debug() << "Track " << num_track_event << ": fit failed for all hypotheses, trying with less hits."
                   << endmsg;
         } else {
 
@@ -368,7 +369,7 @@ struct GenfitTrackFitter final
           if (!isSuccess) {
 
             number_failures += 1;
-            debug() << "Track " << num_track_event - 1
+            debug() << "Track " << num_tracks_event
                     << ": fit failed for single evaluation hypothesis, skipping track." << endmsg;
             auto failedTrack = FittedTracks.create();
             auto failedFittedTrack = FittedTracksWithFilteredHits.create();
@@ -388,7 +389,7 @@ struct GenfitTrackFitter final
 
           if (winning_hypothesis == -1) {
 
-            debug() << "Track " << num_track_event - 1 << ": fit failed for all hypotheses." << endmsg;
+            debug() << "Track " << num_tracks_event - 1 << ": fit failed for all hypotheses." << endmsg;
             number_failures += 1;
             auto failedTrack = FittedTracks.create();
             auto failedFittedTrack = FittedTracksWithFilteredHits.create();
@@ -434,6 +435,7 @@ public:
 
   // Num_tracks = num_processed_tracks + num_skip
   mutable int num_tracks = 0;           // Total number of tracks seen (including skipped ones)
+  mutable int num_tracks_event = 0;     // Total number of tracks seen in one event (including skipped ones)
   mutable int num_skip = 0;             // Number of tracks skipped (e.g. failing pre-selection)
   mutable int num_processed_tracks = 0; // Number of tracks actually processed (i.e. not skipped)
   mutable int number_failures = 0;      // Number of track fits that failed
@@ -655,7 +657,7 @@ private:
 
     auto track_init = track_interface.GetInitialization();
 
-    debug() << "Track " << num_tracks - 1 << " with " << track.getTrackerHits().size()
+    debug() << "Track " << num_tracks_event << " with " << track.getTrackerHits().size()
             << " hits: initial seed for track fit:" << endmsg;
 
     debug() << "  Initial position [mm]: (" << track_init.Position.X() / dd4hep::mm << ", "
@@ -682,7 +684,7 @@ private:
                                      m_Beta_steps, m_filterTrackHits);
 
     if (!isFit) {
-      debug() << "Track fit FAILED for track " << num_tracks - 1 << endmsg;
+      debug() << "Track fit FAILED for track " << num_tracks_event << endmsg;
       return false;
     }
 

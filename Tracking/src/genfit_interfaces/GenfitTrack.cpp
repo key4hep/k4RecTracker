@@ -871,7 +871,7 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
  */
 bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::string FitterType = "DAF", int debug_lvl = 0,
                       std::optional<double> Beta_init = 100., std::optional<double> Beta_final = 0.1,
-                      std::optional<int> Beta_steps = 10, std::optional<bool> FilterHits = true) {
+                      std::optional<int> Beta_steps = 10, std::optional<bool> FilterHits = true) try {
 
   edm4hep::Track Track_temp = m_edm4hepTrack;
   for (size_t i = 0; i < Track_temp.trackStates_size(); ++i) {
@@ -921,21 +921,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
   genfit::Track genfitTrack = *m_genfitTrack;
   genfit::AbsTrackRep* trackRep = genfitTrack.getTrackRep(0);
 
-  try {
-
-    genfitFitter->processTrackWithRep(&genfitTrack, trackRep);
-
-  } catch (const genfit::Exception& e) {
-
-    std::cerr << "Exception during track fitting: " << e.what() << std::endl;
-    m_edm4hepTrack.setChi2(-1);
-    m_edm4hepTrack.setNdf(-1);
-
-    m_trackWithFit.setChi2(-1);
-    m_trackWithFit.setNdf(-1);
-
-    return false;
-  }
+  genfitFitter->processTrackWithRep(&genfitTrack, trackRep);
 
   if (genfitFitter->isTrackFitted(&genfitTrack, trackRep)) {
 
@@ -1148,15 +1134,25 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     m_trackWithFit.setNdf(genfitTrack.getFitStatus()->getNdf());
 
     return true;
-  } else {
-    m_edm4hepTrack.setChi2(-1);
-    m_edm4hepTrack.setNdf(-1);
-
-    m_trackWithFit.setChi2(-1);
-    m_trackWithFit.setNdf(-1);
-
-    return false;
   }
+
+  m_edm4hepTrack.setChi2(-1);
+  m_edm4hepTrack.setNdf(-1);
+
+  m_trackWithFit.setChi2(-1);
+  m_trackWithFit.setNdf(-1);
+
+  return false;
+} catch (const genfit::Exception& e) {
+  std::cerr << "Exception during track fitting or fitted-state extraction: " << e.what() << std::endl;
+
+  m_edm4hepTrack.setChi2(-1);
+  m_edm4hepTrack.setNdf(-1);
+
+  m_trackWithFit.setChi2(-1);
+  m_trackWithFit.setNdf(-1);
+
+  return false;
 }
 
 /**
