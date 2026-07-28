@@ -18,9 +18,9 @@ protected:
 ErrorHandlerFunc_t previousRootErrorHandler = nullptr;
 
 void filteredRootErrorHandler(int level, Bool_t abort, const char* location, const char* message) {
-  const bool isNonPositiveDefiniteCholesky =
-      location != nullptr && message != nullptr && std::strstr(location, "TDecompChol::Decompose") != nullptr &&
-      std::strstr(message, "matrix not positive definite") != nullptr;
+  const bool isNonPositiveDefiniteCholesky = location != nullptr && message != nullptr &&
+                                             std::strstr(location, "TDecompChol::Decompose") != nullptr &&
+                                             std::strstr(message, "matrix not positive definite") != nullptr;
 
   if (isNonPositiveDefiniteCholesky) {
     return;

@@ -655,8 +655,7 @@ private:
                                     m_omega_factor.value(), m_z0_factor.value(), m_sigma_tanLambda.value());
 
     auto track_init = track_interface.GetInitialization();
-    const bool showDebugOutput =
-        m_printoutLevel == uint(MSG::DEBUG) || m_printoutLevel == uint(MSG::VERBOSE);
+    const bool showDebugOutput = m_printoutLevel == uint(MSG::DEBUG) || m_printoutLevel == uint(MSG::VERBOSE);
 
     debug() << "Track " << num_tracks_event << " with " << track.getTrackerHits().size()
             << " hits: initial seed for track fit:" << endmsg;
