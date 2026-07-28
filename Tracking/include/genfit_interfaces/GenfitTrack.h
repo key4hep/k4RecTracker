@@ -98,16 +98,25 @@ public:
                        std::optional<double> sigma_z0, std::optional<double> sigma_tanLambda);
 
   void CreateGenFitTrack(int particle_hypotesis, int debug_lvl);
-  bool Fit(std::string FitterType, int debug_lvl, std::optional<double> Beta_init, std::optional<double> Beta_final,
-           std::optional<int> Beta_steps, std::optional<bool> FilterHits);
+  bool Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::string FitterType, int debug_lvl,
+           std::optional<double> Beta_init, std::optional<double> Beta_final, std::optional<int> Beta_steps,
+           std::optional<bool> FilterHits);
 
   genfit::Track* GetTrack_genfit() { return m_genfitTrack; }
   genfit::AbsTrackRep* GetRep_genfit() { return m_genfitTrackRep; }
   edm4hep::MutableTrack& GetTrack_edm4hep() { return m_edm4hepTrack; }
   edm4hep::MutableTrack& GetTrackWithFit_edm4hep() { return m_trackWithFit; }
-  edm4hep::TrackerHitPlaneCollection& GetFittedHits() { return m_fittedHits; }
 
   int GetCharge() { return m_charge_hypothesis; }
+
+  static TMatrixDSym InitialCovarianceMatrixHelixToCartesian(const TMatrixDSym& helixCovariance,
+                                                             const TVector3& positionCm, const TVector3& momentumGeV,
+                                                             const TVector3& referencePointCm, int charge,
+                                                             double magneticFieldTesla);
+
+  TMatrixDSym CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6,
+                                               TVector3 Position_cm, TVector3 Momentum_gev, TVector3 RefPoint_cm,
+                                               int Charge, double Bz);
 
   void PrintTrack_init() {
 
@@ -142,13 +151,7 @@ private:
   void CheckInitialization();
   void OrderHits(const edm4hep::Track& track, bool skipTrackOrdering);
   void LimitNumberHits(double epsilon, int smoothWindow);
-
-  TMatrixDSym CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_helix, TVector3 Position_cm, TVector3 Momentum_gev,
-                                               TVector3 RefPoint_cm, int charge, double Bz);
-
-  TMatrixDSym CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6,
-                                               TVector3 Position_cm, TVector3 Momentum_gev, TVector3 RefPoint_cm,
-                                               int Charge, double Bz);
+  void SetVPPosition(TVector3 referencePoint) { m_VP_referencePoint = referencePoint; };
 
   TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, int Charge, std::optional<double> sigma_d0,
                                              std::optional<double> sigma_phi, std::optional<double> sigma_omega,
@@ -156,7 +159,8 @@ private:
 
   HelperInitialization ComputeInitialParameters(double Bz);
 
-  edm4hep::TrackState UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState, int location);
+  edm4hep::TrackState UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState, TVector3 ReferencePoint,
+                                       int location);
 
   PCAInfoHelper PCAInfo(TVector3 position, TVector3 momentum, int charge, TVector3 refPoint, double Bz);
 
@@ -167,14 +171,17 @@ private:
   TVector3 m_momInit = TVector3(0., 0., 0.);
   TMatrixDSym m_covInit;
 
+  // Non-owning alias: ownership is transferred to m_genfitTrack when it is constructed.
   genfit::AbsTrackRep* m_genfitTrackRep = nullptr;
+  // Owns its TrackReps, TrackPoints, and measurements.
   genfit::Track* m_genfitTrack = nullptr;
 
   edm4hep::MutableTrack m_edm4hepTrack;
   edm4hep::MutableTrack m_trackWithFit;
-  edm4hep::TrackerHitPlaneCollection m_fittedHits;
 
   TVector3 m_VP_referencePoint{0., 0., 0.};
+  TVector3 m_FirstHit_referencePoint{0., 0., 0.};
+  TVector3 m_LastHit_referencePoint{0., 0., 0.};
 
   const dd4hep::rec::WireTracker_info_struct* m_wire_info;
   const dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
