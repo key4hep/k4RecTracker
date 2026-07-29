@@ -111,11 +111,4 @@ set_tests_properties(${test_name}_check PROPERTIES
   FIXTURES_REQUIRED ${test_name}_fixture
 )
 
-ADD_TEST(NAME ${test_name}_cleanup
-  COMMAND ${CMAKE_COMMAND} -E rm -f input.root output.root)
-set_tests_properties(${test_name}_cleanup PROPERTIES
-  WORKING_DIRECTORY "${test_dir}"
-  FIXTURES_CLEANUP ${test_name}_fixture
-)
-
 #endif()
