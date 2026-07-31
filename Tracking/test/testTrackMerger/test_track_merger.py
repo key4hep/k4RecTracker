@@ -34,8 +34,6 @@ Requirements
 """
 
 import argparse
-import subprocess
-from pathlib import Path
 
 import edm4hep
 import podio
@@ -47,8 +45,6 @@ import podio
 INNER_COLL = "InnerTracks"
 OUTER_COLL = "OuterTracks"
 OUT_COLL = "MyCandidateMergedTracks"
-
-STEERING_FILE = Path(__file__).parent / "test_track_merger_steer.py"
 
 
 # ---------------------------------------------------------------------------
@@ -181,18 +177,16 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="step", required=True)
 
-    run_parser = subparsers.add_parser("run", help="Write input file and run TrackMerger")
-    run_parser.add_argument("--input", default="input.root")
-    run_parser.add_argument("--output", default="output.root")
+    setup_parser = subparsers.add_parser("setup", help="Write the input file")
+    setup_parser.add_argument("--input", default="input.root")
 
     check_parser = subparsers.add_parser("check", help="Check the TrackMerger output file")
     check_parser.add_argument("--output", default="output.root")
 
     args = parser.parse_args()
 
-    if args.step == "run":
+    if args.step == "setup":
         write_input_file(args.input)
-        run_gaudi(args.input, args.output)
     elif args.step == "check":
         check_output(args.output)
 
