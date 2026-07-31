@@ -1,12 +1,12 @@
 """
 Steering file for the TrackMerger test.
 
-Can be run standalone with:
+Run with:
 
-    k4run test_track_merger_steer.py
+    k4run test_track_merger_steer.py --input input.root --output output.root
 
-Input/output file names default to sensible values but are exposed via CLI
-so the test driver can override them.
+Input/output file names default to sensible values but can be overridden
+via CLI, e.g. by the CTest setup in CMakeLists.
 """
 
 from Configurables import TrackMerger

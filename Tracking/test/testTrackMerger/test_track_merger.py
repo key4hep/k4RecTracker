@@ -3,34 +3,35 @@ Minimalistic test for the TrackMerger Gaudi processor.
 
 What it does
 ------------
-1. (run step) Creates a small EDM4hep input file containing:
+1. (setup step) Creates a small EDM4hep input file containing:
    - InnerTracks : 2 tracks
    - OuterTracks : 2 tracks
 
    Track pair 0 is set up to MATCH  (|d0_diff| <= 0.5, |z0_diff| <= 2.5).
    Track pair 1 is set up to NOT match (large d0/z0 offsets).
 
-   Then runs TrackMerger via test_track_merger_steer.py (k4run), which sets
-   all 5 per-parameter tolerances (D0Tolerance, Z0Tolerance, PhiTolerance,
-   OmegaTolerance, TanLambdaTolerance) to exercise their configurability.
+   TrackMerger itself is run separately by CTest via
+   `k4run test_track_merger_steer.py`, which sets all 5 per-parameter
+   tolerances (D0Tolerance, Z0Tolerance, PhiTolerance, OmegaTolerance,
+   TanLambdaTolerance) to exercise their configurability.
 
 2. (check step) Reads the output file and asserts that exactly 1 merged track
    was produced, that it carries hits from both parent tracks, and that it
    links back to both parent tracks.
 
-The run and check steps are split into two subcommands so that CMake can run
-them as separate tests with a fixture dependency between them, while sharing
-all collection names/tolerances defined once in this file.
+The setup and check steps are split into two subcommands so that CMake can
+run them (and the k4run step in between) as separate tests chained via
+fixtures, while sharing all collection names defined once in this file.
 
 Usage
 -----
-    python3 test_track_merger.py run   --input input.root --output output.root
-    python3 test_track_merger.py check --output output.root
+    python3 test_track_merger.py setup   --input input.root
+    k4run test_track_merger_steer.py     --input input.root --output output.root
+    python3 test_track_merger.py check   --output output.root
 
 Requirements
 ------------
   pip install podio edm4hep   (or load the key4hep stack)
-  k4run must be on PATH
 """
 
 import argparse
