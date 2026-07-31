@@ -111,23 +111,7 @@ def write_input_file(path: str) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Step 2 - run Gaudi via the standalone steering file
-# ---------------------------------------------------------------------------
-def run_gaudi(input_file: str, output_file: str) -> None:
-    result = subprocess.run(
-        ["k4run", str(STEERING_FILE), "--input", input_file, "--output", output_file],
-        capture_output=True,
-        text=True,
-    )
-    print(result.stdout[-3000:])  # tail to keep output readable
-    if result.returncode != 0:
-        print(result.stderr[-2000:])
-        raise RuntimeError(f"k4run failed (exit {result.returncode})")
-    print("[run] Gaudi job finished successfully.")
-
-
-# ---------------------------------------------------------------------------
-# Step 3 - read back & assert
+# Step 2 - read back & assert
 # ---------------------------------------------------------------------------
 def check_output(output_file: str) -> None:
     reader = podio.root_io.Reader(output_file)
