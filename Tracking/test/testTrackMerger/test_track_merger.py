@@ -39,7 +39,6 @@ from pathlib import Path
 
 import edm4hep
 import podio
-from edm4hep import TrackState as TS
 
 # ---------------------------------------------------------------------------
 # Constants that mirror the TrackMerger defaults.
@@ -97,13 +96,13 @@ def write_input_file(path: str) -> None:
     # Inner track needs AtLastHit; Outer track needs AtFirstHit
     # Using identical d0/z0 -> diff = 0, well within tolerance
     d0_match, z0_match = 1.0, 5.0
-    add_track(inner_tracks, inner_hits, TS.AtLastHit, d0_match, z0_match)
-    add_track(outer_tracks, outer_hits, TS.AtFirstHit, d0_match, z0_match)
+    add_track(inner_tracks, inner_hits, edm4hep.TrackState.AtLastHit, d0_match, z0_match)
+    add_track(outer_tracks, outer_hits, edm4hep.TrackState.AtFirstHit, d0_match, z0_match)
 
     # --- Pair 1: should NOT match ---
     # Offsets deliberately exceed both thresholds
-    add_track(inner_tracks, inner_hits, TS.AtLastHit, 10.0, 100.0)
-    add_track(outer_tracks, outer_hits, TS.AtFirstHit, 50.0, 500.0)
+    add_track(inner_tracks, inner_hits, edm4hep.TrackState.AtLastHit, 10.0, 100.0)
+    add_track(outer_tracks, outer_hits, edm4hep.TrackState.AtFirstHit, 50.0, 500.0)
 
     frame.put(inner_tracks, INNER_COLL)
     frame.put(outer_tracks, OUTER_COLL)
