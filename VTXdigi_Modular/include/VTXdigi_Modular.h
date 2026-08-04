@@ -46,7 +46,7 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
   std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> operator() (const edm4hep::SimTrackerHitCollection& simHits, const edm4hep::EventHeaderCollection& headers) const override;
 
   /** @brief Increment histograms. To be called from the charge collector, once per simHit */
-  void FillHistograms_fromChargeCollector_perSimHit(const int layer, const dd4hep::rec::Vector3D& pathTravel, const float pathLength_Geant4, const dd4hep::rec::Vector3D& truthPos_local, const TGeoHMatrix& trafoMatrix, const bool createdInGenerator) const;
+  void FillHistograms_fromChargeCollector_perSimHit(const int layer, const dd4hep::rec::Vector3D& pathTravel, const float pathLength_Geant4, const dd4hep::rec::Vector3D& truthPos_local, const TGeoHMatrix& trafoMatrix) const;
 
   /* -- Accessors for charge collector -- */
 
@@ -98,8 +98,9 @@ private:
   void CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const;
 
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
-  void FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix, const std::pair<float, float> clusterPos_local) const;
-  void FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize, const int clusterSize_u, const int clusterSize_v) const;
+  void FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix) const;
+  // void FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize, const int clusterSize_u, const int clusterSize_v) const;
+  void FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cluster, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix) const;
   void FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::CellID& cellID) const;
 
   /* -- Properties -- */
@@ -171,77 +172,57 @@ private:
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRead{this, "SimTrackerHits read"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRejected_LayerNotToBeDigitized{this, " - SimTrackerHits rejected (layer not to be digitized)"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsAccepted{this, " = SimTrackerHits accepted"};
-  mutable Gaudi::Accumulators::Counter<> m_counter_accSimHitsCreatedInGenerator{this, "( accepted SimTrackerHits from particles created in generator)"};
-  mutable Gaudi::Accumulators::Counter<> m_counter_accSimHitsDirectMcParticleLink{this, "( accepted SimTrackerHits with direct MC particle link)"};
-
-
+  mutable Gaudi::Accumulators::Counter<> m_counter_accSimHitsCausedByGeneratorMCParticle{this, "( accepted SimTrackerHits from particles created in generator)"};
 
   mutable Gaudi::Accumulators::Counter<> m_counter_digiHitsCreated{this, "Digi hits created"};
 
   /* -- Histograms -- */
 
   enum {
-    hist1d_simHitE,
-    hist1d_simHitCharge,
-    hist1d_simHitMomentum_keV,
-    hist1d_simHitMomentum_MeV,
-    hist1d_simHitMomentum_GeV,
+    hist1d_simHit_pdg,
+    hist1d_simHit_depositedEnergy,
+    hist1d_simHit_depositedCharge,
+    hist1d_simHit_particleMomentum_keV,
+    hist1d_simHit_particleMomentum_MeV,
+    hist1d_simHit_particleMomentum_GeV,
+    hist1d_simHit_timeStamp,
     hist1d_simHit_x,
     hist1d_simHit_y,
     hist1d_simHit_z,
-    hist1d_simHit_z_createdInGenerator,
-    hist1d_simHit_z_createdInSimulation,
-    hist1d_simHit_Vertex_x,
-    hist1d_simHit_Vertex_y,
-    hist1d_simHit_Vertex_z,
-    hist1d_simhit_MomentumDirection_x,
-    hist1d_simhit_MomentumDirection_y,
-    hist1d_simhit_MomentumDirection_z,
-    hist1d_simHit_InitialMomentumDirection_x,
-    hist1d_simHit_InitialMomentumDirection_y,
-    hist1d_simHit_InitialMomentumDirection_z,
-    hist1d_digiHitCharge,
-    hist1d_simHitPDG,
+    hist1d_simHit_z_causedByGeneratorMCParticle,
+    hist1d_simHit_z_causedBySimulationMCParticle,
+    hist1d_simHit_vertex_x,
+    hist1d_simHit_vertex_y,
+    hist1d_simHit_vertex_z,
+    hist1d_simhit_particleMomentumDirection_x,
+    hist1d_simhit_particleMomentumDirection_y,
+    hist1d_simhit_particleMomentumDirection_z,
+    hist1d_simHit_particleMomentumInitialDirection_x,
+    hist1d_simHit_particleMomentumInitialDirection_y,
+    hist1d_simHit_particleMomentumInitialDirection_z,
+    hist1d_digiHit_collectedCharge,
+    hist1d_digiHit_collectedCharge_seedPixel,
     hist1d_digiHitsPerSimHit,
     hist1d_clusterSize,
     hist1d_clusterSize_u,
     hist1d_clusterSize_v,
-    hist1d_clusterSize_createdInGenerator,
-    hist1d_clusterSize_createdInSimulation,
+    hist1d_clusterSize_causedByGeneratorMCParticle,
+    hist1d_clusterSize_causedBySimulationMCParticle,
     hist1d_residual_u,
     hist1d_residual_u_maxEParticleOnSensor,
-    hist1d_residual_u_noParents,
-    hist1d_residual_u_directMcParticleLink,
-    hist1d_residual_u_mcOriginFarFromSimHit,
-    hist1d_residual_u_directMcParticleLink_mcOriginFarFromSimHit,
-    hist1d_residual_u_singlePixelCluster,
-    hist1d_residual_u_multiPixelCluster,
-    hist1d_residual_u_createdInGenerator,
-    hist1d_residual_u_createdInSimulation,
+    hist1d_residual_u_causedByGeneratorMCParticle,
+    hist1d_residual_u_causedBySimulationMCParticle,
     hist1d_residual_v,
     hist1d_residual_v_maxEParticleOnSensor,
-    hist1d_residual_v_noParents,
-    hist1d_residual_v_directMcParticleLink,
-    hist1d_residual_v_mcOriginFarFromSimHit,
-    hist1d_residual_v_directMcParticleLink_mcOriginFarFromSimHit,
-    hist1d_residual_v_singlePixelCluster,
-    hist1d_residual_v_multiPixelCluster,
-    hist1d_residual_v_createdInGenerator,
-    hist1d_residual_v_createdInSimulation,
+    hist1d_residual_v_causedByGeneratorMCParticle,
+    hist1d_residual_v_causedBySimulationMCParticle,
     hist1d_residual_w,
-    hist1d_residual_w_noParents,
-    hist1d_residual_r,
     hist1d_clusterPosUncertainty_u,
-    hist1d_clusterPosUncertainty_u_noParents,
     hist1d_clusterPosUncertainty_v,
-    hist1d_clusterPosUncertainty_v_noParents,
-    hist1d_pixelDistToClusterCenter_u,
-    hist1d_pixelDistToClusterCenter_v,
     hist1d_pathTravel_u,
     hist1d_pathTravel_v,
     hist1d_pathTravel_r,
-    hist1d_simHitTimeStamp,
-    hist1d_digiHitTimeStamp,
+    hist1d_digiHit_timeStamp,
     hist1d_simHitsPerDigiHit,
     hist1d_highestEnergyParticleOnSensor_energy,
     hist1dArrayLen
@@ -261,7 +242,7 @@ private:
   > m_hist1d;
 
   enum{
-    histProfile1d_digiHitCharge_vs_global_z,
+    histProfile1d_digiHit_collectedCharge_vs_global_z,
     histProfile1d_clusterSize_vs_global_z,
     histProfile1d_clusterSize_u_vs_global_z,
     histProfile1d_clusterSize_v_vs_global_z,
@@ -287,31 +268,24 @@ private:
   > m_histProfile1d;
 
   enum {
-    hist2d_digiHitCharge_vs_global_z,
+    hist2d_digiHit_collectedCharge_vs_global_z,
     hist2d_hitMap_simHits,
-    hist2d_hitMap_simHits_createdInGenerator,
-    hist2d_hitMap_simHits_createdInSimulation,
-    hist2d_hitMap_simHits_eDepAboveThreshold,
+    hist2d_hitMap_simHits_causedByGeneratorMCParticle,
+    hist2d_hitMap_simHits_causedBySimulationMCParticle,
     hist2d_hitMap_pixelHits,
     hist2d_clusterSize_vs_global_z,
     hist2d_clusterSize_u_vs_global_z,
     hist2d_clusterSize_v_vs_global_z,
-    hist2d_clusterSize_vs_global_z_createdInGenerator,
-    hist2d_clusterSize_vs_global_z_createdInSim,
+    hist2d_clusterSize_vs_global_z_causedByGeneratorMCParticle,
+    hist2d_clusterSize_vs_global_z_causedBySimulationMCParticle,
     hist2d_residual_u_vs_global_z,
     hist2d_residual_v_vs_global_z,
     hist2d_residual_r_vs_global_z,
     hist2d_residual_vs_clusterPosUncertainty_u,
     hist2d_residual_vs_clusterPosUncertainty_v,
     hist2d_pathTravel_u_vs_global_z,
-    hist2d_pathTravel_u_vs_global_z_createdInGenerator,
-    hist2d_pathTravel_u_vs_global_z_createdInSimulation,
     hist2d_pathTravel_v_vs_global_z,
-    hist2d_pathTravel_v_vs_global_z_createdInGenerator,
-    hist2d_pathTravel_v_vs_global_z_createdInSimulation,
     hist2d_pathTravel_w_vs_global_z,
-    hist2d_pathTravel_w_vs_global_z_createdInGenerator,
-    hist2d_pathTravel_w_vs_global_z_createdInSimulation,
     hist2d_pathTravel_r_vs_global_z,
     hist2d_simHit_xy,
     hist2d_simHit_xz,

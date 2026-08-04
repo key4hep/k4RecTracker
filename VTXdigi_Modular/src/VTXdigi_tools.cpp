@@ -81,16 +81,17 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 
 /* -- helpers -- */
 
-/** @brief Check if a MCParticle was created in the generator */
-bool CreatedInGenerator(const edm4hep::MCParticle& mcParticle) {
-  int32_t simulatorStatus = mcParticle.getSimulatorStatus();
-  int mask_bit = edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
+bool CausedByGeneratorMCParticle(const edm4hep::SimTrackerHit& simTrackerHit) {
+  const auto mcParticle = simTrackerHit.getParticle();
+
+  const int32_t simulatorStatus = mcParticle.getSimulatorStatus();
+  const int mask_bit = edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
   const int32_t mask = 1 << mask_bit;
 
-  if ((simulatorStatus & mask) == 0) {
-    return true; // bit is not set -> created in generator
-  }
-  return false; // bit is set -> created in simulation
+  const bool mcpCreatedInGenerator = (simulatorStatus & mask) == 0; // bit is not set -> created in generator
+  const bool hasDirectMcParticleLink = !simTrackerHit.isProducedBySecondary();
+
+  return mcpCreatedInGenerator && hasDirectMcParticleLink;
 }
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
@@ -379,6 +380,16 @@ std::pair<float, float> Cluster::ComputePosUncertainty_ChargeWeighted() const {
   return ComputePosUncertainty_ChargeWeighted(ComputePos());
 }
 
+float Cluster::GetSeedPixelCharge() const {
+  float maxCharge = 0;
+  for (const auto pixel : pixels) {
+    if (pixel->charge > maxCharge) {
+      maxCharge = pixel->charge;
+    }
+  }
+  return maxCharge;
+}
+
 
 std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv) {
   return {{
@@ -462,295 +473,6 @@ std::vector<Cluster> HitMap::ComputeClusters() const {
     } // loop over queue
   } // loop over cluster-seeds
   return clusters;
-}
-
-/* -- Tool tests -- */
-
-bool ToolTest() {
-  std::cout << " | Running VTXdigi tool tests" << std::endl;
-  bool passed = true;
-
-  std::cout << " | VTXdigi_tools::ComputeBinIndex()";
-  {
-    bool passedInternal = true;
-    const float binX0 = -1.0f;
-    const float binWidth = 0.5f;
-    const int binN = 6;
-
-    const float inputs[5] = { -1.0f, 0.0f, 2.0f, -1.1f, 2.1f };
-    const int expectedOutputs[5] = { 0, 2, 5, -1, -1 };
-
-    for (size_t i = 0; i < 5; ++i) {
-      int result = ComputeBinIndex(inputs[i], binX0, binWidth, binN);
-      if (result != expectedOutputs[i]) {
-        std::cout << " - FAILED " << std::endl << " | -> Expected bin index " << expectedOutputs[i] << " for x=" << inputs[i] << ", got " << result << std::endl;
-        passedInternal = false;
-      }
-    }
-    if (passedInternal)
-      std::cout << " - PASSED" << std::endl;
-    passed = passed && passedInternal;
-  }
-
-  std::cout << " | VTXdigi_tools::ComputePixelIndices()";
-  {
-    bool passedInternal = true;
-
-    const std::pair<float, float> pixelPitch = { 1.0f, 2.0f };
-    const std::pair<size_t, size_t> pixelCount = { 10, 10 };
-
-    std::array<dd4hep::rec::Vector3D, 10> inputs = {{dd4hep::rec::Vector3D(0.f, 0.f, 0.f)}};
-    inputs = {
-      dd4hep::rec::Vector3D( -4.5f, -9.0f, 0.0f ),
-      dd4hep::rec::Vector3D(0.0f, 0.0f, 0.0f),
-      dd4hep::rec::Vector3D(4.4f, 8.9f, 0.0f),
-      dd4hep::rec::Vector3D(-5.0f, -10.0f, 0.0f), // edge tests
-      dd4hep::rec::Vector3D(5.0f, 10.0f, 0.0f),
-      dd4hep::rec::Vector3D(-5.1f, 0.0f, 0.0f), // out of bounds tests
-      dd4hep::rec::Vector3D(5.1f, 0.0f, 0.0f),
-      dd4hep::rec::Vector3D(0.0f, -10.1f, 0.0f),
-      dd4hep::rec::Vector3D(0.0f, 10.1f, 0.0f),
-      dd4hep::rec::Vector3D(5.1f, 10.1f, 0.0f),
-    };
-    std::array<std::pair<int, int>, inputs.size()> expectedOutputs = {{{0, 0}}};
-    expectedOutputs= {{
-      {0,0},
-      {5,5},
-      {9,9},
-      {0,0},
-      {9,9},
-      {-1,5},
-      {-1,5},
-      {5,-1},
-      {5,-1},
-      {-1,-1}
-    }};
-
-    for (size_t i = 0; i < inputs.size(); ++i) {
-      std::pair<int, int> result = ComputePixelIndices(inputs.at(i), pixelPitch, pixelCount);
-      if (result != expectedOutputs[i]) {
-        std::cout << " - FAILED " << std::endl << " | -> Expected pixel indices (" << expectedOutputs[i].first << ", " << expectedOutputs[i].second << ") for (u,v,w)=(" << inputs.at(i).x() << ", " << inputs.at(i).y() << ", " << inputs.at(i).z() << "), got (" << result.first << ", " << result.second << ")" << std::endl;
-        passedInternal = false;
-      }
-    }
-
-    if (passedInternal)
-      std::cout << " - PASSED" << std::endl;
-    passed = passed && passedInternal;
-  }
-
-  std::cout << " | VTXdigi_tools::ComputePosFromPixIndex_local(std::pair<int,int>)";
-  {
-    bool passedInternal = true;
-
-    const std::pair<float, float> sensorLength = { 10.0, 20.0 }; // 10 x 10 pixels
-    const std::pair<float, float> pixelPitch = { 1.0, 2.0 };
-
-    std::array<std::pair<int, int>, 6> inputs = {{{0, 0}}};
-    inputs = {{
-      {0, 0},
-      {4, 4},
-      {5, 5},
-      {9, 9},
-      {-1, -1}, // out of bounds test
-      {10, 10},
-    }};
-    std::array<dd4hep::rec::Vector3D, inputs.size()> expectedOutputs = {{dd4hep::rec::Vector3D(0.f, 0.f, 0.f)}};
-    expectedOutputs = {{
-      dd4hep::rec::Vector3D( -4.5, -9.0, 0.0 ),
-      dd4hep::rec::Vector3D( -0.5, -1.0, 0.0 ),
-      dd4hep::rec::Vector3D( 0.5, 1.0, 0.0 ),
-      dd4hep::rec::Vector3D( 4.5, 9.0, 0.0 ),
-      dd4hep::rec::Vector3D( -5.5, -11.0, 0.0 ),
-      dd4hep::rec::Vector3D( 5.5, 11.0, 0.0 ),
-    }};
-
-    for (size_t i = 0; i < inputs.size(); ++i) {
-      dd4hep::rec::Vector3D result = ComputePosFromPixIndex_local(inputs.at(i), sensorLength, pixelPitch);
-      if (std::abs(result.x() - expectedOutputs[i].x()) > 1e-6 || std::abs(result.y() - expectedOutputs[i].y()) > 1e-6) {
-        if (passedInternal)
-        std::cout << " - FAILED " << std::endl;
-        std::cout << " | -> Expected local position (" << expectedOutputs[i].x() << ", " << expectedOutputs[i].y() << ") for index (i_u,i_v)=(" << inputs.at(i).first << ", " << inputs.at(i).second << "), got (" << result.x() << ", " << result.y() << ")" << std::endl;
-        passedInternal = false;
-      }
-    }
-
-    if (passedInternal)
-      std::cout << " - PASSED" << std::endl;
-    passed = passed && passedInternal;
-  }
-
-  std::cout << " | VTXdigi_tools::ComputePosFromPixIndex_local(std::pair<float,float>)";
-  {
-    bool passedInternal = true;
-
-    const std::pair<float, float> pixelPitch = { 1.0, 2.0 };
-    const std::pair<float, float> sensorLength = { 10.0, 20.0 }; // 10 x 10 pixels
-
-    std::array<std::pair<float, float>, 9> inputs = {{{0., 0.}}};
-    inputs = {{
-      {0., 0.},
-      {4., 4.},
-      {4.5, 4.5},
-      {5., 5.},
-      {9.0, 9.0},
-      {-0.5, -0.5},
-      {9.5, 9.5},
-      {-1., -1.}, // expect out of bounds to not be treated at all (done elsewhere)
-      {10., 10.},
-    }};
-    std::array<dd4hep::rec::Vector3D, inputs.size()> expectedOutputs = {{dd4hep::rec::Vector3D(0.f, 0.f, 0.f)}};
-    expectedOutputs = {{
-      dd4hep::rec::Vector3D( -4.5, -9.0, 0.0 ),
-      dd4hep::rec::Vector3D( -0.5, -1.0, 0.0 ),
-      dd4hep::rec::Vector3D( 0., 0., 0. ),
-      dd4hep::rec::Vector3D( 0.5, 1.0, 0.0 ),
-      dd4hep::rec::Vector3D( 4.5, 9.0, 0.0 ),
-      dd4hep::rec::Vector3D( -5.0, -10.0, 0.0 ),
-      dd4hep::rec::Vector3D( 5.0, 10.0, 0.0 ),
-      dd4hep::rec::Vector3D( -5.5, -11.0, 0.0 ),
-      dd4hep::rec::Vector3D( 5.5, 11.0, 0.0 ),
-    }};
-
-    for (size_t i = 0; i < inputs.size(); ++i) {
-      dd4hep::rec::Vector3D result = ComputePosFromPixIndex_local(inputs.at(i), sensorLength, pixelPitch);
-      if (std::abs(result.x() - expectedOutputs[i].x()) > 1e-6 || std::abs(result.y() - expectedOutputs[i].y()) > 1e-6) {
-        if (passedInternal)
-        std::cout << " - FAILED " << std::endl;
-        std::cout << " | -> Expected local position (" << expectedOutputs[i].x() << ", " << expectedOutputs[i].y() << ") for index (i_u,i_v)=(" << inputs.at(i).first << ", " << inputs.at(i).second << "), got (" << result.x() << ", " << result.y() << ")" << std::endl;
-        passedInternal = false;
-      }
-    }
-
-    if (passedInternal)
-      std::cout << " - PASSED" << std::endl;
-    passed = passed && passedInternal;
-  }
-
-  std::cout << " | VTXdigi_tools::ComputeInPixelIndices()";
-  {
-    bool passedInternal = true;
-
-    const std::array<int, 3> binCount = { 4, 4, 4 };
-    const std::pair<float, float> pixelPitch = { 1.0f, 2.0f }; // bin-width is 0.25
-
-    const std::array<float, 3> activeVolumeDimensions = { 10.0f, 20.0f, 1.0f };
-
-    std::array<dd4hep::rec::Vector3D, 10> inputs = {{dd4hep::rec::Vector3D(0.f, 0.f, 0.f)}};
-    inputs = {
-      dd4hep::rec::Vector3D(0.1, 0.1, -0.4),
-      dd4hep::rec::Vector3D(0.1, 1.9, 0.1),
-      dd4hep::rec::Vector3D(-0.1, -0.1, -0.4),
-      dd4hep::rec::Vector3D(-0.1, -0.1, 0.1),
-      dd4hep::rec::Vector3D(0., 0., 0.), // edges
-      dd4hep::rec::Vector3D(1., 2.,0.5),
-      dd4hep::rec::Vector3D(-5.1, -10.1, 0.), // out-of-bounds
-      dd4hep::rec::Vector3D(5.1, 10.1, 0.),
-      dd4hep::rec::Vector3D(0.1, 0.1, -0.6),
-      dd4hep::rec::Vector3D(0.1, 0.1, 0.6),
-    };
-    std::array<std::array<int, 3>, inputs.size()> expectedOutputs = {{{0, 0, 0}}};
-    expectedOutputs = {{
-      {0, 0, 0},
-      {0, 3, 2},
-      {3, 3, 0},
-      {3, 3, 2},
-      {0, 0, 2}, // edges
-      {0, 0, 3},
-      {-1, -1, 2}, // out-of-bounds
-      {-1, -1, 2},
-      {0, 0, -1},
-      {0, 0, -1},
-    }};
-
-    for (size_t i = 0; i < inputs.size(); ++i) {
-      std::array<int, 3> result = ComputeInPixelIndices(inputs.at(i), binCount, pixelPitch, activeVolumeDimensions);
-      if (result != expectedOutputs[i]) {
-        std::cout << " - FAILED " << std::endl << " | -> Expected in-pixel indices (" << expectedOutputs[i][0] << ", " << expectedOutputs[i][1] << ", " << expectedOutputs[i][2] << ") for (u,v,w)=(" << inputs.at(i).x() << ", " << inputs.at(i).y() << ", " << inputs.at(i).z() << "), got (" << result[0] << ", " << result[1] << ", " << result[2] << ")" << std::endl;
-        passedInternal = false;
-      }
-    }
-
-    if (passedInternal)
-      std::cout << " - PASSED" << std::endl;
-    passed = passed && passedInternal;
-  }
-
-  std::cout << " | VTXdigi_tools::HitMap()";
-  {
-    bool passedInternal = true;
-
-    SimHitWrapper simHitWrapper; // not used, just need something to pass to FillCharge()
-
-    HitMap hitMap({10,10});
-
-    hitMap.FillCharge({0,0},1, simHitWrapper);
-    hitMap.FillCharge({1,1},2, simHitWrapper);
-
-    if (hitMap.GetCharge({0,0}) != 1) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected charge 1 at (0,0), got " << hitMap.GetCharge({0,0}) << std::endl;
-      passedInternal = false;
-    }
-    if (hitMap.GetCharge({1,1}) != 2) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected charge 2 at (1,1), got " << hitMap.GetCharge({1,1}) << std::endl;
-      passedInternal = false;
-    }
-    if (hitMap.GetTotalCharge() != 3) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 3, got " << hitMap.GetTotalCharge() << std::endl;
-      passedInternal = false;
-    }
-
-    hitMap.FillCharge({0,0},100, simHitWrapper); // test adding charge to existing pixel
-
-    if (hitMap.GetCharge({0,0}) != 101) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected charge 101 at (0,0), got " << hitMap.GetCharge({0,0}) << std::endl;
-      passedInternal = false;
-    }
-    if (hitMap.GetTotalCharge() != 103) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 103, got " << hitMap.GetTotalCharge() << std::endl;
-      passedInternal = false;
-    }
-
-    try {
-      hitMap.FillCharge({-1,0},1, simHitWrapper);
-      std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (-1,0)" << std::endl;
-      passedInternal = false;
-    }
-    catch (const std::runtime_error& e) {}
-    try {
-      hitMap.FillCharge({0,-1},1, simHitWrapper);
-      std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (0,-1)" << std::endl;
-      passedInternal = false;
-    }
-    catch (const std::runtime_error& e) {}
-    try {
-      hitMap.FillCharge({10,0},1, simHitWrapper);
-      std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (10,0)" << std::endl;
-      passedInternal = false;
-    }
-    catch (const std::runtime_error& e) {}
-    try {
-      hitMap.FillCharge({0,10},1, simHitWrapper);
-      std::cout << " - FAILED " << std::endl << " | -> Expected out-of-bounds exception for pixel (0,10)" << std::endl;
-      passedInternal = false;
-    }
-    catch (const std::runtime_error& e) {}
-
-    hitMap.Reset();
-
-    if (hitMap.GetTotalCharge() != 0) {
-      std::cout << " - FAILED " << std::endl << " | -> Expected total charge 0 after Reset(), got " << hitMap.GetTotalCharge() << std::endl;
-      passedInternal = false;
-    }
-
-    if (passedInternal)
-      std::cout << " - PASSED" << std::endl;
-    passed = passed && passedInternal;
-  }
-
-  if (passed)
-    std::cout << " | All tests passed." << std::endl;
-  return passed;
 }
 
 } // namespace VTXdigi_tools

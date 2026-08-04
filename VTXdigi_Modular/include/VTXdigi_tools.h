@@ -17,15 +17,11 @@ namespace VTXdigi_tools {
 
 constexpr float kChargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
 
-/* -- Tool tests -- */
-bool ToolTest();
-
 /* -- SimHitWrapper -- */
 
-/** @brief Check if a MCParticle was created in the generator */
-bool CreatedInGenerator(const edm4hep::MCParticle& mcParticle);
-/** @brief Check if a simTrackerHit was created in the generator */
-inline bool CreatedInGenerator(const edm4hep::SimTrackerHit& simTrackerHit) { return CreatedInGenerator(simTrackerHit.getParticle()); };
+/** @brief Check if a simHit was caused by a particle that was created in the generator
+  * @note this accounts for dropping of low-E MCParticles if SaveAllParticles=False in ddsim */
+bool CausedByGeneratorMCParticle(const edm4hep::SimTrackerHit& simTrackerHit);
 
 /** @brief Class to contain all information about a simTrackerHit that is needed for the digitization.
  * @note this is where the simTrackerHit is actually stored, everything else (pixelHit / cluster) will store pointers to this. */
@@ -56,11 +52,9 @@ public:
   inline float charge() const { return m_charge; }
   inline int layer() const { return m_layerNumber; }
 
-  /** @brief Check if the simHit particle was created in the generator (via MCParticle, which might not be the "real" particle, if SaveAllParticles is turned off in ddsim) */
-  inline bool CreatedInGenerator() const { return ::VTXdigi_tools::CreatedInGenerator(m_simTrackerHit); }
-
-  /** @brief Check if the linked MC particle is the particle that produced this hit. If false, the hit was produced by a secondary particle, which had no MC particle  */
-  inline bool hasDirectMcParticleLink() const { return !m_simTrackerHit.isProducedBySecondary(); }
+  /** @brief Check if the simHit was caused by a particle that was created in the generator
+  * @note this accounts for dropping of low-E MCParticles if SaveAllParticles=False in ddsim */
+  inline bool CausedByGeneratorMCParticle() const {return VTXdigi_tools::CausedByGeneratorMCParticle(m_simTrackerHit); }
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
@@ -101,6 +95,9 @@ struct Cluster {
   /** @brief Compute the uncertainty of the cluster position via charge-weighed center of gravity in terms of pixel indices */
   std::pair<float, float> ComputePosUncertainty_ChargeWeighted() const;
   std::pair<float, float> ComputePosUncertainty_ChargeWeighted(const std::pair<float, float>& clusterPos) const;
+
+  /** @brief get the charge in the seed pixel (eg. pixel with the highest charge) */
+  float GetSeedPixelCharge() const;
 };
 
 /** @brief Get the indices of all direct neighbors of a pixel */

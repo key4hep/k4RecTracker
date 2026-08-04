@@ -424,8 +424,8 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
   }
 
   const Index_inPix binCount = m_LUT.GetBinCount();
-  const std::array<float, 3> entry = {path.entry.x(), path.entry.y(), path.entry.z()};
-  const std::array<float, 3> travel = {path.travel.x(), path.travel.y(), path.travel.z()};
+  const std::array<float, 3> entry = {static_cast<float>(path.entry.x()), static_cast<float>(path.entry.y()), static_cast<float>(path.entry.z())};
+  const std::array<float, 3> travel = {static_cast<float>(path.travel.x()), static_cast<float>(path.travel.y()), static_cast<float>(path.travel.z())};
 
   std::array<int, 3> g; // fine-grid bin index per axis, of the voxel the path currently is in
   std::array<int, 3> step; // direction (+1/-1) the bin index moves along each axis
@@ -503,7 +503,7 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
   if (iterationsLeft < 0) [[unlikely]]
     m_digitizer.warning() << "ChargeCollector_LUT::FillHit: voxel traversal did not terminate within the expected number of steps. Some charge may have been dropped." << endmsg;
 
-  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix, simHit.CreatedInGenerator()); // fill histograms once per sim hit, with info from the path (eg. travel vector, which contains info on the angle of incidence)
+  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix); // fill histograms once per sim hit, with info from the path (eg. travel vector, which contains info on the angle of incidence)
 }
 
 void ChargeCollector_LUT::DistributeVoxelCharge(HitMap& hitMap, const Index_voxel& i_vox, const float charge, const SimHitWrapper& simHit) const {
