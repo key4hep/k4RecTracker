@@ -172,7 +172,9 @@ private:
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRead{this, "SimTrackerHits read"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsRejected_LayerNotToBeDigitized{this, " - SimTrackerHits rejected (layer not to be digitized)"};
   mutable Gaudi::Accumulators::Counter<> m_counter_simHitsAccepted{this, " = SimTrackerHits accepted"};
-  mutable Gaudi::Accumulators::Counter<> m_counter_accSimHitsCausedByGeneratorMCParticle{this, "( accepted SimTrackerHits from particles created in generator)"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_accSimHitsFromPrimary{this, "( accepted SimTrackerHits from particles created in generator)"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_accSimHitsFromSecondary{this, "( accepted SimTrackerHits from particles created in Geant4 simulation)"};
+  mutable Gaudi::Accumulators::Counter<> m_counter_accSimHitsFromDelta{this, "( accepted SimTrackerHits from delta rays)"};
 
   mutable Gaudi::Accumulators::Counter<> m_counter_digiHitsCreated{this, "Digi hits created"};
 
@@ -180,6 +182,7 @@ private:
 
   enum {
     hist1d_simHit_pdg,
+    hist1d_simHit_mcParticleLevel,
     hist1d_simHit_depositedEnergy,
     hist1d_simHit_depositedCharge,
     hist1d_simHit_particleMomentum_keV,
@@ -189,8 +192,8 @@ private:
     hist1d_simHit_x,
     hist1d_simHit_y,
     hist1d_simHit_z,
-    hist1d_simHit_z_causedByGeneratorMCParticle,
-    hist1d_simHit_z_causedBySimulationMCParticle,
+    hist1d_simHit_z_causedByPrimary,
+    hist1d_simHit_z_causedBySecondary,
     hist1d_simHit_vertex_x,
     hist1d_simHit_vertex_y,
     hist1d_simHit_vertex_z,
@@ -202,21 +205,21 @@ private:
     hist1d_simHit_particleMomentumInitialDirection_z,
     hist1d_digiHit_collectedCharge,
     hist1d_digiHit_collectedCharge_seedPixel,
-    hist1d_digiHitsPerSimHit,
     hist1d_clusterSize,
     hist1d_clusterSize_u,
     hist1d_clusterSize_v,
-    hist1d_clusterSize_causedByGeneratorMCParticle,
-    hist1d_clusterSize_causedBySimulationMCParticle,
-    hist1d_residual_u,
+    hist1d_clusterSize_causedByPrimary,
+    hist1d_clusterSize_causedBySecondary,
+    hist1d_residual_u_toPrimaries,
+    hist1d_residual_u_toSecondaries,
+    hist1d_residual_u_toPrimariesSecondaries,
+    hist1d_residual_u_toPrimariesSecondariesDeltas,
     hist1d_residual_u_maxEParticleOnSensor,
-    hist1d_residual_u_causedByGeneratorMCParticle,
-    hist1d_residual_u_causedBySimulationMCParticle,
-    hist1d_residual_v,
+    hist1d_residual_v_toPrimaries,
+    hist1d_residual_v_toSecondaries,
+    hist1d_residual_v_toPrimariesSecondaries,
+    hist1d_residual_v_toPrimariesSecondariesDeltas,
     hist1d_residual_v_maxEParticleOnSensor,
-    hist1d_residual_v_causedByGeneratorMCParticle,
-    hist1d_residual_v_causedBySimulationMCParticle,
-    hist1d_residual_w,
     hist1d_clusterPosUncertainty_u,
     hist1d_clusterPosUncertainty_v,
     hist1d_pathTravel_u,
@@ -246,12 +249,6 @@ private:
     histProfile1d_clusterSize_vs_global_z,
     histProfile1d_clusterSize_u_vs_global_z,
     histProfile1d_clusterSize_v_vs_global_z,
-    histProfile1d_residual_u_vs_global_z,
-    histProfile1d_residual_v_vs_global_z,
-    histProfile1d_residual_r_vs_global_z,
-    histProfile1d_pathTravel_u_vs_global_z,
-    histProfile1d_pathTravel_v_vs_global_z,
-    histProfile1d_pathTravel_r_vs_global_z,
     histProfile1dArrayLen };
   mutable std::unordered_map<
     int, // layer number
@@ -270,23 +267,22 @@ private:
   enum {
     hist2d_digiHit_collectedCharge_vs_global_z,
     hist2d_hitMap_simHits,
-    hist2d_hitMap_simHits_causedByGeneratorMCParticle,
-    hist2d_hitMap_simHits_causedBySimulationMCParticle,
+    hist2d_hitMap_simHits_causedByPrimary,
+    hist2d_hitMap_simHits_causedBySecondary,
     hist2d_hitMap_pixelHits,
     hist2d_clusterSize_vs_global_z,
     hist2d_clusterSize_u_vs_global_z,
     hist2d_clusterSize_v_vs_global_z,
-    hist2d_clusterSize_vs_global_z_causedByGeneratorMCParticle,
-    hist2d_clusterSize_vs_global_z_causedBySimulationMCParticle,
-    hist2d_residual_u_vs_global_z,
-    hist2d_residual_v_vs_global_z,
-    hist2d_residual_r_vs_global_z,
-    hist2d_residual_vs_clusterPosUncertainty_u,
-    hist2d_residual_vs_clusterPosUncertainty_v,
+    hist2d_clusterSize_vs_global_z_causedByPrimary,
+    hist2d_clusterSize_vs_global_z_causedBySecondary,
+    hist2d_residual_u_toPrimariesSecondaries_vs_global_z,
+    hist2d_residual_v_toPrimariesSecondaries_vs_global_z,
+    hist2d_residual_u_toPrimariesSecondaries_vs_clusterPosUncertainty,
+    hist2d_residual_v_toPrimariesSecondaries_vs_clusterPosUncertainty,
     hist2d_pathTravel_u_vs_global_z,
     hist2d_pathTravel_v_vs_global_z,
     hist2d_pathTravel_w_vs_global_z,
-    hist2d_pathTravel_r_vs_global_z,
+    hist2d_pathTravel_vs_global_z,
     hist2d_simHit_xy,
     hist2d_simHit_xz,
     hist2d_simHit_yz,

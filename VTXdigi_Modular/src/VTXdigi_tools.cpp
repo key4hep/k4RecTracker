@@ -11,6 +11,28 @@ SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::un
   m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
 }
 
+bool SimHitWrapper::causedByPrimary() const {
+  const int32_t simulatorStatus = m_simTrackerHit.getParticle().getSimulatorStatus();
+  const int mask_bit = edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
+  const int32_t mask = 1 << mask_bit;
+  return (simulatorStatus & mask) == 0; // bit is not set -> created in generator
+}
+
+bool SimHitWrapper::MCParticleProdVertexIsOutsideSensor() const {
+  const auto& mcParticle = m_simTrackerHit.getParticle();
+
+  return true; // TODO: implement this function, which is needed to find simHits from different MCParticles. For now, true is a relatively ok assumption (because most deltas are low E -> get dropped in ddsim anyway)
+}
+
+MCParticleLevel SimHitWrapper::GetMCParticleLevel() const {
+  if ( !HasDirectMPCarticleLink() || !MCParticleProdVertexIsOutsideSensor() )
+    return MCParticleLevel::Delta;
+  if ( causedByPrimary() )
+    return MCParticleLevel::Primary;
+  return MCParticleLevel::Secondary;
+}
+
+
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
   std::swap(a.m_simTrackerHit, b.m_simTrackerHit);
   std::swap(a.m_cellID, b.m_cellID);
@@ -80,19 +102,6 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
 // 28 : "VertexIsNotEndpointOfParent",
 
 /* -- helpers -- */
-
-bool CausedByGeneratorMCParticle(const edm4hep::SimTrackerHit& simTrackerHit) {
-  const auto mcParticle = simTrackerHit.getParticle();
-
-  const int32_t simulatorStatus = mcParticle.getSimulatorStatus();
-  const int mask_bit = edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
-  const int32_t mask = 1 << mask_bit;
-
-  const bool mcpCreatedInGenerator = (simulatorStatus & mask) == 0; // bit is not set -> created in generator
-  const bool hasDirectMcParticleLink = !simTrackerHit.isProducedBySecondary();
-
-  return mcpCreatedInGenerator && hasDirectMcParticleLink;
-}
 
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
   return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
@@ -476,5 +485,3 @@ std::vector<Cluster> HitMap::ComputeClusters() const {
 }
 
 } // namespace VTXdigi_tools
-
-

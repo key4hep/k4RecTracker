@@ -19,9 +19,11 @@ constexpr float kChargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair
 
 /* -- SimHitWrapper -- */
 
-/** @brief Check if a simHit was caused by a particle that was created in the generator
-  * @note this accounts for dropping of low-E MCParticles if SaveAllParticles=False in ddsim */
-bool CausedByGeneratorMCParticle(const edm4hep::SimTrackerHit& simTrackerHit);
+enum class MCParticleLevel {
+  Primary, // created in generator
+  Secondary, // created in simulation (scattering or decay)
+  Delta // created in simulation, but either (a) MCParticle dropped in ddsim bcecause of low energy or (b) created inside the sensor volume
+};
 
 /** @brief Class to contain all information about a simTrackerHit that is needed for the digitization.
  * @note this is where the simTrackerHit is actually stored, everything else (pixelHit / cluster) will store pointers to this. */
@@ -52,9 +54,23 @@ public:
   inline float charge() const { return m_charge; }
   inline int layer() const { return m_layerNumber; }
 
-  /** @brief Check if the simHit was caused by a particle that was created in the generator
-  * @note this accounts for dropping of low-E MCParticles if SaveAllParticles=False in ddsim */
-  inline bool CausedByGeneratorMCParticle() const {return VTXdigi_tools::CausedByGeneratorMCParticle(m_simTrackerHit); }
+  /** @brief Check if the linked MCParticle was created in the generator (vs in the Geant4 simulation)
+  * @note this does NOT account for dropping of low-E MCParticles if SaveAllParticles=False in ddsim. use in conjunction with HasDirectMPCarticleLink() and IsMCParticleProdVertexOutsideSensor() */
+  bool causedByPrimary() const;
+
+  /** @brief Check if the link to the MCParticle is direct
+   * @note This is false if the simHit was produces by a particle with low energy, which was dropped in ddsim (replacing the linked MCParticle with that low-E particle's parent) */
+  inline bool HasDirectMPCarticleLink() const { return !m_simTrackerHit.isProducedBySecondary(); }
+
+  /** @brief Check if the linked MCParticle's production vertex is outside the sensor volume in which the simHit lies */
+  bool MCParticleProdVertexIsOutsideSensor() const;
+
+  /** @brief Compute wether the simHit was produced by a (a) primary, (b) secondary or (c) delta particle
+   * primary - generator level particle
+   * secondary - particle produced in Geant4 simulation
+   * delta - particle produced in Geant4 simulation and either (a) dropped in ddsim or (b) produced inside the sensor volume
+   * @note this is not cached (for now) because it is only used for histogramming (not in the core digitization algorithm) */
+  MCParticleLevel GetMCParticleLevel() const;
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
