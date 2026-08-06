@@ -22,6 +22,7 @@
 
 // DD4HEP
 #include "DDRec/SurfaceManager.h"
+#include "DDRec/CellIDPositionConverter.h"
 
 /** @class VTXdigi_Modular
  *
@@ -95,13 +96,17 @@ private:
   std::vector<VTXdigi_tools::Cluster> Clusterize(const VTXdigi_tools::HitMap& hitMap) const;
 
   /** @brief Create a digiHit per cluster */
-  void CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const;
+  void CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::VolumeID& volumeID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const;
 
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
-  void FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix) const;
+  void FillHistograms_perPixel(const dd4hep::DDSegmentation::VolumeID& volumeID, const VTXdigi_tools::Pixel& pix) const;
   // void FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize, const int clusterSize_u, const int clusterSize_v) const;
   void FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cluster, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix) const;
-  void FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::CellID& cellID) const;
+  void FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::VolumeID& volumeID) const;
+
+  /* -- Helpers -- */
+
+  dd4hep::DDSegmentation::VolumeID GetVolumeID(const dd4hep::DDSegmentation::CellID& cellID) const;
 
   /* -- Properties -- */
 
@@ -141,8 +146,9 @@ private:
   SmartIF<IRndmGenSvc> m_randomService;
   SmartIF<IGeoSvc> m_geoService;
   std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_cellIdDecoder;
+  std::unique_ptr<dd4hep::rec::CellIDPositionConverter> m_cellIDPositionConverter;
   const dd4hep::Detector* m_detector = nullptr;
-  const dd4hep::rec::SurfaceMap* m_surfaceMap; // map from cellID (unsigned long, without segmentation bits) to simSurface (dd4hep::rec::ISurface*)
+  const dd4hep::rec::SurfaceMap* m_surfaceMap; // map from volumeID to simSurface (dd4hep::rec::ISurface*)
   dd4hep::VolumeManager m_volumeManager; // volume manager to get the physical cell sensitive volume
   dd4hep::DetElement m_subDetector; // subdetector DetElement. contains layers as children
 

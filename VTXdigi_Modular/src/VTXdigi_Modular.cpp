@@ -52,18 +52,16 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
     return std::make_tuple(edm4hep::TrackerHitPlaneCollection(), edm4hep::TrackerHitSimTrackerHitLinkCollection());
   }
 
-  /* TODO: Implement fast digitization, where simHit pos is simply smeared by a Gaussian.
-  * this makes a lot of the init etc unnecessary, so maybe keep it in a separate class? We cannot simply add a ChargeCollector implementation to do this, because ChargeCollectors act on pixels, but fast digitization acts on the position itself (ofc we could emulate this in clusters, but thats incredibly inefficient and stinks) */
+  /* TODO: Implement fast digitization, where simHit pos is simply smeared by a Gaussian. But:
+  * that would make a lot of the init etc unnecessary, so maybe keep it in a separate class? We cannot simply add a ChargeCollector implementation to do this, because ChargeCollectors act on pixels, but fast digitization acts on the position itself (ofc we could emulate this in clusters, but thats incredibly inefficient and stinks) */
 
-  std::unordered_map<dd4hep::DDSegmentation::CellID, std::vector<VTXdigi_tools::SimHitWrapper>> sensorSimHits; // map from sensor (shortened cellID) to hits
+  std::unordered_map<dd4hep::DDSegmentation::VolumeID, std::vector<VTXdigi_tools::SimHitWrapper>> sensorSimHits; // map from sensor (volumeID) to hits
   for (const edm4hep::SimTrackerHit& simTrackerHit : simTrackerHits) {
-
-
     if (CheckSimhitLayer(simTrackerHit)){
-      const dd4hep::DDSegmentation::CellID cellID = VTXdigi_tools::GetCellID_short(simTrackerHit);
-      sensorSimHits[cellID].emplace_back(simTrackerHit, m_cellIdDecoder); // simTrackerHits are copied here. Pointers to these are passed around (eg. in hit/pixel/cluster objects).
+      const dd4hep::DDSegmentation::VolumeID volumeID = GetVolumeID(simTrackerHit.getCellID());
+      sensorSimHits[volumeID].emplace_back(simTrackerHit, volumeID, m_cellIdDecoder, m_volumeManager, m_cellIDPositionConverter); // simTrackerHits are copied here. Pointers to these are passed around (eg. in hit/pixel/cluster objects).
 
-      switch (sensorSimHits[cellID].back().GetMCParticleLevel()) {
+      switch (sensorSimHits[volumeID].back().mcParticleLevel()) {
         case VTXdigi_tools::MCParticleLevel::Primary:
           ++m_counter_accSimHitsFromPrimary;
           break;
@@ -82,10 +80,10 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
   std::vector<VTXdigi_tools::SimHitWrapper> hitsSensor;
 
   /* loop over sensors */
-  for (const auto& [cellID, simHits] : sensorSimHits) {
-    debug() << "   - Processing sensor with cellID " << cellID << " (layer " << simHits.back().layer() << "). Has " << simHits.size() << " simHits." << endmsg;
+  for (const auto& [volumeID, simHits] : sensorSimHits) {
+    debug() << "   - Processing sensor with volumeID " << volumeID << " (layer " << simHits.back().layer() << "). Has " << simHits.size() << " simHits." << endmsg;
 
-    const TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation); // transformation from global detector to local sensor frame
+    const TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(volumeID, m_volumeManager, m_sensorNormalRotation); // transformation from global detector to local sensor frame
 
     /* Fill hit map with charge from all simHits on this sensor, using the selected charge collection method */
     VTXdigi_tools::HitMap hitMap(m_pixelCount);
@@ -109,9 +107,9 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
 
     std::vector<VTXdigi_tools::Cluster> clusters = Clusterize(hitMap);
 
-    CreateDigiHits(digiHits, digiHitLinks, cellID, trafoMatrix, clusters);
+    CreateDigiHits(digiHits, digiHitLinks, volumeID, trafoMatrix, clusters);
     if (m_debugHistograms.value())
-      FillHistograms_perSensor(simHits, digiHits, trafoMatrix, cellID);
+      FillHistograms_perSensor(simHits, digiHits, trafoMatrix, volumeID);
   } /* loop over sensors */
 
   debug() << " - Finished digitization. Created " << digiHits.size() << " digiHits from " << simTrackerHits.size() << " simTrackerHits." << endmsg;
@@ -168,7 +166,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (!m_geoService)
     throw GaudiException("Unable to retrieve the GeoSvc", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
-  /* TODO: get cellID without using geoService, a la Jessy (if this is advantageous) */
+  /* TODO: get volumeID without using geoService, a la Jessy (if this is advantageous) */
   std::string cellIDstr = m_geoService->constantAsString(m_encodingStringVariable.value());
   m_cellIdDecoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(cellIDstr);
   if (!m_cellIdDecoder)
@@ -190,6 +188,9 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (!m_volumeManager.isValid())
     throw GaudiException("Unable to retrieve the VolumeManager from the DD4hep detector", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
+  m_cellIDPositionConverter = std::make_unique<dd4hep::rec::CellIDPositionConverter>(*m_detector);
+  if (!m_cellIDPositionConverter)
+    throw GaudiException("Unable to create CellIDPositionConverter", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   { /* DD4hep has a transformation from the global detector coordinates to each sensors local system. The definition of the local system might change.
     * We have to make sure that a sensor always sits in the u-v plane in the local system, eg. we might have to swap the axes of the local system.
@@ -199,10 +200,10 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     auto surfaceMapIter = m_surfaceMap->begin();
     if (surfaceMapIter == m_surfaceMap->end())
       throw GaudiException("Surface map for subdetector " + m_subDetName.value() + " is empty.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-    const unsigned long cellID = surfaceMapIter->first;
+    const unsigned long volumeID = surfaceMapIter->first;
     const dd4hep::rec::ISurface* surface = surfaceMapIter->second;
 
-    TGeoHMatrix sensorTrafoMatrix = m_volumeManager.lookupDetElement(cellID).nominal().worldTransformation();
+    TGeoHMatrix sensorTrafoMatrix = m_volumeManager.lookupDetElement(volumeID).nominal().worldTransformation();
     double tempVec[3];
 
     const double epsilon = 1.0e-6; // reasonable for comparing to 1
@@ -230,7 +231,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     /* TODO: this only makes sure that the sensor normal vector is perpendicular to the surface.
     * It does NOT make sure that the local x and y are not swapped and have the correct polarity.
     * I tried coming up with the correct transformation matrix based on the axis rotations, but tbh I am quite stumped by how the rotation acts on the vectors, and how I can fix it. */
-    TGeoHMatrix M = VTXdigi_tools::ComputeSensorTrafoMatrix(cellID, m_volumeManager, m_sensorNormalRotation);
+    TGeoHMatrix M = VTXdigi_tools::ComputeSensorTrafoMatrix(volumeID, m_volumeManager, m_sensorNormalRotation);
     M.MasterToLocalVect(surface->u().unit(), tempVec);
     if (std::abs(tempVec[0]-1.) > epsilon || std::abs(tempVec[1]) > epsilon || std::abs(tempVec[2]) > epsilon)
       warning() << "After rotation, local sensor U direction (" << tempVec[0] << "," << tempVec[1] << "," << tempVec[2] << ") is not parallel to (1,0,0) axis!" << endmsg;
@@ -1156,9 +1157,9 @@ std::vector<VTXdigi_tools::Cluster> VTXdigi_Modular::Clusterize(const VTXdigi_to
   }
 }
 
-void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::CellID& cellID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const {
+void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::VolumeID& volumeID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const {
 
-  // Called for each cluster on a sensor, so cellID and direction vectors are same among these clusters
+  // Called for each cluster on a sensor, so volumeID and direction vectors are same among these clusters
   const dd4hep::rec::Vector3D direction_u_3d = VTXdigi_tools::LocalToGlobal(dd4hep::rec::Vector3D(1, 0, 0), trafoMatrix);
   const edm4hep::Vector2f direction_u = edm4hep::Vector2f(direction_u_3d.theta(), direction_u_3d.phi()); // edm4hep expects direction in to given as (theta, phi)
 
@@ -1175,8 +1176,8 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
 
     edm4hep::MutableTrackerHitPlane digiHit = digiHits.create();
     ++m_counter_digiHitsCreated;
-    /* TODO: do we want cellID with segmentation? (instead of using the short cellID that only encodes the sensor and not the pixel) */
-    digiHit.setCellID(cellID);
+    /* TODO: do we want cellID instead of VolumeID (cellID also encodes pixel segmentation instead of only the volume (ie. sensor) that the hit is in) */
+    digiHit.setCellID(volumeID);
     digiHit.setEDep(cluster.charge / VTXdigi_tools::kChargePerkeV);
 
     // position
@@ -1242,7 +1243,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
       FillHistograms_perDigiHit(cluster, digiHit, trafoMatrix);
 
       for (const VTXdigi_tools::Pixel* pix : cluster.pixels)
-        FillHistograms_perPixel(cellID, *pix);
+        FillHistograms_perPixel(volumeID, *pix);
     }
   } /* loop over clusters */
 }
@@ -1253,7 +1254,7 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   /* executed once for each simHit, no cuts applied before */
 
   const int layer = simHit.layer();
-  const TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(simHit.cellID(), m_volumeManager, m_sensorNormalRotation);
+  const TGeoHMatrix trafoMatrix = VTXdigi_tools::ComputeSensorTrafoMatrix(simHit.volumeID(), m_volumeManager, m_sensorNormalRotation);
 
   const dd4hep::rec::Vector3D simHitPos_global = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getPosition());
   const dd4hep::rec::Vector3D simHitPos_local = VTXdigi_tools::GlobalToLocal(simHitPos_global, trafoMatrix);
@@ -1264,7 +1265,7 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   const dd4hep::rec::Vector3D simHitMomentumInitial = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getParticle().getMomentum()); // in GeV
 
   ++(*m_hist1d.at(layer).at(hist1d_simHit_pdg))[simHit.hitPtr()->getParticle().getPDG()];
-  ++(*m_hist1d.at(layer).at(hist1d_simHit_mcParticleLevel))[static_cast<int>(simHit.GetMCParticleLevel())];
+  ++(*m_hist1d.at(layer).at(hist1d_simHit_mcParticleLevel))[static_cast<int>(simHit.mcParticleLevel())];
 
   ++(*m_hist1d.at(layer).at(hist1d_simHit_depositedEnergy))[simHit.hitPtr()->getEDep() * (dd4hep::GeV / dd4hep::keV)];
   ++(*m_hist1d.at(layer).at(hist1d_simHit_depositedCharge))[simHit.charge()];
@@ -1296,7 +1297,7 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
 
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits))[{i_uv.first, i_uv.second}];
 
-  const VTXdigi_tools::MCParticleLevel mcParticleLevel = simHit.GetMCParticleLevel();
+  const VTXdigi_tools::MCParticleLevel mcParticleLevel = simHit.mcParticleLevel();
 
   if ( mcParticleLevel == VTXdigi_tools::MCParticleLevel::Primary ) {
     ++(*m_hist1d.at(layer).at(hist1d_simHit_z_causedByPrimary))[simHitPos_global.z()];
@@ -1310,10 +1311,10 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   }
 }
 
-void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::CellID& cellID, const VTXdigi_tools::Pixel& pix) const {
+void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::VolumeID& volumeID, const VTXdigi_tools::Pixel& pix) const {
   /* executed once for each pixel */
 
-  const int layer = VTXdigi_tools::GetLayer(cellID, m_cellIdDecoder);
+  const int layer = VTXdigi_tools::GetLayer(volumeID, m_cellIdDecoder);
   const std::pair<int, int> i_uv = pix.index;
 
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_pixelHits))[{i_uv.first, i_uv.second}];
@@ -1363,7 +1364,7 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cl
     ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondariesDeltas))[ residual_local.x()*1000.f ];
     ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondariesDeltas))[ residual_local.y()*1000.f ];
 
-    const VTXdigi_tools::MCParticleLevel mcParticleLevel = simHit->GetMCParticleLevel();
+    const VTXdigi_tools::MCParticleLevel mcParticleLevel = simHit->mcParticleLevel();
 
     if (mcParticleLevel == VTXdigi_tools::MCParticleLevel::Primary) {
       ++(*m_hist1d.at(layer).at(hist1d_clusterSize_causedByPrimary))[ cluster.GetSize() ];
@@ -1393,9 +1394,9 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cl
   } // loop over contributing simHits
 }
 
-void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::CellID& cellID) const {
+void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::VolumeID& volumeID) const {
   /* executed once for each sensor, after all clusters have been created */
-  const int layer = VTXdigi_tools::GetLayer(cellID, m_cellIdDecoder);
+  const int layer = VTXdigi_tools::GetLayer(volumeID, m_cellIdDecoder);
 
   if (simHits.empty()) {
     debug() << " - No simHits found on this sensor." << endmsg;
@@ -1481,4 +1482,21 @@ void VTXdigi_Modular::PrintCountersSummary() const {
 
   info()	<<	" | "	<<	std::setw(colWidths[0])	<<	std::left	<<	"Digi hits created"
          << " | " << std::setw(colWidths[1]) << std::right << m_counter_digiHitsCreated.value() << " |" << endmsg;
+}
+
+/* ---- Helpers ---- */
+
+dd4hep::DDSegmentation::VolumeID VTXdigi_Modular::GetVolumeID(const dd4hep::DDSegmentation::CellID& cellID) const {
+  /* - volumeID identifies the detector element volume (eg. sensor)
+   * - cellID identifies a cell inside a volume (eg. pixel)
+   * - we could convert cellID->volumeID by masking bits of the cellID, but this breaks if the cellID encoding changes later on
+   *  -> use the volumeManager to convert correctly, only handle cellID's where absolutely necessary
+   * - Note: this throws if a unknown cellID is passed. Catch & return 0 instead */
+  try{
+    return m_volumeManager.lookupContext(cellID)->element.volumeID();  // throws if unknown
+  }
+  catch (const std::exception& e) {
+    warning() << "VTXdigi_Modular::GetVolumeID(): Failed to convert cellID to volumeID, returning volumeID 0: " << e.what() << endmsg;
+    return 0;
+  }
 }

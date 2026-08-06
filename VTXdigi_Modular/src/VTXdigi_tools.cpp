@@ -1,94 +1,67 @@
 // VTXdigi_Modular/src/VTXdigi_tools.cpp
 #include "VTXdigi_tools.h"
+#include <DD4hep/Objects.h>
+#include <DD4hep/VolumeManager.h>
+#include <edm4hep/Vector3d.h>
 
 namespace VTXdigi_tools {
 
-SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) : m_simTrackerHit(simTrackerHit) {
-  m_cellID = GetCellID_short(m_simTrackerHit);
+SimHitWrapper::SimHitWrapper(
+  edm4hep::SimTrackerHit simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID,
+  const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder,
+  const dd4hep::VolumeManager& volumeManager,
+  const std::unique_ptr<dd4hep::rec::CellIDPositionConverter>& cellIDPositionConverter)
+    : m_simTrackerHit(simTrackerHit), m_volumeID(volumeID) {
 
   m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * kChargePerkeV); // convert energy deposit (in keV) to number of electrons
+  m_layerNumber = GetLayer(m_volumeID, cellIdDecoder);
 
-  m_layerNumber = GetLayer(m_cellID, cellIdDecoder);
+  // check if the simHit was caused by a primary, secondary or delta particle
+  if ( m_simTrackerHit.isProducedBySecondary() ) {
+    // if ddsim dropped the MCParticle that caused this simHit, we assume it was a delta ray
+    // ddsim drops MCParticles below a certain energy cut to save computing cost and disk space.
+    m_mcParticleLevel = MCParticleLevel::Delta;
+  }
+  else {
+    // check if the MCPArticle was created by the generator
+    const int32_t simulatorStatus = m_simTrackerHit.getParticle().getSimulatorStatus();
+    const int32_t mask = 1 << edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
+    const bool causedByPrimary = (simulatorStatus & mask) == 0; // bit is not set -> created in generator
+    if ( causedByPrimary )
+      m_mcParticleLevel = MCParticleLevel::Primary;
+    else
+    {
+      // now check if the MCParticle prod. vertex lies outside this sensors volume (by comparing volumeIDs)
+      const edm4hep::Vector3d prodVertex_temp = m_simTrackerHit.getParticle().getVertex();
+      const dd4hep::Position prodVertex = 0.1 * ConvertVector_toPosition(prodVertex_temp); // convert edm4hep's mm -> dd4hep's cm
+      const dd4hep::DDSegmentation::CellID prodVertex_cellID = cellIDPositionConverter->cellID(prodVertex); // returns 0 if the position is outside of any sensitive volume
+
+      // convert cellID to volumeID - see comment in VTXdigi_Modular::GetVolumeID())
+      dd4hep::DDSegmentation::CellID prodVertex_volumeID;
+      if (prodVertex_cellID == 0)
+        prodVertex_volumeID = 0; // lookupContext(cellID=0) crashes (because cellID 0 does not exist)
+      else
+        prodVertex_volumeID = volumeManager.lookupContext(prodVertex_cellID)->element.volumeID();
+
+      if (prodVertex_volumeID != m_volumeID) {
+        // the MCParticle was created outside of this sensor's sensitive volume
+        m_mcParticleLevel = MCParticleLevel::Secondary;
+      }
+      else {
+        m_mcParticleLevel = MCParticleLevel::Delta;
+      }
+    }
+  }
 }
-
-bool SimHitWrapper::causedByPrimary() const {
-  const int32_t simulatorStatus = m_simTrackerHit.getParticle().getSimulatorStatus();
-  const int mask_bit = edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
-  const int32_t mask = 1 << mask_bit;
-  return (simulatorStatus & mask) == 0; // bit is not set -> created in generator
-}
-
-bool SimHitWrapper::MCParticleProdVertexIsOutsideSensor() const {
-  const auto& mcParticle = m_simTrackerHit.getParticle();
-
-  return true; // TODO: implement this function, which is needed to find simHits from different MCParticles. For now, true is a relatively ok assumption (because most deltas are low E -> get dropped in ddsim anyway)
-}
-
-MCParticleLevel SimHitWrapper::GetMCParticleLevel() const {
-  if ( !HasDirectMPCarticleLink() || !MCParticleProdVertexIsOutsideSensor() )
-    return MCParticleLevel::Delta;
-  if ( causedByPrimary() )
-    return MCParticleLevel::Primary;
-  return MCParticleLevel::Secondary;
-}
-
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
   std::swap(a.m_simTrackerHit, b.m_simTrackerHit);
-  std::swap(a.m_cellID, b.m_cellID);
+  std::swap(a.m_volumeID, b.m_volumeID);
   std::swap(a.m_charge, b.m_charge);
   std::swap(a.m_layerNumber, b.m_layerNumber);
+  std::swap(a.m_truthPos, b.m_truthPos);
+  std::swap(a.m_mcParticleLevel, b.m_mcParticleLevel);
 } // swap(Hit&, Hit&)
-
-// std::unordered_set<const VTXdigi_tools::SimHitWrapper*> FindSimHitsWithIndividualParents(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*> simHits) {
-//   // TODO: implement this function, which is needed to find simHits from different MCParticles. If two simHits originate from the same MCParticle, return only the one from the MCParticle further up the family tree.
-
-//   std::unordered_set<const VTXdigi_tools::SimHitWrapper*> individualSimHits;
-
-//   for (const auto* simHit : simHits) {
-//     // if no simHit in individualSimHits shares a parent with simHit, add simHit to individualSimHits
-
-//     for (const auto* otherSimHit : individualSimHits) {
-//       const edm4hep::MCParticle& mcP = simHit->hitPtr()->getParticle();
-//       const edm4hep::MCParticle& otherMcP = otherSimHit->hitPtr()->getParticle();
-
-//       // first: check obvious cases
-//       if (mcP == otherMcP) {
-//         // no need to do anything, simHits are from the same MCParticle
-//         break;
-//       }
-
-//       // second: check if simHit and otherSimHit are direct children of each other?
-//       if (mcP.parents_size() == 1) {
-//         const edm4hep::MCParticle& mcP_parent = mcP.getParents()[0];
-//         if (mcP_parent == otherMcP) {
-//           // no need to do anything, other is created by the parent of simHit
-//           break;
-//         }
-//       }
-//       if (otherMcP.parents_size() == 1) {
-//         const edm4hep::MCParticle& otherMcP_parent = otherMcP.getParents()[0];
-//         if (otherMcP_parent == mcP) {
-//           // replace otherSimHit with simHit, because simHit is from a parent of the otherSimHit
-
-//           break;
-//         }
-//       }
-
-
-
-//       if (simHit->hitPtr()->getParticle().getParents()[0] == otherSimHit->hitPtr()->getParticle().getParents()[0]) {
-//         hasSharedParent = true;
-//         break;
-//       }
-//     }
-//     if (!hasSharedParent) {
-//       individualSimHits.insert(simHit);
-//     }
-//   }
-
-// }
-
 
 // SimulatorStatus bits (see https://edm4hep.web.cern.ch/classedm4hep_1_1_mutable_m_c_particle.html)
 // 29 : "Backscatter",
@@ -113,8 +86,18 @@ edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec) {
   return edm4hep::Vector3d(vec.x(), vec.y(), vec.z());
 }
 
-TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::CellID& cellID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation) {
-  TGeoHMatrix M = volumeManager.lookupDetElement(cellID).nominal().worldTransformation();
+dd4hep::Position ConvertVector_toPosition(dd4hep::rec::Vector3D vec) {
+  return dd4hep::Position(vec.x(), vec.y(), vec.z());
+}
+dd4hep::Position ConvertVector_toPosition(edm4hep::Vector3f vec) {
+  return dd4hep::Position(vec.x, vec.y, vec.z);
+}
+dd4hep::Position ConvertVector_toPosition(edm4hep::Vector3d vec) {
+  return dd4hep::Position(vec.x, vec.y, vec.z);
+}
+
+TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::VolumeID& volumeID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation) {
+  TGeoHMatrix M = volumeManager.lookupDetElement(volumeID).nominal().worldTransformation();
 
   /* rotate the local coordinate system st. sensor U is (1,0,0), V is (0,1,0) and normal vector is (0,0,1) */
   M.Multiply(sensorNormalRotation);
@@ -141,23 +124,11 @@ dd4hep::rec::Vector3D LocalToGlobal(const dd4hep::rec::Vector3D& local, const TG
   return dd4hep::rec::Vector3D(global[0], global[1], global[2]);
 }
 
-dd4hep::DDSegmentation::CellID GetCellID_short(const edm4hep::SimTrackerHit& simTrackerHit) {
-  /* Mask removes segmentation bits, now cellID is unique for each sensor */
-  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
-  return simTrackerHit.getCellID() & m_mask;
-}
-dd4hep::DDSegmentation::CellID GetCellID_short(const dd4hep::DDSegmentation::CellID& cellID) {
-  /* Mask removes segmentation bits, now cellID is unique for each sensor */
-  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
-  return cellID & m_mask;
+int GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
+  return static_cast<int>(cellIdDecoder->get(volumeID, "layer"));
 }
 
-int GetLayer(const dd4hep::DDSegmentation::CellID& cellID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
-  return static_cast<int>(cellIdDecoder->get(cellID, "layer"));
-}
-int GetLayer(const edm4hep::SimTrackerHit& simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
-  return GetLayer(GetCellID_short(simTrackerHit), cellIdDecoder);
-}
+
 
 /* -- Binning things -- */
 

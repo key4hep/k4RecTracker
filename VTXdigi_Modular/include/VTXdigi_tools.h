@@ -5,6 +5,7 @@
 #include "GaudiKernel/RndmGenerators.h"
 
 #include "DDRec/Surface.h"
+#include "DDRec/CellIDPositionConverter.h"
 
 #include "edm4hep/SimTrackerHit.h"
 
@@ -21,21 +22,26 @@ constexpr float kChargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair
 
 enum class MCParticleLevel {
   Primary, // created in generator
-  Secondary, // created in simulation (scattering or decay)
-  Delta // created in simulation, but either (a) MCParticle dropped in ddsim bcecause of low energy or (b) created inside the sensor volume
+  Secondary, // created in simulation (scattering or decay) but not inside this sensors volume
+  Delta // created in simulation, but either (a) MCParticle dropped in ddsim because of low energy or (b) created inside the sensor volume
 };
 
 /** @brief Class to contain all information about a simTrackerHit that is needed for the digitization.
  * @note this is where the simTrackerHit is actually stored, everything else (pixelHit / cluster) will store pointers to this. */
 class SimHitWrapper {
   edm4hep::SimTrackerHit m_simTrackerHit;
-  dd4hep::DDSegmentation::CellID m_cellID; // without segmentation bits
+  dd4hep::DDSegmentation::VolumeID m_volumeID; // this is the CellID without segmentation bits
   float m_charge;
   int m_layerNumber;
   mutable dd4hep::rec::Vector3D m_truthPos; // simHit truth position, local coordinates. Mutable because it might be adjusted in const ChargeCollector::FillHit() to account for charge collection biases (see ChargeCollector_impl.h ChargeCollector_LUT::MoveTruthPosition() for more info).
+  MCParticleLevel m_mcParticleLevel;
 
 public:
-  SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
+  SimHitWrapper(
+    edm4hep::SimTrackerHit simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID,
+    const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder,
+    const dd4hep::VolumeManager& volumeManager,
+    const std::unique_ptr<dd4hep::rec::CellIDPositionConverter>& cellIDPositionConverter);
   SimHitWrapper(const SimHitWrapper& other) = default;
   SimHitWrapper(SimHitWrapper&& other) = default;
   SimHitWrapper() = default;
@@ -50,27 +56,15 @@ public:
    * @note might have been adjusted by ChargeCollector::FillHit() to correct for charge collection effects (eg. not completely depleted sensors where charges are only collected close to the upper sensor surface as in TPSCo 65nm CIS). */
   inline const dd4hep::rec::Vector3D truthPos() const { return m_truthPos; }
 
-  inline dd4hep::DDSegmentation::CellID cellID() const { return m_cellID; }
+  inline dd4hep::DDSegmentation::VolumeID volumeID() const { return m_volumeID; }
   inline float charge() const { return m_charge; }
   inline int layer() const { return m_layerNumber; }
 
-  /** @brief Check if the linked MCParticle was created in the generator (vs in the Geant4 simulation)
-  * @note this does NOT account for dropping of low-E MCParticles if SaveAllParticles=False in ddsim. use in conjunction with HasDirectMPCarticleLink() and IsMCParticleProdVertexOutsideSensor() */
-  bool causedByPrimary() const;
-
-  /** @brief Check if the link to the MCParticle is direct
-   * @note This is false if the simHit was produces by a particle with low energy, which was dropped in ddsim (replacing the linked MCParticle with that low-E particle's parent) */
-  inline bool HasDirectMPCarticleLink() const { return !m_simTrackerHit.isProducedBySecondary(); }
-
-  /** @brief Check if the linked MCParticle's production vertex is outside the sensor volume in which the simHit lies */
-  bool MCParticleProdVertexIsOutsideSensor() const;
-
-  /** @brief Compute wether the simHit was produced by a (a) primary, (b) secondary or (c) delta particle
+  /** @brief Determine whether the simHit was produced by a (a) primary, (b) secondary or (c) delta particle
    * primary - generator level particle
-   * secondary - particle produced in Geant4 simulation
-   * delta - particle produced in Geant4 simulation and either (a) dropped in ddsim or (b) produced inside the sensor volume
-   * @note this is not cached (for now) because it is only used for histogramming (not in the core digitization algorithm) */
-  MCParticleLevel GetMCParticleLevel() const;
+   * secondary - particle produced in Geant4 simulation but not inside this sensors volume
+   * delta - particle produced in Geant4 simulation and either (a) dropped in ddsim or (b) produced inside the sensor volume */
+  inline MCParticleLevel mcParticleLevel() const { return m_mcParticleLevel; }
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
@@ -179,26 +173,30 @@ private:
 
 /* -- helpers -- */
 
-/** @brief Convert a dd4hep::rec::Vector3D to edm4hep::Vector3d and vice-versa */
+/** @brief Convert a edm4hep::Vector3d to dd4hep::rec::Vector3D */
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);
-/** @copydoc dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) */
+/** @brief Convert a edm4hep::Vector3f to dd4hep::rec::Vector3D */
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3f vec);
-/** @copydoc dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) */
+/** @brief Convert a dd4hep::rec::Vector3D to edm4hep::Vector3d */
 edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec);
 
-/** @brief Compute the transformation matrix from global detector to local sensor frame for a given sensor cellID */
-TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::CellID& cellID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation);
+/** @brief Convert a dd4hep::rec::Vector3D to dd4hep::Position */
+dd4hep::Position ConvertVector_toPosition(dd4hep::rec::Vector3D vec);
+/** @brief Convert a edm4hep::Vector3f to dd4hep::Position */
+dd4hep::Position ConvertVector_toPosition(edm4hep::Vector3f vec);
+/** @brief Convert a edm4hep::Vector3d to dd4hep::Position */
+dd4hep::Position ConvertVector_toPosition(edm4hep::Vector3d vec);
+
+
+/** @brief Compute the transformation matrix from global detector to local sensor frame for a given sensor volume (defined by its volumeID) */
+TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::VolumeID& volumeID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation);
 
 /** @brief Transform a position from global detector coordinates to local sensor coordinates, using the sensor transformation matrix */
 dd4hep::rec::Vector3D GlobalToLocal(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M);
 /** @brief Transform a position from local sensor coordinates to global detector coordinates, using the sensor transformation matrix */
 dd4hep::rec::Vector3D LocalToGlobal(const dd4hep::rec::Vector3D& local, const TGeoHMatrix& M);
 
-dd4hep::DDSegmentation::CellID GetCellID_short(const edm4hep::SimTrackerHit& simTrackerHit);
-dd4hep::DDSegmentation::CellID GetCellID_short(const dd4hep::DDSegmentation::CellID& cellID);
-
-int GetLayer(const dd4hep::DDSegmentation::CellID& cellID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
-int GetLayer(const edm4hep::SimTrackerHit& simTrackerHit, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
+int GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
 
 /* -- Binning tools -- */
 
