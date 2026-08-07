@@ -74,6 +74,7 @@ make get_data
 * `ARCdigi`: ARC digitization (for now, this step produces 'reco' collection)
 * `VTXdigi`: vertex detector digitization (for now, this step produces 'reco' collection)
 * `VTXdigiDetailed`: vertex detector and silicon sensors tracker detector digitization with detailed charge readout (for now, this step produces 'reco' collection)
+* `VTXdigi_Modular`: silicon pixel digitizer, shares charge deposition across neighboring pixels. Supports different charge-sharing implementations, mainly lookup table-based implementation for now. Envisioned to be merged with the drift-bases implementation from `VTXdigiDetailed` in the future. (for now, this step produces 'reco' collection) 
 * `Tracking`: tracking algorithms orchestrating [GenFit](https://github.com/GenFit/GenFit)
 
 ## Execute Examples
