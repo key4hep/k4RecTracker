@@ -116,7 +116,7 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
         goto store_value;
       } else if (betagamma > 10000) {
         warning() << "beta*gamma value above \"good\" range of delphes parametrisation (0.5-10000), "
-                     "beta*gamma will be set to max value of 10000 as approximation." << endmsg;
+                     "beta*gamma will be set to max value as approximation." << endmsg;
         betagamma = 9999.9; // 10000 is out of range already
       }
 
@@ -124,6 +124,11 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
       // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
       double nclusters_per_mm = m_delphesTrkUtil.Nclusters(betagamma, m_GasSel.value()) / 1000.0;
       debug() << "Number of clusters per mm: " << nclusters_per_mm << endmsg;
+      if (nclusters_per_mm < 1e-6) {
+        warning() << "Delphes number of clusters per mm calculation returned 0.0, dN/dx will be set to dummy value: "
+                  << dummy_value << " clusters/mm" << endmsg;
+        goto store_value;
+      }
 
       ///////////////////////
       // Track Information //
