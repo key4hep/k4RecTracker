@@ -114,6 +114,29 @@ struct Cluster {
 std::array<std::pair<int, int>, 4> GetDirectNeighbors(const std::pair<int, int>& i_uv);
 std::array<std::pair<int, int>, 8> GetNeighbors(const std::pair<int, int>& i_uv);
 
+/* -- Eta correction -- */
+
+class EtaFunction {
+  const std::array< std::vector<std::pair<float, float>>,2> m_functions;
+  std::array<const unsigned int,2> m_binCounts;
+
+public:
+  EtaFunction(std::array< std::vector<std::pair<float, float>>,2> functions);
+
+  /** @brief Get the raw eta functions */
+  inline const std::array< std::vector<std::pair<float, float>>,2>& GetFunctions() const { return m_functions; }
+  /** @brief Get the number of bins */
+  inline const std::array<const unsigned int,2>& GetBinCounts() const { return m_binCounts; }
+  /** @brief Get the number of bins along a axis (0 - u, 1 - v)*/
+  inline unsigned int GetNBins(int axis) const { return m_binCounts.at(axis); }
+
+  /** @brief Get the eta function value for a given axis and position along the axis t
+   * @note t in [0,1), goes from one pixel centre to the next */
+  float GetEta(unsigned int axis, float t) const;
+  /** @brief Get a pair of eta function values for a pair of positions along the axes [u,v] */
+  std::array<float, 2> GetEtas(std::array<float, 2> ts) const;
+};
+
 /* -- HitMap -- */
 
 struct Hash_PairInt {

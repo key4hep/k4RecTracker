@@ -307,6 +307,47 @@ inline bool HitMap::_OutOfBounds(std::pair<int, int> i_uv) const {
   );
 }
 
+/* -- Eta function -- */
+
+EtaFunction::EtaFunction(std::array< std::vector<std::pair<float, float>>,2> functions) : m_functions(std::move(functions)), m_binCounts({m_functions[0].size(), static_cast<uint>(m_functions[1].size())}) {
+
+  if (m_functions[0].empty() || m_functions[1].empty())
+    throw std::runtime_error("EtaFunction: functions cannot be empty");
+
+  if (m_functions[0][0].first != 0.f || m_functions[1][0].first != 0.f)
+    throw std::runtime_error("EtaFunction: first element of functions must have t=0");
+
+  // TODO: implement checks that the functions are monotonically increasing
+}
+
+float EtaFunction::GetEta(unsigned int axis, float t) const {
+  if (axis > 1)
+    throw std::runtime_error("EtaFunction::GetEta: axis must be 0 (u) or 1 (v), got " + std::to_string(axis));
+  if (t < 0 || t > 1)
+    throw std::runtime_error("EtaFunction::GetEta: t must be in [0, 1], got " + std::to_string(t));
+
+  int bin;
+  if (t >= m_functions[axis].back().first) {
+    bin = m_functions[axis].size() - 1;
+  }
+  else {
+    bin = 1;
+    while (true) {
+      float t_bin = m_functions[axis][bin].first;
+      if (t < t_bin) {
+        bin = bin - 1;
+        break;
+      }
+      ++bin;
+    }
+  }
+  return m_functions[axis][bin].second;
+}
+
+std::array<float, 2> EtaFunction::GetEtas(std::array<float, 2> ts) const{
+  return {{GetEta(0, ts[0]), GetEta(1, ts[1])}};
+}
+
 /* -- Clusterization -- */
 
 std::pair<float, float> Cluster::ComputePos() const {

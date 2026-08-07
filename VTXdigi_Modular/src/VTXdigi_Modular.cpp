@@ -23,12 +23,24 @@ StatusCode VTXdigi_Modular::initialize() {
 
   InitLayersAndSensors();
 
-  if (m_debugHistograms)
-    InitHistograms();
-
   // This needs to come in after the properties, geometry and services have all been initialized
   verbose() << "Initializing charge collection method: " << m_chargeCollectionMethod.value() << endmsg;
   m_chargeCollector = VTXdigi_tools::CreateChargeCollector(*this, m_chargeCollectionMethod);
+
+  if (m_LUT_extractEtaFunction.value()) {
+    if (auto etaFunction = m_chargeCollector->ComputeEtaFunction()) {
+      m_etaFunction.emplace(std::move(*etaFunction)); // there are no copy-constructors, this is the
+      info() << " - Extracted eta function from charge collector. It has " << m_etaFunction->GetNBins(0) << " bins in u and " << m_etaFunction->GetNBins(1) << " bins in v." << endmsg;
+      if (!m_etaFunction)
+        error() << "Failed to set m_etaFunction." << endmsg;
+      else
+        debug() << "Successfully set m_etaFunction." << endmsg;
+    }
+  }
+
+  if (m_debugHistograms)
+  // needs to run after charge collector & eta function are initialised
+    InitHistograms();
 
   info() << " - Initialized successfully." << endmsg;
   return StatusCode::SUCCESS;
@@ -106,6 +118,7 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
       hitMap.ApplyThreshold(m_threshold.value(), m_smearing_threshold.value() > 0.f ? &m_rndm_threshold : nullptr);
 
     std::vector<VTXdigi_tools::Cluster> clusters = Clusterize(hitMap);
+
 
     CreateDigiHits(digiHits, digiHitLinks, volumeID, trafoMatrix, clusters);
     if (m_debugHistograms.value())
@@ -1084,7 +1097,7 @@ void VTXdigi_Modular::InitHistograms() {
 
   } /* loop over layers */
 
-  /* global (eg covering all layers) histograms */
+  /* global (eg not layer-specific) histograms */
 
   m_hist1dglobal.at(hist1dglobal_pathTravel_r).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
@@ -1108,6 +1121,42 @@ void VTXdigi_Modular::InitHistograms() {
     }
   );
 
+  if (m_etaFunction) {
+    debug() << "Creating global histograms for eta function." << endmsg;
+
+    unsigned int nBins_u = 2*m_etaFunction.value().GetNBins(0);
+    unsigned int nBins_v = 2*m_etaFunction.value().GetNBins(1);
+    // doubling the bin-number is necessary to get correct binning from constant-width histograms, see all the comments on even/odd case in ChargeCollector_impl.cpp LookupTable::ComputeEtaFunction()
+
+    m_histProfile1dglobal.at(histProfile1dglobal_etaFunction_u).reset(
+      new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Global/etaFunction_u",
+        "Eta function in u direction;u position (from pixel centre to the neighbor pixel's centre);Eta function value",
+        {nBins_u, 0.f, 1.f}
+      }
+    );
+    m_histProfile1dglobal.at(histProfile1dglobal_etaFunction_v).reset(
+      new Gaudi::Accumulators::StaticProfileHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Global/etaFunction_v",
+        "Eta function in v direction;v position (from pixel centre to the neighbor pixel's centre);Eta function value",
+        {nBins_v, 0.f, 1.f}
+      }
+    );
+
+    // directly fill the hists with the eta function
+    for (unsigned int i_bin=0; i_bin < nBins_u; ++i_bin) {
+      const float binCenter = 1.f / static_cast<float>(nBins_u) * (static_cast<float>(i_bin) + 0.5f);
+      (*m_histProfile1dglobal.at(histProfile1dglobal_etaFunction_u))[ binCenter ] += m_etaFunction.value().GetEta(0, binCenter);
+    }
+    for (unsigned int i_bin=0; i_bin < nBins_v; ++i_bin) {
+      const float binCenter = 1.f / static_cast<float>(nBins_v) * (static_cast<float>(i_bin) + 0.5f);
+      (*m_histProfile1dglobal.at(histProfile1dglobal_etaFunction_v))[ binCenter ] += m_etaFunction.value().GetEta(1, binCenter);
+    }
+    debug() << "Filled eta function histograms with " << nBins_u << " bins in u and " << nBins_v << " bins in v." << endmsg;
+  }
+  else {
+    debug() << "No eta function provided, skipping creation of global histograms for eta function." << endmsg;
+  }
 }
 
 /* ---- Eventloop functions ---- */

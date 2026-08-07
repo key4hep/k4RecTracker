@@ -2,10 +2,12 @@
 #pragma once
 
 #include "../include/VTXdigi_Modular.h"
+#include <optional>
 
 namespace VTXdigi_tools {
 class SimHitWrapper; // forward-declaration for include/VTXdigi_tools.h
 class HitMap; // forward-declaration for include/VTXdigi_tools.h
+class EtaFunction; // forward-declaration for include/VTXdigi_tools.h
 
 using Index_pix = std::pair<int, int>;
 using Index_inPix = std::array<int, 3>;
@@ -78,10 +80,14 @@ public:
 
   inline int GetBinCount(int i) const { return m_binCount.at(i); }
   inline Index_inPix GetBinCount() const { return m_binCount; }
+
+  std::array<std::vector<std::pair<float, float>>,2> ComputeEtaFunction() const;
+
 private:
 
   /** @brief Convert 3D in-pixel bin indices and a matrix row/column to a flat index for m_matrices */
   int FindIndex (const Index_inPix& j, const int col, const int row) const;
+
 }; // class LookupTable
 
 class ChargeCollector_LUT : public IChargeCollector {
@@ -99,7 +105,12 @@ class ChargeCollector_LUT : public IChargeCollector {
 public:
 
   explicit ChargeCollector_LUT(const VTXdigi_Modular& digitizer);
+
   void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix) const override;
+
+  std::optional<std::array<std::vector<std::pair<float, float>>,2>> ComputeEtaFunction() const override {
+    return std::make_optional(m_LUT.ComputeEtaFunction());
+  };
 
 private:
 

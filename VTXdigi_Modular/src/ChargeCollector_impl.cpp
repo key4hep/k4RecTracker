@@ -226,7 +226,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not read first line after header in LUT file: " + digitizer.LutFileName());
   }
   if (m_matrixSize < 3 || m_matrixSize % 2 == 0)
-  throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".");
+    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".");
   m_matrixSize_half = (m_matrixSize - 1) / 2;
   digitizer.debug() << "   - Inferred matrix size of " << m_matrixSize << " from first line." << endmsg;
 
@@ -376,6 +376,91 @@ int LookupTable::FindIndex (const Index_inPix& j, const int col, const int row) 
   int index_matrix = j[0] + m_binCount[0] * (j[1] + m_binCount[1] * j[2]);
   int index_element = col * m_matrixSize + row;
   return index_matrix * m_matrixSize * m_matrixSize + index_element;
+}
+
+std::array<std::vector<std::pair<float, float>>,2> LookupTable::ComputeEtaFunction() const {
+  /* compute the eta function by projecting the LUT (binning in u,v,w) onto the u- and v-axes
+    eta(t) : [0,1) -> [0,1]
+
+  This is a bit complicated because the eta-binning is shifted by half a pixel wrt. the LUT-binning along a given axis
+    - For even bin numbers: the bins map 1-to-1 (+ the shift), easy case
+    - For odd bin numbers: the bins are shifted by half a bin.
+      Force the bin edges to line up via unequal bin width:
+      the first and last bin of the eta function are only half as wide for odd bin counts. */
+
+  const unsigned int n_bins_u = (m_binCount.at(0) % 2 == 0) ? m_binCount.at(0) : m_binCount.at(0) + 1; // if odd number of bins, add one
+  std::vector<std::pair<float, float>> function_u(n_bins_u); // binned eta function: pair<bin lower edge, bin eta value>
+
+  // loop along u axis (in terms of eta binning)
+  for (int i_t=0; i_t < m_binCount.at(0); ++i_t) {
+
+    // assemble the LUT bin index i_u corresponding to this eta bin i_t
+    // this works for even and odd bin counts.
+    // for odd case: the last bin is never reached. fix that later.
+    int i_u = (i_t + m_binCount.at(0)/2) % m_binCount.at(0);
+
+    // now find the lower edge of the eta bin in terms of t
+    // for odd case: the first bin edge is negative. fix that later.
+    float t = static_cast<float>(i_t) / static_cast<float>(m_binCount.at(0));
+    if (m_binCount.at(0) % 2 == 1) {
+      t -= 0.5f / static_cast<float>(m_binCount.at(0));
+    }
+
+    // we always use two bins of the 5x5 matrix to compute the eta function:
+    // the two pixel in between which the charge is deposited.
+    // this changes depending on whether the charge is deposited left or right of the pixel centre
+    // for odd case: the central bin is an outlier, because we SHOULD use it twice (once for left, once for right). Again, fix this later
+    int row_leftPix, row_rightPix;
+    if (i_u - m_binCount.at(0)/2 < 0) {
+      row_leftPix = m_matrixSize_half-1;
+      row_rightPix = m_matrixSize_half;
+    }
+    else {
+      row_leftPix = m_matrixSize_half;
+      row_rightPix = m_matrixSize_half+1;
+    }
+
+    // finally: sum up charge across this slice of the LUT (with fixed i_u)
+    float leftPix = 0.f, rightPix = 0.f;
+    for (int i_v=0; i_v < m_binCount.at(1); ++i_v) {
+      for (int i_w=0; i_w < m_binCount.at(2); ++i_w) {
+        leftPix += GetWeight({i_u, i_v, i_w}, m_matrixSize_half, row_leftPix);
+        rightPix += GetWeight({i_u, i_v, i_w}, m_matrixSize_half, row_rightPix);
+      }
+    }
+    float eta = leftPix / (leftPix + rightPix);
+    function_u.at(i_t) = std::make_pair(t, eta);
+  }
+
+  // all the promised fixes for odd bin counts
+  if (m_binCount.at(0) % 2 == 1) {
+    // fix the bin edges
+    function_u.at(n_bins_u).first = function_u.at(0).first + 1.f;
+    function_u.at(0).first = 0.f;
+
+    // the last bin was never reached.
+    int row_leftPix = m_matrixSize_half;
+    int row_rightPix = m_matrixSize_half+1;
+
+    float leftPix = 0, rightPix = 0;
+
+    int i_u = m_binCount.at(0)/2; // corresponds to the central bin of the LUT. odd integer division rounds down.
+    for (int i_v=0; i_v < m_binCount.at(1); ++i_v) {
+      for (int i_w=0; i_w < m_binCount.at(2); ++i_w) {
+        leftPix += GetWeight({i_u, i_v, i_w}, m_matrixSize_half, row_leftPix);
+        rightPix += GetWeight({i_u, i_v, i_w}, m_matrixSize_half, row_rightPix);
+      }
+    }
+    float eta = leftPix / (leftPix + rightPix);
+    function_u.at(n_bins_u).second = eta;
+  } // odd-case fixes
+
+  // TODO: do this for v as well.
+
+  const unsigned int n_bins_v = (m_binCount.at(1) % 2 == 0) ? m_binCount.at(1) : m_binCount.at(1) + 1;
+  std::vector<std::pair<float, float>> function_v(n_bins_v);
+
+  return std::array<std::vector<std::pair<float, float>>,2>({function_u, function_v});
 }
 
 ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer),
@@ -601,5 +686,3 @@ void ChargeCollector_Debug::FillHit(const SimHitWrapper& simHit, HitMap& hitMap,
 // /* -- Drift approach -- */
 
 } // namespace VTXdigi_tools
-
-
