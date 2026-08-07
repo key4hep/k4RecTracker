@@ -306,30 +306,33 @@ struct GenfitTrackFitter final
   operator()(const edm4hep::TrackCollection& tracks_input) const override {
 
     debug() << "Event number: " << event_counter++ << endmsg;
+    num_tracks_event = 0;
 
-    // This collection stores the output of the fit
+    // These collections store the output of the fit
     edm4hep::TrackCollection FittedTracks;
     edm4hep::TrackCollection FittedTracksWithFilteredHits;
     edm4hep::TrackerHitPlaneCollection FittedHits;
 
     // Loop over the tracks created by the pattern recognition step
+    uint num_track_event = 0;
     for (const auto& track : tracks_input) {
 
-      num_tracks += 1;
+      num_tracks++;
+      num_tracks_event++;
 
       // Skip unmatched tracks if the option is enabled
-      // Consider unmatched tracks those with type = 0
       if (m_ListOfTypesToSkip.size() > 0 && std::find(m_ListOfTypesToSkip.begin(), m_ListOfTypesToSkip.end(),
                                                       track.getType()) != m_ListOfTypesToSkip.end()) {
         num_skip += 1;
-        warning() << "Skipping track " << num_tracks - 1 << " with type " << track.getType() << "\n" << endmsg;
-        continue; // skip unmatched tracks
+        warning() << "Skipping track " << num_tracks_event << " with type " << track.getType() << "\n" << endmsg;
+        continue;
       }
 
+      // skip tracks with less then 3 hits (seed initialization needs 3 hits)
       if (track.getTrackerHits().size() < 3) {
         num_skip += 1;
-        warning() << "Track " << num_tracks - 1 << ": less than 3 hits, skipping fit.\n" << endmsg;
-        continue; // skip tracks with less then 3 hits (seed initialization needs 3 hits)
+        warning() << "Track " << num_tracks_event << ": less than 3 hits, skipping fit.\n" << endmsg;
+        continue;
       }
 
       num_processed_tracks += 1;
@@ -342,10 +345,10 @@ struct GenfitTrackFitter final
 
       } else {
 
-        int winning_hypothesis = FindBestHypothesis(track, false);
+        int winning_hypothesis = FindBestHypothesis(track, FittedHits, false);
 
         if (winning_hypothesis == -1) {
-          debug() << "Track " << num_tracks - 1 << ": fit failed for all hypotheses, trying with less hits." << endmsg;
+          debug() << "Track " << num_track_event << ": fit failed for all hypotheses, trying with less hits." << endmsg;
         } else {
 
           isSuccess = 1;
@@ -365,7 +368,7 @@ struct GenfitTrackFitter final
           if (!isSuccess) {
 
             number_failures += 1;
-            debug() << "Track " << num_tracks - 1 << ": fit failed for single evaluation hypothesis, skipping track."
+            debug() << "Track " << num_tracks_event << ": fit failed for single evaluation hypothesis, skipping track."
                     << endmsg;
             auto failedTrack = FittedTracks.create();
             auto failedFittedTrack = FittedTracksWithFilteredHits.create();
@@ -381,11 +384,11 @@ struct GenfitTrackFitter final
 
         } else {
 
-          int winning_hypothesis = FindBestHypothesis(track, true);
+          int winning_hypothesis = FindBestHypothesis(track, FittedHits, true);
 
           if (winning_hypothesis == -1) {
 
-            debug() << "Track " << num_tracks - 1 << ": fit failed for all hypotheses." << endmsg;
+            debug() << "Track " << num_tracks_event - 1 << ": fit failed for all hypotheses." << endmsg;
             number_failures += 1;
             auto failedTrack = FittedTracks.create();
             auto failedFittedTrack = FittedTracksWithFilteredHits.create();
@@ -431,12 +434,16 @@ public:
 
   // Num_tracks = num_processed_tracks + num_skip
   mutable int num_tracks = 0;           // Total number of tracks seen (including skipped ones)
+  mutable int num_tracks_event = 0;     // Total number of tracks seen in one event (including skipped ones)
   mutable int num_skip = 0;             // Number of tracks skipped (e.g. failing pre-selection)
   mutable int num_processed_tracks = 0; // Number of tracks actually processed (i.e. not skipped)
   mutable int number_failures = 0;      // Number of track fits that failed
 
 private:
-  // ====================== Debug & Printout ======================
+  //////////////////////
+  // Debug & Printout //
+  //////////////////////
+
   // Debug level for track fitting and initialization printouts
   // 0       : no printouts
   // INFO    : prints fit results
@@ -444,7 +451,10 @@ private:
   // VERBOSE : prints detailed internal fit information
   uint m_printoutLevel;
 
-  // ====================== Geometry & Detector ======================
+  /////////////////////////
+  // Geometry & Detector //
+  /////////////////////////
+
   ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
 
   std::unique_ptr<GenfitInterface::GenfitField> m_genfitField;
@@ -453,14 +463,14 @@ private:
   GenfitInterface::GenfitMaterialInterface* m_geoMaterial;
 
   dd4hep::rec::SurfaceManager* m_surfMan;
-  dd4hep::rec::WireTracker_info_struct* m_wire_info;
-  dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
+  dd4hep::rec::WireTracker_info_struct* m_wire_info{nullptr};
+  dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder{nullptr};
 
   Gaudi::Property<std::string> m_WireTracker_name{
       this, "WireTrackerName", "DCH_v2",
       "WireTrackerName in the detector description (used to retrieve Wire Tracker geometry and material information)"};
 
-  // ====================== ECAL Geometry Parameters ======================
+  // ECAL Geometry Parameters
   double m_eCalBarrelInnerR;
   double m_eCalBarrelMaxZ;
   double m_eCalEndCapInnerR;
@@ -468,7 +478,9 @@ private:
   double m_eCalEndCapInnerZ;
   double m_eCalEndCapOuterZ;
 
-  // ====================== Fitter Settings ======================
+  /////////////////////
+  // Fitter Settings //
+  /////////////////////
 
   Gaudi::Property<bool> m_useBrems{this, "UseBrems", false, "Include Bremsstrahlung energy loss and noise in the fit"};
 
@@ -486,7 +498,10 @@ private:
                                     "Number of steps in the annealing schedule (if m_Fitter_type == 'DAF') "
                                     "[https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf]"};
 
-  // ====================== Track Initialization ======================
+  //////////////////////////
+  // Track Initialization //
+  //////////////////////////
+
   Gaudi::Property<std::vector<int>> m_particleHypothesis{
       this,
       "ParticleHypothesisList",
@@ -518,7 +533,7 @@ private:
   Gaudi::Property<double> m_z0_factor{
       this, "Z0Factor", 0.1,
       "Scaling factor for z0 uncertainty for the initial covariance matrix when InitializationType = 0,1,3."
-      "The actual sigma_z0 is computed as Z0Factor * |z0 (in cm)|"};
+      "The actual sigma_z0 is computed as Z0Factor * |z0 (in mm)|"};
   Gaudi::Property<double> m_sigma_tanLambda{
       this, "Sigma_tanLambda", 0.1,
       "Initial uncertainty on tanLambda for the initial covariance matrix when InitializationType = 0,1,3."};
@@ -542,7 +557,10 @@ private:
       this, "SmoothWindow", 5,
       "Number of hits used for smoothing before computing the first derivative in track initialization"};
 
-  // ====================== Track Filtering & Evaluation ======================
+  ////////////////////////////////////
+  // Track Filtering and Evaluation //
+  ////////////////////////////////////
+
   Gaudi::Property<bool> m_skipTrackOrdering{this, "SkipTrackOrdering", false, "Skip hit ordering before fitting"};
 
   Gaudi::Property<std::vector<int>> m_ListOfTypesToSkip{
@@ -566,7 +584,10 @@ private:
       "and the corresponding track states are stored in the output track."
       "This is applied only if a non-zero magnetic field (Bz > 0) is found at the last hit position."};
 
-  // ====================== Track Classification ======================
+  //////////////////////////
+  // Track Classification //
+  //////////////////////////
+
   Gaudi::Property<double> m_RadialThresholdPromptTrack{
       this, "RadialThresholdPromptTrack", 100.,
       "Radius [mm] defining a spherical region centered at {0,0,0}. "
@@ -576,7 +597,9 @@ private:
       "using the PCA "
       "of the first hit."};
 
-  // ====================== Fit Helpers ======================
+  /////////////////
+  // Fit Helpers //
+  /////////////////
 
   /**
    * @brief Process and fit a reconstructed track using Genfit, with optional hit filtering
@@ -623,15 +646,16 @@ private:
 
     TVector3 Init_momentum(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
 
-    track_interface.InitializeTrack(m_RadialThresholdPromptTrack.value(), m_useFirstHitAsReference, LimitHits,
+    double RadialThresholdPromptTrack_cm = m_RadialThresholdPromptTrack.value() * dd4hep::mm;
+
+    track_interface.InitializeTrack(RadialThresholdPromptTrack_cm, m_useFirstHitAsReference, LimitHits,
                                     m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum,
-                                    m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value() * dd4hep::mm,
-                                    m_sigma_phi.value(), m_omega_factor.value(), m_z0_factor.value(),
-                                    m_sigma_tanLambda.value());
+                                    m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value(), m_sigma_phi.value(),
+                                    m_omega_factor.value(), m_z0_factor.value(), m_sigma_tanLambda.value());
 
     auto track_init = track_interface.GetInitialization();
 
-    debug() << "Track " << num_tracks - 1 << " with " << track.getTrackerHits().size()
+    debug() << "Track " << num_tracks_event << " with " << track.getTrackerHits().size()
             << " hits: initial seed for track fit:" << endmsg;
 
     debug() << "  Initial position [mm]: (" << track_init.Position.X() / dd4hep::mm << ", "
@@ -654,11 +678,11 @@ private:
 
     track_interface.CreateGenFitTrack(particleHypothesis, debug_track);
 
-    bool isFit = track_interface.Fit(m_Fitter_type.value(), m_printoutLevel, m_Beta_init, m_Beta_final, m_Beta_steps,
-                                     m_filterTrackHits);
+    bool isFit = track_interface.Fit(FittedHits, m_Fitter_type.value(), m_printoutLevel, m_Beta_init, m_Beta_final,
+                                     m_Beta_steps, m_filterTrackHits);
 
     if (!isFit) {
-      debug() << "Track fit FAILED for track " << num_tracks - 1 << endmsg;
+      debug() << "Track fit FAILED for track " << num_tracks_event << endmsg;
       return false;
     }
 
@@ -727,7 +751,6 @@ private:
         }
       }
 
-      FittedHits = std::move(track_interface.GetFittedHits());
       FittedTracksWithFilteredHits.push_back(edm4hep_track_with_fit);
     }
 
@@ -761,11 +784,15 @@ private:
    *       additional physics constraints or likelihood-based criteria.
    * @note All fits are performed with debug output disabled and without hit filtering.
    */
-  int FindBestHypothesis(const edm4hep::Track& track, bool LimitHits) const {
+  int FindBestHypothesis(const edm4hep::Track& track, edm4hep::TrackerHitPlaneCollection& fittedHits,
+                         bool LimitHits) const {
 
-    TVector3 Init_position(m_init_position.value()[0], m_init_position.value()[1], m_init_position.value()[2]);
+    TVector3 Init_position(m_init_position.value()[0] * dd4hep::mm, m_init_position.value()[1] * dd4hep::mm,
+                           m_init_position.value()[2] * dd4hep::mm);
 
     TVector3 Init_momentum(m_init_momentum.value()[0], m_init_momentum.value()[1], m_init_momentum.value()[2]);
+
+    double RadialThresholdPromptTrack_cm = m_RadialThresholdPromptTrack.value() * dd4hep::mm;
 
     int winning_hypothesis = -1;
     double winning_chi2_ndf = std::numeric_limits<double>::max();
@@ -775,15 +802,16 @@ private:
       GenfitInterface::GenfitTrack track_interface(track, m_skipTrackOrdering, m_wire_info, m_dc_decoder,
                                                    m_genfitField.get());
 
-      track_interface.InitializeTrack(m_RadialThresholdPromptTrack.value(), m_useFirstHitAsReference, LimitHits,
+      track_interface.InitializeTrack(RadialThresholdPromptTrack_cm, m_useFirstHitAsReference, LimitHits,
                                       m_initializationType, m_trackStateLocation.value(), Init_position, Init_momentum,
-                                      m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value() * dd4hep::mm,
+                                      m_epsilon.value(), m_smoothWindow.value(), m_sigma_d0.value(),
                                       m_sigma_phi.value(), m_omega_factor.value(), m_z0_factor.value(),
                                       m_sigma_tanLambda.value());
 
       track_interface.CreateGenFitTrack(pdgCode, 0);
 
-      bool isFit = track_interface.Fit(m_Fitter_type.value(), 0, m_Beta_init, m_Beta_final, m_Beta_steps, false);
+      bool isFit =
+          track_interface.Fit(fittedHits, m_Fitter_type.value(), 0, m_Beta_init, m_Beta_final, m_Beta_steps, false);
 
       if (!isFit)
         continue;
