@@ -410,25 +410,25 @@ std::array<std::vector<std::pair<float, float>>,2> LookupTable::ComputeEtaFuncti
     // the two pixel in between which the charge is deposited.
     // this changes depending on whether the charge is deposited left or right of the pixel centre
     // for odd case: the central bin is an outlier, because we SHOULD use it twice (once for left, once for right). Again, fix this later
-    int row_leftPix, row_rightPix;
+    int col_leftPix, col_rightPix;
     if (i_u - m_binCount.at(0)/2 < 0) {
-      row_leftPix = m_matrixSize_half-1;
-      row_rightPix = m_matrixSize_half;
+      col_leftPix = m_matrixSize_half-1;
+      col_rightPix = m_matrixSize_half;
     }
     else {
-      row_leftPix = m_matrixSize_half;
-      row_rightPix = m_matrixSize_half+1;
+      col_leftPix = m_matrixSize_half;
+      col_rightPix = m_matrixSize_half+1;
     }
 
     // finally: sum up charge across this slice of the LUT (with fixed i_u)
     float leftPix = 0.f, rightPix = 0.f;
     for (int i_v=0; i_v < m_binCount.at(1); ++i_v) {
       for (int i_w=0; i_w < m_binCount.at(2); ++i_w) {
-        leftPix += GetWeight({i_u, i_v, i_w}, m_matrixSize_half, row_leftPix);
-        rightPix += GetWeight({i_u, i_v, i_w}, m_matrixSize_half, row_rightPix);
+        leftPix += GetWeight({i_u, i_v, i_w}, col_leftPix, m_matrixSize_half);
+        rightPix += GetWeight({i_u, i_v, i_w}, col_rightPix, m_matrixSize_half);
       }
     }
-    float eta = leftPix / (leftPix + rightPix);
+    float eta = rightPix / (leftPix + rightPix);
     function_u.at(i_t) = std::make_pair(t, eta);
   }
 
@@ -439,19 +439,19 @@ std::array<std::vector<std::pair<float, float>>,2> LookupTable::ComputeEtaFuncti
     function_u.at(0).first = 0.f;
 
     // the last bin was never reached.
-    int row_leftPix = m_matrixSize_half;
-    int row_rightPix = m_matrixSize_half+1;
+    int col_leftPix = m_matrixSize_half;
+    int col_rightPix = m_matrixSize_half-1;
 
     float leftPix = 0, rightPix = 0;
 
     int i_u = m_binCount.at(0)/2; // corresponds to the central bin of the LUT. odd integer division rounds down.
     for (int i_v=0; i_v < m_binCount.at(1); ++i_v) {
       for (int i_w=0; i_w < m_binCount.at(2); ++i_w) {
-        leftPix += GetWeight({i_u, i_v, i_w}, m_matrixSize_half, row_leftPix);
-        rightPix += GetWeight({i_u, i_v, i_w}, m_matrixSize_half, row_rightPix);
+        leftPix += GetWeight({i_u, i_v, i_w}, col_leftPix, m_matrixSize_half);
+        rightPix += GetWeight({i_u, i_v, i_w}, col_rightPix, m_matrixSize_half);
       }
     }
-    float eta = leftPix / (leftPix + rightPix);
+    float eta = rightPix / (leftPix + rightPix);
     function_u.at(n_bins_u).second = eta;
   } // odd-case fixes
 
