@@ -109,17 +109,27 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
       double betagamma = momentum / mass;
       debug() << "MCParticle betagamma: " << betagamma << endmsg;
       // Check if betagamma is in valid range of delphes parametrisation (status: 16 June 2025)
-      if (betagamma < 0.5 || betagamma > 20000.0) {
-        warning() << "beta*gamma value outside of \"good\" range of delphes parametrisation (0.5-20000), dN/dx will be "
+      if (betagamma < 0.5) {
+        warning() << "beta*gamma value below \"good\" range of delphes parametrisation (0.5-10000), dN/dx will be "
                      "set to dummy value: "
                   << dummy_value << " clusters/mm" << endmsg;
         goto store_value;
+      } else if (betagamma > 10000) {
+        warning() << "beta*gamma value above \"good\" range of delphes parametrisation (0.5-10000), "
+                     "beta*gamma will be set to max value as approximation."
+                  << endmsg;
+        betagamma = 9999.9; // 10000 is out of range already
       }
 
       // Get number of clusters per length from delphes
       // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
       double nclusters_per_mm = m_delphesTrkUtil.Nclusters(betagamma, m_GasSel.value()) / 1000.0;
       debug() << "Number of clusters per mm: " << nclusters_per_mm << endmsg;
+      if (nclusters_per_mm < 1e-6) {
+        warning() << "Delphes number of clusters per mm calculation returned 0.0, dN/dx will be set to dummy value: "
+                  << dummy_value << " clusters/mm" << endmsg;
+        goto store_value;
+      }
 
       ///////////////////////
       // Track Information //
