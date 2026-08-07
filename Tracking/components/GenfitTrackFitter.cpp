@@ -123,14 +123,14 @@ struct GenfitTrackFitter final
     }
 
     // Initialize the Genfit: FieldManager and MaterialEffects
-    const dd4hep::Detector* detector = m_geoSvc->getDetector();
-    auto fieldMap = detector->field();
+    const dd4hep::Detector* geo_detector = m_geoSvc->getDetector();
+    auto fieldMap = geo_detector->field();
     m_genfitField = std::make_unique<GenfitInterface::GenfitField>(fieldMap);
 
     m_fieldManager = genfit::FieldManager::getInstance();
     m_fieldManager->init(m_genfitField.get());
 
-    m_geoMaterial = GenfitInterface::GenfitMaterialInterface::getInstance(detector);
+    m_geoMaterial = GenfitInterface::GenfitMaterialInterface::getInstance(geo_detector);
 
     if (m_useBrems) {
       genfit::MaterialEffects::getInstance()->setEnergyLossBrems(true);
