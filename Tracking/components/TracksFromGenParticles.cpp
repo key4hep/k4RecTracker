@@ -102,7 +102,7 @@ struct TracksFromGenParticles final
       }
 
       if (!retrieved) { // typical cases
-        info() << "No DR calo has been found. Searching for the separated barrel and endcap ECAL" << endmsg;
+        info() << "No DR calo has been found. Searching for the separated barrel and endcap ECAL..." << endmsg;
 
         // set "special" parameters to 0, will use it later to avoid projecting to the empty detector
         m_eCalBarrelInnerR = 0.;
@@ -147,6 +147,8 @@ struct TracksFromGenParticles final
                 << endmsg;
         return StatusCode::FAILURE;
       }
+
+      info() << "Found ECAL extension successfully" << endmsg;
     }
 
     // setup system decoder
