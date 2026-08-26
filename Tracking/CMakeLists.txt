@@ -48,6 +48,10 @@ gaudi_add_module(${PackageName}
   ${DELPHES_LIBRARIES}
 )
 
+if(TARGET PandoraPFA::PandoraSDK)
+  target_link_libraries(${PackageName} PRIVATE PandoraPFA::PandoraSDK)
+endif()
+
 target_include_directories(${PackageName} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/genfit_interfaces>
