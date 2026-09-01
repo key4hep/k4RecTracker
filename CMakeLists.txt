@@ -19,7 +19,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # The Tracking subpackage targets FCCee and pulls in dependencies that are not
 # available everywhere (GenFit, MarlinUtil, PandoraSDK, ONNX Runtime, Torch).
 # Turn this off to build only the digitizers, e.g. on the Muon Collider stack.
-option(K4RECTRACKER_COMPILE_FCCEETRACKING "Build the Tracking subpackage" ON)
+option(K4RECTRACKER_TRACKING "Build the Tracking subpackage" ON)
+
+# The DCH digitisers need Delphes (DCHdigi_v02) and GSL, and build the podio
+# datamodel extension used for drift chamber hits.
+option(K4RECTRACKER_DCH_DIGITISERS "Build the DCH digitisers" ON)
 
 # dependencies
 # For some reason, the find_package with DD4hep must be the first one
@@ -34,11 +38,18 @@ find_package(EDM4HEP REQUIRED)
 find_package(k4FWCore 1.3 REQUIRED)
 find_package(k4geo REQUIRED)
 find_package(Gaudi REQUIRED)
-find_package(Delphes REQUIRED)
-find_package(GSL REQUIRED)
+# Needed by the DCH digitisers and by Tracking
+if(K4RECTRACKER_DCH_DIGITISERS OR K4RECTRACKER_TRACKING)
+  find_package(Delphes REQUIRED)
+endif()
+
+# Only needed by the DCH digitisers
+if(K4RECTRACKER_DCH_DIGITISERS)
+  find_package(GSL REQUIRED)
+endif()
 
 # Only needed by Tracking
-if(K4RECTRACKER_COMPILE_FCCEETRACKING)
+if(K4RECTRACKER_TRACKING)
   find_package(PandoraSDK REQUIRED)
   find_package(Eigen3 REQUIRED)
   find_package(onnxruntime REQUIRED)
@@ -61,15 +72,19 @@ function(set_test_env _testname)
 
 endfunction()
 
-add_subdirectory(WireTrackerDigi)
+if(K4RECTRACKER_DCH_DIGITISERS)
+  add_subdirectory(WireTrackerDigi)
+else()
+  message(STATUS "K4RECTRACKER_DCH_DIGITISERS is OFF: not building the DCH digitisers")
+endif()
 add_subdirectory(ARCdigi)
 add_subdirectory(VTXdigi)
 add_subdirectory(VTXdigiDetailed)
-if(K4RECTRACKER_COMPILE_FCCEETRACKING)
+if(K4RECTRACKER_TRACKING)
   set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
   add_subdirectory(Tracking)
 else()
-  message(STATUS "K4RECTRACKER_COMPILE_FCCEETRACKING is OFF: not building the Tracking subpackage")
+  message(STATUS "K4RECTRACKER_TRACKING is OFF: not building the Tracking subpackage")
 endif()
 
 include(cmake/CreateProjectConfig.cmake)
