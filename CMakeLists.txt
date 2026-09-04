@@ -53,7 +53,7 @@ function(set_test_env _testname)
 
 endfunction()
 
-add_subdirectory(DCHdigi)
+add_subdirectory(WireTrackerDigi)
 add_subdirectory(ARCdigi)
 add_subdirectory(VTXdigi)
 add_subdirectory(VTXdigiDetailed)

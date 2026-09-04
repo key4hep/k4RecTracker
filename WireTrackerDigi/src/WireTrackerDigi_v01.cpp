@@ -1,4 +1,4 @@
-#include "DCHdigi_v02.h"
+#include "WireTrackerDigi_v01.h"
 
 // Gaudi
 #include <GaudiKernel/MsgStream.h>
@@ -29,13 +29,13 @@ struct HitInfo {
 };
 } // namespace
 
-DCHdigi_v02::DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc)
+WireTrackerDigi_v01::WireTrackerDigi_v01(const std::string& name, ISvcLocator* svcLoc)
     : MultiTransformer(name, svcLoc,
                        {KeyValues("InputSimHitCollection", {""}), KeyValues("HeaderName", {"EventHeader"})},
                        {KeyValues("OutputDigihitCollection", {"DCHDigi2Collection"}),
                         KeyValues("OutputLinkCollection", {"DCHDigi2SimLinkCollection"})}) {}
 
-StatusCode DCHdigi_v02::initialize() {
+StatusCode WireTrackerDigi_v01::initialize() {
 
   m_uniqueIDSvc = serviceLocator()->service(m_uidSvcName);
   if (!m_uniqueIDSvc) {
@@ -50,30 +50,30 @@ StatusCode DCHdigi_v02::initialize() {
   }
 
   // Retrieve the subdetector
-  std::string dch_name(m_dch_name.value());
-  if (m_geoSvc->getDetector()->detectors().count(dch_name) == 0) {
-    error() << "Detector <<" << dch_name << ">> does not exist." << endmsg;
+  std::string wt_name(m_wt_name.value());
+  if (m_geoSvc->getDetector()->detectors().count(wt_name) == 0) {
+    error() << "Detector <<" << wt_name << ">> does not exist." << endmsg;
     return StatusCode::FAILURE;
   }
 
   // Retrieve the detector element
-  dd4hep::DetElement dch_detelem = m_geoSvc->getDetector()->detectors().at(dch_name);
-  // Retrieve the DCH_info data extension for the drift chamber
-  auto wt_info = dch_detelem.extension<dd4hep::rec::WireTracker_info_struct>();
-  m_dch_info = dynamic_cast<dd4hep::rec::DCH_info*>(wt_info);
-  if (not m_dch_info->IsValid()) {
-    error() << "No valid data extension was found for detector <<" << dch_name << ">>." << endmsg;
+  dd4hep::DetElement wt_detelem = m_geoSvc->getDetector()->detectors().at(wt_name);
+  // Retrieve the WireTracker_info data extension for the drift chamber
+  auto wt_info = wt_detelem.extension<dd4hep::rec::WireTracker_info_struct>();
+  m_wt_info = dynamic_cast<dd4hep::rec::WireTracker_info*>(wt_info);
+  if (not m_wt_info->IsValid()) {
+    error() << "No valid data extension was found for detector <<" << wt_name << ">>." << endmsg;
     return StatusCode::FAILURE;
   }
 
   // Retrieve the readout associated with the detector element (subdetector)
-  dd4hep::SensitiveDetector dch_sd = m_geoSvc->getDetector()->sensitiveDetector(dch_name);
-  if (not dch_sd.isValid()) {
-    error() << "No valid Sensitive Detector was found for detector <<" << dch_name << ">>." << endmsg;
+  dd4hep::SensitiveDetector wt_sd = m_geoSvc->getDetector()->sensitiveDetector(wt_name);
+  if (not wt_sd.isValid()) {
+    error() << "No valid Sensitive Detector was found for detector <<" << wt_name << ">>." << endmsg;
     return StatusCode::FAILURE;
   }
   // set the cellID decoder
-  m_decoder = dch_sd.readout().idSpec().decoder();
+  m_decoder = wt_sd.readout().idSpec().decoder();
 
   if (!(m_drift_velocity_um_per_ns.value() > 0.0)) {
     m_drift_velocity_um_per_ns.setValue(get_default_drift_velocity_um_per_ns());
@@ -93,7 +93,7 @@ StatusCode DCHdigi_v02::initialize() {
 }
 
 std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>
-DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
+WireTrackerDigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input,
                         const edm4hep::EventHeaderCollection& header) const {
 
   edm4hep::SenseWireHitCollection output;
@@ -121,25 +121,28 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
 
     // Some geometry values needed for the calculations below
     int superlayer = m_decoder->get(cellID, "superlayer");
-    int layer = m_dch_info->CalculateILayerFromCellIDFields(m_decoder->get(cellID, "layer"), superlayer);
-    int nphi = m_decoder->get(cellID, "nphi");
+    int layer = m_wt_info->CalculateILayerFromCellIDFields(m_decoder->get(cellID, "layer"), superlayer);
 
+    // use m_isSTT to determine cellID components nphi/tube and sector/0
+    int nphi = m_isSTT ? m_decoder->get(cellID, "tube") : m_decoder->get (cellID, "nphi");
+    int sector = m_isSTT ? m_decoder->get (cellID, "sector") : 0;
+      
     /* THE FOLLOWING CALCULATION OF WIRE ANGLES HAS BEEN COPIED AS IS FROM DCHdigi_v01! */
     // The direction of the sense wires can be calculated as:
     //   RotationZ(WireAzimuthalAngle) * RotationX(stereoangle)
     // One point of the wire is for example the following:
     //   RotationZ(WireAzimuthalAngle) * Position(cell_rave_z0, 0 , 0)
     // variables are defined below
-    auto WireAzimuthalAngle = this->m_dch_info->Get_cell_phi_angle(superlayer, layer, /*sector=*/0, nphi);
+    auto WireAzimuthalAngle = this->m_wt_info->Get_cell_phi_angle(superlayer, layer, sector, nphi);
     float WireStereoAngle = 0;
     {
-      auto l = this->m_dch_info->database.at(layer);
+      auto l = this->m_wt_info->database.at(layer);
       // when building the twisted tube, the twist angle is defined as:
       //     cell_twistangle    = DCH_i->StereoSign(l) * DCH_i->twist_angle
       // which forces the stereoangle of the wire to have the oposite sign
       WireStereoAngle = (-1.) * l.stereo_sw_z0;
     }
-    /* END OF COPYING WIRE ANGLE CALCULATION FROM DCHdigi_v01 */
+    /* END OF COPYING WIRE ANGLE CALCULATION FROM WireTrackerDigi_v01 */
 
     // Hits will be grouped by time into batches separated by 400 ns (dead time of a cell)
     // Need an additional loop over the simhits to create these hit trains
@@ -158,7 +161,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
       auto simhit_position_ddu = this->toVector3D(simhit.getPosition()) * dd4hep::mm;
 
       auto hit_to_wire_vector_ddu =
-          m_dch_info->Calculate_hitpos_to_wire_vector(superlayer, layer, /*isector=*/0, nphi, simhit_position_ddu);
+          m_wt_info->Calculate_hitpos_to_wire_vector(superlayer, layer, sector, nphi, simhit_position_ddu);
       auto hit_projection_on_the_wire_ddu = simhit_position_ddu + hit_to_wire_vector_ddu;
       double distance_to_wire_mm =
           hit_to_wire_vector_ddu.R() / dd4hep::mm; // Explicitly cast to mm, no matter what the default unit is
@@ -173,7 +176,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
 
       // z smearing
       double smearing_z_ddu = random_engine.Gaus(0.0, m_z_resolution_mm.value() * dd4hep::mm);
-      auto wire_direction_ez_ddu = (m_dch_info->Calculate_wire_vector_ez(superlayer, layer, /*sector=*/0, nphi)).Unit();
+      auto wire_direction_ez_ddu = (m_wt_info->Calculate_wire_vector_ez(superlayer, layer, sector, nphi)).Unit();
       hit_projection_on_the_wire_ddu +=
           smearing_z_ddu *
           wire_direction_ez_ddu; // Need to multiply smearing_z_ddu with dd4hep::mm to cast into default units
@@ -181,13 +184,13 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
       // Limit z to values inside the drift chamber.
       // NB: can lead to a peak at z=Lhalf and z=-Lhalf
       hit_projection_on_the_wire_ddu.SetZ(
-          std::clamp(hit_projection_on_the_wire_ddu.Z(), -(this->m_dch_info->Lhalf), this->m_dch_info->Lhalf));
+          std::clamp(hit_projection_on_the_wire_ddu.Z(), -(this->m_wt_info->Lhalf), this->m_wt_info->Lhalf));
 
       // Convert to edm4hep vector and cast to mm
       edm4hep::Vector3d digihit_position_mm = this->toEDM4hepVector(hit_projection_on_the_wire_ddu) * (1 / dd4hep::mm);
 
       double distance_to_readout_mm =
-          (this->m_dch_info->Lhalf / dd4hep::mm - std::abs(digihit_position_mm.z)) / std::cos(WireStereoAngle);
+          (this->m_wt_info->Lhalf / dd4hep::mm - std::abs(digihit_position_mm.z)) / std::cos(WireStereoAngle);
       double travel_time_ns = this->get_signal_travel_time_ns(distance_to_readout_mm);
 
       double arrival_time_ns = simhit.getTime() + drift_time_ns + travel_time_ns;
@@ -270,7 +273,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
 
         // NB: at the moment, hits from secondary particles (isProducedBySecondary() flag) cannot be treated perfectly
         // accurate, because the beta*gamma of that secondary particle cannot be retrieved This will need to be fixed in
-        // DCHdigi_v03, with the full waveform digitisation
+        // WireTrackerDigi_v02, with the full waveform digitisation
 
         if (new_entry) {
           // As simplfication: just take the betagamma value from the first hit we encounter (unlikely to change much
@@ -351,7 +354,7 @@ DCHdigi_v02::operator()(const edm4hep::SimTrackerHitCollection& input,
   return std::make_tuple(std::move(output), std::move(links));
 }
 
-double DCHdigi_v02::get_drift_time_ns(double distance_to_wire_mm) const {
+double WireTrackerDigi_v01::get_drift_time_ns(double distance_to_wire_mm) const {
   // Calculate the drift time based on the distance to the wire
   // This is a preliminary implementation that needs to be updated with a realistic model
   // For now, we use a simple linear model with a constant drift velocity
@@ -364,7 +367,7 @@ double DCHdigi_v02::get_drift_time_ns(double distance_to_wire_mm) const {
   return drift_time_ns;
 }
 
-double DCHdigi_v02::get_signal_travel_time_ns(double distance_to_readout_mm) const {
+double WireTrackerDigi_v01::get_signal_travel_time_ns(double distance_to_readout_mm) const {
   // Calculate the time it takes for the signal to travel along the wire to the readout electronics
 
   // Calculate the signal travel time in ns
@@ -372,7 +375,7 @@ double DCHdigi_v02::get_signal_travel_time_ns(double distance_to_readout_mm) con
   return signal_travel_time_ns;
 }
 
-double DCHdigi_v02::get_default_drift_velocity_um_per_ns() const {
+double WireTrackerDigi_v01::get_default_drift_velocity_um_per_ns() const {
   // Return the default drift velocity based on the gas type
   // Currently, all gas types return the same value as placeholder
   switch (m_GasType.value()) {
