@@ -5,8 +5,9 @@ Run with:
 
     k4run test_simtrackerhit_cell_merger_steer.py --input input.root --output output.root
 
-One instance is scheduled per value of the MultipleTrackHandling property, so that all three
-ways of dealing with several Geant4 tracks in the same cell are exercised in a single job.
+One instance is scheduled per value of the MultipleTrackHandling property, plus one more for the
+"Average" RepresentativeKinematics, so that every choice of both properties is exercised in a
+single job.
 
 Input/output file names default to sensible values but can be overridden via CLI, e.g. by the
 CTest setup in CMakeLists.
@@ -24,6 +25,8 @@ INPUT_COLL = "SimTrackerHits"
 OUT_COLL_ALL = "MergedHitsAll"
 OUT_COLL_PRIMARY = "MergedHitsPrimaryOnly"
 OUT_COLL_PER_TRACK = "MergedHitsPerTrack"
+OUT_COLL_SINGLE_TRACK = "MergedHitsSingleTrackCells"
+OUT_COLL_AVERAGE = "MergedHitsAllAveraged"
 
 parser.add_argument("--input", default="input.root", help="Input EDM4hep file")
 parser.add_argument("--output", default="output.root", help="Output EDM4hep file")
@@ -54,8 +57,23 @@ merger_per_track = SimTrackerHitCellMerger(
     MultipleTrackHandling="PerTrack",
 )
 
+merger_single_track = SimTrackerHitCellMerger(
+    "SimTrackerHitCellMergerSingleTrackCells",
+    InputSimTrackerHits=INPUT_COLL,
+    OutputSimTrackerHits=OUT_COLL_SINGLE_TRACK,
+    MultipleTrackHandling="SkipMultiTrackCells",
+)
+
+merger_average = SimTrackerHitCellMerger(
+    "SimTrackerHitCellMergerAllAveraged",
+    InputSimTrackerHits=INPUT_COLL,
+    OutputSimTrackerHits=OUT_COLL_AVERAGE,
+    MultipleTrackHandling="All",
+    RepresentativeKinematics="Average",
+)
+
 ApplicationMgr(
-    TopAlg=[merger_all, merger_primary, merger_per_track],
+    TopAlg=[merger_all, merger_primary, merger_per_track, merger_single_track, merger_average],
     EvtSel="NONE",
     EvtMax=1,
     ExtSvc=[iosvc],
