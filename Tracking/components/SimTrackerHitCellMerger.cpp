@@ -31,15 +31,76 @@
 #include <algorithm>
 #include <array>
 #include <compare>
+#include <cstddef>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include <PropertyChoices.h>
+namespace {
+
+/** @class PropertyChoices
+ *
+ *  Minimal stand-in for the `choices` argument of Python's argparse.add_argument(), for
+ *  string-valued Gaudi properties that may only take one of a fixed set of values. It replaces a
+ *  hand-written if/else chain by a single table that is also the one source of truth for the list
+ *  of valid values quoted in the property documentation and in error messages.
+ *
+ *  Gaudi itself has no equivalent. Gaudi::Property does take a VERIFIER template parameter, but
+ *  the only two verifiers it ships are Gaudi::Details::Property::NullVerifier and
+ *  Gaudi::Details::Property::BoundedVerifier (numeric lower/upper bounds, exposed as
+ *  Gaudi::CheckedProperty). A verifier is moreover default-constructed by the property and already
+ *  invoked on the default value inside the property constructor, so there is no clean way to teach
+ *  one a list of allowed strings from the owning algorithm.
+ */
+template <typename ENUM, std::size_t N>
+class PropertyChoices {
+public:
+  using Choice = std::pair<std::string_view, ENUM>;
+
+  constexpr explicit PropertyChoices(std::array<Choice, N> choices) : m_choices(choices) {}
+
+  /// Translate one of the allowed strings into its enum value, or return std::nullopt if the
+  /// string is not one of the choices
+  constexpr std::optional<ENUM> parse(std::string_view value) const {
+    for (const auto& choice : m_choices) {
+      if (choice.first == value)
+        return choice.second;
+    }
+    return std::nullopt;
+  }
+
+  /// The allowed values rendered as `'A', 'B', 'C'`, for property documentation and error messages
+  std::string list() const {
+    std::string rendered;
+    for (const auto& choice : m_choices) {
+      if (!rendered.empty())
+        rendered += ", ";
+      rendered += '\'';
+      rendered += choice.first;
+      rendered += '\'';
+    }
+    return rendered;
+  }
+
+private:
+  std::array<Choice, N> m_choices;
+};
+
+/// Build a PropertyChoices out of `std::pair{"Name", Enum::Value}` entries, deducing the number of
+/// choices so that it never has to be kept in sync by hand
+template <typename ENUM, typename... NAMES>
+constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
+  return PropertyChoices<ENUM, sizeof...(choices)>{std::array<std::pair<std::string_view, ENUM>, sizeof...(choices)>{
+      std::pair<std::string_view, ENUM>{choices.first, choices.second}...}};
+}
+
+} // namespace
 
 /** @class SimTrackerHitCellMerger
  *
