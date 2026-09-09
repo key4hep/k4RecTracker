@@ -12,15 +12,16 @@ What it does
      cell 2 : particle 1                        with 1 step  of 4.0 mm
 
    So cell 1 is crossed by three tracks and cell 2 by a single one. The hits are deliberately
-   written in a scrambled order so that the per-cell and per-track grouping, the cellID ordering of
-   the output and the "earliest hit is the representative one" rule are all exercised. Each hit
-   carries a position and a momentum derived from its time, so that averaging them gives a
-   predictable answer.
+   written in a scrambled order so that the per-cell and per-track grouping and the cellID ordering
+   of the output are all exercised. Each hit carries a position and a momentum derived from its
+   time, so that both picking one of them and averaging over them give a predictable answer.
 
    SimTrackerHitCellMerger itself is run separately by CTest via
    `k4run test_simtrackerhit_cell_merger_steer.py`, which runs one instance per value of the
-   MultipleTrackHandling property, plus one more for the "Average" RepresentativeKinematics, so
-   that every choice of both properties is covered in a single job.
+   MultipleTrackHandling property, plus one more for the non-default "EarliestHit"
+   RepresentativeKinematics, so that every choice of both properties is covered in a single job.
+   The four instances that do not set RepresentativeKinematics use its default, "Average", so
+   their expected kinematics below are means over the hits that were summed.
 
 2. (check step) Reads the output file and asserts the accumulated path lengths, energy deposits,
    MCParticle relations and representative kinematics of each output collection.
@@ -51,7 +52,7 @@ OUT_COLL_ALL = "MergedHitsAll"
 OUT_COLL_PRIMARY = "MergedHitsPrimaryOnly"
 OUT_COLL_PER_TRACK = "MergedHitsPerTrack"
 OUT_COLL_SINGLE_TRACK = "MergedHitsSingleTrackCells"
-OUT_COLL_AVERAGE = "MergedHitsAllEarliestHit"
+OUT_COLL_EARLIEST_HIT = "MergedHitsAllEarliestHit"
 
 CELL_A = 1
 CELL_B = 2
@@ -177,40 +178,42 @@ def check_output(output_file: str) -> None:
         OUT_COLL_PRIMARY,
         OUT_COLL_PER_TRACK,
         OUT_COLL_SINGLE_TRACK,
-        OUT_COLL_AVERAGE,
+        OUT_COLL_EARLIEST_HIT,
     ):
         assert coll_name in available, f"Output collection '{coll_name}' not found in output file"
 
     # --- MultipleTrackHandling = "SumAll" ----------------------------------
-    # One hit per cell, summing every track. Cell 1 gets 1.0 + 2.0 + 0.5 + 0.25 mm, is attributed to
-    # the most primary contributor (particle 0) and takes its kinematics from the globally earliest
-    # hit of the cell, which belongs to particle 2.
+    # One hit per cell, summing every track. Cell 1 gets 1.0 + 2.0 + 0.5 + 0.25 mm and is attributed
+    # to the most primary contributor (particle 0). With the default "Average" kinematics it sits at
+    # the mean of all four times 2.0, 0.5, 1.0 and 1.5 ns, i.e. at 1.25 ns.
     merged_all = frame.get(OUT_COLL_ALL)
     assert len(merged_all) == 2, (
         f"'SumAll' should give one hit per cell, i.e. 2, got {len(merged_all)}"
     )
-    check_hit(OUT_COLL_ALL, 0, merged_all[0], CELL_A, 3.75, 0.00375, 0, 0.5)
+    check_hit(OUT_COLL_ALL, 0, merged_all[0], CELL_A, 3.75, 0.00375, 0, 1.25)
     check_hit(OUT_COLL_ALL, 1, merged_all[1], CELL_B, 4.0, 0.004, 1, 3.0)
 
     # --- MultipleTrackHandling = "PrimaryOnly" -----------------------------
     # One hit per cell, but only the steps of the most primary contributor are summed, so cell 1
     # keeps only particle 0's 1.0 + 2.0 mm and the 0.5 + 0.25 mm of the other two tracks are dropped.
+    # The average is therefore over particle 0's two hits only, at (2.0 + 1.0) / 2 = 1.5 ns.
     merged_primary = frame.get(OUT_COLL_PRIMARY)
     assert len(merged_primary) == 2, (
         f"'PrimaryOnly' should give one hit per cell, i.e. 2, got {len(merged_primary)}"
     )
-    check_hit(OUT_COLL_PRIMARY, 0, merged_primary[0], CELL_A, 3.0, 0.003, 0, 1.0)
+    check_hit(OUT_COLL_PRIMARY, 0, merged_primary[0], CELL_A, 3.0, 0.003, 0, 1.5)
     check_hit(OUT_COLL_PRIMARY, 1, merged_primary[1], CELL_B, 4.0, 0.004, 1, 3.0)
 
     # --- MultipleTrackHandling = "PerTrack" --------------------------------
     # Same data type, but cell 1 now appears three times, once per contributing track and ordered
-    # from the most to the least primary one.
+    # from the most to the least primary one. Only particle 0 contributed more than one hit, so only
+    # its entry is an average, again at 1.5 ns; the others carry the time of their single hit.
     merged_per_track = frame.get(OUT_COLL_PER_TRACK)
     assert len(merged_per_track) == 4, (
         f"'PerTrack' should give 3 hits for cell {CELL_A} and 1 for cell {CELL_B}, i.e. 4, "
         f"got {len(merged_per_track)}"
     )
-    check_hit(OUT_COLL_PER_TRACK, 0, merged_per_track[0], CELL_A, 3.0, 0.003, 0, 1.0)
+    check_hit(OUT_COLL_PER_TRACK, 0, merged_per_track[0], CELL_A, 3.0, 0.003, 0, 1.5)
     check_hit(OUT_COLL_PER_TRACK, 1, merged_per_track[1], CELL_A, 0.5, 0.0005, 1, 1.5)
     check_hit(OUT_COLL_PER_TRACK, 2, merged_per_track[2], CELL_A, 0.25, 0.00025, 2, 0.5)
     check_hit(OUT_COLL_PER_TRACK, 3, merged_per_track[3], CELL_B, 4.0, 0.004, 1, 3.0)
@@ -224,16 +227,16 @@ def check_output(output_file: str) -> None:
     )
     check_hit(OUT_COLL_SINGLE_TRACK, 0, merged_single_track[0], CELL_B, 4.0, 0.004, 1, 3.0)
 
-    # --- RepresentativeKinematics = "Average" ------------------------------
-    # Same sums as "SumAll", but the kinematics are now the unweighted mean over the summed hits, so
-    # cell 1 sits at the mean of the times 2.0, 0.5, 1.0 and 1.5 ns, i.e. at 1.25 ns. Cell 2 has a
-    # single hit and is therefore unchanged.
-    merged_average = frame.get(OUT_COLL_AVERAGE)
-    assert len(merged_average) == 2, (
-        f"'Average' should give one hit per cell, i.e. 2, got {len(merged_average)}"
+    # --- RepresentativeKinematics = "EarliestHit" --------------------------
+    # Same sums as "SumAll", but the kinematics are now copied from the earliest of the summed hits
+    # instead of averaged, so cell 1 takes them from the globally earliest hit of the cell at
+    # 0.5 ns, which belongs to particle 2. Cell 2 has a single hit and is therefore unchanged.
+    merged_earliest_hit = frame.get(OUT_COLL_EARLIEST_HIT)
+    assert len(merged_earliest_hit) == 2, (
+        f"'EarliestHit' should give one hit per cell, i.e. 2, got {len(merged_earliest_hit)}"
     )
-    check_hit(OUT_COLL_AVERAGE, 0, merged_average[0], CELL_A, 3.75, 0.00375, 0, 1.25)
-    check_hit(OUT_COLL_AVERAGE, 1, merged_average[1], CELL_B, 4.0, 0.004, 1, 3.0)
+    check_hit(OUT_COLL_EARLIEST_HIT, 0, merged_earliest_hit[0], CELL_A, 3.75, 0.00375, 0, 0.5)
+    check_hit(OUT_COLL_EARLIEST_HIT, 1, merged_earliest_hit[1], CELL_B, 4.0, 0.004, 1, 3.0)
 
     print("[check] All assertions passed.")
     for coll_name in (
@@ -241,7 +244,7 @@ def check_output(output_file: str) -> None:
         OUT_COLL_PRIMARY,
         OUT_COLL_PER_TRACK,
         OUT_COLL_SINGLE_TRACK,
-        OUT_COLL_AVERAGE,
+        OUT_COLL_EARLIEST_HIT,
     ):
         print(f"        {coll_name}: {len(frame.get(coll_name))} hits")
 

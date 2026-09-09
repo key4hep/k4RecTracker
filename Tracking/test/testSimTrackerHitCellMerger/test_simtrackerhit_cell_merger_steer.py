@@ -6,8 +6,8 @@ Run with:
     k4run test_simtrackerhit_cell_merger_steer.py --input input.root --output output.root
 
 One instance is scheduled per value of the MultipleTrackHandling property, plus one more for the
-"Average" RepresentativeKinematics, so that every choice of both properties is exercised in a
-single job.
+non-default "EarliestHit" RepresentativeKinematics, so that every choice of both properties is
+exercised in a single job. The other four use the default RepresentativeKinematics, "Average".
 
 The collection name properties are declared by the k4FWCore KeyValues of the transformer and are
 therefore list valued, so they have to be given as lists rather than as bare strings.
@@ -76,7 +76,13 @@ merger_earliest_hit = SimTrackerHitCellMerger(
 )
 
 ApplicationMgr(
-    TopAlg=[merger_all, merger_primary, merger_per_track, merger_single_track, merger_earliest_hit],
+    TopAlg=[
+        merger_all,
+        merger_primary,
+        merger_per_track,
+        merger_single_track,
+        merger_earliest_hit,
+    ],
     EvtSel="NONE",
     EvtMax=1,
     ExtSvc=[iosvc],
