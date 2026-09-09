@@ -50,13 +50,6 @@ namespace {
  *  string-valued Gaudi properties that may only take one of a fixed set of values. It replaces a
  *  hand-written if/else chain by a single table that is also the one source of truth for the list
  *  of valid values quoted in the property documentation and in error messages.
- *
- *  Gaudi itself has no equivalent. Gaudi::Property does take a VERIFIER template parameter, but
- *  the only two verifiers it ships are Gaudi::Details::Property::NullVerifier and
- *  Gaudi::Details::Property::BoundedVerifier (numeric lower/upper bounds, exposed as
- *  Gaudi::CheckedProperty). A verifier is moreover default-constructed by the property and already
- *  invoked on the default value inside the property constructor, so there is no clean way to teach
- *  one a list of allowed strings from the owning algorithm.
  */
 template <typename ENUM, std::size_t N>
 class PropertyChoices {
@@ -120,14 +113,12 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *   - "PrimaryOnly"         : one output hit per cellID, but only the hits of the most primary contributor
  *                             are summed. Contributions of later (secondary) tracks are dropped, which is
  *                             what one wants when the accumulated path length is meant to describe the
- *                             primary particle traversing the cell. 'Primary' is determined by the lowest
- *                             Geant4 track number of the contributing MCParticles.
+ *                             primary particle traversing the cell.
  *   - "PerTrack"            : one output hit per (cellID, track) pair, each summing only the hits of that
- *                             track. The output data type is unchanged; the only difference is that for a
- *                             given cell more than one entry may appear, once per contributing track,
- *                             each entry carrying its own MCParticle relation. Entries of a given cell are
- *                             written in order of increasing Geant4 track number, so the first entry for a
- *                             cell is the most primary one.
+ *                             track. For a given cell more than one entry may appear, once per contributing
+ *                             track, each entry carrying its own MCParticle relation. Entries of a given cell
+ *                             are written in order of increasing Geant4 track number, so the first entry for
+ *                             a cell is the most primary one.
  *   - "SkipMultiTrackCells" : one output hit per cellID, but only for cells that were crossed by exactly
  *                             one track. Cells with an ambiguous composition are dropped altogether,
  *                             which gives a clean but biased sample of unambiguous single-track cells.
@@ -138,7 +129,7 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  dd4hep::sim::Geant4HitData::MonteCarloContrib::trackID, but that is an in-memory structure of the
  *  simulation: edm4hep::SimTrackerHit has no field for it, so the writer only uses it to resolve the
  *  MCParticle relation and to set the producedBySecondary quality bit, and the number itself is lost.
- *  What *is* persisted, and what this algorithm therefore uses, is:
+ *  What this algorithm therefore uses, is:
  *
  *   - MCParticle::isCreatedInSimulation(), the BITCreatedInSimulation bit of the simulator status. This is
  *     genuine Geant4 truth written by DDG4: it separates the particles that came from the generator (the
@@ -155,8 +146,10 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  Note that hits flagged isProducedBySecondary() do not point to the secondary that actually created them
  *  (it was not kept in the MCParticle collection) but to its surviving ancestor, so their step length is
  *  booked on that ancestor. Set ExcludeSecondaryHits to true to skip such hits altogether.
+ * 
+ *  Overlay hits can be ignored via the ExcludeOverlayHits property.
  *
- *  Of the remaining fields of a merged hit, only time, position and momentum are configurable, via the
+ *  Of the remaining fields of a merged SimHit, time, position and momentum need to be configured, via the
  *  RepresentativeKinematics property:
  *
  *   - "EarliestHit" : they are copied from the earliest (smallest time) of the summed hits.
@@ -171,7 +164,7 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *
  *  Inputs:
  *      - @param InputSimTrackerHits Name of the input edm4hep::SimTrackerHitCollection, default
- *  "SimTrackerHits". Declared as a Gaudi property by the k4FWCore KeyValues of the transformer.
+ *  "SimTrackerHits"
  *
  *  Properties:
  *      - @param MultipleTrackHandling How to treat several Geant4 tracks crossing the same cell, one of
@@ -180,13 +173,13 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  either "EarliestHit" or "Average" (see above)
  *      - @param ExcludeSecondaryHits Skip SimTrackerHits flagged isProducedBySecondary() instead of
  *  booking their step length on the ancestor MCParticle they point to
+ *      - @param ExcludeOverlayHits Skip SimTrackerHits flagged isOverlay() instead of booking their step
  *      - @param MinPathLength_mm Do not write merged hits whose accumulated path length, in mm, is below
  *  this value
  *
  *  Outputs:
  *      - @param OutputSimTrackerHits Name of the output edm4hep::SimTrackerHitCollection of merged hits,
- *  default "MergedSimTrackerHits". Declared as a Gaudi property by the k4FWCore KeyValues of the
- *  transformer.
+ *  default "MergedSimTrackerHits"
  *
  *  @author Andreas Loeschcke Centeno, Claude Code
  */
@@ -249,6 +242,9 @@ struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm
     for (const auto& hit : simTrackerHits) {
 
       if (m_excludeSecondaryHits && hit.isProducedBySecondary())
+        continue;
+
+      if (m_excludeOverlayHits && hit.isOverlay())
         continue;
 
       const auto particle = hit.getParticle();
@@ -419,23 +415,28 @@ private:
   Gaudi::Property<std::string> m_multipleTrackHandling{
       this, "MultipleTrackHandling", "SumAll",
       "How to treat several Geant4 tracks in the same cell, one of " + s_trackHandlingChoices.list() +
-          ": 'SumAll' sums the step lengths of every track, 'PrimaryOnly' sums only those of the most primary "
-          "track, 'PerTrack' writes one output hit per cell and track, 'SkipMultiTrackCells' drops cells "
-          "that were crossed by more than one track"};
+          ": 'SumAll' sums the step lengths of every track (default value), 'PrimaryOnly' sums only those of the "
+          "most primary track, 'PerTrack' writes one output hit per cell and track, 'SkipMultiTrackCells' drops "
+          "cells that were crossed by more than one track"};
 
   /// Configurable property steering where the time, position and momentum of a merged hit come from
   Gaudi::Property<std::string> m_representativeKinematics{
-      this, "RepresentativeKinematics", "EarliestHit",
+      this, "RepresentativeKinematics", "Average",
       "Where the time, position and momentum of a merged hit come from, one of " + s_representativeChoices.list() +
           ": 'EarliestHit' copies them from the earliest of the summed hits, 'Average' takes their unweighted "
-          "arithmetic mean over the summed hits"};
+          "arithmetic mean over the summed hits (default value)"};
 
   /// Configurable property to skip hits that were created by a secondary which is not kept in the
   /// MCParticle collection, and whose step length would otherwise be booked on its surviving ancestor
   Gaudi::Property<bool> m_excludeSecondaryHits{
       this, "ExcludeSecondaryHits", false,
       "Skip SimTrackerHits flagged isProducedBySecondary() instead of attributing them to the ancestor "
-      "MCParticle they point to"};
+      "MCParticle they point to (default false)"};
+
+  /// Configurable property to skip overlay hits
+  Gaudi::Property<bool> m_excludeOverlayHits{
+      this, "ExcludeOverlayHits", true,
+      "Skip SimTrackerHits flagged isOverlay() instead of booking their step length (default true)"};
 
   /// Configurable property to suppress merged hits with a negligible accumulated path length
   Gaudi::Property<float> m_minPathLength_mm{

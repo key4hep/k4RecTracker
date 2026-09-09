@@ -51,7 +51,7 @@ OUT_COLL_ALL = "MergedHitsAll"
 OUT_COLL_PRIMARY = "MergedHitsPrimaryOnly"
 OUT_COLL_PER_TRACK = "MergedHitsPerTrack"
 OUT_COLL_SINGLE_TRACK = "MergedHitsSingleTrackCells"
-OUT_COLL_AVERAGE = "MergedHitsAllAveraged"
+OUT_COLL_AVERAGE = "MergedHitsAllEarliestHit"
 
 CELL_A = 1
 CELL_B = 2

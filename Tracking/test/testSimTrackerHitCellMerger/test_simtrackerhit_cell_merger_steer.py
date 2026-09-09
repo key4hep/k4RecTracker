@@ -29,7 +29,7 @@ OUT_COLL_ALL = "MergedHitsAll"
 OUT_COLL_PRIMARY = "MergedHitsPrimaryOnly"
 OUT_COLL_PER_TRACK = "MergedHitsPerTrack"
 OUT_COLL_SINGLE_TRACK = "MergedHitsSingleTrackCells"
-OUT_COLL_AVERAGE = "MergedHitsAllAveraged"
+OUT_COLL_EARLIEST_HIT = "MergedHitsAllEarliestHit"
 
 parser.add_argument("--input", default="input.root", help="Input EDM4hep file")
 parser.add_argument("--output", default="output.root", help="Output EDM4hep file")
@@ -67,16 +67,16 @@ merger_single_track = SimTrackerHitCellMerger(
     MultipleTrackHandling="SkipMultiTrackCells",
 )
 
-merger_average = SimTrackerHitCellMerger(
-    "SimTrackerHitCellMergerAllAveraged",
+merger_earliest_hit = SimTrackerHitCellMerger(
+    "SimTrackerHitCellMergerAllEarliestHit",
     InputSimTrackerHits=[INPUT_COLL],
-    OutputSimTrackerHits=[OUT_COLL_AVERAGE],
+    OutputSimTrackerHits=[OUT_COLL_EARLIEST_HIT],
     MultipleTrackHandling="SumAll",
-    RepresentativeKinematics="Average",
+    RepresentativeKinematics="EarliestHit",
 )
 
 ApplicationMgr(
-    TopAlg=[merger_all, merger_primary, merger_per_track, merger_single_track, merger_average],
+    TopAlg=[merger_all, merger_primary, merger_per_track, merger_single_track, merger_earliest_hit],
     EvtSel="NONE",
     EvtMax=1,
     ExtSvc=[iosvc],
