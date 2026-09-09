@@ -60,7 +60,7 @@ StatusCode WireTrackerDigi_v01::initialize() {
   dd4hep::DetElement wt_detelem = m_geoSvc->getDetector()->detectors().at(wt_name);
   // Retrieve the WireTracker_info data extension for the drift chamber
   auto wt_info = wt_detelem.extension<dd4hep::rec::WireTracker_info_struct>();
-  m_wt_info = dynamic_cast<dd4hep::rec::WireTracker_info*>(wt_info);
+  m_wt_info = wt_detelem.extension<dd4hep::rec::WireTracker_info_struct>();
   if (not m_wt_info->IsValid()) {
     error() << "No valid data extension was found for detector <<" << wt_name << ">>." << endmsg;
     return StatusCode::FAILURE;

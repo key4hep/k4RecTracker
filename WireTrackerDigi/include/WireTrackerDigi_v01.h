@@ -128,7 +128,7 @@ private:
   Gaudi::Property<std::string> m_wt_name{this, "DCH_name", "DCH_v2", "Name of the Drift Chamber detector"};
 
   // Drift chamber info extension for geometry calculations
-  dd4hep::rec::WireTracker_info* m_wt_info{nullptr};
+  dd4hep::rec::WireTracker_info_struct* m_wt_info{nullptr};
 
   // z resolution in mm
   Gaudi::Property<double> m_z_resolution_mm{this, "zResolution_mm", 1.0,
