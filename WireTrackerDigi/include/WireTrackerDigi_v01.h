@@ -125,7 +125,7 @@ private:
   dd4hep::DDSegmentation::BitFieldCoder* m_decoder;
 
   // Detector name
-  Gaudi::Property<std::string> m_wt_name{this, "DCH_name", "DCH_v2", "Name of the Drift Chamber detector"};
+  Gaudi::Property<std::string> m_wt_name{this, "DCH_name", "DCH_v2", "Name of the detector (eg, DCH_v2 or STT_o1_v01)"};
 
   // Drift chamber info extension for geometry calculations
   dd4hep::rec::WireTracker_info_struct* m_wt_info{nullptr};
