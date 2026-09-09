@@ -6,8 +6,10 @@ Run with:
     k4run test_simtrackerhit_cell_merger_steer.py --input input.root --output output.root
 
 One instance is scheduled per value of the MultipleTrackHandling property, plus one more for the
-non-default "EarliestHit" RepresentativeKinematics, so that every choice of both properties is
-exercised in a single job. The other four use the default RepresentativeKinematics, "Average".
+non-default "EarliestHit" RepresentativeKinematics and one more with ExcludeOverlayHits switched
+off, so that every choice of the two string properties is exercised in a single job. The instances
+that do not set RepresentativeKinematics use its default, "Average", and every instance but the
+last uses the default ExcludeOverlayHits, true.
 
 The collection name properties are declared by the k4FWCore KeyValues of the transformer and are
 therefore list valued, so they have to be given as lists rather than as bare strings.
@@ -30,6 +32,7 @@ OUT_COLL_PRIMARY = "MergedHitsPrimaryOnly"
 OUT_COLL_PER_TRACK = "MergedHitsPerTrack"
 OUT_COLL_SINGLE_TRACK = "MergedHitsSingleTrackCells"
 OUT_COLL_EARLIEST_HIT = "MergedHitsAllEarliestHit"
+OUT_COLL_WITH_OVERLAY = "MergedHitsAllWithOverlay"
 
 parser.add_argument("--input", default="input.root", help="Input EDM4hep file")
 parser.add_argument("--output", default="output.root", help="Output EDM4hep file")
@@ -75,6 +78,14 @@ merger_earliest_hit = SimTrackerHitCellMerger(
     RepresentativeKinematics="EarliestHit",
 )
 
+merger_with_overlay = SimTrackerHitCellMerger(
+    "SimTrackerHitCellMergerAllWithOverlay",
+    InputSimTrackerHits=[INPUT_COLL],
+    OutputSimTrackerHits=[OUT_COLL_WITH_OVERLAY],
+    MultipleTrackHandling="SumAll",
+    ExcludeOverlayHits=False,
+)
+
 ApplicationMgr(
     TopAlg=[
         merger_all,
@@ -82,6 +93,7 @@ ApplicationMgr(
         merger_per_track,
         merger_single_track,
         merger_earliest_hit,
+        merger_with_overlay,
     ],
     EvtSel="NONE",
     EvtMax=1,

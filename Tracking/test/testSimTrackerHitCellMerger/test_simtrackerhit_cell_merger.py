@@ -3,15 +3,18 @@ Minimalistic test for the SimTrackerHitCellMerger Gaudi multi transformer.
 
 What it does
 ------------
-1. (setup step) Creates a small EDM4hep input file containing three MCParticles and one
-   SimTrackerHitCollection with hits in two cells:
+1. (setup step) Creates a small EDM4hep input file containing four MCParticles and one
+   SimTrackerHitCollection with hits in three cells:
 
      cell 1 : particle 0 (the most primary one) with 2 steps of 1.0 and 2.0 mm
               particle 1                        with 1 step  of 0.5 mm
               particle 2                        with 1 step  of 0.25 mm
      cell 2 : particle 1                        with 1 step  of 4.0 mm
+     cell 3 : particle 3, overlay               with 2 steps of 1.5 and 2.5 mm
 
-   So cell 1 is crossed by three tracks and cell 2 by a single one. The hits are deliberately
+   So cell 1 is crossed by three tracks and cell 2 by a single one. Cell 3 holds the only hits
+   flagged isOverlay(), so that ExcludeOverlayHits can be checked in both directions: it must be
+   absent from every collection produced with the default (true) and present with it set to false. The hits are deliberately
    written in a scrambled order so that the per-cell and per-track grouping and the cellID ordering
    of the output are all exercised. Each hit carries a position and a momentum derived from its
    time, so that both picking one of them and averaging over them give a predictable answer.
@@ -19,9 +22,10 @@ What it does
    SimTrackerHitCellMerger itself is run separately by CTest via
    `k4run test_simtrackerhit_cell_merger_steer.py`, which runs one instance per value of the
    MultipleTrackHandling property, plus one more for the non-default "EarliestHit"
-   RepresentativeKinematics, so that every choice of both properties is covered in a single job.
-   The four instances that do not set RepresentativeKinematics use its default, "Average", so
-   their expected kinematics below are means over the hits that were summed.
+   RepresentativeKinematics and one more with ExcludeOverlayHits switched off, so that every
+   choice of the two string properties is covered in a single job. The instances that do not set
+   RepresentativeKinematics use its default, "Average", so their expected kinematics below are
+   means over the hits that were summed.
 
 2. (check step) Reads the output file and asserts the accumulated path lengths, energy deposits,
    MCParticle relations and representative kinematics of each output collection.
@@ -53,9 +57,11 @@ OUT_COLL_PRIMARY = "MergedHitsPrimaryOnly"
 OUT_COLL_PER_TRACK = "MergedHitsPerTrack"
 OUT_COLL_SINGLE_TRACK = "MergedHitsSingleTrackCells"
 OUT_COLL_EARLIEST_HIT = "MergedHitsAllEarliestHit"
+OUT_COLL_WITH_OVERLAY = "MergedHitsAllWithOverlay"
 
 CELL_A = 1
 CELL_B = 2
+CELL_C = 3
 
 # (cellID, particle index, pathLength [mm], eDep [GeV], time [ns]), in scrambled order
 HITS = [
@@ -64,6 +70,13 @@ HITS = [
     (CELL_A, 2, 0.25, 0.00025, 0.5),
     (CELL_A, 0, 1.0, 0.001, 1.0),
     (CELL_A, 1, 0.5, 0.0005, 1.5),
+]
+
+# Same, for the hits that are flagged isOverlay(). They are kept in their own cell so that
+# switching ExcludeOverlayHits does not change anything expected of cells 1 and 2.
+OVERLAY_HITS = [
+    (CELL_C, 3, 1.5, 0.0015, 5.0),
+    (CELL_C, 3, 2.5, 0.0025, 6.0),
 ]
 
 
@@ -94,8 +107,14 @@ def write_input_file(path: str) -> None:
         particle.setPDG(pdg)
         particle.setMomentum(edm4hep.Vector3d(1.0, 0.0, 0.0))
 
+    # Particle 3 stands in for a track of an overlaid event
+    overlay_particle = particles.create()
+    overlay_particle.setPDG(13)
+    overlay_particle.setMomentum(edm4hep.Vector3d(1.0, 0.0, 0.0))
+    overlay_particle.setOverlay(True)
+
     hits = edm4hep.SimTrackerHitCollection()
-    for cell_id, particle_index, path_length, edep, time in HITS:
+    for cell_id, particle_index, path_length, edep, time in HITS + OVERLAY_HITS:
         hit = hits.create()
         hit.setCellID(cell_id)
         hit.setPathLength(path_length)
@@ -104,6 +123,7 @@ def write_input_file(path: str) -> None:
         hit.setPosition(edm4hep.Vector3d(*hit_position(time)))
         hit.setMomentum(edm4hep.Vector3f(*hit_momentum(time)))
         hit.setParticle(particles[particle_index])
+        hit.setOverlay((cell_id, particle_index, path_length, edep, time) in OVERLAY_HITS)
 
     frame.put(particles, PARTICLE_COLL)
     frame.put(hits, INPUT_COLL)
@@ -163,6 +183,17 @@ def check_hit(
 
 
 # ---------------------------------------------------------------------------
+# Helper: assert that a collection contains no hit of the overlay cell
+# ---------------------------------------------------------------------------
+def check_no_overlay(coll_name: str, collection) -> None:
+    overlay_cells = [hit.getCellID() for hit in collection if hit.getCellID() == CELL_C]
+    assert not overlay_cells, (
+        f"{coll_name}: ExcludeOverlayHits defaults to true, so the overlay cell {CELL_C} should "
+        f"have been dropped, but {len(overlay_cells)} hit(s) of it were written"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Step 2 - read back & assert
 # ---------------------------------------------------------------------------
 def check_output(output_file: str) -> None:
@@ -179,6 +210,7 @@ def check_output(output_file: str) -> None:
         OUT_COLL_PER_TRACK,
         OUT_COLL_SINGLE_TRACK,
         OUT_COLL_EARLIEST_HIT,
+        OUT_COLL_WITH_OVERLAY,
     ):
         assert coll_name in available, f"Output collection '{coll_name}' not found in output file"
 
@@ -238,6 +270,33 @@ def check_output(output_file: str) -> None:
     check_hit(OUT_COLL_EARLIEST_HIT, 0, merged_earliest_hit[0], CELL_A, 3.75, 0.00375, 0, 0.5)
     check_hit(OUT_COLL_EARLIEST_HIT, 1, merged_earliest_hit[1], CELL_B, 4.0, 0.004, 1, 3.0)
 
+    # --- ExcludeOverlayHits, default true ----------------------------------
+    # None of the collections above was configured with ExcludeOverlayHits, so all of them ran with
+    # its default and must have dropped the overlay cell entirely. Their length assertions already
+    # pin this down, but check it explicitly so a leak names the culprit.
+    for coll_name in (
+        OUT_COLL_ALL,
+        OUT_COLL_PRIMARY,
+        OUT_COLL_PER_TRACK,
+        OUT_COLL_SINGLE_TRACK,
+        OUT_COLL_EARLIEST_HIT,
+    ):
+        check_no_overlay(coll_name, frame.get(coll_name))
+
+    # --- ExcludeOverlayHits = False ----------------------------------------
+    # With the flag switched off the overlay hits are booked like any other, so cell 3 appears with
+    # both of its steps summed, 1.5 + 2.5 mm, attributed to the overlay particle 3, and at the mean
+    # of the times 5.0 and 6.0 ns. Cells 1 and 2 are unaffected, since the overlay hits sit in a
+    # cell of their own.
+    merged_with_overlay = frame.get(OUT_COLL_WITH_OVERLAY)
+    assert len(merged_with_overlay) == 3, (
+        f"'ExcludeOverlayHits=False' should keep the overlay cell {CELL_C} as well, i.e. give 3 "
+        f"hits, got {len(merged_with_overlay)}"
+    )
+    check_hit(OUT_COLL_WITH_OVERLAY, 0, merged_with_overlay[0], CELL_A, 3.75, 0.00375, 0, 1.25)
+    check_hit(OUT_COLL_WITH_OVERLAY, 1, merged_with_overlay[1], CELL_B, 4.0, 0.004, 1, 3.0)
+    check_hit(OUT_COLL_WITH_OVERLAY, 2, merged_with_overlay[2], CELL_C, 4.0, 0.004, 3, 5.5)
+
     print("[check] All assertions passed.")
     for coll_name in (
         OUT_COLL_ALL,
@@ -245,6 +304,7 @@ def check_output(output_file: str) -> None:
         OUT_COLL_PER_TRACK,
         OUT_COLL_SINGLE_TRACK,
         OUT_COLL_EARLIEST_HIT,
+        OUT_COLL_WITH_OVERLAY,
     ):
         print(f"        {coll_name}: {len(frame.get(coll_name))} hits")
 
