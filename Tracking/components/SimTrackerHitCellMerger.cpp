@@ -109,8 +109,9 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  edm4hep::SimTrackerHitCollection with one entry per cell (or per cell and track, see below).
  *
  *  A single Geant4 track usually leaves several SimTrackerHits in one cell (one per step), and several
- *  tracks (the primary plus its delta rays, conversions, ...) can cross the very same cell. What to do
- *  with those different tracks is steered by the MultipleTrackHandling property:
+ *  tracks (the primary plus its delta rays, conversions, ...) can cross the very same cell. How to handle cases
+ *  with multiple tracks in a cell is configurable via the MultipleTrackHandling property,
+ *  which can take one of the following values:
  *
  *   - "All"                 : one output hit per cellID. pathLength and eDep are summed over *every*
  *                             contributing hit, irrespective of which track produced it. The MCParticle
@@ -119,13 +120,14 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *   - "PrimaryOnly"         : one output hit per cellID, but only the hits of the most primary contributor
  *                             are summed. Contributions of later (secondary) tracks are dropped, which is
  *                             what one wants when the accumulated path length is meant to describe the
- *                             primary particle traversing the cell.
+ *                             primary particle traversing the cell. 'Primary' is determined by the lowest
+ *                             Geant4 track number of the contributing MCParticles.
  *   - "PerTrack"            : one output hit per (cellID, track) pair, each summing only the hits of that
- *                             track. The output data type is unchanged; the only difference is that the
- *                             same cellID may now appear several times in the output collection, once per
- *                             contributing track, each entry carrying its own MCParticle relation. Entries
- *                             of a given cell are written in order of increasing Geant4 track number, so
- *                             the first entry for a cell is the most primary one.
+ *                             track. The output data type is unchanged; the only difference is that for a 
+ *                             given cell more than one entry may appear, once per contributing track, 
+ *                             each entry carrying its own MCParticle relation. Entries of a given cell are 
+ *                             written in order of increasing Geant4 track number, so the first entry for a 
+ *                             cell is the most primary one.
  *   - "SkipMultiTrackCells" : one output hit per cellID, but only for cells that were crossed by exactly
  *                             one track. Cells with an ambiguous composition are dropped altogether,
  *                             which gives a clean but biased sample of unambiguous single-track cells.
@@ -157,15 +159,14 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  Of the remaining fields of a merged hit, only time, position and momentum are configurable, via the
  *  RepresentativeKinematics property:
  *
- *   - "EarliestHit" : they are copied from the earliest (smallest time) of the summed hits, i.e. from the
- *                     hit that a readout triggering on the first arrival would see.
+ *   - "EarliestHit" : they are copied from the earliest (smallest time) of the summed hits.
  *   - "Average"     : they are the unweighted arithmetic mean over the summed hits, i.e. the centroid of
  *                     the track segment(s) that were merged.
  *
  *  The quality bit field is always copied from the earliest summed hit, since bit flags cannot be
  *  averaged, and only pathLength and eDep are ever accumulated.
  *
- *  @author Andreas Loeschcke Centeno
+ *  @author Andreas Loeschcke Centeno, Claude Code
  */
 
 struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm4hep::SimTrackerHitCollection>(
@@ -182,13 +183,15 @@ struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm
   enum class RepresentativeKinematics { EarliestHit, Average };
 
   static constexpr auto s_trackHandlingChoices = makePropertyChoices<TrackHandling>(
-      std::pair{"All", TrackHandling::All}, std::pair{"PrimaryOnly", TrackHandling::PrimaryOnly},
+      std::pair{"All", TrackHandling::All}, 
+      std::pair{"PrimaryOnly", TrackHandling::PrimaryOnly},
       std::pair{"PerTrack", TrackHandling::PerTrack},
       std::pair{"SkipMultiTrackCells", TrackHandling::SkipMultiTrackCells});
 
   static constexpr auto s_representativeChoices =
-      makePropertyChoices<RepresentativeKinematics>(std::pair{"EarliestHit", RepresentativeKinematics::EarliestHit},
-                                                    std::pair{"Average", RepresentativeKinematics::Average});
+      makePropertyChoices<RepresentativeKinematics>(
+        std::pair{"EarliestHit", RepresentativeKinematics::EarliestHit},
+        std::pair{"Average", RepresentativeKinematics::Average});
 
   StatusCode initialize() override {
     const auto trackHandling = s_trackHandlingChoices.parse(m_multipleTrackHandling);
@@ -217,8 +220,6 @@ struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm
   operator()(const edm4hep::SimTrackerHitCollection& simTrackerHits) const override {
 
     auto output = edm4hep::SimTrackerHitCollection();
-
-    debug() << "Received SimTrackerHit collection with " << simTrackerHits.size() << " hits" << endmsg;
 
     // Accumulate per cell and, within a cell, per contributing track. The inner map is ordered so that
     // iterating it yields the contributors from the most to the least primary one, i.e. begin() is the
@@ -285,8 +286,6 @@ struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm
       }
       }
     }
-
-    debug() << "Wrote " << output.size() << " merged SimTrackerHits from " << cellMap.size() << " cells" << endmsg;
 
     return std::make_tuple(std::move(output));
   }
@@ -380,8 +379,9 @@ private:
     if (m_representative == RepresentativeKinematics::Average) {
       const double norm = 1. / contribution.nHits;
       mergedHit.setTime(contribution.timeSum * norm);
-      mergedHit.setPosition(
-          {contribution.positionSum[0] * norm, contribution.positionSum[1] * norm, contribution.positionSum[2] * norm});
+      mergedHit.setPosition({contribution.positionSum[0] * norm, 
+                             contribution.positionSum[1] * norm, 
+                             contribution.positionSum[2] * norm});
       mergedHit.setMomentum({static_cast<float>(contribution.momentumSum[0] * norm),
                              static_cast<float>(contribution.momentumSum[1] * norm),
                              static_cast<float>(contribution.momentumSum[2] * norm)});
@@ -391,10 +391,6 @@ private:
       mergedHit.setMomentum(contribution.earliestHit.getMomentum());
     }
 
-    verbose() << "Cell " << cellID << ": merged " << contribution.nHits << " hits of MCParticle "
-              << contribution.particle.getObjectID().index << " (PDG " << contribution.particle.getPDG()
-              << ") into path length " << contribution.pathLength << " mm, eDep " << contribution.eDep << " GeV"
-              << endmsg;
   }
 
   /// Configurable property steering what to do when several Geant4 tracks cross the same cell
