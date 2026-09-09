@@ -181,13 +181,13 @@ def check_output(output_file: str) -> None:
     ):
         assert coll_name in available, f"Output collection '{coll_name}' not found in output file"
 
-    # --- MultipleTrackHandling = "All" -------------------------------------
+    # --- MultipleTrackHandling = "SumAll" ----------------------------------
     # One hit per cell, summing every track. Cell 1 gets 1.0 + 2.0 + 0.5 + 0.25 mm, is attributed to
     # the most primary contributor (particle 0) and takes its kinematics from the globally earliest
     # hit of the cell, which belongs to particle 2.
     merged_all = frame.get(OUT_COLL_ALL)
     assert len(merged_all) == 2, (
-        f"'All' should give one hit per cell, i.e. 2, got {len(merged_all)}"
+        f"'SumAll' should give one hit per cell, i.e. 2, got {len(merged_all)}"
     )
     check_hit(OUT_COLL_ALL, 0, merged_all[0], CELL_A, 3.75, 0.00375, 0, 0.5)
     check_hit(OUT_COLL_ALL, 1, merged_all[1], CELL_B, 4.0, 0.004, 1, 3.0)
@@ -225,7 +225,7 @@ def check_output(output_file: str) -> None:
     check_hit(OUT_COLL_SINGLE_TRACK, 0, merged_single_track[0], CELL_B, 4.0, 0.004, 1, 3.0)
 
     # --- RepresentativeKinematics = "Average" ------------------------------
-    # Same sums as "All", but the kinematics are now the unweighted mean over the summed hits, so
+    # Same sums as "SumAll", but the kinematics are now the unweighted mean over the summed hits, so
     # cell 1 sits at the mean of the times 2.0, 0.5, 1.0 and 1.5 ns, i.e. at 1.25 ns. Cell 2 has a
     # single hit and is therefore unchanged.
     merged_average = frame.get(OUT_COLL_AVERAGE)

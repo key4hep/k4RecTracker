@@ -40,7 +40,7 @@ merger_all = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerAll",
     InputSimTrackerHits=INPUT_COLL,
     OutputSimTrackerHits=OUT_COLL_ALL,
-    MultipleTrackHandling="All",
+    MultipleTrackHandling="SumAll",
 )
 
 merger_primary = SimTrackerHitCellMerger(
@@ -68,7 +68,7 @@ merger_average = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerAllAveraged",
     InputSimTrackerHits=INPUT_COLL,
     OutputSimTrackerHits=OUT_COLL_AVERAGE,
-    MultipleTrackHandling="All",
+    MultipleTrackHandling="SumAll",
     RepresentativeKinematics="Average",
 )
 
