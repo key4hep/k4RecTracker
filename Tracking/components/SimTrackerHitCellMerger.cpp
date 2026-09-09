@@ -337,7 +337,9 @@ private:
     int nHits = 0;
     edm4hep::MCParticle particle{};
     /// Earliest of the summed hits, source of the quality bits and, for RepresentativeKinematics
-    /// "EarliestHit", of the time, position and momentum
+    /// "EarliestHit", of the time, position and momentum. Note that a default constructed edm4hep
+    /// handle owns a fresh zero filled object rather than being empty, so isAvailable() is true for
+    /// it and cannot be used to tell whether a hit has been booked yet: use nHits for that.
     edm4hep::SimTrackerHit earliestHit{};
     /// Running sums used by RepresentativeKinematics "Average"
     double timeSum_ns = 0.;
@@ -346,12 +348,12 @@ private:
 
     /// Book one simulated hit
     void add(const edm4hep::SimTrackerHit& hit) {
+      if (nHits == 0 || hit.getTime() < earliestHit.getTime())
+        earliestHit = hit;
       pathLength_mm += hit.getPathLength();
       eDep_GeV += hit.getEDep();
       nHits++;
       particle = hit.getParticle();
-      if (!earliestHit.isAvailable() || hit.getTime() < earliestHit.getTime())
-        earliestHit = hit;
       timeSum_ns += hit.getTime();
       const auto& position_mm = hit.getPosition();
       positionSum_mm[0] += position_mm.x;
@@ -366,11 +368,13 @@ private:
     /// Fold the contribution of another track of the same cell in. The MCParticle relation is left
     /// untouched, since a merged cell has to be attributed to one chosen track by the caller.
     void merge(const Contribution& other) {
+      if (other.nHits == 0)
+        return;
+      if (nHits == 0 || other.earliestHit.getTime() < earliestHit.getTime())
+        earliestHit = other.earliestHit;
       pathLength_mm += other.pathLength_mm;
       eDep_GeV += other.eDep_GeV;
       nHits += other.nHits;
-      if (!earliestHit.isAvailable() || other.earliestHit.getTime() < earliestHit.getTime())
-        earliestHit = other.earliestHit;
       timeSum_ns += other.timeSum_ns;
       for (std::size_t i = 0; i < 3; i++) {
         positionSum_mm[i] += other.positionSum_mm[i];

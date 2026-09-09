@@ -9,6 +9,9 @@ One instance is scheduled per value of the MultipleTrackHandling property, plus 
 "Average" RepresentativeKinematics, so that every choice of both properties is exercised in a
 single job.
 
+The collection name properties are declared by the k4FWCore KeyValues of the transformer and are
+therefore list valued, so they have to be given as lists rather than as bare strings.
+
 Input/output file names default to sensible values but can be overridden via CLI, e.g. by the
 CTest setup in CMakeLists.
 """
@@ -38,36 +41,36 @@ iosvc.Output = args.output
 
 merger_all = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerAll",
-    InputSimTrackerHits=INPUT_COLL,
-    OutputSimTrackerHits=OUT_COLL_ALL,
+    InputSimTrackerHits=[INPUT_COLL],
+    OutputSimTrackerHits=[OUT_COLL_ALL],
     MultipleTrackHandling="SumAll",
 )
 
 merger_primary = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerPrimaryOnly",
-    InputSimTrackerHits=INPUT_COLL,
-    OutputSimTrackerHits=OUT_COLL_PRIMARY,
+    InputSimTrackerHits=[INPUT_COLL],
+    OutputSimTrackerHits=[OUT_COLL_PRIMARY],
     MultipleTrackHandling="PrimaryOnly",
 )
 
 merger_per_track = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerPerTrack",
-    InputSimTrackerHits=INPUT_COLL,
-    OutputSimTrackerHits=OUT_COLL_PER_TRACK,
+    InputSimTrackerHits=[INPUT_COLL],
+    OutputSimTrackerHits=[OUT_COLL_PER_TRACK],
     MultipleTrackHandling="PerTrack",
 )
 
 merger_single_track = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerSingleTrackCells",
-    InputSimTrackerHits=INPUT_COLL,
-    OutputSimTrackerHits=OUT_COLL_SINGLE_TRACK,
+    InputSimTrackerHits=[INPUT_COLL],
+    OutputSimTrackerHits=[OUT_COLL_SINGLE_TRACK],
     MultipleTrackHandling="SkipMultiTrackCells",
 )
 
 merger_average = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerAllAveraged",
-    InputSimTrackerHits=INPUT_COLL,
-    OutputSimTrackerHits=OUT_COLL_AVERAGE,
+    InputSimTrackerHits=[INPUT_COLL],
+    OutputSimTrackerHits=[OUT_COLL_AVERAGE],
     MultipleTrackHandling="SumAll",
     RepresentativeKinematics="Average",
 )
