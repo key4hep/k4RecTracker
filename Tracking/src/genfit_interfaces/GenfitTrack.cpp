@@ -34,7 +34,10 @@ GenfitTrack::GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrderi
   OrderHits(track, skipTrackOrdering);
 }
 
-GenfitTrack::~GenfitTrack() {}
+GenfitTrack::~GenfitTrack() {
+
+  delete m_genfitTrack;
+}
 
 /**
  * @brief Check if required Genfit components are properly initialized.
@@ -339,7 +342,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
         double Bz =
             m_fieldMap->getBz(m_VP_referencePoint) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
 
-        // Reconstruct the PCA
+        // Reconstruct the PCA described by this exact TrackState
         m_posInit = TVector3(m_VP_referencePoint.X() - ts.D0 * std::sin(ts.phi) * dd4hep::mm,
                              m_VP_referencePoint.Y() + ts.D0 * std::cos(ts.phi) * dd4hep::mm,
                              m_VP_referencePoint.Z() + ts.Z0 * dd4hep::mm);
@@ -767,8 +770,6 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
  */
 void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
 
-  delete m_genfitTrack;
-  delete m_genfitTrackRep;
   m_genfitTrack = nullptr;
   m_genfitTrackRep = nullptr;
 
