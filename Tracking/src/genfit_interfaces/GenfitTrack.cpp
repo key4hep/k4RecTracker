@@ -117,9 +117,18 @@ void GenfitTrack::OrderHits(const edm4hep::Track& track, bool skipTrackOrdering)
   // Sort hits along the track
   std::ranges::sort(distIndex, {}, &std::pair<float, std::size_t>::first);
 
-  m_edm4hepTrack = edm4hep::MutableTrack();
+  bool first = true;
   for (const auto& [_, idx] : distIndex) {
-    m_edm4hepTrack.addToTrackerHits(hits[idx]);
+    const auto& hit = hits[idx];
+    auto pos = hit.getPosition();
+    m_edm4hepTrack.addToTrackerHits(hit);
+
+    if (first) {
+      m_FirstHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
+      first = false;
+    }
+
+    m_LastHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
   }
 }
 
@@ -506,6 +515,9 @@ void GenfitTrack::LimitNumberHits(double epsilon, int smoothWindow) {
     int idx_fill_track = 0;
     auto temp_hits = temp_track.getTrackerHits();
     for (const auto& hit : temp_hits) {
+
+      auto pos = hit.getPosition();
+      m_LastHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
       m_edm4hepTrack.addToTrackerHits(hit);
       ++idx_fill_track;
       if (idx_fill_track >= maxHit)

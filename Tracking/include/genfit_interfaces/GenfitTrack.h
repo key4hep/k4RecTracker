@@ -175,6 +175,8 @@ private:
   edm4hep::TrackerHitPlaneCollection m_fittedHits;
 
   TVector3 m_VP_referencePoint{0., 0., 0.};
+  TVector3 m_FirstHit_referencePoint{0., 0., 0.};
+  TVector3 m_LastHit_referencePoint{0., 0., 0.};
 
   const dd4hep::rec::WireTracker_info_struct* m_wire_info;
   const dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
