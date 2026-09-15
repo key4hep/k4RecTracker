@@ -842,14 +842,16 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
  * track state based on the fitted position and momentum, taking into account the
  * assumed charge hypothesis and magnetic field.
  *
+ * @param fittedHits Output collection of fitted tracker hits after filtering (it is not updated if no filtering is
+ * applied).
  * @param FitterType Fitting strategy to use (https://indico.cern.ch/event/258092/papers/1588579/files/4253-genfit.pdf):
  *        - "DAF"        : Deterministic Annealing Filter
  *        - "KALMAN"     : Standard Kalman filter
  *        - "KALMAN_REF" : Kalman filter with reference track
- * @param debug_lvl   Verbosity level for debug output
- *                       - 0 = silent,
- *                       - 1 = fitter printout
- *                       - 2 = fitter printout + fit results
+ * @param debug_lvl   Gaudi-compatible verbosity level for debug output
+ *                       - 0 or >= 3 = silent
+ *                       - 2 = fit results, track states, and fit failures
+ *                       - 1 = level 2 output + detailed fitter information
  * @param Beta_init   Initial annealing parameter (only for DAF, default = 100)
  * @param Beta_final  Final annealing parameter (only for DAF, default = 0.1)
  * @param Beta_steps  Number of annealing steps (only for DAF, default = 10)
@@ -860,9 +862,9 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
  * @note If any exception occurs during fitting or state extrapolation, the function
  *       returns false and does not update the track.
  */
-bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::optional<double> Beta_init = 100.,
-                      std::optional<double> Beta_final = 0.1, std::optional<int> Beta_steps = 10,
-                      std::optional<bool> FilterHits = true) {
+bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::string FitterType = "DAF", int debug_lvl = 0,
+                      std::optional<double> Beta_init = 100., std::optional<double> Beta_final = 0.1,
+                      std::optional<int> Beta_steps = 10, std::optional<bool> FilterHits = true) {
 
   edm4hep::Track Track_temp = m_edm4hepTrack;
   for (size_t i = 0; i < Track_temp.trackStates_size(); ++i) {
@@ -908,7 +910,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
 
     genfitFitter->processTrackWithRep(&genfitTrack, trackRep);
 
-  } catch (const std::exception& e) {
+  } catch (const genfit::Exception& e) {
 
     std::cerr << "Exception during track fitting: " << e.what() << std::endl;
     m_edm4hepTrack.setChi2(-1);
@@ -957,15 +959,24 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
         }
 
         if (isAccepted) {
-          // Retrieve the fitted state from the KalmanFitterInfo
-          genfit::StateOnPlane state = kfi->getFittedState();
-          genfit::MeasuredStateOnPlane measState = kfi->getFittedState();
+          // Retrieving the fitted state averages the forward and backward Kalman
+          // states. This can fail for an otherwise fitted track when one point has
+          // an ill-conditioned covariance matrix. Do not let such a point abort the
+          // full event; omit it from the filtered-hit output instead.
+          genfit::MeasuredStateOnPlane measState;
+          try {
+            
+          } catch (const genfit::Exception& e) {
+
+            std::cerr << "Exception retrieving fitted hit state: " << e.what() << std::endl;
+            continue;
+          }
 
           // Extract the 3D position of the fitted state
-          TVector3 pos = state.getPos();
+          TVector3 pos = measState.getPos();
 
           // Extract the measurement plane's orientation vectors
-          auto planeMeas = state.getPlane();
+          auto planeMeas = measState.getPlane();
           auto U = planeMeas->getU(); // Plane u-direction
           auto V = planeMeas->getV(); // Plane v-direction
           auto O = planeMeas->getO(); // Plane origin
@@ -1019,7 +1030,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
           double err_v = std::sqrt(var_v);
 
           // Create a new fitted hit object and set its position
-          auto hit3D = m_fittedHits.create();
+          auto hit3D = fittedHits.create();
           hit3D.setPosition(edm4hep::Vector3d(pos.X() / dd4hep::mm, pos.Y() / dd4hep::mm, pos.Z() / dd4hep::mm));
 
           // Set the 3x3 position covariance matrix in EDM4hep format
@@ -1042,12 +1053,7 @@ bool GenfitTrack::Fit(std::string FitterType = "DAF", int debug_lvl = 0, std::op
           hit3D.setU(edm4hepU);
           hit3D.setV(edm4hepV);
 
-          hit3D.setType(1); // Mark as accepted hit
           m_trackWithFit.addToTrackerHits(hit3D);
-        } else {
-          // Create a placeholder for the rejected hit
-          auto hit3D = m_fittedHits.create();
-          hit3D.setType(0); // Mark as rejected hit
         }
       }
     }
