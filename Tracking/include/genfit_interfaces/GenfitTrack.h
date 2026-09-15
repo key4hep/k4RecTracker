@@ -151,6 +151,7 @@ private:
   void CheckInitialization();
   void OrderHits(const edm4hep::Track& track, bool skipTrackOrdering);
   void LimitNumberHits(double epsilon, int smoothWindow);
+  void SetVPPosition(TVector3 referencePoint) { m_VP_referencePoint = referencePoint; };
 
   TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, int Charge, std::optional<double> sigma_d0,
                                              std::optional<double> sigma_phi, std::optional<double> sigma_omega,
