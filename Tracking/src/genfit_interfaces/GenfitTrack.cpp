@@ -75,9 +75,18 @@ void GenfitTrack::OrderHits(const edm4hep::Track& track, bool skipTrackOrdering)
 
   if (skipTrackOrdering) {
 
+    bool first = true;
     for (const auto& hit : track.getTrackerHits()) {
 
       m_edm4hepTrack.addToTrackerHits(hit);
+      auto pos = hit.getPosition();
+
+      if (first) {
+        m_FirstHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
+        first = false;
+      }
+
+      m_LastHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
     }
     return;
   }
