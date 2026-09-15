@@ -767,6 +767,7 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
  */
 void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
 
+  delete m_genfitTrack;
   m_genfitTrack = nullptr;
   m_genfitTrackRep = nullptr;
 
@@ -866,6 +867,9 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
                       std::optional<double> Beta_init = 100., std::optional<double> Beta_final = 0.1,
                       std::optional<int> Beta_steps = 10, std::optional<bool> FilterHits = true) {
 
+  const bool showFitDiagnostics = (debug_lvl == 1 || debug_lvl == 2);
+  const bool showFitterDiagnostics = (debug_lvl == 1);
+
   edm4hep::Track Track_temp = m_edm4hepTrack;
   for (size_t i = 0; i < Track_temp.trackStates_size(); ++i) {
 
@@ -897,10 +901,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     throw std::invalid_argument("Unknown fit method: " + FitterType);
   }
 
-  int debug_lvl_fit = debug_lvl;
-  if (debug_lvl > 1)
-    debug_lvl_fit = 0;
-  genfitFitter->setDebugLvl(debug_lvl_fit);
+  genfitFitter->setDebugLvl(showFitterDiagnostics ? 1 : 0);
 
   // Process track
   genfit::Track genfitTrack = *m_genfitTrack;
@@ -912,7 +913,9 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
 
   } catch (const genfit::Exception& e) {
 
-    std::cerr << "Exception during track fitting: " << e.what() << std::endl;
+    if (showFitDiagnostics) {
+      std::cerr << "Exception during track fitting: " << e.what() << std::endl;
+    }
     m_edm4hepTrack.setChi2(-1);
     m_edm4hepTrack.setNdf(-1);
 
@@ -965,10 +968,11 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
           // full event; omit it from the filtered-hit output instead.
           genfit::MeasuredStateOnPlane measState;
           try {
-            
+            measState = kfi->getFittedState();
           } catch (const genfit::Exception& e) {
-
-            std::cerr << "Exception retrieving fitted hit state: " << e.what() << std::endl;
+            if (showFitDiagnostics) {
+              std::cerr << "Exception retrieving fitted hit state: " << e.what() << std::endl;
+            }
             continue;
           }
 
@@ -1058,27 +1062,53 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       }
     }
 
+    // getFittedState() averages the forward/backward Kalman states and can throw
+    // a genfit::Exception (e.g. an ill-conditioned covariance)
     genfit::MeasuredStateOnPlane fittedState;
 
-    // trackState First Hit
-    fittedState = genfitTrack.getFittedState();
+    // trackState firstHit
+    try {
+      fittedState = genfitTrack.getFittedState();
+    } catch (const genfit::Exception& e) {
+      if (showFitDiagnostics) {
+        std::cerr << "Exception retrieving fitted state: " << e.what() << std::endl;
+      }
+      m_edm4hepTrack.setChi2(-1);
+      m_edm4hepTrack.setNdf(-1);
+      m_trackWithFit.setChi2(-1);
+      m_trackWithFit.setNdf(-1);
+      return false;
+    }
     edm4hep::TrackState trackStateFirstHit =
         UpdateTrackState(fittedState, m_FirstHit_referencePoint, edm4hep::TrackState::AtFirstHit);
 
     // trackState lastHit
-    fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
+    try {
+      fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
+    } catch (const genfit::Exception& e) {
+      if (showFitDiagnostics) {
+        std::cerr << "Exception retrieving fitted state: " << e.what() << std::endl;
+      }
+      m_edm4hepTrack.setChi2(-1);
+      m_edm4hepTrack.setNdf(-1);
+      m_trackWithFit.setChi2(-1);
+      m_trackWithFit.setNdf(-1);
+      return false;
+    }
     edm4hep::TrackState trackStateLastHit =
         UpdateTrackState(fittedState, m_LastHit_referencePoint, edm4hep::TrackState::AtLastHit);
 
     // Extrapolation to IP
     genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
     auto* fi = static_cast<genfit::KalmanFitterInfo*>(tp->getFitterInfo(trackRep));
-    fittedState = fi->getFittedState(true);
 
     try {
+      fittedState = fi->getFittedState(true);
       trackRep->extrapolateToLine(fittedState, TVector3(0, 0, 0), TVector3(0, 0, 1));
-    } catch (const std::exception& e) {
-      std::cerr << "Exception during extrapolation to IP: " << e.what() << std::endl;
+    } catch (const genfit::Exception& e) {
+      if (showFitDiagnostics) {
+        std::cerr << "Exception during extrapolation to IP: " << e.what() << std::endl;
+      }
 
       m_edm4hepTrack.setChi2(-1);
       m_edm4hepTrack.setNdf(-1);
@@ -1087,10 +1117,9 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
 
       return false;
     }
-
     edm4hep::TrackState trackStateIP = UpdateTrackState(fittedState, m_VP_referencePoint, edm4hep::TrackState::AtIP);
 
-    if (debug_lvl == 2) {
+    if (showFitDiagnostics) {
 
       std::cout << "GenfitTrack    DEBUG : TrackState at IP: " << std::endl;
       std::cout << "GenfitTrack    DEBUG :  D0: " << trackStateIP.D0 << " mm" << std::endl;
