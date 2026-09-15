@@ -34,10 +34,7 @@ GenfitTrack::GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrderi
   OrderHits(track, skipTrackOrdering);
 }
 
-GenfitTrack::~GenfitTrack() {
-
-  delete m_genfitTrack;
-}
+GenfitTrack::~GenfitTrack() { delete m_genfitTrack; }
 
 /**
  * @brief Check if required Genfit components are properly initialized.
