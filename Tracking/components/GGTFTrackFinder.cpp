@@ -131,8 +131,8 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
 
     if (batch.nHits == 0 || batch.nHits > kMaxHits) {
       if (batch.nHits > kMaxHits) {
-        warning() << "Event " << eventNumber << " has " << batch.nHits
-                  << " hits, exceeding the configured limit of " << kMaxHits << "; skipping." << endmsg;
+        warning() << "Event " << eventNumber << " has " << batch.nHits << " hits, exceeding the configured limit of "
+                  << kMaxHits << "; skipping." << endmsg;
       }
       return std::make_tuple(std::move(outputTracks));
     }
