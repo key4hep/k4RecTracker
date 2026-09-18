@@ -4,7 +4,8 @@
  * @author Andreas Loeschcke Centeno
  * @date   2025-10-09
  *
- * Gaudi MultiTransformer that digitises SimTrackerHits from a wire tracker (Drift Chamber or straw-tube tracker) to edm4hep::SenseWireHits
+ * Gaudi MultiTransformer that digitises SimTrackerHits from a wire tracker (Drift Chamber or straw-tube tracker) to
+ * edm4hep::SenseWireHits
  *
  * In comparison to DCHdigi_v01, this version will produce only one DigiHit per cell, combining all SimHits in the same
  * cell (unless there is siginificant time difference between the SimHits, larger than the m_deadtime_ns parameter). To
@@ -39,8 +40,8 @@
  *     - @param m_ReadoutWindowDuration_ns Duration of the readout window in ns
  *     - @param m_uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring
  * reproducibility.
- *     - @param m_geoSvcName The name of the GeoSvc instance, needed to intialise the WireTracker_info class for geometry
- * calculations
+ *     - @param m_geoSvcName The name of the GeoSvc instance, needed to intialise the WireTracker_info class for
+ * geometry calculations
  *
  * Outputs:
  *     - SenseWireHitCollection: Digitised hits
@@ -168,7 +169,7 @@ private:
       "Together with ReadoutWindowStartTime_ns, defines the readout window. Any DigiHits with arrival time after "
       "ReadoutWindowStartTime_ns + ReadoutWindowDuration_ns are discarded."};
   Gaudi::Property<bool> m_isSTT{this, "isSTT", false,
-                                             "Set to true if using straw tubes, false for drift chamber. False by default."};
+                                "Set to true if using straw tubes, false for drift chamber. False by default."};
   /// Convert EDM4hep Vector3d to Vector3D as defined in WireTracker_info
   Vector3D toVector3D(const edm4hep::Vector3d& v) const { return {v[0], v[1], v[2]}; };
   /// Convert Vector3D as defined in WireTracker_info to EDM4hep Vector3d
