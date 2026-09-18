@@ -1,4 +1,4 @@
-set(PackageName DCHdigi)
+set(PackageName WireTrackerDigi)
 
 project(${PackageName})
 

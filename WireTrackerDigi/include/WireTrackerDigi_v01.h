@@ -4,9 +4,9 @@
  * @author Andreas Loeschcke Centeno
  * @date   2025-10-09
  *
- * Gaudi MultiTransformer that digitises SimTrackerHits from a Drift Chamber to edm4hep::SenseWireHits
+ * Gaudi MultiTransformer that digitises SimTrackerHits from a wire tracker (Drift Chamber or straw-tube tracker) to edm4hep::SenseWireHits
  *
- * In comparison to WireTrackerDigi_v01, this version will produce only one DigiHit per cell, combining all SimHits in the same
+ * In comparison to DCHdigi_v01, this version will produce only one DigiHit per cell, combining all SimHits in the same
  * cell (unless there is siginificant time difference between the SimHits, larger than the m_deadtime_ns parameter). To
  * do this, the hits in the cells are sorted by time, after adding a (simplified, to be updated in the future) drift
  * time and time to reach the readout. They are further separated in hit 'trains' if the time difference between two
@@ -28,7 +28,7 @@
  *     - EventHeaderCollection (for consistently seeding the random engine)
  *
  * Properties:
- *     - @param m_wt_name The name of the drift chamber geometry, needed to get the decoder for the cellID
+ *     - @param m_wt_name The name of the wire tracker geometry, needed to get the decoder for the cellID
  *     - @param m_z_resolution_mm Spatial resolution in the direction along the wire, in mm
  *     - @param m_xy_resolution_mm Spatial resolution in the direction perpendicular to the wire, in mm
  *     - @param m_deadtime_ns Deadtime of a cell in ns, hit trains in the same cell separated by more than this time
@@ -127,7 +127,7 @@ private:
   // Detector name
   Gaudi::Property<std::string> m_wt_name{this, "DCH_name", "DCH_v2", "Name of the detector (eg, DCH_v2 or STT_o1_v01)"};
 
-  // Drift chamber info extension for geometry calculations
+  // Wire Tracker info extension for geometry calculations
   dd4hep::rec::WireTracker_info_struct* m_wt_info{nullptr};
 
   // z resolution in mm
