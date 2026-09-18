@@ -2,7 +2,7 @@ set(PackageName WireTrackerDigi)
 
 project(${PackageName})
 
-# Find Delphes for DCHdigi_v02
+# Find Delphes for WireTrackerDigi_v01
 find_package(Delphes REQUIRED)
 
 # Build the extension data model and link it against the upstream model
@@ -107,10 +107,10 @@ set_test_env(${test_name})
 SET(test_name "test_runDCHdigiV1")
 ADD_TEST(NAME ${test_name} COMMAND sh +x test_DCHdigi.sh )
 set_test_env(${test_name})
-set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/DCHdigi/test/test_DCHdigi")
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/WireTrackerDigi/test/test_DCHdigi")
 
 SET(test_name "test_runDCHdigiV2")
 ADD_TEST(NAME ${test_name} COMMAND k4run runDCHdigiV2.py )
 set_test_env(${test_name})
 set_tests_properties(${test_name} PROPERTIES DEPENDS test_runDCHdigiV1)
-set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/DCHdigi/test/test_DCHdigi")
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/WireTrackerDigi/test/test_DCHdigi")
