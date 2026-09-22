@@ -174,7 +174,7 @@ struct GenfitTrackFitter final
         }
       }
 
-      if (!(fields.count("superlayer") && fields.count("layer") && (fields.count("nphi") || fields.count("tube")) )) {
+      if (!(fields.count("superlayer") && fields.count("layer") && (fields.count("nphi") || fields.count("tube")))) {
 
         warning() << "WireTracker decoder missing required fields: " << desc << endmsg;
         throw std::runtime_error("Invalid WireTracker decoder");

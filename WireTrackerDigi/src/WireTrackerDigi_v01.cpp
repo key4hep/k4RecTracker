@@ -93,7 +93,7 @@ StatusCode WireTrackerDigi_v01::initialize() {
 
 std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>
 WireTrackerDigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input,
-                        const edm4hep::EventHeaderCollection& header) const {
+                                const edm4hep::EventHeaderCollection& header) const {
 
   edm4hep::SenseWireHitCollection output;
   edm4hep::TrackerHitSimTrackerHitLinkCollection links;
@@ -123,9 +123,9 @@ WireTrackerDigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input,
     int layer = m_wt_info->CalculateILayerFromCellIDFields(m_decoder->get(cellID, "layer"), superlayer);
 
     // use m_isSTT to determine cellID components nphi/tube and sector/0
-    int nphi = m_isSTT ? m_decoder->get(cellID, "tube") : m_decoder->get (cellID, "nphi");
-    int sector = m_isSTT ? m_decoder->get (cellID, "sector") : 0;
-      
+    int nphi = m_isSTT ? m_decoder->get(cellID, "tube") : m_decoder->get(cellID, "nphi");
+    int sector = m_isSTT ? m_decoder->get(cellID, "sector") : 0;
+
     /* THE FOLLOWING CALCULATION OF WIRE ANGLES HAS BEEN COPIED AS IS FROM DCHdigi_v01! */
     // The direction of the sense wires can be calculated as:
     //   RotationZ(WireAzimuthalAngle) * RotationX(stereoangle)
