@@ -70,7 +70,7 @@ make get_data
 
 ## Repository content
 
-* `DCHdigi`: drift chamber digitization (for now, this step produces 'reco' collection)
+* `WireTracker`: drift chamber and straw tube digitization (DCHdigi_v02 is still aviable as an alias of WireTrackerDigi_v01)
 * `ARCdigi`: ARC digitization (for now, this step produces 'reco' collection)
 * `VTXdigi`: vertex detector digitization (for now, this step produces 'reco' collection)
 * `VTXdigiDetailed`: vertex detector and silicon sensors tracker detector digitization with detailed charge readout (for now, this step produces 'reco' collection)
@@ -79,7 +79,7 @@ make get_data
 ## Execute Examples
 
 ```bash
-k4run DCHdigi/test/runDCHsimpleDigitizer.py
+k4run WireTrackerDigi/test/runDCHsimpleDigitizer.py
 ```
 
 ```bash
