@@ -1116,9 +1116,8 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     // Commit fitted hits only after all operations that can make the fit fail have succeeded.
     for (const auto& pendingHit : pendingFittedHits) {
       auto hit3D = fittedHits.create();
-      hit3D.setPosition(edm4hep::Vector3d(pendingHit.position.X() / dd4hep::mm,
-                                         pendingHit.position.Y() / dd4hep::mm,
-                                         pendingHit.position.Z() / dd4hep::mm));
+      hit3D.setPosition(edm4hep::Vector3d(pendingHit.position.X() / dd4hep::mm, pendingHit.position.Y() / dd4hep::mm,
+                                          pendingHit.position.Z() / dd4hep::mm));
       hit3D.setCovMatrix({
           static_cast<float>(pendingHit.covariance(0, 0)), // xx
           static_cast<float>(pendingHit.covariance(1, 0)), // yx
