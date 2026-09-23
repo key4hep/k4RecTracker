@@ -1471,7 +1471,7 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
 
   double d0 =
       (-(x_reco - ReferencePoint.X()) * std::sin(phi) + (y_reco - ReferencePoint.Y()) * std::cos(phi)) / dd4hep::mm;
-  double z0 = z_reco - ReferencePoint.Z();
+  double z0 = (z_reco - ReferencePoint.Z()) / dd4hep::mm;
 
   double Bz = m_fieldMap->getBz(gen_position) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
 
