@@ -25,8 +25,8 @@ GenfitTrack::GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrderi
                          const dd4hep::rec::WireTracker_info_struct* wire_info,
                          const dd4hep::DDSegmentation::BitFieldCoder* decoder,
                          const GenfitInterface::GenfitField* fieldMap)
-    : m_originalTrack(track), m_posInit(0., 0., 0.), m_momInit(0., 0., 0.), m_covInit(6), m_genfitTrackRep(nullptr),
-      m_genfitTrack(nullptr), m_edm4hepTrack(), m_wireInfo(wire_info), m_dcDecoder(decoder), m_fieldMap(fieldMap)
+    : m_originalTrack(track), m_posInit(0., 0., 0.), m_momInit(0., 0., 0.), m_covInit(6), m_edm4hepTrack(),
+      m_wireInfo(wire_info), m_dcDecoder(decoder), m_fieldMap(fieldMap)
 
 {
 
@@ -34,7 +34,7 @@ GenfitTrack::GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrderi
   OrderHits(track, skipTrackOrdering);
 }
 
-GenfitTrack::~GenfitTrack() { delete m_genfitTrack; }
+GenfitTrack::~GenfitTrack() {}
 
 /**
  * @brief Check if required Genfit components are properly initialized.
@@ -343,7 +343,7 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
         found = true;
 
         m_vpReferencePoint = TVector3(ts.referencePoint.x * dd4hep::mm, ts.referencePoint.y * dd4hep::mm,
-                                       ts.referencePoint.z * dd4hep::mm); // in cm
+                                      ts.referencePoint.z * dd4hep::mm); // in cm
 
         double Bz =
             m_fieldMap->getBz(m_vpReferencePoint) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
@@ -776,9 +776,7 @@ GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double B
  */
 void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
 
-  delete m_genfitTrack;
-  m_genfitTrack = nullptr;
-  m_genfitTrackRep = nullptr;
+  m_genfitTrack.reset();
 
   m_signedParticleHypothesis = particle_hypotesis;
   if (particle_hypotesis == 11 || particle_hypotesis == 13) {
@@ -799,8 +797,9 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
   stateVec[4] = m_momInit.Y();
   stateVec[5] = m_momInit.Z();
 
-  m_genfitTrackRep = new genfit::RKTrackRep(m_signedParticleHypothesis);
-  m_genfitTrack = new genfit::Track(m_genfitTrackRep, stateVec, m_covInit);
+  auto trackRep = std::make_unique<genfit::RKTrackRep>(m_signed_particle_hypothesis);
+  m_genfitTrack = std::make_unique<genfit::Track>(trackRep.get(), stateVec, m_covInit);
+  trackRep.release();
 
   auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
 
@@ -824,13 +823,13 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
       detID = 0;
       auto planar_hit = hit.as<edm4hep::TrackerHitPlane>();
       GenfitInterface::PlanarMeasurement measurement(planar_hit, detID, ++hit_idx, debug_lvl);
-      m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack));
+      m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack.get()));
     } else if (hit.isA<edm4hep::SenseWireHit>()) {
       detID = 1;
       auto wire_hit = hit.as<edm4hep::SenseWireHit>();
       GenfitInterface::WireMeasurement measurement(wire_hit, m_wireInfo, m_dcDecoder, has_sectors, detID, ++hit_idx,
                                                    debug_lvl);
-      m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack));
+      m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack.get()));
     } else {
       throw std::runtime_error("InitializeTrack: Unknown hit type encountered - Hit will be skipped.");
     }
