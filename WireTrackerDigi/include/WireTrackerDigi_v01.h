@@ -186,6 +186,5 @@ private:
 };
 
 // DCHdigi_v02 alias to maintain compatibility
-typedef WireTrackerDigi_v01 DCHdigi_v02;
-DECLARE_COMPONENT(DCHdigi_v02);
 DECLARE_COMPONENT(WireTrackerDigi_v01);
+DECLARE_COMPONENT_WITH_ID(WireTrackerDigi_v01, "DCHdigi_v02");
