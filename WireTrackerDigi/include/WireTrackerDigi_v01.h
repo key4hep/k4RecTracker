@@ -1,10 +1,11 @@
-/** @class DCHdigi_v02
- * Gaudi Algorithm for DCH digitization
+/** @class WireTrackerDigi_v01
+ * Gaudi Algorithm for WireTracker digitization
  *
  * @author Andreas Loeschcke Centeno
  * @date   2025-10-09
  *
- * Gaudi MultiTransformer that digitises SimTrackerHits from a Drift Chamber to edm4hep::SenseWireHits
+ * Gaudi MultiTransformer that digitises SimTrackerHits from a wire tracker (Drift Chamber or straw-tube tracker) to
+ * edm4hep::SenseWireHits
  *
  * In comparison to DCHdigi_v01, this version will produce only one DigiHit per cell, combining all SimHits in the same
  * cell (unless there is siginificant time difference between the SimHits, larger than the m_deadtime_ns parameter). To
@@ -24,11 +25,11 @@
  * suffix (e.g. _mm, _ns) or by giving the unit system in which they are in (e.g. dd4hep default units: _ddu)
  *
  * Inputs:
- *     - SimTrackerHitCollection (SimTrackerHits in the DCH)
+ *     - SimTrackerHitCollection (SimTrackerHits in the DCH or STT)
  *     - EventHeaderCollection (for consistently seeding the random engine)
  *
  * Properties:
- *     - @param m_dch_name The name of the drift chamber geometry, needed to get the decoder for the cellID
+ *     - @param m_wt_name The name of the wire tracker geometry, needed to get the decoder for the cellID
  *     - @param m_z_resolution_mm Spatial resolution in the direction along the wire, in mm
  *     - @param m_xy_resolution_mm Spatial resolution in the direction perpendicular to the wire, in mm
  *     - @param m_deadtime_ns Deadtime of a cell in ns, hit trains in the same cell separated by more than this time
@@ -39,8 +40,8 @@
  *     - @param m_ReadoutWindowDuration_ns Duration of the readout window in ns
  *     - @param m_uidSvcName The name of the UniqueIDGenSvc instance, used to create seed for each event/run, ensuring
  * reproducibility.
- *     - @param m_geoSvcName The name of the GeoSvc instance, needed to intialise the DCH_info class for geometry
- * calculations
+ *     - @param m_geoSvcName The name of the GeoSvc instance, needed to intialise the WireTracker_info class for
+ * geometry calculations
  *
  * Outputs:
  *     - SenseWireHitCollection: Digitised hits
@@ -88,13 +89,13 @@
 
 using Vector3D = dd4hep::rec::WireTracker_info::Vector3D;
 
-class DCHdigi_v02 final
+class WireTrackerDigi_v01 final
     : public k4FWCore::MultiTransformer<
           std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>(
               const edm4hep::SimTrackerHitCollection&, const edm4hep::EventHeaderCollection&)> {
 
 public:
-  DCHdigi_v02(const std::string& name, ISvcLocator* svcLoc);
+  WireTrackerDigi_v01(const std::string& name, ISvcLocator* svcLoc);
 
   std::tuple<edm4hep::SenseWireHitCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>
   operator()(const edm4hep::SimTrackerHitCollection& input,
@@ -125,10 +126,10 @@ private:
   dd4hep::DDSegmentation::BitFieldCoder* m_decoder;
 
   // Detector name
-  Gaudi::Property<std::string> m_dch_name{this, "DCH_name", "DCH_v2", "Name of the Drift Chamber detector"};
+  Gaudi::Property<std::string> m_wt_name{this, "DCH_name", "DCH_v2", "Name of the detector (eg, DCH_v2 or STT_o1_v01)"};
 
-  // Drift chamber info extension for geometry calculations
-  dd4hep::rec::DCH_info* m_dch_info{nullptr};
+  // Wire Tracker info extension for geometry calculations
+  dd4hep::rec::WireTracker_info_struct* m_wt_info{nullptr};
 
   // z resolution in mm
   Gaudi::Property<double> m_z_resolution_mm{this, "zResolution_mm", 1.0,
@@ -167,7 +168,8 @@ private:
       this, "ReadoutWindowDuration_ns", 450.0,
       "Together with ReadoutWindowStartTime_ns, defines the readout window. Any DigiHits with arrival time after "
       "ReadoutWindowStartTime_ns + ReadoutWindowDuration_ns are discarded."};
-
+  Gaudi::Property<bool> m_isSTT{this, "isSTT", false,
+                                "Set to true if using straw tubes, false for drift chamber. False by default."};
   /// Convert EDM4hep Vector3d to Vector3D as defined in WireTracker_info
   Vector3D toVector3D(const edm4hep::Vector3d& v) const { return {v[0], v[1], v[2]}; };
   /// Convert Vector3D as defined in WireTracker_info to EDM4hep Vector3d
@@ -183,4 +185,7 @@ private:
   double get_default_drift_velocity_um_per_ns() const;
 };
 
+// DCHdigi_v02 alias to maintain compatibility
+typedef WireTrackerDigi_v01 DCHdigi_v02;
 DECLARE_COMPONENT(DCHdigi_v02);
+DECLARE_COMPONENT(WireTrackerDigi_v01);

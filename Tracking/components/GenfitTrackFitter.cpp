@@ -174,15 +174,15 @@ struct GenfitTrackFitter final
         }
       }
 
-      if (!(fields.count("superlayer") && fields.count("layer") && fields.count("nphi"))) {
+      if (!(fields.count("superlayer") && fields.count("layer") && (fields.count("nphi") || fields.count("tube")))) {
 
-        warning() << "DCH decoder missing required fields: " << desc << endmsg;
-        throw std::runtime_error("Invalid DCH decoder");
+        warning() << "WireTracker decoder missing required fields: " << desc << endmsg;
+        throw std::runtime_error("Invalid WireTracker decoder");
       }
 
     } catch (const std::exception& e) {
 
-      warning() << "DCH_info unexpected error: " << e.what()
+      warning() << "WireTracker_info unexpected error: " << e.what()
                 << ". This may indicate missing drift chamber or configuration issues." << endmsg;
     }
 
