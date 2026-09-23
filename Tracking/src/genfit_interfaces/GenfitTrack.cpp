@@ -797,7 +797,7 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
   stateVec[4] = m_momInit.Y();
   stateVec[5] = m_momInit.Z();
 
-  auto trackRep = std::make_unique<genfit::RKTrackRep>(m_signed_particle_hypothesis);
+  auto trackRep = std::make_unique<genfit::RKTrackRep>(m_signedParticleHypothesis);
   m_genfitTrack = std::make_unique<genfit::Track>(trackRep.get(), stateVec, m_covInit);
   trackRep.release();
 
@@ -935,6 +935,16 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
 
   if (genfitFitter->isTrackFitted(&genfitTrack, trackRep)) {
 
+    struct PendingFittedHit {
+      TVector3 position;
+      TMatrixDSym covariance;
+      double du;
+      double dv;
+      TVector3 u;
+      TVector3 v;
+    };
+    std::vector<PendingFittedHit> pendingFittedHits;
+
     // Hit Filtering based on measurement weights (if FitterType == "DAF" and FilterHits == true)
     if (FilterHits.value() && FitterType == "DAF") {
 
@@ -1041,31 +1051,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
           double err_u = std::sqrt(var_u);
           double err_v = std::sqrt(var_v);
 
-          // Create a new fitted hit object and set its position
-          auto hit3D = fittedHits.create();
-          hit3D.setPosition(edm4hep::Vector3d(pos.X() / dd4hep::mm, pos.Y() / dd4hep::mm, pos.Z() / dd4hep::mm));
-
-          // Set the 3x3 position covariance matrix in EDM4hep format
-          hit3D.setCovMatrix({
-              static_cast<float>(covXYZ(0, 0)), // xx
-              static_cast<float>(covXYZ(1, 0)), // yx
-              static_cast<float>(covXYZ(1, 1)), // yy
-              static_cast<float>(covXYZ(2, 0)), // zx
-              static_cast<float>(covXYZ(2, 1)), // zy
-              static_cast<float>(covXYZ(2, 2))  // zz
-          });
-
-          // Set the errors along the local plane axes
-          hit3D.setDu(err_u);
-          hit3D.setDv(err_v);
-
-          // Set plane orientation in EDM4hep
-          edm4hep::Vector2f edm4hepU = {static_cast<float>(u.X()), static_cast<float>(u.Y())};
-          edm4hep::Vector2f edm4hepV = {static_cast<float>(v.X()), static_cast<float>(v.Y())};
-          hit3D.setU(edm4hepU);
-          hit3D.setV(edm4hepV);
-
-          m_trackWithFit.addToTrackerHits(hit3D);
+          pendingFittedHits.push_back({pos, covXYZ, err_u, err_v, u, v});
         }
       }
     }
@@ -1126,6 +1112,28 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       return false;
     }
     edm4hep::TrackState trackStateIP = UpdateTrackState(fittedState, m_vpReferencePoint, edm4hep::TrackState::AtIP);
+
+    // Commit fitted hits only after all operations that can make the fit fail have succeeded.
+    for (const auto& pendingHit : pendingFittedHits) {
+      auto hit3D = fittedHits.create();
+      hit3D.setPosition(edm4hep::Vector3d(pendingHit.position.X() / dd4hep::mm,
+                                         pendingHit.position.Y() / dd4hep::mm,
+                                         pendingHit.position.Z() / dd4hep::mm));
+      hit3D.setCovMatrix({
+          static_cast<float>(pendingHit.covariance(0, 0)), // xx
+          static_cast<float>(pendingHit.covariance(1, 0)), // yx
+          static_cast<float>(pendingHit.covariance(1, 1)), // yy
+          static_cast<float>(pendingHit.covariance(2, 0)), // zx
+          static_cast<float>(pendingHit.covariance(2, 1)), // zy
+          static_cast<float>(pendingHit.covariance(2, 2))  // zz
+      });
+      hit3D.setDu(pendingHit.du);
+      hit3D.setDv(pendingHit.dv);
+      hit3D.setU({static_cast<float>(pendingHit.u.X()), static_cast<float>(pendingHit.u.Y())});
+      hit3D.setV({static_cast<float>(pendingHit.v.X()), static_cast<float>(pendingHit.v.Y())});
+
+      m_trackWithFit.addToTrackerHits(hit3D);
+    }
 
     if (showFitDiagnostics) {
 
