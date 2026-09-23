@@ -26,7 +26,7 @@ GenfitTrack::GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrderi
                          const dd4hep::DDSegmentation::BitFieldCoder* decoder,
                          const GenfitInterface::GenfitField* fieldMap)
     : m_originalTrack(track), m_posInit(0., 0., 0.), m_momInit(0., 0., 0.), m_covInit(6), m_genfitTrackRep(nullptr),
-      m_genfitTrack(nullptr), m_edm4hepTrack(), m_wire_info(wire_info), m_dc_decoder(decoder), m_fieldMap(fieldMap)
+      m_genfitTrack(nullptr), m_edm4hepTrack(), m_wireInfo(wire_info), m_dcDecoder(decoder), m_fieldMap(fieldMap)
 
 {
 
@@ -82,11 +82,11 @@ void GenfitTrack::OrderHits(const edm4hep::Track& track, bool skipTrackOrdering)
       auto pos = hit.getPosition();
 
       if (first) {
-        m_FirstHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
+        m_firstHitReferencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
         first = false;
       }
 
-      m_LastHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
+      m_lastHitReferencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
     }
     return;
   }
@@ -131,11 +131,11 @@ void GenfitTrack::OrderHits(const edm4hep::Track& track, bool skipTrackOrdering)
     m_edm4hepTrack.addToTrackerHits(hit);
 
     if (first) {
-      m_FirstHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
+      m_firstHitReferencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
       first = false;
     }
 
-    m_LastHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
+    m_lastHitReferencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
   }
 }
 
@@ -145,7 +145,7 @@ void GenfitTrack::OrderHits(const edm4hep::Track& track, bool skipTrackOrdering)
  * This method initializes the internal state of the `GenfitTrack` object by defining:
  * - the initial position (`m_posInit`)
  * - the initial momentum (`m_momInit`)
- * - the charge hypothesis (`m_charge_hypothesis`)
+ * - the charge hypothesis (`m_chargeHypothesis`)
  * - the initial covariance matrix (`m_covInit`)
  *
  * The initialization procedure depends on the selected strategy and may rely on:
@@ -178,7 +178,7 @@ void GenfitTrack::OrderHits(const edm4hep::Track& track, bool skipTrackOrdering)
  *    - InitializationType == 1 (refined: parameter-based estimation):
  *        - Uses `ComputeInitialParameters(Bz)` to obtain a more accurate estimate
  *          of position and momentum, typically exploiting multiple hits.
- *        - Optionally updates the reference point (`m_VP_referencePoint`):
+ *        - Optionally updates the reference point (`m_vpReferencePoint`):
  *            - if `UseFirstHitAsReference` is true, or
  *            - if displaced tracking is enabled and the first hit lies outside
  *              a sphere of radius `RadiusForDisplacedTracking`.
@@ -294,9 +294,9 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     double Bz = m_fieldMap->getBz(m_posInit) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
 
     HelperInitialization initInfo = ComputeInitialParameters(Bz);
-    m_charge_hypothesis = initInfo.Charge;
+    m_chargeHypothesis = initInfo.Charge;
 
-    m_covInit = ComputeInitialCovarianceMatrix(Bz, m_charge_hypothesis, sigma_d0.value(), sigma_phi.value(),
+    m_covInit = ComputeInitialCovarianceMatrix(Bz, m_chargeHypothesis, sigma_d0.value(), sigma_phi.value(),
                                                omega_factor.value(), z0_factor.value(), sigma_tanLambda.value());
   }
 
@@ -316,16 +316,16 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
 
     // Optional reference point update
     if (UseFirstHitAsReference || (RadiusForDisplacedTracking > 0. && firstHitVec.Mag() > RadiusForDisplacedTracking)) {
-      m_VP_referencePoint = firstHitVec;
+      m_vpReferencePoint = firstHitVec;
     }
 
     HelperInitialization initInfo = ComputeInitialParameters(Bz);
 
-    m_charge_hypothesis = initInfo.Charge;
+    m_chargeHypothesis = initInfo.Charge;
     m_posInit = initInfo.Position;
     m_momInit = initInfo.Momentum;
 
-    m_covInit = ComputeInitialCovarianceMatrix(Bz, m_charge_hypothesis, sigma_d0.value(), sigma_phi.value(),
+    m_covInit = ComputeInitialCovarianceMatrix(Bz, m_chargeHypothesis, sigma_d0.value(), sigma_phi.value(),
                                                omega_factor.value(), z0_factor.value(), sigma_tanLambda.value());
   }
 
@@ -342,17 +342,17 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
       if (ts.location == TrackStateLocation.value()) {
         found = true;
 
-        m_VP_referencePoint = TVector3(ts.referencePoint.x * dd4hep::mm, ts.referencePoint.y * dd4hep::mm,
+        m_vpReferencePoint = TVector3(ts.referencePoint.x * dd4hep::mm, ts.referencePoint.y * dd4hep::mm,
                                        ts.referencePoint.z * dd4hep::mm); // in cm
 
         double Bz =
-            m_fieldMap->getBz(m_VP_referencePoint) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
+            m_fieldMap->getBz(m_vpReferencePoint) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
 
         // Reconstruct the PCA described by this exact TrackState
-        m_posInit = TVector3(m_VP_referencePoint.X() - ts.D0 * std::sin(ts.phi) * dd4hep::mm,
-                             m_VP_referencePoint.Y() + ts.D0 * std::cos(ts.phi) * dd4hep::mm,
-                             m_VP_referencePoint.Z() + ts.Z0 * dd4hep::mm);
-        m_charge_hypothesis = (Bz / ts.omega >= 0.) ? 1 : -1;
+        m_posInit = TVector3(m_vpReferencePoint.X() - ts.D0 * std::sin(ts.phi) * dd4hep::mm,
+                             m_vpReferencePoint.Y() + ts.D0 * std::cos(ts.phi) * dd4hep::mm,
+                             m_vpReferencePoint.Z() + ts.Z0 * dd4hep::mm);
+        m_chargeHypothesis = (Bz / ts.omega >= 0.) ? 1 : -1;
 
         // Helix -> momentum conversion
         double pT = ConversionUnits::a_lcio * std::abs(Bz) / std::abs(ts.omega);
@@ -379,8 +379,8 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
           }
         }
 
-        m_covInit = InitialCovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_VP_referencePoint,
-                                                            m_charge_hypothesis, Bz);
+        m_covInit = InitialCovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_vpReferencePoint,
+                                                            m_chargeHypothesis, Bz);
       }
     }
 
@@ -402,9 +402,9 @@ void GenfitTrack::InitializeTrack(double RadiusForDisplacedTracking, bool UseFir
     double Bz = m_fieldMap->getBz(m_posInit) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
 
     HelperInitialization initInfo = ComputeInitialParameters(Bz);
-    m_charge_hypothesis = initInfo.Charge;
+    m_chargeHypothesis = initInfo.Charge;
 
-    m_covInit = ComputeInitialCovarianceMatrix(Bz, m_charge_hypothesis, sigma_d0.value(), sigma_phi.value(),
+    m_covInit = ComputeInitialCovarianceMatrix(Bz, m_chargeHypothesis, sigma_d0.value(), sigma_phi.value(),
                                                omega_factor.value(), z0_factor.value(), sigma_tanLambda.value());
   }
 
@@ -508,7 +508,7 @@ void GenfitTrack::LimitNumberHits(double epsilon, int smoothWindow) {
     for (const auto& hit : temp_hits) {
 
       auto pos = hit.getPosition();
-      m_LastHit_referencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
+      m_lastHitReferencePoint = TVector3(pos.x * dd4hep::mm, pos.y * dd4hep::mm, pos.z * dd4hep::mm);
       m_edm4hepTrack.addToTrackerHits(hit);
       ++idx_fill_track;
       if (idx_fill_track >= maxHit)
@@ -597,7 +597,7 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, int Charge, s
   C_helix(2, 2) = std::pow(omega_factor.value_or(0.5) * omega, 2);
 
   // z0 relative to the track-parameter reference point, in mm.
-  double z0_scale = std::abs((m_posInit.Z() - m_VP_referencePoint.Z()) / dd4hep::mm);
+  double z0_scale = std::abs((m_posInit.Z() - m_vpReferencePoint.Z()) / dd4hep::mm);
   C_helix(3, 3) = std::pow(z0_factor.value_or(0.1) * z0_scale, 2);
 
   // tanLambda
@@ -605,7 +605,7 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, int Charge, s
   C_helix(4, 4) = stl * stl;
 
   TMatrixDSym covState =
-      InitialCovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_VP_referencePoint, Charge, Bz);
+      InitialCovarianceMatrixHelixToCartesian(C_helix, m_posInit, m_momInit, m_vpReferencePoint, Charge, Bz);
 
   return covState;
 }
@@ -664,7 +664,7 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, int Charge, s
  */
 GenfitTrack::HelperInitialization GenfitTrack::ComputeInitialParameters(double Bz) {
 
-  Point2D_xy referencePoint_xy(m_VP_referencePoint.X() / dd4hep::mm, m_VP_referencePoint.Y() / dd4hep::mm); // in mm
+  Point2D_xy referencePoint_xy(m_vpReferencePoint.X() / dd4hep::mm, m_vpReferencePoint.Y() / dd4hep::mm); // in mm
 
   auto hits = m_edm4hepTrack.getTrackerHits();
   const size_t N = hits.size();
@@ -780,12 +780,12 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
   m_genfitTrack = nullptr;
   m_genfitTrackRep = nullptr;
 
-  m_signed_particle_hypothesis = particle_hypotesis;
+  m_signedParticleHypothesis = particle_hypotesis;
   if (particle_hypotesis == 11 || particle_hypotesis == 13) {
-    m_signed_particle_hypothesis = -m_charge_hypothesis * particle_hypotesis;
+    m_signedParticleHypothesis = -m_chargeHypothesis * particle_hypotesis;
 
   } else {
-    m_signed_particle_hypothesis = m_charge_hypothesis * particle_hypotesis;
+    m_signedParticleHypothesis = m_chargeHypothesis * particle_hypotesis;
   }
 
   // Create stateVec
@@ -799,15 +799,15 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
   stateVec[4] = m_momInit.Y();
   stateVec[5] = m_momInit.Z();
 
-  m_genfitTrackRep = new genfit::RKTrackRep(m_signed_particle_hypothesis);
+  m_genfitTrackRep = new genfit::RKTrackRep(m_signedParticleHypothesis);
   m_genfitTrack = new genfit::Track(m_genfitTrackRep, stateVec, m_covInit);
 
   auto hits_for_genfit = m_edm4hepTrack.getTrackerHits();
 
   // Check whether the wire tracker has sectors.
-  // m_dc_decoder is nullptr when the geometry has no wire tracker; in that case
+  // m_dcDecoder is nullptr when the geometry has no wire tracker; in that case
   // there are no SenseWireHits either, so has_sectors is never actually consumed.
-  const bool has_sectors = m_dc_decoder && (m_dc_decoder->fieldDescription().find("sector") != std::string::npos);
+  const bool has_sectors = m_dcDecoder && (m_dcDecoder->fieldDescription().find("sector") != std::string::npos);
 
   int hit_idx(0);
   int detID(-1);
@@ -828,7 +828,7 @@ void GenfitTrack::CreateGenFitTrack(int particle_hypotesis, int debug_lvl) {
     } else if (hit.isA<edm4hep::SenseWireHit>()) {
       detID = 1;
       auto wire_hit = hit.as<edm4hep::SenseWireHit>();
-      GenfitInterface::WireMeasurement measurement(wire_hit, m_wire_info, m_dc_decoder, has_sectors, detID, ++hit_idx,
+      GenfitInterface::WireMeasurement measurement(wire_hit, m_wireInfo, m_dcDecoder, has_sectors, detID, ++hit_idx,
                                                    debug_lvl);
       m_genfitTrack->insertPoint(new genfit::TrackPoint(measurement.getGenFit(), m_genfitTrack));
     } else {
@@ -1089,7 +1089,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       return false;
     }
     edm4hep::TrackState trackStateFirstHit =
-        UpdateTrackState(fittedState, m_FirstHit_referencePoint, edm4hep::TrackState::AtFirstHit);
+        UpdateTrackState(fittedState, m_firstHitReferencePoint, edm4hep::TrackState::AtFirstHit);
 
     // trackState lastHit
     try {
@@ -1105,7 +1105,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       return false;
     }
     edm4hep::TrackState trackStateLastHit =
-        UpdateTrackState(fittedState, m_LastHit_referencePoint, edm4hep::TrackState::AtLastHit);
+        UpdateTrackState(fittedState, m_lastHitReferencePoint, edm4hep::TrackState::AtLastHit);
 
     // Extrapolation to IP
     genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
@@ -1126,7 +1126,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
 
       return false;
     }
-    edm4hep::TrackState trackStateIP = UpdateTrackState(fittedState, m_VP_referencePoint, edm4hep::TrackState::AtIP);
+    edm4hep::TrackState trackStateIP = UpdateTrackState(fittedState, m_vpReferencePoint, edm4hep::TrackState::AtIP);
 
     if (showFitDiagnostics) {
 
@@ -1471,7 +1471,7 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
 
   double tanLambda = pz / pt;
   double omega = std::abs(ConversionUnits::a_lcio * Bz / pt);
-  if (m_charge_hypothesis < 0)
+  if (m_chargeHypothesis < 0)
     omega = -omega;
 
   Edm4hepTrackState.D0 = d0;
@@ -1486,7 +1486,7 @@ edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane M
   Edm4hepTrackState.location = location;
 
   TMatrixDSym CovHelix = CovarianceMatrixCartesianToHelix(covariancePosMom, gen_position, gen_momentum, ReferencePoint,
-                                                          m_charge_hypothesis, Bz);
+                                                          m_chargeHypothesis, Bz);
 
   // Conversion from TMatrixDSym(5x5) to lower-triangular packed format used in edm4hep::TrackState
   for (int i = 0; i < 5; ++i) {

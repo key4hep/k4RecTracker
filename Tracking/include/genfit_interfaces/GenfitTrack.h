@@ -107,7 +107,7 @@ public:
   edm4hep::MutableTrack& GetTrack_edm4hep() { return m_edm4hepTrack; }
   edm4hep::MutableTrack& GetTrackWithFit_edm4hep() { return m_trackWithFit; }
 
-  int GetCharge() { return m_charge_hypothesis; }
+  int GetCharge() { return m_chargeHypothesis; }
 
   static TMatrixDSym InitialCovarianceMatrixHelixToCartesian(const TMatrixDSym& helixCovariance,
                                                              const TVector3& positionCm, const TVector3& momentumGeV,
@@ -136,7 +136,7 @@ public:
 
   HelperInitialization GetInitialization() {
 
-    return {m_posInit, m_momInit, m_covInit, m_charge_hypothesis,
+    return {m_posInit, m_momInit, m_covInit, m_chargeHypothesis,
             static_cast<int>(m_edm4hepTrack.getTrackerHits().size())};
   }
 
@@ -151,7 +151,7 @@ private:
   void CheckInitialization();
   void OrderHits(const edm4hep::Track& track, bool skipTrackOrdering);
   void LimitNumberHits(double epsilon, int smoothWindow);
-  void SetVPPosition(TVector3 referencePoint) { m_VP_referencePoint = referencePoint; };
+  void SetVPPosition(TVector3 referencePoint) { m_vpReferencePoint = referencePoint; };
 
   TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, int Charge, std::optional<double> sigma_d0,
                                              std::optional<double> sigma_phi, std::optional<double> sigma_omega,
@@ -164,8 +164,8 @@ private:
 
   PCAInfoHelper PCAInfo(TVector3 position, TVector3 momentum, int charge, TVector3 refPoint, double Bz);
 
-  int m_signed_particle_hypothesis = 211;
-  int m_charge_hypothesis = 1;
+  int m_signedParticleHypothesis = 211;
+  int m_chargeHypothesis = 1;
 
   TVector3 m_posInit = TVector3(0., 0., 0.);
   TVector3 m_momInit = TVector3(0., 0., 0.);
@@ -177,12 +177,12 @@ private:
   edm4hep::MutableTrack m_edm4hepTrack;
   edm4hep::MutableTrack m_trackWithFit;
 
-  TVector3 m_VP_referencePoint{0., 0., 0.};
-  TVector3 m_FirstHit_referencePoint{0., 0., 0.};
-  TVector3 m_LastHit_referencePoint{0., 0., 0.};
+  TVector3 m_vpReferencePoint{0., 0., 0.};
+  TVector3 m_firstHitReferencePoint{0., 0., 0.};
+  TVector3 m_lastHitReferencePoint{0., 0., 0.};
 
-  const dd4hep::rec::WireTracker_info_struct* m_wire_info;
-  const dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
+  const dd4hep::rec::WireTracker_info_struct* m_wireInfo;
+  const dd4hep::DDSegmentation::BitFieldCoder* m_dcDecoder;
   const GenfitInterface::GenfitField* m_fieldMap;
 };
 
