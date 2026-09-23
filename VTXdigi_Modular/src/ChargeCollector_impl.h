@@ -1,6 +1,9 @@
 // VTXdigi_Modular/src/ChargeCollector_impl.h
 #pragma once
 
+#include "TFile.h"
+#include "TH1D.h"
+
 #include "../include/VTXdigi_Modular.h"
 #include <optional>
 
@@ -11,20 +14,11 @@ class HitMap; // forward-declaration for include/VTXdigi_tools.h
 using Index_pix = std::array<int, 2>;
 using Index_inPix = std::array<int, 3>;
 
-constexpr float kPathLengthTolerance = 1.0001f; // tolerance factor for how much longer the computed path can be compared to the Geant4 path length.
+constexpr float kPathLengthTolerance = 1.001f; // tolerance factor for how much longer the computed path can be compared to the Geant4 path length.
 // (If the computed path is longer than the Geant4 path, either the linear path approximation breaks down, or the particle begins or ends inside the sensor volume)
 
 constexpr float kLutEntryMinimum = 1.e-5f; // LUT entries below this value are set to zero, to minimise unnecessary computations in hot loop.
 // result is quite sensitive to this, so choose carefully. 1e-5 seems to be a good compromise between accuracy and performance for the TPSCo 65nm CIS LUT
-
-constexpr float kLambda = 0.000212f; // mean distance between interactions of a MIP in silicon in mm
-// source: https://doi.org/10.1088/1748-0221/12/11/P11017 (at https://arxiv.org/abs/1706.04883)
-
-constexpr int kMaxDepositionCharge = 15.f * 273.f; // a range-cut of 3 um corresponds to a energy of ~15 keV
-// source: ESTAR https://physics.nist.gov/PhysRefData/Star/Text/ESTAR.html
-
-constexpr float kFano = 0.115f; // theoretical Fano factor for silicon
-// source: https://doi.org/10.1103%2FPhysRevB.22.5565
 
 /** @brief holds pixel indices i and in-pixel bin indices j (identifying one voxel of the charge-sharing grid) */
 struct Index_voxel {
@@ -102,6 +96,9 @@ private:
 class ChargeCollector_LUT : public IChargeCollector {
 
   LookupTable m_LUT;
+  std::unique_ptr<const TH1D> m_chargeSamplingHist; // histogram to sample deposition charges from.
+  float m_meanDepositionsPerUm; // mean number of deposition clusters per um of path length in the sensor to sample deposition count from
+
   const bool m_shiftTruthPos; // if true, the truth position in the simHitWrapper is shifted to the depth in the sensor where most charge is collected, to get useful residual plots. Mirrors VTXdigi_Modular::m_LUT_shiftTruthPosition Gaudi property.
 
   /* fine grid over the whole sensor (pixel grid x in-pixel bins), used by the voxel traversal in FillHit().

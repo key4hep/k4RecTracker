@@ -69,6 +69,10 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
 
   inline std::string LutFileName() const { return m_LUT_FileName; }
 
+  inline float MeanDepositionsPerUm() const { return m_LUT_meanDepositionsPerUm.value(); }
+
+  inline std::string DepositionChargeHistogramFilename() const { return m_LUT_depositionChargeHistogram.value(); }
+
 
 private:
 
@@ -141,6 +145,9 @@ private:
   Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
   Gaudi::Property<bool> m_LUT_ignorePitch{this, "LookupTableIgnorePitch", false, "Ignore the sensor thickness and pixel pitch values stored in the LUT file. Useful for slightly stretching/shrinking the LUT to fit curved sensors where the sensor length is not an integer multiple of the pixel pitch. If empty, the LUT file values are used."};
   Gaudi::Property<bool> m_LUT_shiftTruthPos{this, "LookupTableShiftTruthPosition", false, "Internally shift the truth position of the simHit. Only affects the output histograms, does not affect any collection. If turned to false, angled particle trajectories will bias the residual plots in case of LUT tables with uneven charge collection across the sensor thickness."};
+  Gaudi::Property<float> m_LUT_meanDepositionsPerUm{this, "LookupTableMeanDepositionsPerUm", 2.65f, "Mean number of deposition clusters per um of path length in the sensor. Only used if ChargeCollectionMethod is set to \"LookupTable\". Defaults to 2.65, optimised to match the Allpix Squared simulation."};
+  Gaudi::Property<std::string> m_LUT_depositionChargeHistogram{this, "LookupTableDepositionChargeHistogram", m_undefinedString, "Root file containing a histogram with the deposition charge distribution to sample from. For now, clone the k4RecTracker repo & set this to `path/to/k4RecTracker/VTXdigi_Modular/test/chargeDepositionDistribution.root`. This pairs with the meanDepositionsPerUm default of 2.65 (to mirror Allpix Squared)"};
+
 
   /* -- Services, geometry variables -- */
 
