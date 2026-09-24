@@ -23,7 +23,7 @@ option(K4RECTRACKER_TRACKING "Build the Tracking subpackage" ON)
 
 # The DCH digitisers need Delphes (DCHdigi_v02) and GSL, and build the podio
 # datamodel extension used for drift chamber hits.
-option(K4RECTRACKER_DCH_DIGITISERS "Build the DCH digitisers" ON)
+option(K4RECTRACKER_WIRETRACKER_DIGITISERS "Build the WireTracker digitisers" ON)
 
 # dependencies
 # For some reason, the find_package with DD4hep must be the first one
@@ -39,12 +39,12 @@ find_package(k4FWCore 1.3 REQUIRED)
 find_package(k4geo REQUIRED)
 find_package(Gaudi REQUIRED)
 # Needed by the DCH digitisers and by Tracking
-if(K4RECTRACKER_DCH_DIGITISERS OR K4RECTRACKER_TRACKING)
+if(K4RECTRACKER_WIRETRACKER_DIGITISERS OR K4RECTRACKER_TRACKING)
   find_package(Delphes REQUIRED)
 endif()
 
 # Only needed by the DCH digitisers
-if(K4RECTRACKER_DCH_DIGITISERS)
+if(K4RECTRACKER_WIRETRACKER_DIGITISERS)
   find_package(GSL REQUIRED)
 endif()
 
@@ -72,10 +72,10 @@ function(set_test_env _testname)
 
 endfunction()
 
-if(K4RECTRACKER_DCH_DIGITISERS)
+if(K4RECTRACKER_WIRETRACKER_DIGITISERS)
   add_subdirectory(WireTrackerDigi)
 else()
-  message(STATUS "K4RECTRACKER_DCH_DIGITISERS is OFF: not building the DCH digitisers")
+  message(STATUS "K4RECTRACKER_WIRETRACKER_DIGITISERS is OFF: not building the DCH digitisers")
 endif()
 add_subdirectory(ARCdigi)
 add_subdirectory(VTXdigi)
