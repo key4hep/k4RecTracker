@@ -4,7 +4,7 @@ This subfolder contains the implementation of several Tracking tools for FCC-ee 
 
 * GGTFTrackFinder
 * PlotTrackHitResiduals
-* TrackdNdxDelphesBased
+* TrackdNdxClusterCounting (formerly TrackdNdxDelphesBased, still available under that name)
 * TracksFromGenParticles
 
 ## Geometric Graph Track Finding
