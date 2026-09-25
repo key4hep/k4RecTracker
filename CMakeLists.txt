@@ -21,10 +21,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 # Turn this off to build only the digitizers, e.g. on the Muon Collider stack.
 option(K4RECTRACKER_TRACKING "Build the Tracking subpackage" ON)
 
-# The DCH digitisers need Delphes (DCHdigi_v02) and GSL, and build the podio
-# datamodel extension used for drift chamber hits.
-option(K4RECTRACKER_WIRETRACKER_DIGITISERS "Build the WireTracker digitisers" ON)
-
 # dependencies
 # For some reason, the find_package with DD4hep must be the first one
 find_package(DD4hep REQUIRED COMPONENTS DDRec DDG4 DDParsers)
@@ -38,15 +34,8 @@ find_package(EDM4HEP REQUIRED)
 find_package(k4FWCore 1.3 REQUIRED)
 find_package(k4geo REQUIRED)
 find_package(Gaudi REQUIRED)
-# Needed by the DCH digitisers and by Tracking
-if(K4RECTRACKER_WIRETRACKER_DIGITISERS OR K4RECTRACKER_TRACKING)
-  find_package(Delphes REQUIRED)
-endif()
-
-# Only needed by the DCH digitisers
-if(K4RECTRACKER_WIRETRACKER_DIGITISERS)
-  find_package(GSL REQUIRED)
-endif()
+find_package(Delphes REQUIRED)
+find_package(GSL REQUIRED)
 
 # Only needed by Tracking
 if(K4RECTRACKER_TRACKING)
@@ -72,11 +61,7 @@ function(set_test_env _testname)
 
 endfunction()
 
-if(K4RECTRACKER_WIRETRACKER_DIGITISERS)
-  add_subdirectory(WireTrackerDigi)
-else()
-  message(STATUS "K4RECTRACKER_WIRETRACKER_DIGITISERS is OFF: not building the DCH digitisers")
-endif()
+add_subdirectory(WireTrackerDigi)
 add_subdirectory(ARCdigi)
 add_subdirectory(VTXdigi)
 add_subdirectory(VTXdigiDetailed)

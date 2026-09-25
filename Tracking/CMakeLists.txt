@@ -38,6 +38,7 @@ gaudi_add_module(${PackageName}
   k4FWCore::k4FWCore
   k4FWCore::k4Interface
   k4geo::detectorCommon
+  extensionDict
   onnxruntime::onnxruntime
   torch
   DD4hep::DDRec
@@ -46,11 +47,6 @@ gaudi_add_module(${PackageName}
   Eigen3::Eigen
   ${DELPHES_LIBRARIES}
 )
-
-# The podio datamodel extension is built by DCHdigi
-if(TARGET extensionDict)
-  target_link_libraries(${PackageName} PRIVATE extensionDict)
-endif()
 
 if(TARGET PandoraPFA::PandoraSDK)
   target_link_libraries(${PackageName} PRIVATE PandoraPFA::PandoraSDK)
