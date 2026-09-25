@@ -149,8 +149,18 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     info() << "Cluster position uncertainty not set. Doing simple charge-weighted uncertainty estimation." << endmsg;
   else if (m_positionUncertainty.value().size() == 2)
     info() << "Cluster position uncertainty set to (" << m_positionUncertainty.value().at(0) << " mm, " << m_positionUncertainty.value().at(1) << " mm) in u and v direction." << endmsg;
-  else if (m_positionUncertainty.value().size() == 6)
-    info() << "Cluster position uncertainty set to (" << m_positionUncertainty.value().at(0) << ", " << m_positionUncertainty.value().at(1) << ", " << m_positionUncertainty.value().at(2) << ") mm and (" << m_positionUncertainty.value().at(3) << ", " << m_positionUncertainty.value().at(4) << ", " << m_positionUncertainty.value().at(5) << ") mm for cluster lengths of (1, 2, 3), in u and v direction, respectively." << endmsg;
+  else if (m_positionUncertainty.value().size() == 10) {
+    std::string unc_u = "[";
+    std::string unc_v = "[";
+    for (int size = 1; size < 5; size++) {
+      unc_u += std::to_string(m_positionUncertainty.value().at(size)) + ", ";
+      unc_v += std::to_string(m_positionUncertainty.value().at(size + 5)) + ", ";
+    }
+    unc_u += "]";
+    unc_v += "]";
+
+    info() << "Cluster position uncertainty set to " << unc_u << " mm and " << unc_v << " mm for cluster lengths of (1, 2, 3, 4, 5+), in u and v direction, respectively." << endmsg;
+  }
   else
     throw GaudiException("Property ClusterPositionUncertainty must be either empty (for charge-weighted estimation), have exactly 2 values (for fixed uncertainty in u and v), or six values (for cluster-length based estimation).", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
@@ -1292,22 +1302,22 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
       digiHit.setDu(m_positionUncertainty.value().at(0));
       digiHit.setDv(m_positionUncertainty.value().at(1));
     }
-    else if (m_positionUncertainty.value().size() == 6) {
+    else if (m_positionUncertainty.value().size() == 10) {
       int clusterSize_u = cluster.GetSize(0);
-      if (clusterSize_u == 1)
-        digiHit.setDu(m_positionUncertainty.value().at(0));
-      else if (clusterSize_u == 2)
-        digiHit.setDu(m_positionUncertainty.value().at(1));
-      else
-        digiHit.setDu(m_positionUncertainty.value().at(2));
+      for (int size = 1; size < 5; size++) {
+        if (clusterSize_u == size)
+          digiHit.setDu(m_positionUncertainty.value().at(size - 1));
+      }
+      if (clusterSize_u >= 5)
+        digiHit.setDu(m_positionUncertainty.value().at(4));
 
       int clusterSize_v = cluster.GetSize(1);
-      if (clusterSize_v == 1)
-        digiHit.setDv(m_positionUncertainty.value().at(3));
-      else if (clusterSize_v == 2)
-        digiHit.setDv(m_positionUncertainty.value().at(4));
-      else
-        digiHit.setDv(m_positionUncertainty.value().at(5));
+      for (int size = 1; size < 5; size++) {
+        if (clusterSize_v == size)
+          digiHit.setDv(m_positionUncertainty.value().at(size + 4));
+      }
+      if (clusterSize_v >= 5)
+        digiHit.setDv(m_positionUncertainty.value().at(9));
     }
     debug() << "         - Set digiHit position uncertainty to (" << digiHit.getDu() << ", " << digiHit.getDv() << ") mm." << endmsg;
 
