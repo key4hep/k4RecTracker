@@ -1,0 +1,58 @@
+set(PackageName VTXdigi_Modular)
+
+project(${PackageName})
+
+file(GLOB sources
+    ${PROJECT_SOURCE_DIR}/src/*.cpp
+)
+
+file(GLOB headers
+  ${PROJECT_SOURCE_DIR}/include/*.h
+)
+
+gaudi_add_module(${PackageName}
+  SOURCES ${sources}
+  LINK
+  Gaudi::GaudiKernel
+  EDM4HEP::edm4hep
+  k4FWCore::k4FWCore
+  k4FWCore::k4Interface
+  DD4hep::DDRec
+  ROOT::MathCore
+)
+
+target_include_directories(${PackageName} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+
+set_target_properties(${PackageName} PROPERTIES PUBLIC_HEADER "${headers}")
+
+file(GLOB test_scripts ${PROJECT_SOURCE_DIR}/test/*.py )
+
+file(GLOB test_data ${PROJECT_SOURCE_DIR}/test/*.init ) # test input
+
+file(COPY ${test_scripts} ${test_data} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/test)
+
+install(TARGETS ${PackageName}
+  EXPORT ${CMAKE_PROJECT_NAME}Targets
+  RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT bin
+  LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT shlib
+  PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/@{CMAKE_PROJECT_NAME}" COMPONENT dev
+)
+
+install(FILES ${test_scripts} ${test_data} DESTINATION test)
+
+set(test_name "test_runVTXdigi_Modular")
+set(test_script "${CMAKE_CURRENT_SOURCE_DIR}/test/test.sh")
+add_test(NAME ${test_name}
+         COMMAND bash ${test_script}
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+)
+set_tests_properties(${test_name} PROPERTIES
+    TIMEOUT 2400 # initializing Geant4 takes about a million years
+    ENVIRONMENT "SOURCE_DIR_TEST=${CMAKE_CURRENT_SOURCE_DIR}/test;K4RECTRACKER=${CMAKE_INSTALL_PREFIX}/share/k4RecTracker;PATH=${CMAKE_INSTALL_PREFIX}/bin:$ENV{PATH};PYTHONPATH=${CMAKE_INSTALL_PREFIX}/python:${CMAKE_CURRENT_SOURCE_DIR}/test:$ENV{PYTHONPATH};LD_LIBRARY_PATH=${CMAKE_INSTALL_PREFIX}/lib:${CMAKE_INSTALL_PREFIX}/lib64:$ENV{LD_LIBRARY_PATH}"
+)
+if(COMMAND set_test_env)
+  set_test_env(${test_name})
+endif()
