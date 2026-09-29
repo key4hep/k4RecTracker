@@ -93,7 +93,7 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
       m_environment = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "GGTFTrackFinder");
 
       m_sessionOptions.SetIntraOpNumThreads(1);
-      m_sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::DISABLE_ALL);
+      m_sessionOptions.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_DISABLE_ALL);
 
       m_session = std::make_unique<Ort::Session>(*m_environment, m_modelPath.value().c_str(), m_sessionOptions);
 
