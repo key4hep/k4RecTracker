@@ -1098,14 +1098,16 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       return false;
     }
 
-    // TrackState at the nominal Ip. m_vpReferencePoint is used as pivot point
+    // TrackState at the nominal IP. m_vpReferencePoint is used as pivot point
     genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
     auto* fi = static_cast<genfit::KalmanFitterInfo*>(tp->getFitterInfo(trackRep));
     edm4hep::TrackState trackStateIP;
 
     try {
       fittedState = fi->getFittedState(true);
-      trackStateIP = UpdateTrackState(fittedState, m_vpReferencePoint, edm4hep::TrackState::AtIP);
+      trackStateIP = UpdateTrackState(
+          fittedState, m_vpReferencePoint,
+          edm4hep::TrackState::AtIP); // N.B. trackState does not carry meaningful information for displaced tracks
     } catch (const genfit::Exception& e) {
       if (showFitDiagnostics) {
         std::cerr << "Exception creating TrackState at IP: " << e.what() << std::endl;
