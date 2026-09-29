@@ -597,7 +597,11 @@ TMatrixDSym GenfitTrack::ComputeInitialCovarianceMatrix(double Bz, int Charge, s
   C_helix(2, 2) = std::pow(omega_factor.value_or(0.5) * omega, 2);
 
   // z0 relative to the track-parameter reference point, in mm.
-  double z0_scale = std::abs((m_posInit.Z() - m_vpReferencePoint.Z()) / dd4hep::mm);
+  double z0_scale = std::abs(m_posInit.Z() - m_vpReferencePoint.Z()) / dd4hep::mm;
+  if (z0_scale < 1e-8) {
+    z0_scale = std::abs(m_posInit.Z()) / dd4hep::mm;
+  }
+
   C_helix(3, 3) = std::pow(z0_factor.value_or(0.1) * z0_scale, 2);
 
   // tanLambda
