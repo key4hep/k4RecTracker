@@ -33,10 +33,10 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
   return chargeCollector;
 }
 
-bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular&  digitizer) {
+Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular&  digitizer) {
   const double eps = 1e-12; // reasonable for number O(0.01) (like sensor thickness in mm) with float precision
 
-  path.simPos = simHit.truthPos();
+  simPos = simHit.truthPos();
 
   double momentum_global[3] = {
     static_cast<double>(simHit.hitPtr()->getMomentum().x),
@@ -48,65 +48,94 @@ bool ConstructPath(Path& path, const SimHitWrapper& simHit, const TGeoHMatrix& t
 
   /* Step 1 - travel vector */
   const double scaleFactor_travel = digitizer.ActiveVolumeDimensions().at(2) / std::abs(momentum_local[2]);
-  path.travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]);
+  travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]);
 
   /* Step 2 - entry point */
-  if (std::abs(path.simPos.z()) > digitizer.ActiveVolumeDimensions().at(2)/2.f + eps) {
-      digitizer.warning() << "SimHit position is outside the sensor volume (local w = " << path.simPos.z() << " mm, sensor thickness = " << digitizer.ActiveVolumeDimensions().at(2) << " mm). This should never happen. Forcing it to w=0." << endmsg;
-    path.simPos.z() = 0.f; // ensures no divide by zero etc
+  if (std::abs(simPos.z()) > digitizer.ActiveVolumeDimensions().at(2)/2.f + eps) {
+      digitizer.warning() << "SimHit position is outside the sensor volume (local w = " << simPos.z() << " mm, sensor thickness = " << digitizer.ActiveVolumeDimensions().at(2) << " mm). This should never happen. Forcing it to w=0." << endmsg;
+    simPos.z() = 0.f; // ensures no divide by zero etc
   }
   double shiftDist_w;
-  if (path.travel.z() >= 0.f) {
-    shiftDist_w = path.simPos.z() + 0.5f * digitizer.ActiveVolumeDimensions().at(2);
+  if (travel.z() >= 0.f) {
+    shiftDist_w = simPos.z() + 0.5f * digitizer.ActiveVolumeDimensions().at(2);
   }
   else {
-    shiftDist_w = path.simPos.z() - 0.5f * digitizer.ActiveVolumeDimensions().at(2);
+    shiftDist_w = simPos.z() - 0.5f * digitizer.ActiveVolumeDimensions().at(2);
   }
-  const double scaleFactor_entry = shiftDist_w / path.travel.z();
-  path.entry = path.simPos - scaleFactor_entry * path.travel;
+  const double scaleFactor_entry = shiftDist_w / travel.z();
+  entry = simPos - scaleFactor_entry * travel;
 
   /* Step 3 - clip path to sensor edges (in u/v) */
   std::array<double, 2> t = {0., 1.}; // parametrize path as entry + t*travel; t in [0,1]
-  t = ComputePathClippingFactors(t, path.entry.x(), path.travel.x(), digitizer.ActiveVolumeDimensions().at(0));
-  t = ComputePathClippingFactors(t, path.entry.y(), path.travel.y(), digitizer.ActiveVolumeDimensions().at(1));
+  t = ComputePathClippingFactors(t, entry.x(), travel.x(), digitizer.ActiveVolumeDimensions().at(0));
+  t = ComputePathClippingFactors(t, entry.y(), travel.y(), digitizer.ActiveVolumeDimensions().at(1));
   if (t[0] != 0.f || t[1] != 1.f) {
     if (0.f <= t[0] && t[0] < t[1] && t[1] <= 1.f) {
       /* valid clipping */
-      digitizer.debug() << "       - Clipping SimHitPath with t [" << t[0] << ", " << t[1] << "]. PathLength changed to " << static_cast<int>((t[1] - t[0]) * path.travel.r()*1000) << " um from " << static_cast<int>(path.travel.r()*1000) << " um" << endmsg;
+      digitizer.debug() << "       - Clipping SimHitPath with t [" << t[0] << ", " << t[1] << "]. PathLength changed to " << static_cast<int>((t[1] - t[0]) * travel.r()*1000) << " um from " << static_cast<int>(travel.r()*1000) << " um" << endmsg;
 
-      path.entry = path.entry + t[0] * path.travel;
-      path.travel = (t[1] - t[0]) * path.travel;
+      entry = entry + t[0] * travel;
+      travel = (t[1] - t[0]) * travel;
     }
     else {
       /* invalid clipping, shouldn't happen */
-      digitizer.warning() << "VTXdigi_tools::Path::Path() - invalid clipping factors t = [" << t[0] << ", " << t[1] << "]. Path might lie completely outside the sensor." << endmsg;
-      digitizer.debug() << " -> entry (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, exit (" << path.entry.x() + path.travel.x() << ", " << path.entry.y() + path.travel.y() << ", " << path.entry.z() + path.travel.z() << ") mm, sensor dim. (+-" << digitizer.ActiveVolumeDimensions().at(0)/2 << ", +-" << digitizer.ActiveVolumeDimensions().at(1)/2 << ") mm" << endmsg;
-      digitizer.debug() << " -> Path length " << static_cast<int>(path.travel.r()*1000) << " um, in G4 " << static_cast<int>(simHit.hitPtr()->getPathLength()*1000) << " um" << endmsg;
-      return false;
+      digitizer.warning() << "VTXdigi_tools::ConstructPath() - invalid clipping factors t = [" << t[0] << ", " << t[1] << "]. Path might lie completely outside the sensor." << endmsg;
+      digitizer.debug() << " -> entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, sensor dim. (+-" << digitizer.ActiveVolumeDimensions().at(0)/2 << ", +-" << digitizer.ActiveVolumeDimensions().at(1)/2 << ") mm" << endmsg;
+      digitizer.debug() << " -> Path length " << static_cast<int>(travel.r()*1000) << " um, in G4 " << static_cast<int>(simHit.hitPtr()->getPathLength()*1000) << " um" << endmsg;
+      isValid = false;
+      return;
     }
   }
 
   /* Step 4 -check that path is not much longer than the length it had in Geant4 */
-  path.lengthG4 = simHit.hitPtr()->getPathLength();
-  if (path.travel.r() > kPathLengthTolerance * path.lengthG4) {
-    digitizer.debug() << "       - Shortening path length from " << static_cast<int>(path.travel.r()*1000) << " um to " << static_cast<int>(path.lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
+  lengthG4 = simHit.hitPtr()->getPathLength();
+  if (travel.r() > kPathLengthTolerance * lengthG4) {
+    digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*1000) << " um to " << static_cast<int>(lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
 
     /* make sure the path stays centred around the simTrackerHit position */
-    const double t_simPos = ( (path.simPos - path.entry).dot(path.travel) ) / (path.travel.r() * path.travel.r());
+    const double t_simPos = ( (simPos - entry).dot(travel) ) / (travel.r() * travel.r());
 
-    const double t_length_halved = 0.5 * path.lengthG4 / path.travel.r(); // length of the new path in terms of t [0,1] on old path, halved
+    const double t_length_halved = 0.5 * lengthG4 / travel.r(); // length of the new path in terms of t [0,1] on old path, halved
     const double t_center = std::max(t_length_halved, std::min(t_simPos, 1. - t_length_halved)); // center of new path clamped to [t_length_half, 1 - t_length_half] while not exceeding [0,1]
 
     const double t_min = t_center - t_length_halved;
     const double t_max = t_center + t_length_halved;
 
-    path.entry = path.entry + t_min * path.travel;
-    path.travel = (t_max - t_min) * path.travel;
+    entry = entry + t_min * travel;
+    travel = (t_max - t_min) * travel;
   }
 
 
-  digitizer.debug() << "       - Constructed path, length " << path.travel.r()*1000 << " um (G4-length " << path.lengthG4*1000 << " um), entry (" << path.entry.x() << ", " << path.entry.y() << ", " << path.entry.z() << ") mm, exit (" << path.entry.x() + path.travel.x() << ", " << path.entry.y() + path.travel.y() << ", " << path.entry.z() + path.travel.z() << ") mm, " << endmsg;
-  return true; // indicate valid path constructed
+  digitizer.debug() << "       - Constructed path, length " << travel.r()*1000 << " um (G4-length " << lengthG4*1000 << " um), entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, " << endmsg;
+  isValid = true;
+}
+
+std::vector<std::pair<float, dd4hep::rec::Vector3D>> Path::SampleDepositions(const float hitCharge, TRandom3& randomGen, const float meanDepositionsPerUm, const TH1D& chargeSamplingHist) const {
+  float probablity = 0.8;
+  float mean = travel.r() * meanDepositionsPerUm * 1000.f; // convert from um to mm
+  int NDepositions = static_cast<int>(randomGen.Binomial(std::round(mean / probablity), probablity)); // convert from um to mm
+
+  std::vector<std::pair<float, dd4hep::rec::Vector3D>> depositions;
+  depositions.reserve(NDepositions);
+  float totalDepositedCharge = 0;
+
+  for (int i_dep = 0; i_dep < NDepositions; ++i_dep) {
+    int charge = static_cast<int>(chargeSamplingHist.GetRandom(&randomGen));
+
+    float t = randomGen.Rndm(); // uniform in (0,1)
+    const dd4hep::rec::Vector3D pos = entry + t * travel;
+
+    depositions.push_back(std::make_pair(charge, pos));
+    totalDepositedCharge += charge;
+  }
+
+  // rescale charges to ensure total charge is equal to simHit.charge()
+  // will be important when drawing each depositions charge from the straggling distribution
+  const float chargeScaler = hitCharge / static_cast<float>(totalDepositedCharge);
+  for (auto& dep : depositions) {
+    dep.first *= chargeScaler;
+  }
+  return depositions;
 }
 
 std::array<double, 2> ComputePathClippingFactors(std::array<double, 2> t, const double entry_ax, const double travel_ax, const double sensorLength_ax) {
@@ -138,6 +167,9 @@ std::array<double, 2> ComputePathClippingFactors(std::array<double, 2> t, const 
 
   return t;
 }
+
+
+
 
 
 
@@ -365,8 +397,6 @@ int LookupTable::FindIndex (const Index_inPix& j, const int col, const int row) 
   return index_matrix * m_matrixSize * m_matrixSize + index_element;
 }
 
-
-
 ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer),
   m_LUT(digitizer.LutFileName(), digitizer),
   m_shiftTruthPos(digitizer.LUT_shiftTruthPos()) {
@@ -412,46 +442,21 @@ ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : ICh
   m_digitizer.info() << " - ChargeCollector_LUT constructed successfully." << endmsg;
 }
 
-
 void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix, TRandom3& randomGen) const {
 
-  Path path;
-  if (!ConstructPath(path, simHit, trafoMatrix, m_digitizer))
+
+  Path path(simHit, trafoMatrix, m_digitizer);
+  if (!path.isValid) [[unlikely]]
     return;
 
   if (m_shiftTruthPos) {
     MoveTruthPosition(simHit, path); // shifts the sim hit position to the depth in the sensor where most charge is collected, to get usesful residual plots.
   }
 
-  float probablity = 0.8;
-  float mean = path.travel.r() * m_meanDepositionsPerUm * 1000.f; // convert from um to mm
-  int NDepositions = static_cast<int>(randomGen.Binomial(std::round(mean / probablity), probablity)); // convert from um to mm
-
-  std::vector<float> depositionCharges;
-  depositionCharges.reserve(NDepositions);
-  float totalDepositedCharge = 0;
-
-  for (int i_dep = 0; i_dep < NDepositions; ++i_dep) {
-    int charge = static_cast<int>(m_chargeSamplingHist->GetRandom(&randomGen));
-
-    depositionCharges.push_back(charge);
-    totalDepositedCharge += charge;
-  }
-
-  // rescale charges to ensure total charge is equal to simHit.charge()
-  // will be important when drawing each depositions charge from the straggling distribution
-  const float chargeScaler = simHit.charge() / static_cast<float>(totalDepositedCharge);
-  for (int i_dep = 0; i_dep < NDepositions; ++i_dep) {
-    float charge = depositionCharges[i_dep] * chargeScaler;
-
-    // draw random position along the path for this deposition
-    float t = randomGen.Rndm(); // uniform in (0,1)
-    if (t < 0.f || t > 1.f)
-      throw std::runtime_error("ChargeCollector_LUT::FillHit: Random position along path is out of bounds: t = " + std::to_string(t) + ". Must be in [0,1].");
-    dd4hep::rec::Vector3D depositionPos = path.entry + t * path.travel;
+  for (const auto& [charge, pos] : path.SampleDepositions(simHit.charge(), randomGen, m_meanDepositionsPerUm, *m_chargeSamplingHist)) {
     Index_voxel voxel;
-    voxel.i = Trafo_local_pixIndex(depositionPos, m_digitizer.PixelPitch(), m_digitizer.PixelCount());
-    voxel.j = Trafo_local_inpixIndex(depositionPos, m_LUT.GetBinCount(), m_digitizer.PixelPitch(), m_digitizer.ActiveVolumeDimensions());
+    voxel.i = Trafo_local_pixIndex(pos, m_digitizer.PixelPitch(), m_digitizer.PixelCount());
+    voxel.j = Trafo_local_inpixIndex(pos, m_LUT.GetBinCount(), m_digitizer.PixelPitch(), m_digitizer.ActiveVolumeDimensions());
 
     DistributeVoxelCharge(hitMap, voxel, charge, simHit);
   }
