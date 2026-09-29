@@ -21,7 +21,7 @@ What it does
 
    SimTrackerHitCellMerger itself is run separately by CTest via
    `k4run test_simtrackerhit_cell_merger_steer.py`, which runs one instance per value of the
-   MultipleTrackHandling property, plus one more for the non-default "EarliestHit"
+   MultiTrackCellHandling property, plus one more for the non-default "EarliestHit"
    RepresentativeKinematics and one more with ExcludeOverlayHits switched off, so that every
    choice of the two string properties is covered in a single job. The instances that do not set
    RepresentativeKinematics use its default, "Average", so their expected kinematics below are
@@ -53,7 +53,7 @@ import podio
 PARTICLE_COLL = "MCParticles"
 INPUT_COLL = "SimTrackerHits"
 OUT_COLL_ALL = "MergedHitsAll"
-OUT_COLL_PRIMARY = "MergedHitsPrimaryOnly"
+OUT_COLL_MOST_PRIMARY = "MergedHitsMostPrimaryInCell"
 OUT_COLL_PER_TRACK = "MergedHitsPerTrack"
 OUT_COLL_SINGLE_TRACK = "MergedHitsSingleTrackCells"
 OUT_COLL_EARLIEST_HIT = "MergedHitsAllEarliestHit"
@@ -206,7 +206,7 @@ def check_output(output_file: str) -> None:
     available = frame.getAvailableCollections()
     for coll_name in (
         OUT_COLL_ALL,
-        OUT_COLL_PRIMARY,
+        OUT_COLL_MOST_PRIMARY,
         OUT_COLL_PER_TRACK,
         OUT_COLL_SINGLE_TRACK,
         OUT_COLL_EARLIEST_HIT,
@@ -214,7 +214,7 @@ def check_output(output_file: str) -> None:
     ):
         assert coll_name in available, f"Output collection '{coll_name}' not found in output file"
 
-    # --- MultipleTrackHandling = "SumAll" ----------------------------------
+    # --- MultiTrackCellHandling = "SumAll" ---------------------------------
     # One hit per cell, summing every track. Cell 1 gets 1.0 + 2.0 + 0.5 + 0.25 mm and is attributed
     # to the most primary contributor (particle 0). With the default "Average" kinematics it sits at
     # the mean of all four times 2.0, 0.5, 1.0 and 1.5 ns, i.e. at 1.25 ns.
@@ -225,18 +225,18 @@ def check_output(output_file: str) -> None:
     check_hit(OUT_COLL_ALL, 0, merged_all[0], CELL_A, 3.75, 0.00375, 0, 1.25)
     check_hit(OUT_COLL_ALL, 1, merged_all[1], CELL_B, 4.0, 0.004, 1, 3.0)
 
-    # --- MultipleTrackHandling = "PrimaryOnly" -----------------------------
+    # --- MultiTrackCellHandling = "MostPrimaryInCell" ----------------------
     # One hit per cell, but only the steps of the most primary contributor are summed, so cell 1
     # keeps only particle 0's 1.0 + 2.0 mm and the 0.5 + 0.25 mm of the other two tracks are dropped.
     # The average is therefore over particle 0's two hits only, at (2.0 + 1.0) / 2 = 1.5 ns.
-    merged_primary = frame.get(OUT_COLL_PRIMARY)
-    assert len(merged_primary) == 2, (
-        f"'PrimaryOnly' should give one hit per cell, i.e. 2, got {len(merged_primary)}"
+    merged_most_primary = frame.get(OUT_COLL_MOST_PRIMARY)
+    assert len(merged_most_primary) == 2, (
+        f"'MostPrimaryInCell' should give one hit per cell, i.e. 2, got {len(merged_most_primary)}"
     )
-    check_hit(OUT_COLL_PRIMARY, 0, merged_primary[0], CELL_A, 3.0, 0.003, 0, 1.5)
-    check_hit(OUT_COLL_PRIMARY, 1, merged_primary[1], CELL_B, 4.0, 0.004, 1, 3.0)
+    check_hit(OUT_COLL_MOST_PRIMARY, 0, merged_most_primary[0], CELL_A, 3.0, 0.003, 0, 1.5)
+    check_hit(OUT_COLL_MOST_PRIMARY, 1, merged_most_primary[1], CELL_B, 4.0, 0.004, 1, 3.0)
 
-    # --- MultipleTrackHandling = "PerTrack" --------------------------------
+    # --- MultiTrackCellHandling = "PerTrack" -------------------------------
     # Same data type, but cell 1 now appears three times, once per contributing track and ordered
     # from the most to the least primary one. Only particle 0 contributed more than one hit, so only
     # its entry is an average, again at 1.5 ns; the others carry the time of their single hit.
@@ -250,7 +250,7 @@ def check_output(output_file: str) -> None:
     check_hit(OUT_COLL_PER_TRACK, 2, merged_per_track[2], CELL_A, 0.25, 0.00025, 2, 0.5)
     check_hit(OUT_COLL_PER_TRACK, 3, merged_per_track[3], CELL_B, 4.0, 0.004, 1, 3.0)
 
-    # --- MultipleTrackHandling = "SkipMultiTrackCells" ---------------------
+    # --- MultiTrackCellHandling = "SkipMultiTrackCells" --------------------
     # Cell 1 was crossed by three tracks and is dropped entirely; only the unambiguous cell 2 survives.
     merged_single_track = frame.get(OUT_COLL_SINGLE_TRACK)
     assert len(merged_single_track) == 1, (
@@ -276,7 +276,7 @@ def check_output(output_file: str) -> None:
     # pin this down, but check it explicitly so a leak names the culprit.
     for coll_name in (
         OUT_COLL_ALL,
-        OUT_COLL_PRIMARY,
+        OUT_COLL_MOST_PRIMARY,
         OUT_COLL_PER_TRACK,
         OUT_COLL_SINGLE_TRACK,
         OUT_COLL_EARLIEST_HIT,
@@ -300,7 +300,7 @@ def check_output(output_file: str) -> None:
     print("[check] All assertions passed.")
     for coll_name in (
         OUT_COLL_ALL,
-        OUT_COLL_PRIMARY,
+        OUT_COLL_MOST_PRIMARY,
         OUT_COLL_PER_TRACK,
         OUT_COLL_SINGLE_TRACK,
         OUT_COLL_EARLIEST_HIT,

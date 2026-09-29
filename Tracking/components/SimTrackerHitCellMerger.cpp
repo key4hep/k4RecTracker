@@ -100,25 +100,29 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  Gaudi transformer that accumulates the Geant4 step lengths (edm4hep::SimTrackerHit::pathLength) of all
  *  simulated hits within a cell (sharing the same cellID), and writes the result as a new, "merged"
  *  edm4hep::SimTrackerHitCollection with one entry per cell (or per cell and track, see below).
- * 
+ *
  *  The purpose of the algorithms is to provide the dx part for dN/dx (or dE/dx) calculations, where dN is
  *  provided by the digitiser. In a full processing chaing the dx would need to come from tracking, but especially
- *  in the case of the straw tube tracker, getting the actual path length inside the sensitive volumes from the 
- *  track is not trivial. Therefore, this algorithm serves as an intermediate temporary solution using truth 
+ *  in the case of the straw tube tracker, getting the actual path length inside the sensitive volumes from the
+ *  track is not trivial. Therefore, this algorithm serves as an intermediate temporary solution using truth
  *  information to provide dx.
  *
  *  A single Geant4 track can leave several SimTrackerHits in one cell (one per step), and several
  *  tracks (the primary plus its delta rays, conversions, ...) can cross the very same cell. How to handle cases
- *  with multiple tracks in a cell is configurable via the MultipleTrackHandling property,
+ *  with multiple tracks in a cell is configurable via the MultiTrackCellHandling property,
  *  which can take one of the following values:
  *
  *   - "SumAll"              : one output hit per cellID. pathLength and eDep are summed over *every*
  *                             contributing hit, irrespective of which track produced it. The MCParticle
  *                             relation of the output hit points to the most primary contributor (see below),
  *                             i.e. to the most primary track crossing the cell.
- *   - "PrimaryOnly"         : one output hit per cellID, but only the hits of the most primary contributor
- *                             are summed. Contributions of later (secondary) tracks are dropped.
- *   - "PerTrack"            : one output hit per (cellID, track) pair, each summing only the hits of that
+ *   - "MostPrimaryInCell"   : one output hit per cellID, but only the hits of the most primary contributor
+ *                             *to that cell* are summed. Contributions of later (secondary) tracks are
+ *                             dropped. Note that the ranking is relative to the cell, so a secondary that
+ *                             crosses a cell no primary ever touched is the most primary one there and is
+ *                             kept. Selecting genuine primaries is left to the caller, e.g. by filtering
+ *                             the input collection beforehand.
+ *   - "PerTrack" (default)  : one output hit per (cellID, track) pair, each summing only the hits of that
  *                             track. For a given cell more than one entry may appear, once per contributing
  *                             track, each entry carrying its own MCParticle relation. Entries of a given cell
  *                             are written in order of increasing Geant4 track number, so the first entry for
@@ -147,7 +151,7 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  Note that hits flagged isProducedBySecondary() do not point to the secondary that actually created them
  *  (it was not kept in the MCParticle collection) but to its surviving ancestor, so their step length is
  *  booked on that ancestor. Set ExcludeSecondaryHits to true to skip such hits altogether.
- * 
+ *
  *  Overlay hits can be ignored via the ExcludeOverlayHits property.
  *
  *  Of the remaining fields of a merged SimHit, time, position and momentum need to be configured, via the
@@ -165,8 +169,8 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  "SimTrackerHits"
  *
  *  Properties:
- *      - @param MultipleTrackHandling How to treat several Geant4 tracks crossing the same cell, one of
- *  "SumAll", "PrimaryOnly", "PerTrack" or "SkipMultiTrackCells" (see above)
+ *      - @param MultiTrackCellHandling How to treat several Geant4 tracks crossing the same cell, one of
+ *  "SumAll", "MostPrimaryInCell", "PerTrack" (default) or "SkipMultiTrackCells" (see above)
  *      - @param RepresentativeKinematics Where the time, position and momentum of a merged hit come from,
  *  either "EarliestHit" or "Average" (see above)
  *      - @param ExcludeSecondaryHits Skip SimTrackerHits flagged isProducedBySecondary() instead of
@@ -190,13 +194,13 @@ struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm
                          {KeyValues("OutputSimTrackerHits", {"MergedSimTrackerHits"})}) {}
 
   /// How to treat several Geant4 tracks crossing the same cell
-  enum class TrackHandling { SumAll, PrimaryOnly, PerTrack, SkipMultiTrackCells };
+  enum class TrackHandling { SumAll, MostPrimaryInCell, PerTrack, SkipMultiTrackCells };
 
   /// Where the time, position and momentum of a merged hit come from
   enum class RepresentativeKinematics { EarliestHit, Average };
 
   static constexpr auto s_trackHandlingChoices = makePropertyChoices<TrackHandling>(
-      std::pair{"SumAll", TrackHandling::SumAll}, std::pair{"PrimaryOnly", TrackHandling::PrimaryOnly},
+      std::pair{"SumAll", TrackHandling::SumAll}, std::pair{"MostPrimaryInCell", TrackHandling::MostPrimaryInCell},
       std::pair{"PerTrack", TrackHandling::PerTrack},
       std::pair{"SkipMultiTrackCells", TrackHandling::SkipMultiTrackCells});
 
@@ -205,9 +209,9 @@ struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm
                                                     std::pair{"Average", RepresentativeKinematics::Average});
 
   StatusCode initialize() override {
-    const auto trackHandling = s_trackHandlingChoices.parse(m_multipleTrackHandling);
+    const auto trackHandling = s_trackHandlingChoices.parse(m_multiTrackCellHandling);
     if (!trackHandling) {
-      error() << "Invalid MultipleTrackHandling '" << m_multipleTrackHandling.value() << "', expected one of "
+      error() << "Invalid MultiTrackCellHandling '" << m_multiTrackCellHandling.value() << "', expected one of "
               << s_trackHandlingChoices.list() << "." << endmsg;
       return StatusCode::FAILURE;
     }
@@ -221,8 +225,8 @@ struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm
     }
     m_representative = *representative;
 
-    info() << "Accumulating SimTrackerHit path lengths per cellID with MultipleTrackHandling = '"
-           << m_multipleTrackHandling.value() << "' and RepresentativeKinematics = '"
+    info() << "Accumulating SimTrackerHit path lengths per cellID with MultiTrackCellHandling = '"
+           << m_multiTrackCellHandling.value() << "' and RepresentativeKinematics = '"
            << m_representativeKinematics.value() << "'" << endmsg;
     return StatusCode::SUCCESS;
   }
@@ -275,7 +279,7 @@ struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm
           addMergedHit(output, cellID, contribution.second);
         break;
 
-      case TrackHandling::PrimaryOnly:
+      case TrackHandling::MostPrimaryInCell:
         // Only the most primary track's steps are summed, everything else in the cell is dropped
         addMergedHit(output, cellID, contributions.begin()->second);
         break;
@@ -410,12 +414,12 @@ private:
   }
 
   /// Configurable property steering what to do when several Geant4 tracks cross the same cell
-  Gaudi::Property<std::string> m_multipleTrackHandling{
-      this, "MultipleTrackHandling", "SumAll",
+  Gaudi::Property<std::string> m_multiTrackCellHandling{
+      this, "MultiTrackCellHandling", "PerTrack",
       "How to treat several Geant4 tracks in the same cell, one of " + s_trackHandlingChoices.list() +
-          ": 'SumAll' sums the step lengths of every track (default value), 'PrimaryOnly' sums only those of the "
-          "most primary track, 'PerTrack' writes one output hit per cell and track, 'SkipMultiTrackCells' drops "
-          "cells that were crossed by more than one track"};
+          ": 'SumAll' sums the step lengths of every track, 'MostPrimaryInCell' sums only those of the most "
+          "primary track of that cell, 'PerTrack' writes one output hit per cell and track (default value), "
+          "'SkipMultiTrackCells' drops cells that were crossed by more than one track"};
 
   /// Configurable property steering where the time, position and momentum of a merged hit come from
   Gaudi::Property<std::string> m_representativeKinematics{
@@ -441,11 +445,11 @@ private:
       this, "MinPathLength_mm", 0.,
       "Do not write merged hits whose accumulated path length, in mm, is below this value"};
 
-  /// Parsed version of m_multipleTrackHandling, set in initialize()
-  TrackHandling m_trackHandling{TrackHandling::SumAll};
+  /// Parsed version of m_multiTrackCellHandling, set in initialize()
+  TrackHandling m_trackHandling{TrackHandling::PerTrack};
 
   /// Parsed version of m_representativeKinematics, set in initialize()
-  RepresentativeKinematics m_representative{RepresentativeKinematics::EarliestHit};
+  RepresentativeKinematics m_representative{RepresentativeKinematics::Average};
 };
 
 DECLARE_COMPONENT(SimTrackerHitCellMerger)

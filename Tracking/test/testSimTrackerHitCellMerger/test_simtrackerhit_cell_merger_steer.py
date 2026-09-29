@@ -5,7 +5,7 @@ Run with:
 
     k4run test_simtrackerhit_cell_merger_steer.py --input input.root --output output.root
 
-One instance is scheduled per value of the MultipleTrackHandling property, plus one more for the
+One instance is scheduled per value of the MultiTrackCellHandling property, plus one more for the
 non-default "EarliestHit" RepresentativeKinematics and one more with ExcludeOverlayHits switched
 off, so that every choice of the two string properties is exercised in a single job. The instances
 that do not set RepresentativeKinematics use its default, "Average", and every instance but the
@@ -28,7 +28,7 @@ from k4FWCore.parseArgs import parser
 # ---------------------------------------------------------------------------
 INPUT_COLL = "SimTrackerHits"
 OUT_COLL_ALL = "MergedHitsAll"
-OUT_COLL_PRIMARY = "MergedHitsPrimaryOnly"
+OUT_COLL_MOST_PRIMARY = "MergedHitsMostPrimaryInCell"
 OUT_COLL_PER_TRACK = "MergedHitsPerTrack"
 OUT_COLL_SINGLE_TRACK = "MergedHitsSingleTrackCells"
 OUT_COLL_EARLIEST_HIT = "MergedHitsAllEarliestHit"
@@ -46,35 +46,37 @@ merger_all = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerAll",
     InputSimTrackerHits=[INPUT_COLL],
     OutputSimTrackerHits=[OUT_COLL_ALL],
-    MultipleTrackHandling="SumAll",
+    MultiTrackCellHandling="SumAll",
 )
 
-merger_primary = SimTrackerHitCellMerger(
-    "SimTrackerHitCellMergerPrimaryOnly",
+merger_most_primary = SimTrackerHitCellMerger(
+    "SimTrackerHitCellMergerMostPrimaryInCell",
     InputSimTrackerHits=[INPUT_COLL],
-    OutputSimTrackerHits=[OUT_COLL_PRIMARY],
-    MultipleTrackHandling="PrimaryOnly",
+    OutputSimTrackerHits=[OUT_COLL_MOST_PRIMARY],
+    MultiTrackCellHandling="MostPrimaryInCell",
 )
 
+# Deliberately left without MultiTrackCellHandling: "PerTrack" is its default, so this instance
+# covers that value and pins the default at the same time. A change of default would show up as a
+# different hit count in the checks for this collection.
 merger_per_track = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerPerTrack",
     InputSimTrackerHits=[INPUT_COLL],
     OutputSimTrackerHits=[OUT_COLL_PER_TRACK],
-    MultipleTrackHandling="PerTrack",
 )
 
 merger_single_track = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerSingleTrackCells",
     InputSimTrackerHits=[INPUT_COLL],
     OutputSimTrackerHits=[OUT_COLL_SINGLE_TRACK],
-    MultipleTrackHandling="SkipMultiTrackCells",
+    MultiTrackCellHandling="SkipMultiTrackCells",
 )
 
 merger_earliest_hit = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerAllEarliestHit",
     InputSimTrackerHits=[INPUT_COLL],
     OutputSimTrackerHits=[OUT_COLL_EARLIEST_HIT],
-    MultipleTrackHandling="SumAll",
+    MultiTrackCellHandling="SumAll",
     RepresentativeKinematics="EarliestHit",
 )
 
@@ -82,14 +84,14 @@ merger_with_overlay = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerAllWithOverlay",
     InputSimTrackerHits=[INPUT_COLL],
     OutputSimTrackerHits=[OUT_COLL_WITH_OVERLAY],
-    MultipleTrackHandling="SumAll",
+    MultiTrackCellHandling="SumAll",
     ExcludeOverlayHits=False,
 )
 
 ApplicationMgr(
     TopAlg=[
         merger_all,
-        merger_primary,
+        merger_most_primary,
         merger_per_track,
         merger_single_track,
         merger_earliest_hit,
