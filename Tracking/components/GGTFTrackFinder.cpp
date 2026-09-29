@@ -126,7 +126,7 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
 
     HitBatch batch;
     const std::size_t inputHitCount = reserveBatch(inputPlanarHitCollections, inputWireHitCollections, batch);
-    
+
     // kMaxHits = 20000 is used to prevent events with an exceptionally large number of hits
     // from being processed by the model. Very large inputs can cause ONNX Runtime C++ inference
     // to fail or crash because input size directly affects memory usage and computational cost.
