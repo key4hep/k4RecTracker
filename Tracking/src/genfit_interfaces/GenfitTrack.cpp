@@ -1060,12 +1060,16 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     // a genfit::Exception (e.g. an ill-conditioned covariance)
     genfit::MeasuredStateOnPlane fittedState;
 
-    // trackState firstHit
+    // TrackState at the first hit. The reference point is the corresponding
+    // digi-hit position; UpdateTrackState moves the fitted state to the
+    // transverse PCA with respect to that pivot.
+    edm4hep::TrackState trackStateFirstHit;
     try {
       fittedState = genfitTrack.getFittedState();
+      trackStateFirstHit = UpdateTrackState(fittedState, m_firstHitReferencePoint, edm4hep::TrackState::AtFirstHit);
     } catch (const genfit::Exception& e) {
       if (showFitDiagnostics) {
-        std::cerr << "Exception retrieving fitted state: " << e.what() << std::endl;
+        std::cerr << "Exception creating TrackState at first hit: " << e.what() << std::endl;
       }
       m_edm4hepTrack.setChi2(-1);
       m_edm4hepTrack.setNdf(-1);
@@ -1073,15 +1077,15 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       m_trackWithFit.setNdf(-1);
       return false;
     }
-    edm4hep::TrackState trackStateFirstHit =
-        UpdateTrackState(fittedState, m_firstHitReferencePoint, edm4hep::TrackState::AtFirstHit);
 
-    // trackState lastHit
+    // TrackState at the last hit, using the last digi-hit position as pivot.
+    edm4hep::TrackState trackStateLastHit;
     try {
       fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
+      trackStateLastHit = UpdateTrackState(fittedState, m_lastHitReferencePoint, edm4hep::TrackState::AtLastHit);
     } catch (const genfit::Exception& e) {
       if (showFitDiagnostics) {
-        std::cerr << "Exception retrieving fitted state: " << e.what() << std::endl;
+        std::cerr << "Exception creating TrackState at last hit: " << e.what() << std::endl;
       }
       m_edm4hepTrack.setChi2(-1);
       m_edm4hepTrack.setNdf(-1);
@@ -1089,19 +1093,18 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       m_trackWithFit.setNdf(-1);
       return false;
     }
-    edm4hep::TrackState trackStateLastHit =
-        UpdateTrackState(fittedState, m_lastHitReferencePoint, edm4hep::TrackState::AtLastHit);
 
-    // Extrapolation to IP
+    // TrackState at the nominal Ip. m_vpReferencePoint is used as pivot point
     genfit::TrackPoint* tp = genfitTrack.getPointWithFitterInfo(0);
     auto* fi = static_cast<genfit::KalmanFitterInfo*>(tp->getFitterInfo(trackRep));
+    edm4hep::TrackState trackStateIP;
 
     try {
       fittedState = fi->getFittedState(true);
-      trackRep->extrapolateToLine(fittedState, TVector3(0, 0, 0), TVector3(0, 0, 1));
+      trackStateIP = UpdateTrackState(fittedState, m_vpReferencePoint, edm4hep::TrackState::AtIP);
     } catch (const genfit::Exception& e) {
       if (showFitDiagnostics) {
-        std::cerr << "Exception during extrapolation to IP: " << e.what() << std::endl;
+        std::cerr << "Exception creating TrackState at IP: " << e.what() << std::endl;
       }
 
       m_edm4hepTrack.setChi2(-1);
@@ -1111,7 +1114,6 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
 
       return false;
     }
-    edm4hep::TrackState trackStateIP = UpdateTrackState(fittedState, m_vpReferencePoint, edm4hep::TrackState::AtIP);
 
     // Commit fitted hits only after all operations that can make the fit fail have succeeded.
     for (const auto& pendingHit : pendingFittedHits) {
@@ -1435,7 +1437,9 @@ TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_c
  * `edm4hep::TrackState` representation, including helix parameters.
  *
  * The procedure includes:
- *   - Extraction of position, momentum, and covariance from the Genfit state
+ *   - Extrapolation to the transverse point of closest approach to the line
+ *     parallel to z through the requested reference point
+ *   - Extraction of position, momentum, and covariance at that PCA
  *   - Retrieval of the local magnetic field (Bz) at the track position
  *   - Derivation of helix parameters:
  *       - d0          : transverse impact parameter (mm)
@@ -1445,59 +1449,65 @@ TMatrixDSym GenfitTrack::CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_c
  *       - tanLambda   : dip angle (pz / pt)
  *   - Assignment of the reference point and track state location
  *
- * @param MeasuredState Genfit measured state containing fitted position and momentum
- * @param ReferencePoint Reference point position [cm]
+ * @param measuredState Genfit measured state containing fitted position and momentum
+ * @param referencePointCm Reference point position [cm]
  * @param location Location identifier for the track state (e.g. AtIP, AtFirstHit, AtLastHit)
  *
  * @note The magnetic field is retrieved at the current position and converted to Tesla.
  * @note The curvature sign (omega) depends on the assumed particle charge hypothesis.
  */
-edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState, TVector3 ReferencePoint,
+edm4hep::TrackState GenfitTrack::UpdateTrackState(genfit::MeasuredStateOnPlane measuredState, TVector3 referencePointCm,
                                                   int location) {
 
   edm4hep::TrackState Edm4hepTrackState;
 
-  TVector3 gen_position, gen_momentum;
-  TMatrixDSym covariancePosMom(6);
+  // GENFIT extrapolates the fitted state to its transverse PCA relative to
+  // the line parallel to z through referencePointCm. For AtIP, this is the beam
+  // axis; for AtFirstHit and AtLastHit, it passes through the corresponding
+  // digi-hit position.
+  measuredState.extrapolateToLine(referencePointCm, TVector3(0., 0., 1.));
 
-  MeasuredState.getPosMomCov(gen_position, gen_momentum, covariancePosMom);
+  TVector3 positionCm, momentumGeV;
+  TMatrixDSym covarianceCmGeV(6);
 
-  double x_reco = gen_position.X(); // cm
-  double y_reco = gen_position.Y(); // cm
-  double z_reco = gen_position.Z(); // cm
-  double pz = gen_momentum.Z();     // gev
-  double pt = gen_momentum.Perp();  // gev
-  double phi = gen_momentum.Phi();
+  measuredState.getPosMomCov(positionCm, momentumGeV, covarianceCmGeV);
 
-  double d0 =
-      (-(x_reco - ReferencePoint.X()) * std::sin(phi) + (y_reco - ReferencePoint.Y()) * std::cos(phi)) / dd4hep::mm;
-  double z0 = (z_reco - ReferencePoint.Z()) / dd4hep::mm;
+  double xCm = positionCm.X();
+  double yCm = positionCm.Y();
+  double zCm = positionCm.Z();
+  double pzGeV = momentumGeV.Z();
+  double ptGeV = momentumGeV.Perp();
+  double phi = momentumGeV.Phi();
 
-  double Bz = m_fieldMap->getBz(gen_position) / (dd4hep::tesla / dd4hep::kilogauss); // From kilogauss to Tesla
+  double d0Mm =
+      (-(xCm - referencePointCm.X()) * std::sin(phi) + (yCm - referencePointCm.Y()) * std::cos(phi)) / dd4hep::mm;
+  double z0Mm = (zCm - referencePointCm.Z()) / dd4hep::mm;
 
-  double tanLambda = pz / pt;
-  double omega = std::abs(ConversionUnits::a_lcio * Bz / pt);
+  double bzTesla = m_fieldMap->getBz(positionCm) / (dd4hep::tesla / dd4hep::kilogauss);
+
+  double tanLambda = pzGeV / ptGeV;
+  double omegaPerMm = std::abs(ConversionUnits::a_lcio * bzTesla / ptGeV);
   if (m_chargeHypothesis < 0)
-    omega = -omega;
+    omegaPerMm = -omegaPerMm;
 
-  Edm4hepTrackState.D0 = d0;
-  Edm4hepTrackState.Z0 = z0;
+  Edm4hepTrackState.D0 = d0Mm;
+  Edm4hepTrackState.Z0 = z0Mm;
   Edm4hepTrackState.phi = phi;
-  Edm4hepTrackState.omega = omega;
+  Edm4hepTrackState.omega = omegaPerMm;
   Edm4hepTrackState.tanLambda = tanLambda;
   Edm4hepTrackState.time = 0.;
 
-  Edm4hepTrackState.referencePoint = edm4hep::Vector3f(ReferencePoint.X() / dd4hep::mm, ReferencePoint.Y() / dd4hep::mm,
-                                                       ReferencePoint.Z() / dd4hep::mm);
+  Edm4hepTrackState.referencePoint = edm4hep::Vector3f(
+      referencePointCm.X() / dd4hep::mm, referencePointCm.Y() / dd4hep::mm, referencePointCm.Z() / dd4hep::mm);
   Edm4hepTrackState.location = location;
 
-  TMatrixDSym CovHelix = CovarianceMatrixCartesianToHelix(covariancePosMom, gen_position, gen_momentum, ReferencePoint,
-                                                          m_chargeHypothesis, Bz);
+  TMatrixDSym covarianceHelix = CovarianceMatrixCartesianToHelix(covarianceCmGeV, positionCm, momentumGeV,
+                                                                 referencePointCm, m_chargeHypothesis, bzTesla);
 
   // Conversion from TMatrixDSym(5x5) to lower-triangular packed format used in edm4hep::TrackState
   for (int i = 0; i < 5; ++i) {
     for (int j = 0; j <= i; ++j) {
-      Edm4hepTrackState.setCovMatrix(static_cast<float>(CovHelix(i, j)), static_cast<edm4hep::TrackParams>(i),
+      Edm4hepTrackState.setCovMatrix(static_cast<float>(covarianceHelix(i, j)), static_cast<edm4hep::TrackParams>(i),
                                      static_cast<edm4hep::TrackParams>(j));
     }
   }
