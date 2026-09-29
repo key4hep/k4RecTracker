@@ -919,7 +919,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
 
     genfitFitter->processTrackWithRep(&genfitTrack, trackRep);
 
-  } catch (const genfit::Exception& e) {
+  } catch (const std::exception& e) {
 
     if (showFitDiagnostics) {
       std::cerr << "Exception during track fitting: " << e.what() << std::endl;
