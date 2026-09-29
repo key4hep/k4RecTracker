@@ -107,6 +107,8 @@ public:
 
   int GetCharge() { return m_chargeHypothesis; }
 
+  void SetVPPosition(TVector3 referencePoint) { m_vpReferencePoint = referencePoint; }
+
   static TMatrixDSym InitialCovarianceMatrixHelixToCartesian(const TMatrixDSym& helixCovariance,
                                                              const TVector3& positionCm, const TVector3& momentumGeV,
                                                              const TVector3& referencePointCm, int charge,
@@ -149,7 +151,6 @@ private:
   void CheckInitialization();
   void OrderHits(const edm4hep::Track& track, bool skipTrackOrdering);
   void LimitNumberHits(double epsilon, int smoothWindow);
-  void SetVPPosition(TVector3 referencePoint) { m_vpReferencePoint = referencePoint; };
 
   TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, int Charge, std::optional<double> sigma_d0,
                                              std::optional<double> sigma_phi, std::optional<double> sigma_omega,
