@@ -125,17 +125,21 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
     edm4hep::TrackCollection outputTracks;
 
     HitBatch batch;
-    reserveBatch(inputPlanarHitCollections, inputWireHitCollections, batch);
-    appendPlanarHits(inputPlanarHitCollections, batch);
-    appendWireHits(inputWireHitCollections, batch);
-
-    if (batch.nHits == 0 || batch.nHits > kMaxHits) {
-      if (batch.nHits > kMaxHits) {
-        warning() << "Event " << eventNumber << " has " << batch.nHits << " hits, exceeding the configured limit of "
+    const std::size_t inputHitCount = reserveBatch(inputPlanarHitCollections, inputWireHitCollections, batch);
+    
+    // kMaxHits = 20000 is used to prevent events with an exceptionally large number of hits
+    // from being processed by the model. Very large inputs can cause ONNX Runtime C++ inference
+    // to fail or crash because input size directly affects memory usage and computational cost.
+    if (inputHitCount == 0 || inputHitCount > kMaxHits) {
+      if (inputHitCount > kMaxHits) {
+        warning() << "Event " << eventNumber << " has " << inputHitCount << " hits, exceeding the configured limit of "
                   << kMaxHits << "; skipping." << endmsg;
       }
       return std::make_tuple(std::move(outputTracks));
     }
+
+    appendPlanarHits(inputPlanarHitCollections, batch);
+    appendWireHits(inputWireHitCollections, batch);
 
     const std::vector<float> modelOutput = runInference(batch.features, batch.nHits);
     const torch::Tensor clusterIds = get_clustering(modelOutput, batch.nHits, m_tbeta, m_td);
@@ -176,10 +180,11 @@ private:
    * @param planarCollections Planar hit collections.
    * @param wireCollections Wire hit collections.
    * @param batch Batch whose buffers will be reserved.
+   * @return Total number of input hits.
    */
-  static void reserveBatch(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& planarCollections,
-                           const std::vector<const edm4hep::SenseWireHitCollection*>& wireCollections,
-                           HitBatch& batch) {
+  static std::size_t reserveBatch(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& planarCollections,
+                                  const std::vector<const edm4hep::SenseWireHitCollection*>& wireCollections,
+                                  HitBatch& batch) {
     std::size_t totalHits = 0;
     for (const auto* collection : planarCollections) {
       if (collection != nullptr) {
@@ -192,10 +197,14 @@ private:
       }
     }
 
-    batch.features.reserve(totalHits * kFeatureCount);
-    batch.hitTypes.reserve(totalHits);
-    batch.collectionIndices.reserve(totalHits);
-    batch.hitIndices.reserve(totalHits);
+    if (totalHits <= kMaxHits) {
+      batch.features.reserve(totalHits * kFeatureCount);
+      batch.hitTypes.reserve(totalHits);
+      batch.collectionIndices.reserve(totalHits);
+      batch.hitIndices.reserve(totalHits);
+    }
+
+    return totalHits;
   }
 
   /**
@@ -215,10 +224,6 @@ private:
       }
 
       for (std::size_t hitIndex = 0; hitIndex < collection->size(); ++hitIndex) {
-        if (batch.nHits > static_cast<std::size_t>(kMaxHits)) {
-          return;
-        }
-
         const auto hit = collection->at(hitIndex);
         const auto position = hit.getPosition();
 
@@ -250,10 +255,6 @@ private:
       }
 
       for (std::size_t hitIndex = 0; hitIndex < collection->size(); ++hitIndex) {
-        if (batch.nHits > static_cast<std::size_t>(kMaxHits)) {
-          return;
-        }
-
         const auto hit = collection->at(hitIndex);
         const edm4hep::Vector3d wirePosition = hit.getPosition();
         const TVector3 wirePositionVector(wirePosition.x, wirePosition.y, wirePosition.z);
