@@ -97,11 +97,17 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
 
 /** @class SimTrackerHitCellMerger
  *
- *  Gaudi multi transformer that accumulates the Geant4 step lengths (edm4hep::SimTrackerHit::pathLength) of all
- *  simulated hits sharing the same cellID, and writes the result as a new, "merged"
+ *  Gaudi transformer that accumulates the Geant4 step lengths (edm4hep::SimTrackerHit::pathLength) of all
+ *  simulated hits within a cell (sharing the same cellID), and writes the result as a new, "merged"
  *  edm4hep::SimTrackerHitCollection with one entry per cell (or per cell and track, see below).
+ * 
+ *  The purpose of the algorithms is to provide the dx part for dN/dx (or dE/dx) calculations, where dN is
+ *  provided by the digitiser. In a full processing chaing the dx would need to come from tracking, but especially
+ *  in the case of the straw tube tracker, getting the actual path length inside the sensitive volumes from the 
+ *  track is not trivial. Therefore, this algorithm serves as an intermediate temporary solution using truth 
+ *  information to provide dx.
  *
- *  A single Geant4 track usually leaves several SimTrackerHits in one cell (one per step), and several
+ *  A single Geant4 track can leave several SimTrackerHits in one cell (one per step), and several
  *  tracks (the primary plus its delta rays, conversions, ...) can cross the very same cell. How to handle cases
  *  with multiple tracks in a cell is configurable via the MultipleTrackHandling property,
  *  which can take one of the following values:
@@ -111,9 +117,7 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *                             relation of the output hit points to the most primary contributor (see below),
  *                             i.e. to the most primary track crossing the cell.
  *   - "PrimaryOnly"         : one output hit per cellID, but only the hits of the most primary contributor
- *                             are summed. Contributions of later (secondary) tracks are dropped, which is
- *                             what one wants when the accumulated path length is meant to describe the
- *                             primary particle traversing the cell.
+ *                             are summed. Contributions of later (secondary) tracks are dropped.
  *   - "PerTrack"            : one output hit per (cellID, track) pair, each summing only the hits of that
  *                             track. For a given cell more than one entry may appear, once per contributing
  *                             track, each entry carrying its own MCParticle relation. Entries of a given cell
@@ -125,10 +129,7 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *
  *  Identifying the most primary track: edm4hep does not persist the Geant4 trackID, and by the time this
  *  algorithm runs there is no Geant4 left to ask - G4Step and G4Track only exist inside the simulation
- *  process. DDG4 does carry the trackID of the step that made a hit in
- *  dd4hep::sim::Geant4HitData::MonteCarloContrib::trackID, but that is an in-memory structure of the
- *  simulation: edm4hep::SimTrackerHit has no field for it, so the writer only uses it to resolve the
- *  MCParticle relation and to set the producedBySecondary quality bit, and the number itself is lost.
+ *  process.
  *  What this algorithm therefore uses, is:
  *
  *   - MCParticle::isCreatedInSimulation(), the BITCreatedInSimulation bit of the simulator status. This is
@@ -158,9 +159,6 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *
  *  The quality bit field is always copied from the earliest summed hit, since bit flags cannot be
  *  averaged, and only pathLength and eDep are ever accumulated.
- *
- *  Note: as in DCHdigi_v02, variables for quantities with units attached to them have the units stated
- *  explicitly in the name as a suffix (e.g. _mm, _ns, _GeV).
  *
  *  Inputs:
  *      - @param InputSimTrackerHits Name of the input edm4hep::SimTrackerHitCollection, default
