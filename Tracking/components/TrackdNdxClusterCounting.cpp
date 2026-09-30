@@ -1,4 +1,4 @@
-#include "TrackdNdxDelphesBased.h"
+#include "TrackdNdxClusterCounting.h"
 
 // Gaudi
 #include <GaudiKernel/MsgStream.h>
@@ -11,22 +11,21 @@
 #include "DD4hep/DD4hepUnits.h"
 #include "DD4hep/Detector.h"
 
-// ROOT
-#include <TVectorD.h>
-
 // STL
 #include <limits>
 #include <random>
 
-DECLARE_COMPONENT(TrackdNdxDelphesBased)
+DECLARE_COMPONENT(TrackdNdxClusterCounting)
+// Old name of this algorithm, from when it was linking against Delphes
+DECLARE_COMPONENT_WITH_ID(TrackdNdxClusterCounting, "TrackdNdxDelphesBased")
 
-TrackdNdxDelphesBased::TrackdNdxDelphesBased(const std::string& name, ISvcLocator* svcLoc)
+TrackdNdxClusterCounting::TrackdNdxClusterCounting(const std::string& name, ISvcLocator* svcLoc)
     : Transformer(
           name, svcLoc,
           {KeyValues("InputLinkCollection", {"TrackMCParticleLinks"}), KeyValues("HeaderName", {"EventHeader"})},
           {KeyValues("OutputCollection", {"RecDqdxCollection"})}) {}
 
-StatusCode TrackdNdxDelphesBased::initialize() {
+StatusCode TrackdNdxClusterCounting::initialize() {
   m_uniqueIDSvc = service("UniqueIDGenSvc");
   if (!m_uniqueIDSvc) {
     error() << "Unable to locate the UniqueIDGenSvc" << endmsg;
@@ -57,8 +56,14 @@ StatusCode TrackdNdxDelphesBased::initialize() {
   debug() << "Zmin: " << Zmin << " mm" << endmsg;
   debug() << "Zmax: " << Zmax << " mm" << endmsg;
 
-  m_delphesTrkUtil.SetDchBoundaries(Rmin, Rmax, Zmin, Zmax);
-  m_delphesTrkUtil.SetGasMix(m_GasSel.value());
+  m_driftVolume = {Rmin, Rmax, Zmin, Zmax};
+
+  const auto gas = k4RecTracker::ClusterCounting::toGasMixture(m_GasSel.value());
+  if (!gas) {
+    error() << "Unknown gas selection " << m_GasSel.value() << endmsg;
+    return StatusCode::FAILURE;
+  }
+  m_clusterParametrisation = k4RecTracker::ClusterCounting::Parametrisation::forGas(*gas);
 
   // Make sure fill factor is between 0 and 1
   if (m_fill_factor.value() < 0.0 || m_fill_factor.value() > 1.0) {
@@ -69,8 +74,8 @@ StatusCode TrackdNdxDelphesBased::initialize() {
   return StatusCode::SUCCESS;
 }
 
-edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::TrackMCParticleLinkCollection& input,
-                                                             const edm4hep::EventHeaderCollection& header) const {
+edm4hep::RecDqdxCollection TrackdNdxClusterCounting::operator()(const edm4hep::TrackMCParticleLinkCollection& input,
+                                                                const edm4hep::EventHeaderCollection& header) const {
   edm4hep::RecDqdxCollection outputCollection;
 
   std::mt19937_64 random_engine;
@@ -117,57 +122,36 @@ edm4hep::RecDqdxCollection TrackdNdxDelphesBased::operator()(const edm4hep::Trac
 
     double betagamma = momentum / mass;
     debug() << "MCParticle betagamma: " << betagamma << endmsg;
-    // Check if betagamma is in valid range of delphes parametrisation (status: 16 June 2025)
-    if (betagamma < 0.5) {
-      debug() << "beta*gamma value below lower limit of \"good\" range of delphes parametrisation (0.5-10000), dN/dx "
-                 "will be set to dummy value: "
-              << dummy_value << " clusters/mm" << endmsg;
+    // Check if betagamma is in valid range of the parametrisation
+    if (betagamma < m_clusterParametrisation->minBetaGamma()) {
+      debug() << "beta*gamma value below lower limit of range of the parametrisation ("
+              << m_clusterParametrisation->minBetaGamma() << "-" << m_clusterParametrisation->maxBetaGamma()
+              << "), dN/dx will be set to dummy value: " << dummy_value << " clusters/mm" << endmsg;
       store_value();
       continue;
-    } else if (betagamma >= 10000) {
-      debug() << "beta*gamma value above upper limit of \"good\" range of delphes parametrisation (0.5-10000), "
-                 "beta*gamma will be set to max value as approximation."
-              << endmsg;
-      betagamma = 9999.9; // 10000 is out of range already
+    } else if (betagamma > m_clusterParametrisation->maxBetaGamma()) {
+      debug() << "beta*gamma value above upper limit of range of the parametrisation ("
+              << m_clusterParametrisation->minBetaGamma() << "-" << m_clusterParametrisation->maxBetaGamma()
+              << "), the value at the upper limit (Fermi plateau) will be used as approximation." << endmsg;
     }
 
-    // Get number of clusters per length from delphes
-    // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
-    double nclusters_per_mm = m_delphesTrkUtil.Nclusters(betagamma, m_GasSel.value()) / 1000.0;
+    // Get number of clusters per length (clamped to the range of the parametrisation)
+    double nclusters_per_mm = m_clusterParametrisation->clustersPerMM(betagamma);
     debug() << "Number of clusters per mm: " << nclusters_per_mm << endmsg;
-    if (nclusters_per_mm < 1e-6) {
-      warning() << "Delphes number of clusters per mm calculation returned 0.0, dN/dx will be set to dummy value: "
-                << dummy_value << " clusters/mm" << endmsg;
-      store_value();
-      continue;
-    }
 
     ///////////////////////
     // Track Information //
     ///////////////////////
-    // Use track state at IP, since this corresponds to delphes and energy loss in tracking system is negligible
+    // Use track state at IP, since energy loss in tracking system is negligible
     const auto track_state = track.getTrackState(edm4hep::TrackState::AtIP).value();
 
-    // Convert edm4hep::TrackState to delphes parameters
-    // Inverse conversion from
-    // https://github.com/key4hep/k4SimDelphes/blob/main/converter/src/DelphesEDM4HepConverter.cc#L532 Note the same
-    // order of parameters as in delphes: D0, phi, C, Z0, cot(theta) See:
-    // https://github.com/delphes/delphes/blob/98f15add056e657e39bda9e32ccd97ef427ce04c/external/TrackCovariance/TrkUtil.cc#L961
-    TVectorD delphes_track(5);
-    delphes_track[0] = track_state.D0;
-    delphes_track[1] = track_state.phi;
-    const double scale = -2.0; // delphes uses C (half curvature) instead of omega, scale is used to convert
-    delphes_track[2] = track_state.omega / scale;
-    delphes_track[3] = track_state.Z0;
-    delphes_track[4] =
-        track_state.tanLambda; // tanLambda and cot(theta) are the same thing (see DelphesEDM4HepConverter.cc)
-
-    // Note: track length will already be in mm, since this is what delphes and the track parametrisation use
-    // so no need to cast it to dd4hep::mm
-    double track_length = m_delphesTrkUtil.TrkLen(delphes_track);
+    // Note: track length will already be in mm, since this is what the track parametrisation uses, so no need to
+    // cast it to dd4hep::mm
+    double track_length = k4RecTracker::ClusterCounting::trackLengthInCylinder(
+        track_state.D0, track_state.omega, track_state.Z0, track_state.tanLambda, m_driftVolume);
     // Check if track length calculation was successful
     if (track_length < std::numeric_limits<double>::epsilon()) {
-      warning() << "Delphes track length calculation returned 0.0, dN/dx will be set to dummy value: " << dummy_value
+      warning() << "Track does not cross the drift volume, dN/dx will be set to dummy value: " << dummy_value
                 << " clusters/mm" << endmsg;
       store_value();
       continue;

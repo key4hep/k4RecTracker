@@ -16,21 +16,25 @@
 #include "edm4hep/RecDqdxCollection.h"
 #include "edm4hep/TrackMCParticleLinkCollection.h"
 
-// delphes
-#include "TrackCovariance/TrkUtil.h"
+// k4RecTracker
+#include "k4RecTracker/ClusterCounting.h"
 
-/** @class TrackdNdxDelphesBased
+// STL
+#include <optional>
+
+/** @class TrackdNdxClusterCounting
  *
  *  Gaudi transformer that builds an edm4hep::RecDqdxCollection out of an edm4hep::TrackMCParticleLinkCollection.
  *  It uses the delphes parametrisation for deriving the dN/dx based on a reconstructed track:
  *  For a given gas mixture, there exist data points specifying the number of clusters per meter for a given beta*gamma
- * of the particle. A spline is used to interpolate between these data points. Additionally, in delphes there is a
- * function to calculate the track length inside a cylindrical volume. The number of clusters per meter and the track
- * length are used to derive the average number of cluster expected for the track. The 'true' value is drawn from a
- * Poissonian and stored in the RecDqdxCollection. This Gaudi functional is linked against delphes, i.e. the delphes
- * functions are called directly via an instance of the delphes::TrkUtil class. The benefit of this approach is that any
- * future updates in the delphes code are automatically available here. For limitations, see below. First status of this
- * algorithm was presented here: https://indico.cern.ch/event/1556632/#72-parametrized-cluster-counti
+ * of the particle. A spline is used to interpolate between these data points. Additionally, the track length inside a
+ * cylindrical volume is calculated. The number of clusters per meter and the track length are used to derive the
+ * average number of cluster expected for the track. The 'true' value is drawn from a Poissonian and stored in the
+ * RecDqdxCollection. The parametrisation and the track length calculation are provided by
+ * k4RecTracker/ClusterCounting.h and reproduce the ones of the Delphes TrackCovariance module (TrkUtil class), which
+ * earlier versions of this algorithm (then called TrackdNdxDelphesBased, still available as an alias) linked against.
+ * For limitations, see below. First status of this algorithm was presented here:
+ * https://indico.cern.ch/event/1556632/#72-parametrized-cluster-counti
  *
  *  PLEASE NOTE :
  *  This algortihm is mostly meant as work-around to be able to provide dN/dx values for track in order to enable
@@ -53,27 +57,26 @@
  * using error and type flag) If the calculation somehow fails (see limitations below), the dqdx value is set to a dummy
  * value (-999)
  *
- *  LIMITATIONS (Status 13.06.2025) :
- *      - Entirely dependent on the implementation of the delphes functions:
- *          - Cluster calculation only available for 4 gas mixtures
- *          - Cluster calculation only for beta*gamma values for a certain range.
- *              - This algorithm sets dN/dx to the dummy value for particles outside the good beta*gamma range (warning
- * produced)
- *          - Track length calculation is not available for particles with a large tranvserse impact parameters
- *              - If the track length calculation fails, dN/dx set to dummy (with warning)
- *          - Track length calculation assumes a perfectly cylindrical drift volume
+ *  LIMITATIONS (Status 24.09.2026) :
+ *      - Cluster calculation only available for 4 gas mixtures
+ *      - Cluster calculation only for beta*gamma values in the range of the parametrisation (0.5-10000)
+ *          - This algorithm sets dN/dx to the dummy value for particles below this range. Above
+ * this range, the value at the end of the parametrisation (Fermi plateau) is used
+ *      - If the track does not cross the drift volume, dN/dx is set to dummy (with warning)
+ *      - Track length calculation assumes a perfectly cylindrical drift volume, and only counts the first traversal of
+ * the volume by the track
  *      - Since this parametrisation is based on full tracks, the energy loss in the tracking volume cannot be accounted
  * for
  *      - dN/dx quantity is only filled with a value, no error at the moment
  *
  *  @author Andreas Loeschcke Centeno
  */
-class TrackdNdxDelphesBased final
+class TrackdNdxClusterCounting final
     : public k4FWCore::Transformer<edm4hep::RecDqdxCollection(const edm4hep::TrackMCParticleLinkCollection&,
                                                               const edm4hep::EventHeaderCollection&)> {
 
 public:
-  TrackdNdxDelphesBased(const std::string& name, ISvcLocator* svcLoc);
+  TrackdNdxClusterCounting(const std::string& name, ISvcLocator* svcLoc);
 
   edm4hep::RecDqdxCollection operator()(const edm4hep::TrackMCParticleLinkCollection& input,
                                         const edm4hep::EventHeaderCollection& header) const override;
@@ -84,7 +87,9 @@ private:
   SmartIF<IUniqueIDGenSvc> m_uniqueIDSvc{nullptr};
   SmartIF<IGeoSvc> m_geoSvc{nullptr};
 
-  TrkUtil m_delphesTrkUtil;
+  // Set up in initialize()
+  std::optional<k4RecTracker::ClusterCounting::Parametrisation> m_clusterParametrisation;
+  k4RecTracker::ClusterCounting::Cylinder m_driftVolume{};
 
   Gaudi::Property<std::string> m_Zmax_parameter_name{
       this,

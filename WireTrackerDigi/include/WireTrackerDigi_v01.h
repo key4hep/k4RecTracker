@@ -14,12 +14,11 @@
  * hits is larger than the deadtime of a cell. Each hit train creates one DigiHit, with the time and the position coming
  * from the first hit (sorted by time) in the train. The energy deposit will be the sum of all hits in the train.
  *
- * The functional also does a dN/dx calculation for the cell, based on the parametrisation in delphes.
- * This is done by summing all the step lengths in the cell and getting the beta*gamma of the particle and passing it to
- * the delphes parametrisation. In case of multiple particles in the same cell, the number of clusters is calculated for
- * each particle and summed up. Since this uses delphes functions directly (via delphes::TrkUtil class member), this
- * functional has a dependency on delphes. The number of electrons within one cluster is not calculated at the moment,
- * and filled with a dummy value (-1).
+ * The functional also does a dN/dx calculation for the cell, based on the parametrisation in delphes (as provided by
+ * k4RecTracker/ClusterCounting.h). This is done by summing all the step lengths in the cell and getting the beta*gamma
+ * of the particle and passing it to the parametrisation. In case of multiple particles in the same cell, the number of
+ * clusters is calculated for each particle and summed up. The number of electrons within one cluster is not calculated
+ * at the moment, and filled with a dummy value (-1).
  *
  * Note: Variables for quantities with units attached to them, have either the units stated explicitly in the name as
  * suffix (e.g. _mm, _ns) or by giving the unit system in which they are in (e.g. dd4hep default units: _ddu)
@@ -81,11 +80,14 @@
 // DD4hep
 #include "DDSegmentation/BitFieldCoder.h"
 
-// delphes
-#include "TrackCovariance/TrkUtil.h"
+// k4RecTracker
+#include "k4RecTracker/ClusterCounting.h"
 
 // ROOT
 #include "TRandom3.h"
+
+// STL
+#include <optional>
 
 using Vector3D = dd4hep::rec::WireTracker_info::Vector3D;
 
@@ -121,7 +123,8 @@ private:
 
   mutable Gaudi::Accumulators::Counter<Gaudi::Accumulators::atomicity::full, unsigned int> m_event_counter;
 
-  TrkUtil m_delphesTrkUtil;
+  // Cluster density parametrisation for the selected gas, set up in initialize()
+  std::optional<k4RecTracker::ClusterCounting::Parametrisation> m_clusterParametrisation;
 
   dd4hep::DDSegmentation::BitFieldCoder* m_decoder;
 

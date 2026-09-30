@@ -45,7 +45,7 @@ gaudi_add_module(${PackageName}
   DD4hep::DDCore
   GenFit::genfit2
   Eigen3::Eigen
-  ${DELPHES_LIBRARIES}
+  k4RecTrackerUtils
 )
 
 if(TARGET PandoraPFA::PandoraSDK)
@@ -57,7 +57,6 @@ target_include_directories(${PackageName} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/genfit_interfaces>
   $<INSTALL_INTERFACE:include>
   ${MarlinUtil_INCLUDE_DIRS}
-  ${DELPHES_INCLUDE_DIRS}
 )
 
 set_target_properties(${PackageName} PROPERTIES PUBLIC_HEADER "${headers}")

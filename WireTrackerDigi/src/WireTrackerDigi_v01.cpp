@@ -74,6 +74,13 @@ StatusCode WireTrackerDigi_v01::initialize() {
   // set the cellID decoder
   m_decoder = wt_sd.readout().idSpec().decoder();
 
+  const auto gas = k4RecTracker::ClusterCounting::toGasMixture(m_GasType.value());
+  if (!gas) {
+    error() << "Unknown gas type " << m_GasType.value() << endmsg;
+    return StatusCode::FAILURE;
+  }
+  m_clusterParametrisation = k4RecTracker::ClusterCounting::Parametrisation::forGas(*gas);
+
   if (!(m_drift_velocity_um_per_ns.value() > 0.0)) {
     m_drift_velocity_um_per_ns.setValue(get_default_drift_velocity_um_per_ns());
     info() << "Drift velocity automatically set to " << m_drift_velocity_um_per_ns.value() << " um/ns for gas type "
@@ -284,8 +291,8 @@ WireTrackerDigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input,
             // Use electron mass as approximation
             mass_GeV = 0.000511;
           }
-          cluster_info.beta_gamma =
-              std::clamp(momentum_GeV / mass_GeV, 0.5, 20000.0); // Clamp to parametrisation range in delphes
+          // Values outside of the range of the parametrisation are clamped to it
+          cluster_info.beta_gamma = momentum_GeV / mass_GeV;
           cluster_info.path_length_mm = simhit->getPathLength();
         } else {
           // If the particle is already present, update the existing entry
@@ -303,9 +310,8 @@ WireTrackerDigi_v01::operator()(const edm4hep::SimTrackerHitCollection& input,
 
       // Calculate the number of clusters for each particle in the cell
       for (const auto& [object_id, particle_info] : cluster_info_map) {
-        // Get number of clusters per length from delphes
-        // Output from delphes function is in 1/m, so to convert to 1/mm we need to scale accordingly
-        double nclusters_per_mm = m_delphesTrkUtil.Nclusters(particle_info.beta_gamma, m_GasType.value()) / 1000.0;
+        // Get number of clusters per length
+        double nclusters_per_mm = m_clusterParametrisation->clustersPerMM(particle_info.beta_gamma);
         double nclusters_mean = nclusters_per_mm * particle_info.path_length_mm;
 
         total_nclusters += sample_zero_truncated_poisson(nclusters_mean, random_engine);
