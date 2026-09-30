@@ -317,9 +317,10 @@ private:
     }
   };
 
-  /// Accumulated step lengths and energy deposits of one track in one cell, or of a whole cell once the
-  /// contributions of its individual tracks have been merged
+  /// Helper struct to hold the temporary accumulation of the SimHits, one per TrackKey in the cell
   struct Contribution {
+    /// Accumulated step lengths and energy deposits of one track in one cell, or of a whole cell once the
+    /// contributions of its individual tracks have been merged
     double pathLength_mm = 0.;
     double eDep_GeV = 0.;
     int nHits = 0;
@@ -408,7 +409,8 @@ private:
       this, "MultiTrackCellHandling", "PerTrack",
       "How to treat several Geant4 tracks in the same cell, one of " + s_trackHandlingChoices.list() +
           ": 'SumAll' sums the step lengths of every track, 'MostPrimaryInCell' sums only those of the most "
-          "primary track of that cell, 'PerTrack' writes one output hit per cell and track (default value), "
+          "primary track of that cell (determined via generator status and index in the MCParticle collection), "
+          "'PerTrack' writes one output hit per cell and track (default value), "
           "'SkipMultiTrackCells' drops cells that were crossed by more than one track"};
 
   /// Configurable property steering where the time, position and momentum of a merged hit come from
