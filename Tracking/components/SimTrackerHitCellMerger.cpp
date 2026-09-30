@@ -427,8 +427,8 @@ private:
 
   /// Configurable property to skip overlay hits
   Gaudi::Property<bool> m_excludeOverlayHits{
-      this, "ExcludeOverlayHits", true,
-      "Skip SimTrackerHits flagged isOverlay() instead of booking their step length (default true)"};
+      this, "ExcludeOverlayHits", false,
+      "Skip SimTrackerHits flagged isOverlay() instead of booking their step length (default false)"};
 
   /// Configurable property to suppress merged hits with a negligible accumulated path length
   Gaudi::Property<float> m_minPathLength_mm{
