@@ -259,16 +259,8 @@ struct SimTrackerHitCellMerger final : k4FWCore::MultiTransformer<std::tuple<edm
       cellMap[hit.getCellID()][TrackKey::of(particle)].add(hit);
     }
 
-    // Write the output in order of increasing cellID so that the result does not depend on the hash
-    // ordering of the map above
-    std::vector<std::uint64_t> cellIDs;
-    cellIDs.reserve(cellMap.size());
-    for (const auto& cell : cellMap)
-      cellIDs.push_back(cell.first);
-    std::sort(cellIDs.begin(), cellIDs.end());
-
-    for (const auto cellID : cellIDs) {
-      const auto& contributions = cellMap.at(cellID);
+    // Loop over the cellMap, accumulate the path lengths and add to the output collection
+    for (const auto& [cellID, contributions] : cellMap) {
 
       switch (m_trackHandling) {
 
