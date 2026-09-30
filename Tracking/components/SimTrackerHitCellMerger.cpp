@@ -102,14 +102,14 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  edm4hep::SimTrackerHitCollection with one entry per cell (or per cell and track, see below).
  *
  *  The purpose of the algorithms is to provide the dx part for dN/dx (or dE/dx) calculations, where dN is
- *  provided by the digitiser. In a full processing chaing the dx would need to come from tracking, but especially
+ *  provided by the digitiser. In a full processing chain, the dx would need to come from tracking, but especially
  *  in the case of the straw tube tracker, getting the actual path length inside the sensitive volumes from the
  *  track is not trivial. Therefore, this algorithm serves as an intermediate temporary solution using truth
  *  information to provide dx.
  *
  *  A single Geant4 track can leave several SimTrackerHits in one cell (one per step), and several
- *  tracks (the primary plus its delta rays, conversions, ...) can cross the very same cell. How to handle cases
- *  with multiple tracks in a cell is configurable via the MultiTrackCellHandling property,
+ *  tracks (the primary plus its delta rays, conversions, other particles, ...) can cross the very same cell. 
+ *  How to handle cases with multiple tracks in a cell is configurable via the MultiTrackCellHandling property,
  *  which can take one of the following values:
  *
  *   - "SumAll"              : one output hit per cellID. pathLength and eDep are summed over *every*
@@ -139,14 +139,14 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *   - MCParticle::isCreatedInSimulation(), the BITCreatedInSimulation bit of the simulator status. This is
  *     genuine Geant4 truth written by DDG4: it separates the particles that came from the generator (the
  *     true primaries) from those that Geant4 created during tracking.
- *   - the index of the MCParticle within its collection, as a proxy for the trackID itself. DDG4 keeps its
- *     particles in a dd4hep::sim::Geant4ParticleMap, i.e. a std::map<int, Geant4Particle*> keyed by the
- *     Geant4 trackID, and writes them out in that (ascending) order, so the collection index is a
- *     monotonically increasing function of the trackID of the particles that were kept.
+ *   - the index of the MCParticle within its collection, which can be used as a proxy for the particle ID. 
+ *     DDG4 stores particles in a dd4hep::sim::Geant4ParticleMap, i.e. a std::map<int, Geant4Particle*>, 
+ *     and writes them to the MCParticle collection in ascending map-key order, so the collection index 
+ *     increases monotonically with the particle ID.
  *
  *  Contributors are ranked by those two in that order, so the "most primary" track of a cell is the
- *  generator particle with the lowest Geant4 track number, and only tracks of the same provenance are
- *  ever compared by index.
+ *  generator particle with the lowest Geant4 track number, and indices are only compared if both particles
+ *  are have the same CreatedInSimulation value.
  *
  *  Note that hits flagged isProducedBySecondary() do not point to the secondary that actually created them
  *  (it was not kept in the MCParticle collection) but to its surviving ancestor, so their step length is
@@ -154,15 +154,14 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *
  *  Overlay hits can be ignored via the ExcludeOverlayHits property.
  *
- *  Of the remaining fields of a merged SimHit, time, position and momentum need to be configured, via the
- *  RepresentativeKinematics property:
+ *  Of the remaining fields of a merged SimHit, time, position and momentum need to be configured, since they
+ *  are not additive. This can be done via the RepresentativeKinematics property:
  *
  *   - "EarliestHit" : they are copied from the earliest (smallest time) of the summed hits.
  *   - "Average"     : they are the unweighted arithmetic mean over the summed hits, i.e. the centroid of
  *                     the track segment(s) that were merged.
  *
- *  The quality bit field is always copied from the earliest summed hit, since bit flags cannot be
- *  averaged, and only pathLength and eDep are ever accumulated.
+ *  The quality bit field is always copied from the earliest summed hit, since bit flags cannot be averaged.
  *
  *  Inputs:
  *      - @param InputSimTrackerHits Name of the input edm4hep::SimTrackerHitCollection, default
@@ -312,8 +311,7 @@ private:
   /// Ranking key of a track contributing to a cell, ordered so that the most primary track comes first:
   /// generator particles before Geant4-created ones, then by increasing MCParticle index (the proxy for
   /// the Geant4 track number), with the collectionID as a final tie breaker for the (pathological) case
-  /// of hits pointing into more than one MCParticle collection. See the class documentation for why
-  /// these are the only pieces of Geant4 truth still available at this point.
+  /// of hits pointing into more than one MCParticle collection.
   struct TrackKey {
     bool createdInSimulation = false;
     int index = 0;
