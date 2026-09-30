@@ -143,11 +143,6 @@ public:
 private:
   edm4hep::Track m_originalTrack;
 
-  struct PCAInfoHelper {
-    TVector3 PCA;
-    double Phi0;
-  };
-
   void CheckInitialization();
   void OrderHits(const edm4hep::Track& track, bool skipTrackOrdering);
   void LimitNumberHits(double epsilon, int smoothWindow);
@@ -160,8 +155,6 @@ private:
 
   edm4hep::TrackState UpdateTrackState(genfit::MeasuredStateOnPlane measuredState, TVector3 referencePointCm,
                                        int location);
-
-  PCAInfoHelper PCAInfo(TVector3 position, TVector3 momentum, int charge, TVector3 refPoint, double Bz);
 
   int m_signedParticleHypothesis = 211;
   int m_chargeHypothesis = 1;
