@@ -47,6 +47,7 @@ merger_all = SimTrackerHitCellMerger(
     InputSimTrackerHits=[INPUT_COLL],
     OutputSimTrackerHits=[OUT_COLL_ALL],
     MultiTrackCellHandling="SumAll",
+    ExcludeOverlayHits=True,
 )
 
 merger_most_primary = SimTrackerHitCellMerger(
@@ -54,6 +55,7 @@ merger_most_primary = SimTrackerHitCellMerger(
     InputSimTrackerHits=[INPUT_COLL],
     OutputSimTrackerHits=[OUT_COLL_MOST_PRIMARY],
     MultiTrackCellHandling="MostPrimaryInCell",
+    ExcludeOverlayHits=True,
 )
 
 # Deliberately left without MultiTrackCellHandling: "PerTrack" is its default, so this instance
@@ -63,6 +65,7 @@ merger_per_track = SimTrackerHitCellMerger(
     "SimTrackerHitCellMergerPerTrack",
     InputSimTrackerHits=[INPUT_COLL],
     OutputSimTrackerHits=[OUT_COLL_PER_TRACK],
+    ExcludeOverlayHits=True,
 )
 
 merger_single_track = SimTrackerHitCellMerger(
@@ -70,6 +73,7 @@ merger_single_track = SimTrackerHitCellMerger(
     InputSimTrackerHits=[INPUT_COLL],
     OutputSimTrackerHits=[OUT_COLL_SINGLE_TRACK],
     MultiTrackCellHandling="SkipMultiTrackCells",
+    ExcludeOverlayHits=True,
 )
 
 merger_earliest_hit = SimTrackerHitCellMerger(
@@ -78,6 +82,7 @@ merger_earliest_hit = SimTrackerHitCellMerger(
     OutputSimTrackerHits=[OUT_COLL_EARLIEST_HIT],
     MultiTrackCellHandling="SumAll",
     RepresentativeKinematics="EarliestHit",
+    ExcludeOverlayHits=True,
 )
 
 merger_with_overlay = SimTrackerHitCellMerger(

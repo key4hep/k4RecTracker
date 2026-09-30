@@ -14,9 +14,9 @@ What it does
 
    So cell 1 is crossed by three tracks and cell 2 by a single one. Cell 3 holds the only hits
    flagged isOverlay(), so that ExcludeOverlayHits can be checked in both directions: it must be
-   absent from every collection produced with the default (true) and present with it set to false. The hits are deliberately
-   written in a scrambled order so that the per-cell and per-track grouping and the cellID ordering
-   of the output are all exercised. Each hit carries a position and a momentum derived from its
+   absent from every collection produced with true and present with it set to false. The hits are deliberately
+   written in a scrambled order so that the per-cell and per-track grouping are exercised. 
+   Each hit carries a position and a momentum derived from its
    time, so that both picking one of them and averaging over them give a predictable answer.
 
    SimTrackerHitCellMerger itself is run separately by CTest via
@@ -42,6 +42,7 @@ Requirements
 """
 
 import argparse
+from collections import defaultdict
 
 import edm4hep
 import podio
@@ -136,9 +137,15 @@ def write_input_file(path: str) -> None:
 # ---------------------------------------------------------------------------
 # Helper: compare one merged hit against its expectation
 # ---------------------------------------------------------------------------
+def hits_by_cell(collection):
+    """cellID -> list of hits in that cell, in whatever order the collection has them."""
+    by_cell = defaultdict(list)
+    for hit in collection:
+        by_cell[hit.getCellID()].append(hit)
+    return by_cell
+
 def check_hit(
     coll_name: str,
-    index: int,
     hit,
     cell_id: int,
     path_length: float,
@@ -152,7 +159,7 @@ def check_hit(
     ones that go with that time, which holds both for a copy of a single input hit and for an
     average, because both are linear in the time.
     """
-    prefix = f"{coll_name}[{index}]"
+    prefix = f"{coll_name}[cell {cell_id}]"
     assert hit.getCellID() == cell_id, (
         f"{prefix}: expected cellID {cell_id}, got {hit.getCellID()}"
     )
@@ -222,8 +229,15 @@ def check_output(output_file: str) -> None:
     assert len(merged_all) == 2, (
         f"'SumAll' should give one hit per cell, i.e. 2, got {len(merged_all)}"
     )
-    check_hit(OUT_COLL_ALL, 0, merged_all[0], CELL_A, 3.75, 0.00375, 0, 1.25)
-    check_hit(OUT_COLL_ALL, 1, merged_all[1], CELL_B, 4.0, 0.004, 1, 3.0)
+    # dictionary with keys 'cellID' and items 'list of every hit in that cell'
+    by_cell = hits_by_cell(merged_all)
+    assert set(by_cell.keys()) == {CELL_A, CELL_B}, f"'SumAll' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    assert all(len(by_cell[cell]) == 1 for cell in (CELL_A, CELL_B)), (
+        f"'SumAll' exptected all cells to have exactly 1 hit"
+    )
+
+    check_hit(OUT_COLL_ALL, by_cell[CELL_A][0], CELL_A, 3.75, 0.00375, 0, 1.25)
+    check_hit(OUT_COLL_ALL, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)
 
     # --- MultiTrackCellHandling = "MostPrimaryInCell" ----------------------
     # One hit per cell, but only the steps of the most primary contributor are summed, so cell 1
@@ -231,10 +245,13 @@ def check_output(output_file: str) -> None:
     # The average is therefore over particle 0's two hits only, at (2.0 + 1.0) / 2 = 1.5 ns.
     merged_most_primary = frame.get(OUT_COLL_MOST_PRIMARY)
     assert len(merged_most_primary) == 2, (
-        f"'MostPrimaryInCell' should give one hit per cell, i.e. 2, got {len(merged_most_primary)}"
+        f"'MostPrimaryInCell' should give one hit per cell, i.e. 2 in total, got {len(merged_most_primary)}"
     )
-    check_hit(OUT_COLL_MOST_PRIMARY, 0, merged_most_primary[0], CELL_A, 3.0, 0.003, 0, 1.5)
-    check_hit(OUT_COLL_MOST_PRIMARY, 1, merged_most_primary[1], CELL_B, 4.0, 0.004, 1, 3.0)
+    by_cell = hits_by_cell(merged_most_primary)
+    assert set(by_cell.keys()) == {CELL_A, CELL_B}, f"'MostPrimaryInCell' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    assert all(len(by_cell[cell]) == 1 for cell in (CELL_A, CELL_B))
+    check_hit(OUT_COLL_MOST_PRIMARY, by_cell[CELL_A][0], CELL_A, 3.0, 0.003, 0, 1.5)
+    check_hit(OUT_COLL_MOST_PRIMARY, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)
 
     # --- MultiTrackCellHandling = "PerTrack" -------------------------------
     # Same data type, but cell 1 now appears three times, once per contributing track and ordered
@@ -245,10 +262,14 @@ def check_output(output_file: str) -> None:
         f"'PerTrack' should give 3 hits for cell {CELL_A} and 1 for cell {CELL_B}, i.e. 4, "
         f"got {len(merged_per_track)}"
     )
-    check_hit(OUT_COLL_PER_TRACK, 0, merged_per_track[0], CELL_A, 3.0, 0.003, 0, 1.5)
-    check_hit(OUT_COLL_PER_TRACK, 1, merged_per_track[1], CELL_A, 0.5, 0.0005, 1, 1.5)
-    check_hit(OUT_COLL_PER_TRACK, 2, merged_per_track[2], CELL_A, 0.25, 0.00025, 2, 0.5)
-    check_hit(OUT_COLL_PER_TRACK, 3, merged_per_track[3], CELL_B, 4.0, 0.004, 1, 3.0)
+    by_cell = hits_by_cell(merged_per_track)
+    assert set(by_cell.keys()) == {CELL_A, CELL_B}, f"'PerTrack' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    assert len(by_cell[CELL_A]) == 3, f"'PerTrack' cell {CELL_A}, expected 3 hits, got {len(by_cell[CELL_A])}"
+    assert len(by_cell[CELL_B]) == 1, f"'PerTrack' cell {CELL_B}, expected 1 hit, got {len(by_cell[CELL_B])}"
+    check_hit(OUT_COLL_PER_TRACK, by_cell[CELL_A][0], CELL_A, 3.0, 0.003, 0, 1.5)
+    check_hit(OUT_COLL_PER_TRACK, by_cell[CELL_A][1], CELL_A, 0.5, 0.0005, 1, 1.5)
+    check_hit(OUT_COLL_PER_TRACK, by_cell[CELL_A][2], CELL_A, 0.25, 0.00025, 2, 0.5)
+    check_hit(OUT_COLL_PER_TRACK, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)
 
     # --- MultiTrackCellHandling = "SkipMultiTrackCells" --------------------
     # Cell 1 was crossed by three tracks and is dropped entirely; only the unambiguous cell 2 survives.
@@ -257,7 +278,10 @@ def check_output(output_file: str) -> None:
         f"'SkipMultiTrackCells' should drop cell {CELL_A} and keep only cell {CELL_B}, i.e. 1 hit, "
         f"got {len(merged_single_track)}"
     )
-    check_hit(OUT_COLL_SINGLE_TRACK, 0, merged_single_track[0], CELL_B, 4.0, 0.004, 1, 3.0)
+    by_cell = hits_by_cell(merged_single_track)
+    assert set(by_cell.keys()) == {CELL_B}, f"'SkipMultiTrackCells' expected cell {CELL_B} exclusively, got {set(by_cell.keys())}"
+    assert len(by_cell[CELL_B]) == 1, f"'SkipMultiTrackCells' cell {CELL_B}, expected 1 hit, got {len(by_cell[CELL_B])}"
+    check_hit(OUT_COLL_SINGLE_TRACK, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)
 
     # --- RepresentativeKinematics = "EarliestHit" --------------------------
     # Same sums as "SumAll", but the kinematics are now copied from the earliest of the summed hits
@@ -267,8 +291,13 @@ def check_output(output_file: str) -> None:
     assert len(merged_earliest_hit) == 2, (
         f"'EarliestHit' should give one hit per cell, i.e. 2, got {len(merged_earliest_hit)}"
     )
-    check_hit(OUT_COLL_EARLIEST_HIT, 0, merged_earliest_hit[0], CELL_A, 3.75, 0.00375, 0, 0.5)
-    check_hit(OUT_COLL_EARLIEST_HIT, 1, merged_earliest_hit[1], CELL_B, 4.0, 0.004, 1, 3.0)
+    by_cell = hits_by_cell(merged_earliest_hit)
+    assert set(by_cell.keys()) == {CELL_A, CELL_B}, f"Kinematics 'EarliestHit' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    assert all(len(by_cell[cell]) == 1 for cell in (CELL_A, CELL_B)), (
+        f"Kinematics 'EarliestHit' with 'SumAll' exptected all cells to have exactly 1 hit"
+    )
+    check_hit(OUT_COLL_EARLIEST_HIT, by_cell[CELL_A][0], CELL_A, 3.75, 0.00375, 0, 0.5)
+    check_hit(OUT_COLL_EARLIEST_HIT, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)
 
     # --- ExcludeOverlayHits, default true ----------------------------------
     # None of the collections above was configured with ExcludeOverlayHits, so all of them ran with
@@ -293,9 +322,14 @@ def check_output(output_file: str) -> None:
         f"'ExcludeOverlayHits=False' should keep the overlay cell {CELL_C} as well, i.e. give 3 "
         f"hits, got {len(merged_with_overlay)}"
     )
-    check_hit(OUT_COLL_WITH_OVERLAY, 0, merged_with_overlay[0], CELL_A, 3.75, 0.00375, 0, 1.25)
-    check_hit(OUT_COLL_WITH_OVERLAY, 1, merged_with_overlay[1], CELL_B, 4.0, 0.004, 1, 3.0)
-    check_hit(OUT_COLL_WITH_OVERLAY, 2, merged_with_overlay[2], CELL_C, 4.0, 0.004, 3, 5.5)
+    by_cell = hits_by_cell(merged_with_overlay)
+    assert set(by_cell.keys()) == {CELL_A, CELL_B, CELL_C}, f"'ExcludeOverlayHits=False' expected cells {CELL_A}, {CELL_B} and {CELL_C}, got {set(by_cell.keys())}"
+    assert all(len(by_cell[cell]) == 1 for cell in (CELL_A, CELL_B, CELL_C)), (
+        f"'ExcludeOverlayHits=False' with 'SumAll' exptected all cells to have exactly 1 hit"
+    )
+    check_hit(OUT_COLL_WITH_OVERLAY, by_cell[CELL_A][0], CELL_A, 3.75, 0.00375, 0, 1.25)
+    check_hit(OUT_COLL_WITH_OVERLAY, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)
+    check_hit(OUT_COLL_WITH_OVERLAY, by_cell[CELL_C][0], CELL_C, 4.0, 0.004, 3, 5.5)
 
     print("[check] All assertions passed.")
     for coll_name in (
