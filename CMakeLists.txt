@@ -24,10 +24,6 @@ option(K4RECTRACKER_TRACKING "Build the Tracking subpackage" ON)
 # dependencies
 # For some reason, the find_package with DD4hep must be the first one
 find_package(DD4hep REQUIRED COMPONENTS DDRec DDG4 DDParsers)
-# dd4hep_set_compiler_flags() expects DD4hep_SET_RPATH to be set to ON
-# otherwise it will not set the rpath when installing
-set(DD4HEP_SET_RPATH ON)
-dd4hep_set_compiler_flags()
 find_package(ROOT COMPONENTS RIO Tree MathCore)
 find_package(podio 1.2 REQUIRED)
 find_package(EDM4HEP REQUIRED)
@@ -41,7 +37,7 @@ find_package(GSL REQUIRED)
 if(K4RECTRACKER_TRACKING)
   find_package(PandoraSDK REQUIRED)
   find_package(Eigen3 REQUIRED)
-  find_package(onnxruntime REQUIRED)
+  find_package(onnxruntime 1.16.0 REQUIRED)
   find_package(Torch REQUIRED)
 endif()
 
@@ -66,7 +62,6 @@ add_subdirectory(ARCdigi)
 add_subdirectory(VTXdigi)
 add_subdirectory(VTXdigiDetailed)
 if(K4RECTRACKER_TRACKING)
-  set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
   add_subdirectory(Tracking)
 else()
   message(STATUS "K4RECTRACKER_TRACKING is OFF: not building the Tracking subpackage")
