@@ -991,7 +991,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
           genfit::MeasuredStateOnPlane measState;
           try {
             measState = kfi->getFittedState();
-          } catch (const genfit::Exception& e) {
+          } catch (const std::exception& e) {
             if (showFitDiagnostics) {
               std::cerr << "Exception retrieving fitted hit state: " << e.what() << std::endl;
             }
@@ -1061,7 +1061,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     }
 
     // getFittedState() averages the forward/backward Kalman states and can throw
-    // a genfit::Exception (e.g. an ill-conditioned covariance)
+    // a std::exception (e.g. an ill-conditioned covariance)
     genfit::MeasuredStateOnPlane fittedState;
 
     // TrackState at the first hit. The reference point is the corresponding
@@ -1071,7 +1071,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     try {
       fittedState = genfitTrack.getFittedState();
       trackStateFirstHit = UpdateTrackState(fittedState, m_firstHitReferencePoint, edm4hep::TrackState::AtFirstHit);
-    } catch (const genfit::Exception& e) {
+    } catch (const std::exception& e) {
       if (showFitDiagnostics) {
         std::cerr << "Exception creating TrackState at first hit: " << e.what() << std::endl;
       }
@@ -1087,7 +1087,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     try {
       fittedState = genfitTrack.getFittedState(genfitTrack.getNumPoints() - 1);
       trackStateLastHit = UpdateTrackState(fittedState, m_lastHitReferencePoint, edm4hep::TrackState::AtLastHit);
-    } catch (const genfit::Exception& e) {
+    } catch (const std::exception& e) {
       if (showFitDiagnostics) {
         std::cerr << "Exception creating TrackState at last hit: " << e.what() << std::endl;
       }
@@ -1108,7 +1108,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       trackStateIP = UpdateTrackState(
           fittedState, m_vpReferencePoint,
           edm4hep::TrackState::AtIP); // N.B. trackState does not carry meaningful information for displaced tracks
-    } catch (const genfit::Exception& e) {
+    } catch (const std::exception& e) {
       if (showFitDiagnostics) {
         std::cerr << "Exception creating TrackState at IP: " << e.what() << std::endl;
       }
