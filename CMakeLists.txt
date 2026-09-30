@@ -37,7 +37,7 @@ find_package(GSL REQUIRED)
 if(K4RECTRACKER_TRACKING)
   find_package(PandoraSDK REQUIRED)
   find_package(Eigen3 REQUIRED)
-  find_package(onnxruntime REQUIRED)
+  find_package(onnxruntime 1.16.0 REQUIRED)
   find_package(Torch REQUIRED)
 endif()
 
