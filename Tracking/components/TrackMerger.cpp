@@ -134,7 +134,8 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
   }
 
 private:
-  bool isMatch(const edm4hep::Track& t1, edm4hep::TrackState::Location loc1, const edm4hep::Track& t2, edm4hep::TrackState::Location loc2) const {
+  bool isMatch(const edm4hep::Track& t1, edm4hep::TrackState::Location loc1, const edm4hep::Track& t2,
+               edm4hep::TrackState::Location loc2) const {
     auto ts1 = t1.getTrackState(loc1);
     auto ts2 = t2.getTrackState(loc2);
 
