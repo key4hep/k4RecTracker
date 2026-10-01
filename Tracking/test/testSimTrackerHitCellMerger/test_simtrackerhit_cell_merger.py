@@ -15,7 +15,7 @@ What it does
    So cell 1 is crossed by three tracks and cell 2 by a single one. Cell 3 holds the only hits
    flagged isOverlay(), so that ExcludeOverlayHits can be checked in both directions: it must be
    absent from every collection produced with true and present with it set to false. The hits are deliberately
-   written in a scrambled order so that the per-cell and per-track grouping are exercised. 
+   written in a scrambled order so that the per-cell and per-track grouping are exercised.
    Each hit carries a position and a momentum derived from its
    time, so that both picking one of them and averaging over them give a predictable answer.
 
@@ -231,9 +231,11 @@ def check_output(output_file: str) -> None:
     )
     # dictionary with keys 'cellID' and items 'list of every hit in that cell'
     by_cell = hits_by_cell(merged_all)
-    assert set(by_cell.keys()) == {CELL_A, CELL_B}, f"'SumAll' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    assert set(by_cell.keys()) == {CELL_A, CELL_B}, (
+        f"'SumAll' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    )
     assert all(len(by_cell[cell]) == 1 for cell in (CELL_A, CELL_B)), (
-        f"'SumAll' exptected all cells to have exactly 1 hit"
+        f"'SumAll' expected all cells to have exactly 1 hit"
     )
 
     check_hit(OUT_COLL_ALL, by_cell[CELL_A][0], CELL_A, 3.75, 0.00375, 0, 1.25)
@@ -248,7 +250,9 @@ def check_output(output_file: str) -> None:
         f"'MostPrimaryInCell' should give one hit per cell, i.e. 2 in total, got {len(merged_most_primary)}"
     )
     by_cell = hits_by_cell(merged_most_primary)
-    assert set(by_cell.keys()) == {CELL_A, CELL_B}, f"'MostPrimaryInCell' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    assert set(by_cell.keys()) == {CELL_A, CELL_B}, (
+        f"'MostPrimaryInCell' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    )
     assert all(len(by_cell[cell]) == 1 for cell in (CELL_A, CELL_B))
     check_hit(OUT_COLL_MOST_PRIMARY, by_cell[CELL_A][0], CELL_A, 3.0, 0.003, 0, 1.5)
     check_hit(OUT_COLL_MOST_PRIMARY, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)
@@ -263,9 +267,15 @@ def check_output(output_file: str) -> None:
         f"got {len(merged_per_track)}"
     )
     by_cell = hits_by_cell(merged_per_track)
-    assert set(by_cell.keys()) == {CELL_A, CELL_B}, f"'PerTrack' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
-    assert len(by_cell[CELL_A]) == 3, f"'PerTrack' cell {CELL_A}, expected 3 hits, got {len(by_cell[CELL_A])}"
-    assert len(by_cell[CELL_B]) == 1, f"'PerTrack' cell {CELL_B}, expected 1 hit, got {len(by_cell[CELL_B])}"
+    assert set(by_cell.keys()) == {CELL_A, CELL_B}, (
+        f"'PerTrack' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    )
+    assert len(by_cell[CELL_A]) == 3, (
+        f"'PerTrack' cell {CELL_A}, expected 3 hits, got {len(by_cell[CELL_A])}"
+    )
+    assert len(by_cell[CELL_B]) == 1, (
+        f"'PerTrack' cell {CELL_B}, expected 1 hit, got {len(by_cell[CELL_B])}"
+    )
     check_hit(OUT_COLL_PER_TRACK, by_cell[CELL_A][0], CELL_A, 3.0, 0.003, 0, 1.5)
     check_hit(OUT_COLL_PER_TRACK, by_cell[CELL_A][1], CELL_A, 0.5, 0.0005, 1, 1.5)
     check_hit(OUT_COLL_PER_TRACK, by_cell[CELL_A][2], CELL_A, 0.25, 0.00025, 2, 0.5)
@@ -279,8 +289,12 @@ def check_output(output_file: str) -> None:
         f"got {len(merged_single_track)}"
     )
     by_cell = hits_by_cell(merged_single_track)
-    assert set(by_cell.keys()) == {CELL_B}, f"'SkipMultiTrackCells' expected cell {CELL_B} exclusively, got {set(by_cell.keys())}"
-    assert len(by_cell[CELL_B]) == 1, f"'SkipMultiTrackCells' cell {CELL_B}, expected 1 hit, got {len(by_cell[CELL_B])}"
+    assert set(by_cell.keys()) == {CELL_B}, (
+        f"'SkipMultiTrackCells' expected cell {CELL_B} exclusively, got {set(by_cell.keys())}"
+    )
+    assert len(by_cell[CELL_B]) == 1, (
+        f"'SkipMultiTrackCells' cell {CELL_B}, expected 1 hit, got {len(by_cell[CELL_B])}"
+    )
     check_hit(OUT_COLL_SINGLE_TRACK, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)
 
     # --- RepresentativeKinematics = "EarliestHit" --------------------------
@@ -292,9 +306,11 @@ def check_output(output_file: str) -> None:
         f"'EarliestHit' should give one hit per cell, i.e. 2, got {len(merged_earliest_hit)}"
     )
     by_cell = hits_by_cell(merged_earliest_hit)
-    assert set(by_cell.keys()) == {CELL_A, CELL_B}, f"Kinematics 'EarliestHit' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    assert set(by_cell.keys()) == {CELL_A, CELL_B}, (
+        f"Kinematics 'EarliestHit' expected cells {CELL_A} and {CELL_B}, got {set(by_cell.keys())}"
+    )
     assert all(len(by_cell[cell]) == 1 for cell in (CELL_A, CELL_B)), (
-        f"Kinematics 'EarliestHit' with 'SumAll' exptected all cells to have exactly 1 hit"
+        f"Kinematics 'EarliestHit' with 'SumAll' expected all cells to have exactly 1 hit"
     )
     check_hit(OUT_COLL_EARLIEST_HIT, by_cell[CELL_A][0], CELL_A, 3.75, 0.00375, 0, 0.5)
     check_hit(OUT_COLL_EARLIEST_HIT, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)
@@ -323,9 +339,11 @@ def check_output(output_file: str) -> None:
         f"hits, got {len(merged_with_overlay)}"
     )
     by_cell = hits_by_cell(merged_with_overlay)
-    assert set(by_cell.keys()) == {CELL_A, CELL_B, CELL_C}, f"'ExcludeOverlayHits=False' expected cells {CELL_A}, {CELL_B} and {CELL_C}, got {set(by_cell.keys())}"
+    assert set(by_cell.keys()) == {CELL_A, CELL_B, CELL_C}, (
+        f"'ExcludeOverlayHits=False' expected cells {CELL_A}, {CELL_B} and {CELL_C}, got {set(by_cell.keys())}"
+    )
     assert all(len(by_cell[cell]) == 1 for cell in (CELL_A, CELL_B, CELL_C)), (
-        f"'ExcludeOverlayHits=False' with 'SumAll' exptected all cells to have exactly 1 hit"
+        f"'ExcludeOverlayHits=False' with 'SumAll' expected all cells to have exactly 1 hit"
     )
     check_hit(OUT_COLL_WITH_OVERLAY, by_cell[CELL_A][0], CELL_A, 3.75, 0.00375, 0, 1.25)
     check_hit(OUT_COLL_WITH_OVERLAY, by_cell[CELL_B][0], CELL_B, 4.0, 0.004, 1, 3.0)

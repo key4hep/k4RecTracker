@@ -108,7 +108,7 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *  information to provide dx.
  *
  *  A single Geant4 track can leave several SimTrackerHits in one cell (one per step), and several
- *  tracks (the primary plus its delta rays, conversions, other particles, ...) can cross the very same cell. 
+ *  tracks (the primary plus its delta rays, conversions, other particles, ...) can cross the very same cell.
  *  How to handle cases with multiple tracks in a cell is configurable via the MultiTrackCellHandling property,
  *  which can take one of the following values:
  *
@@ -139,9 +139,9 @@ constexpr auto makePropertyChoices(std::pair<NAMES, ENUM>... choices) {
  *   - MCParticle::isCreatedInSimulation(), the BITCreatedInSimulation bit of the simulator status. This is
  *     genuine Geant4 truth written by DDG4: it separates the particles that came from the generator (the
  *     true primaries) from those that Geant4 created during tracking.
- *   - the index of the MCParticle within its collection, which can be used as a proxy for the particle ID. 
- *     DDG4 stores particles in a dd4hep::sim::Geant4ParticleMap, i.e. a std::map<int, Geant4Particle*>, 
- *     and writes them to the MCParticle collection in ascending map-key order, so the collection index 
+ *   - the index of the MCParticle within its collection, which can be used as a proxy for the particle ID.
+ *     DDG4 stores particles in a dd4hep::sim::Geant4ParticleMap, i.e. a std::map<int, Geant4Particle*>,
+ *     and writes them to the MCParticle collection in ascending map-key order, so the collection index
  *     increases monotonically with the particle ID.
  *
  *  Contributors are ranked by those two in that order, so the "most primary" track of a cell is the
