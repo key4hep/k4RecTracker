@@ -134,7 +134,7 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
   }
 
 private:
-  bool isMatch(const edm4hep::Track& t1, int loc1, const edm4hep::Track& t2, int loc2) const {
+  bool isMatch(const edm4hep::Track& t1, edm4hep::TrackState::Location loc1, const edm4hep::Track& t2, edm4hep::TrackState::Location loc2) const {
     auto ts1 = getTrackState(t1, loc1);
     auto ts2 = getTrackState(t2, loc2);
 
@@ -167,7 +167,7 @@ private:
   // A negative tolerance means the corresponding parameter is not considered for matching.
   static bool withinTolerance(float diff, float tolerance) { return tolerance < 0.f || diff <= tolerance; }
 
-  std::optional<TS> getTrackState(Track track, const int loc) const {
+  std::optional<TS> getTrackState(Track track, edm4hep::TrackState::Location loc) const {
     auto ts = track.getTrackState(loc);
     if (!ts.has_value()) {
       warning() << std::format("No track state at location {} found!", loc) << endmsg;
