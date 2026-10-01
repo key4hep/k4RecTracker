@@ -134,13 +134,16 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
   }
 
 private:
-  bool isMatch(const edm4hep::Track& t1, int loc1, const edm4hep::Track& t2, int loc2) const {
-    auto ts1 = getTrackState(t1, loc1);
-    auto ts2 = getTrackState(t2, loc2);
+  bool isMatch(const edm4hep::Track& t1, edm4hep::TrackState::Location loc1, const edm4hep::Track& t2,
+               edm4hep::TrackState::Location loc2) const {
+    auto ts1 = t1.getTrackState(loc1);
+    auto ts2 = t2.getTrackState(loc2);
 
     if (!ts1.has_value() || !ts2.has_value()) {
       // It's common for some tracks to lack specific states; verbose instead of debug to avoid spam
-      warning() << fmt::format("    [SKIP] Missing requested states (Loc1: {}, Loc2: {})", loc1, loc2) << endmsg;
+      warning() << fmt::format("    [SKIP] Missing requested states (Loc1: {}, Loc2: {})", static_cast<int>(loc1),
+                               static_cast<int>(loc2))
+                << endmsg;
       return false;
     }
 
@@ -158,7 +161,8 @@ private:
 
     debug() << fmt::format("    Comparing Loc {} vs {}: d0_diff={:.4f}, z0_diff={:.4f}, phi_diff={:.4f}, "
                            "omega_diff={:.4f}, tanLambda_diff={:.4f} -> Match: {}",
-                           loc1, loc2, d0_diff, z0_diff, phi_diff, omega_diff, tanLambda_diff, match)
+                           static_cast<int>(loc1), static_cast<int>(loc2), d0_diff, z0_diff, phi_diff, omega_diff,
+                           tanLambda_diff, match)
             << endmsg;
 
     return match;
@@ -166,14 +170,6 @@ private:
 
   // A negative tolerance means the corresponding parameter is not considered for matching.
   static bool withinTolerance(float diff, float tolerance) { return tolerance < 0.f || diff <= tolerance; }
-
-  std::optional<TS> getTrackState(Track track, const int loc) const {
-    auto ts = track.getTrackState(loc);
-    if (!ts.has_value()) {
-      warning() << std::format("No track state at location {} found!", loc) << endmsg;
-    }
-    return ts;
-  }
 };
 
 DECLARE_COMPONENT(TrackMerger)
