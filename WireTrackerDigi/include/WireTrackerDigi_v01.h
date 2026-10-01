@@ -165,7 +165,7 @@ private:
 
   // Readout window duration in ns
   Gaudi::Property<double> m_ReadoutWindowDuration_ns{
-      this, "ReadoutWindowDuration_ns", 450.0,
+      this, "ReadoutWindowDuration_ns", 600.0,
       "Together with ReadoutWindowStartTime_ns, defines the readout window. Any DigiHits with arrival time after "
       "ReadoutWindowStartTime_ns + ReadoutWindowDuration_ns are discarded."};
   Gaudi::Property<bool> m_isSTT{this, "isSTT", false,
