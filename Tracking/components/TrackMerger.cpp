@@ -141,7 +141,9 @@ private:
 
     if (!ts1.has_value() || !ts2.has_value()) {
       // It's common for some tracks to lack specific states; verbose instead of debug to avoid spam
-      warning() << fmt::format("    [SKIP] Missing requested states (Loc1: {}, Loc2: {})", static_cast<int>(loc1), static_cast<int>(loc2)) << endmsg;
+      warning() << fmt::format("    [SKIP] Missing requested states (Loc1: {}, Loc2: {})", static_cast<int>(loc1),
+                               static_cast<int>(loc2))
+                << endmsg;
       return false;
     }
 
@@ -159,7 +161,8 @@ private:
 
     debug() << fmt::format("    Comparing Loc {} vs {}: d0_diff={:.4f}, z0_diff={:.4f}, phi_diff={:.4f}, "
                            "omega_diff={:.4f}, tanLambda_diff={:.4f} -> Match: {}",
-                           static_cast<int>(loc1), static_cast<int>(loc2), d0_diff, z0_diff, phi_diff, omega_diff, tanLambda_diff, match)
+                           static_cast<int>(loc1), static_cast<int>(loc2), d0_diff, z0_diff, phi_diff, omega_diff,
+                           tanLambda_diff, match)
             << endmsg;
 
     return match;
