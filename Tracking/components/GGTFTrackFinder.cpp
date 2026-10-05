@@ -130,15 +130,16 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
     edm4hep::TrackCollection outputTracks;
 
     HitBatch batch;
-    const std::size_t inputHitCount = reserveBatch(inputPlanarHitCollections, inputWireHitCollections, batch);
+    const std::size_t inputHitCount =
+        reserveBatch(inputPlanarHitCollections, inputWireHitCollections, batch, m_maxHits.value());
 
-    // kMaxHits = 20000 is used to prevent events with an exceptionally large number of hits
+    // MaxHits is used to prevent events with an exceptionally large number of hits
     // from being processed by the model. Very large inputs can cause ONNX Runtime C++ inference
     // to fail or crash because input size directly affects memory usage and computational cost.
-    if (inputHitCount == 0 || inputHitCount > kMaxHits) {
-      if (inputHitCount > kMaxHits) {
-        warning() << "Event " << eventNumber << " has " << inputHitCount << " hits, exceeding the configured limit of "
-                  << kMaxHits << "; skipping." << endmsg;
+    if (inputHitCount == 0 || inputHitCount >= m_maxHits.value()) {
+      if (inputHitCount >= m_maxHits.value()) {
+        warning() << "Event " << eventNumber << " has " << inputHitCount << " hits, reaching the configured limit of "
+                  << m_maxHits.value() << "; skipping." << endmsg;
       }
       return std::make_tuple(std::move(outputTracks));
     }
@@ -189,7 +190,7 @@ private:
    */
   static std::size_t reserveBatch(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& planarCollections,
                                   const std::vector<const edm4hep::SenseWireHitCollection*>& wireCollections,
-                                  HitBatch& batch) {
+                                  HitBatch& batch, std::size_t maxHits) {
     std::size_t totalHits = 0;
     for (const auto* collection : planarCollections) {
       if (collection != nullptr) {
@@ -202,7 +203,7 @@ private:
       }
     }
 
-    if (totalHits <= kMaxHits) {
+    if (totalHits < maxHits) {
       batch.features.reserve(totalHits * kFeatureCount);
       batch.hitTypes.reserve(totalHits);
       batch.collectionIndices.reserve(totalHits);
@@ -412,8 +413,6 @@ private:
 
   static constexpr std::size_t kFeatureCount = 7;
   static constexpr std::size_t kOutputValuesPerHit = 4;
-  static constexpr std::size_t kMaxHits = 20000;
-
   mutable std::atomic<std::uint64_t> m_eventCounter{0}; // Thread-safe processed-event counter.
 
   std::unique_ptr<Ort::Env> m_environment;       // ONNX Runtime environment.
@@ -424,6 +423,7 @@ private:
   std::string m_outputName;                      // Owned ONNX output name.
 
   Gaudi::Property<std::string> m_modelPath{this, "ModelPath", "", "Path to the ONNX model file"};
+  Gaudi::Property<std::size_t> m_maxHits{this, "MaxHits", 20000, "Maximum number of hits accepted per event"};
   Gaudi::Property<double> m_tbeta{this, "Tbeta", 0.6, "Threshold used to identify cluster core points"};
   Gaudi::Property<double> m_td{this, "Td", 0.3, "Radius used to assign nearby hits to a cluster core"};
 };
