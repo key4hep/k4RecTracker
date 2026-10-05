@@ -21,10 +21,19 @@
 #include "DD4hep/Detector.h"
 #include "DD4hep/DetectorSelector.h"
 #include "DD4hep/Readout.h"
+#include "DDSegmentation/BitFieldCoder.h"
 #include <DDRec/DetectorData.h>
 
 // C++
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <exception>
+#include <limits>
+#include <memory>
 #include <string>
+#include <vector>
 
 #include <utils.h>
 
@@ -77,71 +86,63 @@ struct TracksFromGenParticles final
     // - barrel: inner R, zmax
     // - endcap: inner R, zmin, zmax
     if (m_extrapolateToECal) {
-      bool retrieved = false;
-
-      dd4hep::rec::LayeredCalorimeterData* caloExtension =
-          getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL | dd4hep::DetType::ENDCAP),
-                       (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
-
-      if (caloExtension) { // special case handling for DRC o1
-        debug() << "DRC extension found, using it..." << endmsg;
-
-        m_eCalBarrelInnerR = caloExtension->extent[0] / dd4hep::mm;
-        m_eCalBarrelMaxZ = caloExtension->extent[2] / dd4hep::mm;
-        debug() << "DRC barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
-        debug() << "DRC barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
-        m_eCalEndCapInnerR = caloExtension->extent[4] / dd4hep::mm;
-        m_eCalEndCapOuterR = caloExtension->extent[5] / dd4hep::mm;
-        m_eCalEndCapInnerZ = caloExtension->extent[2] / dd4hep::mm;
-        m_eCalEndCapOuterZ = caloExtension->extent[3] / dd4hep::mm;
-        debug() << "DRC endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
-        debug() << "DRC endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
-        debug() << "DRC endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
-        debug() << "DRC endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
-        retrieved = true;
-      }
-
-      if (!retrieved) { // typical cases
-        info() << "No DR calo has been found. Searching for the separated barrel and endcap ECAL..." << endmsg;
-
-        // set "special" parameters to 0, will use it later to avoid projecting to the empty detector
-        m_eCalBarrelInnerR = 0.;
-        m_eCalEndCapInnerR = 0.;
-
-        // try barrel first
-        caloExtension =
-            getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
+      try {
+        const dd4hep::rec::LayeredCalorimeterData* drcExtension =
+            getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL | dd4hep::DetType::ENDCAP),
                          (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
 
-        if (caloExtension) {
-          m_eCalBarrelInnerR = caloExtension->extent[0] / dd4hep::mm;
-          m_eCalBarrelMaxZ = caloExtension->extent[3] / dd4hep::mm;
-          debug() << "ECAL barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
-          debug() << "ECAL barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
-        }
+        if (drcExtension) { // special case handling for DRC o1
+          debug() << "DRC extension found, using it..." << endmsg;
 
-        // then try endcap
-        caloExtension =
-            getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
-                         (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
+          m_eCalBarrelInnerR = drcExtension->extent[0] / dd4hep::mm;
+          m_eCalBarrelMaxZ = drcExtension->extent[2] / dd4hep::mm;
+          debug() << "DRC barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
+          debug() << "DRC barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
+          m_eCalEndCapInnerR = drcExtension->extent[4] / dd4hep::mm;
+          m_eCalEndCapOuterR = drcExtension->extent[5] / dd4hep::mm;
+          m_eCalEndCapInnerZ = drcExtension->extent[2] / dd4hep::mm;
+          m_eCalEndCapOuterZ = drcExtension->extent[3] / dd4hep::mm;
+          debug() << "DRC endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
+          debug() << "DRC endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
+          debug() << "DRC endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
+          debug() << "DRC endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
+        } else { // typical cases
+          info() << "No DR calo has been found. Searching for the separated barrel and endcap ECAL..." << endmsg;
 
-        if (caloExtension) {
-          m_eCalEndCapInnerR = caloExtension->extent[0] / dd4hep::mm;
-          m_eCalEndCapOuterR = caloExtension->extent[1] / dd4hep::mm;
-          m_eCalEndCapInnerZ = caloExtension->extent[2] / dd4hep::mm;
-          m_eCalEndCapOuterZ = caloExtension->extent[3] / dd4hep::mm;
-          debug() << "ECAL endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
-          debug() << "ECAL endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
-          debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
-          debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
-        }
+          // "special" parameters stay at 0 if a detector is not found, will use it later to avoid projecting to the
+          // empty detector
+          const dd4hep::rec::LayeredCalorimeterData* barrelExtension =
+              getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
+                           (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
 
-        if (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.) {
-          retrieved = true;
+          if (barrelExtension) {
+            m_eCalBarrelInnerR = barrelExtension->extent[0] / dd4hep::mm;
+            m_eCalBarrelMaxZ = barrelExtension->extent[3] / dd4hep::mm;
+            debug() << "ECAL barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
+            debug() << "ECAL barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
+          }
+
+          const dd4hep::rec::LayeredCalorimeterData* endcapExtension =
+              getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
+                           (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
+
+          if (endcapExtension) {
+            m_eCalEndCapInnerR = endcapExtension->extent[0] / dd4hep::mm;
+            m_eCalEndCapOuterR = endcapExtension->extent[1] / dd4hep::mm;
+            m_eCalEndCapInnerZ = endcapExtension->extent[2] / dd4hep::mm;
+            m_eCalEndCapOuterZ = endcapExtension->extent[3] / dd4hep::mm;
+            debug() << "ECAL endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
+            debug() << "ECAL endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
+            debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
+            debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
+          }
         }
+      } catch (const std::exception& e) {
+        error() << "Failed to retrieve calorimeter dimensions from detector description: " << e.what() << endmsg;
+        return StatusCode::FAILURE;
       }
 
-      if (!retrieved) {
+      if (m_eCalBarrelInnerR <= 0. && m_eCalEndCapInnerR <= 0.) {
         error() << "Could not retrieve calorimeter dimensions from detector description, cannot perform extrapolation "
                    "to calorimeter."
                 << endmsg;
@@ -152,7 +153,7 @@ struct TracksFromGenParticles final
     }
 
     // setup system decoder
-    m_systemEncoder = new dd4hep::DDSegmentation::BitFieldCoder(m_systemEncoding);
+    m_systemEncoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(m_systemEncoding);
     m_indexSystem = m_systemEncoder->index("system");
 
     return StatusCode::SUCCESS;
@@ -261,7 +262,7 @@ struct TracksFromGenParticles final
             trackHits.push_back(ahit);
 
             // find systemID of hit and increase hit counter for corresponding subdetector
-            uint cellID = hit.getCellID();
+            const std::uint64_t cellID = hit.getCellID();
             int systemID = m_systemEncoder->get(cellID, m_indexSystem);
             for (size_t idxTracker = 0; idxTracker < m_trackerIDs.size(); idxTracker++) {
               if (systemID == m_trackerIDs[idxTracker]) {
@@ -279,7 +280,7 @@ struct TracksFromGenParticles final
 
         // sort the hits according to their time
         std::sort(trackHits.begin(), trackHits.end(),
-                  [](const std::array<double, 7> a, const std::array<double, 7> b) { return a[6] < b[6]; });
+                  [](const std::array<double, 7>& a, const std::array<double, 7>& b) { return a[6] < b[6]; });
 
         // TrackState at First Hit
         auto trackState_AtFirstHit = edm4hep::TrackState{};
@@ -328,7 +329,7 @@ struct TracksFromGenParticles final
         trackFromGen.addToTrackStates(trackState_AtLastHit);
 
         // TrackState at Calorimeter
-        if (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.) {
+        if (m_extrapolateToECal && (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.)) {
           pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
           pandora::CartesianVector secondBestECalProjection(0.f, 0.f, 0.f);
           float minGenericTime(std::numeric_limits<float>::max());
@@ -420,15 +421,15 @@ struct TracksFromGenParticles final
 
 private:
   /// Solenoid magnetic field, to be retrieved from detector
-  float m_Bz;
+  float m_Bz = 0.f;
 
   /// ECAL barrel and endcap extent, to be retrieved from detector
-  float m_eCalBarrelInnerR;
-  float m_eCalBarrelMaxZ;
-  float m_eCalEndCapInnerR;
-  float m_eCalEndCapOuterR;
-  float m_eCalEndCapInnerZ;
-  float m_eCalEndCapOuterZ;
+  float m_eCalBarrelInnerR = 0.f;
+  float m_eCalBarrelMaxZ = 0.f;
+  float m_eCalEndCapInnerR = 0.f;
+  float m_eCalEndCapOuterR = 0.f;
+  float m_eCalEndCapInnerZ = 0.f;
+  float m_eCalEndCapOuterZ = 0.f;
 
   /// Configurable property to decide whether to calculate track state at ECAL or not
   Gaudi::Property<bool> m_extrapolateToECal{this, "ExtrapolateToECal", false,
@@ -461,7 +462,7 @@ private:
   /// system it belongs to. The tool will count number of hits in the different
   /// tracking subsystems based on the hit systemID, and on the list of systemIDs
   /// passed through TrackerIDs
-  dd4hep::DDSegmentation::BitFieldCoder* m_systemEncoder;
+  std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_systemEncoder;
 
   /// Configurable property storing string and number of bits used
   /// to encode the systemID in the hits of the various tracking devices
@@ -469,7 +470,7 @@ private:
   Gaudi::Property<std::string> m_systemEncoding{this, "SystemEncoding", "system:5", "System encoding string"};
 
   /// Used to retrieve systemID by index rather than by string
-  int m_indexSystem;
+  int m_indexSystem = 0;
 };
 
 DECLARE_COMPONENT(TracksFromGenParticles)
