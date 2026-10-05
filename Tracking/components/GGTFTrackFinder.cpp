@@ -113,6 +113,11 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
       return StatusCode::FAILURE;
     }
 
+    if (m_session == nullptr || m_memoryInfo == nullptr) {
+      error() << "ONNX Runtime session is not initialized" << endmsg;
+      return StatusCode::FAILURE;
+    }
+    
     return StatusCode::SUCCESS;
   }
 
@@ -141,8 +146,8 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
     appendPlanarHits(inputPlanarHitCollections, batch);
     appendWireHits(inputWireHitCollections, batch);
 
-    const std::vector<float> modelOutput = runInference(batch.features, batch.nHits);
-    const torch::Tensor clusterIds = get_clustering(modelOutput, batch.nHits, m_tbeta, m_td);
+    const torch::Tensor modelOutput = runInference(batch.features, batch.nHits);
+    const torch::Tensor clusterIds = get_clustering(modelOutput, m_tbeta, m_td);
 
     buildTracks(clusterIds, batch, inputPlanarHitCollections, inputWireHitCollections, outputTracks);
 
@@ -264,7 +269,8 @@ private:
         const double stereoAngle = hit.getWireStereoAngle();
 
         if (!std::isfinite(distanceToWire) || !std::isfinite(azimuthalAngle) || !std::isfinite(stereoAngle)) {
-          throw std::runtime_error("Wire hit contains non-finite geometry values");
+          warning() << "Skipping wire hit with non-finite geometry values" << endmsg;
+          continue;
         }
 
         TVector3 zPrime, xPrime, yPrime;
@@ -302,15 +308,12 @@ private:
    * @param features Flattened input feature buffer; must contain `nHits * 7`
    *        float values.
    * @param nHits Number of hits represented by the input buffer.
-   * @return Flat model output containing four float values per hit.
+   * @return Owned CPU tensor containing four float values per hit.
    * @throws std::logic_error if the session is not initialized.
    * @throws std::runtime_error if the input or output shape is invalid.
    */
-  std::vector<float> runInference(std::vector<float>& features, std::size_t nHits) const {
+  torch::Tensor runInference(std::vector<float>& features, std::size_t nHits) const {
 
-    if (m_session == nullptr || m_memoryInfo == nullptr) {
-      throw std::logic_error("ONNX Runtime session is not initialized");
-    }
     if (features.size() != nHits * kFeatureCount) {
       throw std::runtime_error("Feature buffer size does not match nHits * 7");
     }
@@ -340,7 +343,9 @@ private:
     }
 
     const float* outputData = outputs.front().GetTensorData<float>();
-    return {outputData, outputData + outputElementCount};
+    const std::vector<std::int64_t> outputShape = {static_cast<std::int64_t>(nHits),
+                                                   static_cast<std::int64_t>(kOutputValuesPerHit)};
+    return torch::from_blob(const_cast<float*>(outputData), outputShape, torch::dtype(torch::kFloat32)).clone();
   }
 
   /**
@@ -360,7 +365,7 @@ private:
       throw std::runtime_error("Clustering returned an undefined tensor");
     }
 
-    const torch::Tensor ids = clusterIds.to(torch::kCPU).to(torch::kInt64).contiguous().view({-1});
+    const torch::Tensor& ids = clusterIds;
     if (static_cast<std::size_t>(ids.numel()) != batch.nHits) {
       throw std::runtime_error("Cluster-id count does not match the number of input hits");
     }
@@ -370,7 +375,7 @@ private:
       return;
     }
 
-    const torch::Tensor order = torch::argsort(ids);
+    const torch::Tensor order = torch::argsort(ids, /*stable=*/true, /*dim=*/0, /*descending=*/false);
     const torch::Tensor sortedIds = ids.index_select(0, order);
     const auto orderAccessor = order.accessor<std::int64_t, 1>();
     const auto sortedIdsAccessor = sortedIds.accessor<std::int64_t, 1>();
