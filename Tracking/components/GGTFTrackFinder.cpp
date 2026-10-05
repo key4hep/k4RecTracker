@@ -299,7 +299,7 @@ private:
    * @throws std::logic_error if the session is not initialized.
    * @throws std::runtime_error if the input or output shape is invalid.
    */
-  torch::Tensor runInference(const std::vector<float>& features) const {
+  torch::Tensor runInference(std::vector<float>& features) const {
 
     if (features.size() % kFeatureCount != 0) {
       throw std::runtime_error("Feature buffer size is not a multiple of the feature count");
