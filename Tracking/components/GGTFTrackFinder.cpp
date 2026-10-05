@@ -117,7 +117,7 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
       error() << "ONNX Runtime session is not initialized" << endmsg;
       return StatusCode::FAILURE;
     }
-    
+
     return StatusCode::SUCCESS;
   }
 
