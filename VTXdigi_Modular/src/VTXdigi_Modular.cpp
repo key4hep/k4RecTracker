@@ -203,8 +203,11 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     throw GaudiException("Unable to retrieve the SurfaceManager from the DD4hep detector", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   m_surfaceMap = surfaceManager->map(m_subDetName.value());
-  if (!m_surfaceMap)
-    throw GaudiException("Unable to retrieve the simSurface map for subdetector " + m_subDetName.value(), "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+  if (!m_surfaceMap) {
+    debug() << "Available surface maps: " << endmsg;
+    debug() << surfaceManager->toString() << endmsg;
+    throw GaudiException("Unable to retrieve the simSurface map for subdetector " + m_subDetName.value() + " (printed availabe surfaces above at debug level)", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+  }
 
   m_volumeManager = m_detector->volumeManager();
   if (!m_volumeManager.isValid())

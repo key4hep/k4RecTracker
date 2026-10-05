@@ -426,6 +426,10 @@ ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : ICh
   /* Load charge deposition sampling parameters */
   m_meanDepositionsPerUm = digitizer.MeanDepositionsPerUm();
 
+  if(digitizer.DepositionChargeHistogramFilename() == digitizer.UndefinedString()) {
+    throw std::runtime_error("ChargeCollector_LUT: Deposition charge histogram file name (Gaudi property of VTXdigi_Modular) is not set.");
+  }
+
   std::unique_ptr<TFile> file(TFile::Open(digitizer.DepositionChargeHistogramFilename().c_str(), "READ"));
   if (!file || file->IsZombie())
     throw std::runtime_error("Could not open deposition charge histogram file " + digitizer.DepositionChargeHistogramFilename() + ", cannot continue.");

@@ -55,6 +55,8 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
 
   /* -- Accessors for charge collector -- */
 
+  inline std::string UndefinedString() const { return m_undefinedString; }
+
   inline std::array<float, 3> ActiveVolumeDimensions() const { return {m_sensorLength[0], m_sensorLength[1], m_sensorActiveThickness}; }
 
   inline std::array<float, 2> PixelPitch() const { return m_pixelPitch; }
