@@ -147,7 +147,7 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
     appendPlanarHits(inputPlanarHitCollections, batch);
     appendWireHits(inputWireHitCollections, batch);
 
-    const torch::Tensor modelOutput = runInference(batch.features, batch.nHits);
+    const torch::Tensor modelOutput = runInference(batch.features);
     const torch::Tensor clusterIds = get_clustering(modelOutput, m_tbeta, m_td);
 
     buildTracks(clusterIds, batch, inputPlanarHitCollections, inputWireHitCollections, outputTracks);
@@ -174,7 +174,6 @@ private:
     std::vector<HitType> hitTypes;              // Original hit kind.
     std::vector<std::size_t> collectionIndices; // Source collection index.
     std::vector<std::size_t> hitIndices;        // Index within the source collection.
-    std::size_t nHits = 0;                      // Total number of flattened hits.
   };
 
   /**
@@ -186,6 +185,7 @@ private:
    * @param planarCollections Planar hit collections.
    * @param wireCollections Wire hit collections.
    * @param batch Batch whose buffers will be reserved.
+   * @param maxHits Configured maximum number of hits accepted per event.
    * @return Total number of input hits.
    */
   static std::size_t reserveBatch(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& planarCollections,
@@ -193,14 +193,10 @@ private:
                                   HitBatch& batch, std::size_t maxHits) {
     std::size_t totalHits = 0;
     for (const auto* collection : planarCollections) {
-      if (collection != nullptr) {
-        totalHits += collection->size();
-      }
+      totalHits += collection->size();
     }
     for (const auto* collection : wireCollections) {
-      if (collection != nullptr) {
-        totalHits += collection->size();
-      }
+      totalHits += collection->size();
     }
 
     if (totalHits < maxHits) {
@@ -223,12 +219,8 @@ private:
    */
   static void appendPlanarHits(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& collections,
                                HitBatch& batch) {
-    for (std::size_t collectionIndex = 0; collectionIndex < collections.size(); ++collectionIndex) {
-      const auto* collection = collections[collectionIndex];
-      if (collection == nullptr) {
-        throw std::invalid_argument("Null planar-hit collection pointer");
-      }
-
+    std::size_t collectionIndex = 0;
+    for (const auto* collection : collections) {
       for (std::size_t hitIndex = 0; hitIndex < collection->size(); ++hitIndex) {
         const auto hit = collection->at(hitIndex);
         const auto position = hit.getPosition();
@@ -238,8 +230,8 @@ private:
         batch.hitTypes.push_back(HitType::Planar);
         batch.collectionIndices.push_back(collectionIndex);
         batch.hitIndices.push_back(hitIndex);
-        ++batch.nHits;
       }
+      ++collectionIndex;
     }
   }
 
@@ -253,13 +245,9 @@ private:
    * @param collections Input wire-hit collections.
    * @param batch Destination event batch.
    */
-  static void appendWireHits(const std::vector<const edm4hep::SenseWireHitCollection*>& collections, HitBatch& batch) {
-    for (std::size_t collectionIndex = 0; collectionIndex < collections.size(); ++collectionIndex) {
-      const auto* collection = collections[collectionIndex];
-      if (collection == nullptr) {
-        throw std::invalid_argument("Null wire-hit collection pointer");
-      }
-
+  void appendWireHits(const std::vector<const edm4hep::SenseWireHitCollection*>& collections, HitBatch& batch) const {
+    std::size_t collectionIndex = 0;
+    for (const auto* collection : collections) {
       for (std::size_t hitIndex = 0; hitIndex < collection->size(); ++hitIndex) {
         const auto hit = collection->at(hitIndex);
         const edm4hep::Vector3d wirePosition = hit.getPosition();
@@ -298,26 +286,25 @@ private:
         batch.hitTypes.push_back(HitType::Wire);
         batch.collectionIndices.push_back(collectionIndex);
         batch.hitIndices.push_back(hitIndex);
-        ++batch.nHits;
       }
+      ++collectionIndex;
     }
   }
 
   /**
    * @brief Run the ONNX model for one event.
    *
-   * @param features Flattened input feature buffer; must contain `nHits * 7`
-   *        float values.
-   * @param nHits Number of hits represented by the input buffer.
+   * @param features Flattened input feature buffer containing seven float values per hit.
    * @return Owned CPU tensor containing four float values per hit.
    * @throws std::logic_error if the session is not initialized.
    * @throws std::runtime_error if the input or output shape is invalid.
    */
-  torch::Tensor runInference(std::vector<float>& features, std::size_t nHits) const {
+  torch::Tensor runInference(const std::vector<float>& features) const {
 
-    if (features.size() != nHits * kFeatureCount) {
-      throw std::runtime_error("Feature buffer size does not match nHits * 7");
+    if (features.size() % kFeatureCount != 0) {
+      throw std::runtime_error("Feature buffer size is not a multiple of the feature count");
     }
+    const std::size_t nHits = features.size() / kFeatureCount;
     if (nHits > static_cast<std::size_t>(std::numeric_limits<std::int64_t>::max())) {
       throw std::overflow_error("Hit count cannot be represented by the ONNX tensor shape");
     }
@@ -367,7 +354,7 @@ private:
     }
 
     const torch::Tensor& ids = clusterIds;
-    if (static_cast<std::size_t>(ids.numel()) != batch.nHits) {
+    if (static_cast<std::size_t>(ids.numel()) != batch.hitTypes.size()) {
       throw std::runtime_error("Cluster-id count does not match the number of input hits");
     }
 
