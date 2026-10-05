@@ -97,8 +97,8 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
 
       m_session = std::make_unique<Ort::Session>(*m_environment, m_modelPath.value().c_str(), m_sessionOptions);
 
-      if (m_session->GetInputCount() != 1 || m_session->GetOutputCount() != 1) {
-        error() << "The configured model must expose exactly one input and one output." << endmsg;
+      if (m_session->GetInputCount() < 1 || m_session->GetOutputCount() < 1) {
+        error() << "The configured model must expose at least one input and one output." << endmsg;
         return StatusCode::FAILURE;
       }
 
