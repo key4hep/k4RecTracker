@@ -31,7 +31,6 @@
 #include <cstdint>
 #include <exception>
 #include <limits>
-#include <memory>
 #include <string>
 #include <vector>
 
@@ -153,8 +152,8 @@ struct TracksFromGenParticles final
     }
 
     // setup system decoder
-    m_systemEncoder = std::make_unique<dd4hep::DDSegmentation::BitFieldCoder>(m_systemEncoding);
-    m_indexSystem = m_systemEncoder->index("system");
+    m_systemEncoder = dd4hep::DDSegmentation::BitFieldCoder(m_systemEncoding);
+    m_indexSystem = m_systemEncoder.index("system");
 
     return StatusCode::SUCCESS;
   }
@@ -263,7 +262,7 @@ struct TracksFromGenParticles final
 
             // find systemID of hit and increase hit counter for corresponding subdetector
             const std::uint64_t cellID = hit.getCellID();
-            int systemID = m_systemEncoder->get(cellID, m_indexSystem);
+            int systemID = m_systemEncoder.get(cellID, m_indexSystem);
             for (size_t idxTracker = 0; idxTracker < m_trackerIDs.size(); idxTracker++) {
               if (systemID == m_trackerIDs[idxTracker]) {
                 v[idxTracker]++;
@@ -462,7 +461,7 @@ private:
   /// system it belongs to. The tool will count number of hits in the different
   /// tracking subsystems based on the hit systemID, and on the list of systemIDs
   /// passed through TrackerIDs
-  std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_systemEncoder;
+  dd4hep::DDSegmentation::BitFieldCoder m_systemEncoder;
 
   /// Configurable property storing string and number of bits used
   /// to encode the systemID in the hits of the various tracking devices
