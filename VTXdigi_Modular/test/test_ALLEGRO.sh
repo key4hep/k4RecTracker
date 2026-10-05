@@ -3,13 +3,14 @@ set -uo pipefail
 ###############################################################################
 # Test script
 #
+# Runs the VTXdigi with a lookup table dummy on ALLEGRO o1 v03
+# Then checks if the output collections exist and are non-empty
+#
 # Requirements:
 #   - key4hep stack must be sourced
 #   - Environment variable K4GEO must be set
 #
-# This test only checks if output collections exist, not whether they make any sense.
-#
-# TODO:
+# Expected time to execute the tests is ~ 5 min
 ###############################################################################
 
 Dir_TestSrc="${SOURCE_DIR_TEST:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
@@ -28,13 +29,14 @@ NEvts=10
 Gun_Energy=10 # GeV
 Gun_Particle="mu-"
 
-File_SimOutput="Test_vtxdigi_M_simHits.root"
-File_SimSteering="${Dir_TestSrc}/steering_sim.py"
+File_SimSteering="${Dir_TestSrc}/test_ALLEGRO/steering_sim.py"
 File_Detector="${K4GEO}/FCCee/ALLEGRO/compact/ALLEGRO_o1_v03/ALLEGRO_o1_v03.xml"
+File_SimOutput="simHits.root"
 
-File_DigiSteering="${Dir_TestSrc}/steering_digi.py"
-File_LookupTable="${Dir_TestSrc}/lookup_table_dummy.init"
-File_DigiOutput="Test_vtxdigi_M_output.root"
+File_DigiSteering="${Dir_TestSrc}/test_ALLEGRO/steering_digi.py"
+File_LookupTable="${Dir_TestSrc}/resources/lookup_table_dummy_pixelVol20x20x43p5um.init"
+File_ChargeDep="${Dir_TestSrc}/resources/chargeDepositionDistribution.root"
+File_DigiOutput="output.root"
 
 check_file() {
     local file_path="$1"
@@ -49,7 +51,7 @@ echo "  VTXDigi_Modular execution test"
 echo "========================================================================"
 echo "  Events:    ${NEvts}"
 echo "  Particle:  ${Gun_Particle} @ ${Gun_Energy} GeV (particle gun uniform in cosTheta)"
-echo "  ALLEGRO o1_v03, inner VTX"
+echo "  Detector geometry: ALLEGRO o1_v03, inner VTX"
 echo "========================================================================"
 
 echo "  Checking input files"
@@ -91,7 +93,8 @@ k4run "${File_DigiSteering}" \
     --IOSvc.Input "${File_SimOutput}" \
     --IOSvc.Output "${File_DigiOutput}" \
     --GeoSvc.detectors "${File_Detector}" \
-    --VTXBdigi_inner.LookupTableFile "${File_LookupTable}"
+    --VTXBdigi_inner.LookupTableFile "${File_LookupTable}" \
+    --VTXBdigi_inner.LookupTableDepositionChargeHistogram "${File_ChargeDep}"
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Digitization failed."
@@ -146,7 +149,7 @@ EOF
 
 echo ""
 echo "  Cleaning up temporary files..."
-rm -rf "${File_SimOutput}" __pycache__
+# rm -rf "${File_SimOutput}" __pycache__
 
 echo ""
 echo "========================================================================"
