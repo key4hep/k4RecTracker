@@ -39,7 +39,6 @@ File_SimOutput="simHits.root"
 
 File_DigiSteering="${Dir_TestSrc}/test_SingleSensor/steering_digi.py"
 File_LookupTable="${Dir_TestSrc}/resources/lookup_table_dummy_pixelVol20x20x50um.init"
-File_ChargeDep="${Dir_TestSrc}/resources/chargeDepositionDistribution.root"
 File_DigiOutput="output.root"
 
 check_file() {
@@ -101,8 +100,7 @@ k4run "${File_DigiSteering}" \
     --IOSvc.Input "${File_SimOutput}" \
     --IOSvc.Output "${File_DigiOutput}" \
     --GeoSvc.detectors "${File_Detector}" \
-    --VTXBdigi_inner.LookupTableFile "${File_LookupTable}" \
-    --VTXBdigi_inner.LookupTableDepositionChargeHistogram "${File_ChargeDep}"
+    --VTXBdigi_inner.LookupTableFile "${File_LookupTable}"
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Digitization failed."

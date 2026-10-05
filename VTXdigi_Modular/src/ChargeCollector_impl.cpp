@@ -426,17 +426,17 @@ ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : ICh
   /* Load charge deposition sampling parameters */
   m_meanDepositionsPerUm = digitizer.MeanDepositionsPerUm();
 
-  if(digitizer.DepositionChargeHistogramFilename() == digitizer.UndefinedString()) {
-    throw std::runtime_error("ChargeCollector_LUT: Deposition charge histogram file name (Gaudi property of VTXdigi_Modular) is not set.");
-  }
+  // shipped with k4RecTracker, VTXDIGI_MODULAR_DATADIR is set at compile time in CMakeLists.txt
+  const std::string chargeDepFileName = VTXDIGI_MODULAR_DATADIR "/chargeDepositionDistribution.root";
+  m_digitizer.info() << " - Loading deposition charge histogram from " << chargeDepFileName << endmsg;
 
-  std::unique_ptr<TFile> file(TFile::Open(digitizer.DepositionChargeHistogramFilename().c_str(), "READ"));
+  std::unique_ptr<TFile> file(TFile::Open(chargeDepFileName.c_str(), "READ"));
   if (!file || file->IsZombie())
-    throw std::runtime_error("Could not open deposition charge histogram file " + digitizer.DepositionChargeHistogramFilename() + ", cannot continue.");
+    throw std::runtime_error("Could not open deposition charge histogram file " + chargeDepFileName + ", cannot continue.");
 
   TH1D* hist_chargeDep = file->Get<TH1D>("deposition_charge");
   if (!hist_chargeDep)
-    throw std::runtime_error("Could not find histogram \"deposition_charge\" in file "+ digitizer.DepositionChargeHistogramFilename() + ", cannot continue.");
+    throw std::runtime_error("Could not find histogram \"deposition_charge\" in file "+ chargeDepFileName + ", cannot continue.");
 
   // move ownership from TFile to this class
   hist_chargeDep->SetDirectory(nullptr);

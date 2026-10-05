@@ -35,6 +35,11 @@ install(TARGETS ${PackageName}
   PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${CMAKE_PROJECT_NAME}" COMPONENT dev
 )
 
+# Charge distribution histogram is required at runtime, but we don't need to make it user-definable. This is my attempt to make it available everywhere with the code (locally and via SPACK / on CVMFS) ~ Jona
+set(VTXDIGI_DATA_SUBDIR "${CMAKE_INSTALL_DATADIR}/${CMAKE_PROJECT_NAME}/VTXdigi_Modular")
+install(FILES ${PROJECT_SOURCE_DIR}/data/chargeDepositionDistribution.root DESTINATION ${VTXDIGI_DATA_SUBDIR})
+target_compile_definitions(${PackageName} PRIVATE VTXDIGI_MODULAR_DATADIR="${CMAKE_INSTALL_PREFIX}/${VTXDIGI_DATA_SUBDIR}")
+
 # Tests
 
 file(GLOB test_data ${PROJECT_SOURCE_DIR}/test/resources/* ) # test input
