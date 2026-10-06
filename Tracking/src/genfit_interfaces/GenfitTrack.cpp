@@ -890,9 +890,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
 
   // Reset the global TGeoManager navigator to a canonical state before fitting.
   // The navigator (current node, point, direction, safety/step caches) is process-global
-  // and is mutated by every material lookup during extrapolation. Without this backup
-  // restore mechanism, the material resolved for on-boundary points can depend on the track
-  // fitted previously (even in an earlier event), making fit results order-dependent.
+  // Without this backup fit results can be order-dependent.
   gGeoManager->DoBackupState();
 
   // Initialize the genfit fitter
