@@ -579,7 +579,7 @@ VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
 
   const auto solid = m_volman.lookupDetElement(reduced_cellID).volume().solid();
 
-  double dimX, dimY, dimZ; // Dimensions of the solid in cm
+  double dimX = 0.0, dimY = 0.0, dimZ = 0.0; // Dimensions of the solid in cm
   if (std::string(solid.type()) == "TGeoBBox") {
     dd4hep::Box box(solid);
     dimX = 2 * box.x(); // Get the dimensions in cm
