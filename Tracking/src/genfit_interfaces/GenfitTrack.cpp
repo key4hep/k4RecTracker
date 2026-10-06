@@ -888,6 +888,14 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     Track_temp.getTrackStates(i) = edm4hep::TrackState();
   }
 
+  // Reset the global TGeoManager navigator to a canonical state before fitting.
+  // The navigator (current node, point, direction, safety/step caches) is process-global
+  // and is mutated by every material lookup during extrapolation. Without this reset,
+  // the material resolved for on-boundary points can depend on the track fitted
+  // previously (even in an earlier event), making fit results order-dependent.
+  gGeoManager->CdTop();
+  gGeoManager->FindNode(m_posInit.X(), m_posInit.Y(), m_posInit.Z()); // seed position, in cm
+
   // Initialize the genfit fitter
   std::unique_ptr<genfit::AbsKalmanFitter> genfitFitter = nullptr;
 
