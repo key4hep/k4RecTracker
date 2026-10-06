@@ -1,58 +1,24 @@
 // VTXdigi_Modular/src/VTXdigi_tools.cpp
 #include "VTXdigi_tools.h"
+#include "VTXdigi_Modular.h"
+
 #include <DD4hep/Objects.h>
 #include <DD4hep/VolumeManager.h>
+#include <DDRec/Vector3D.h>
+#include <Parsers/Primitives.h>
 #include <edm4hep/Vector3d.h>
 
 namespace VTXdigi_tools {
 
 SimHitWrapper::SimHitWrapper(
-  edm4hep::SimTrackerHit simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID,
-  const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder,
-  const dd4hep::VolumeManager& volumeManager,
-  const std::unique_ptr<dd4hep::rec::CellIDPositionConverter>& cellIDPositionConverter)
+  edm4hep::SimTrackerHit simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID, const VTXdigi_Modular& digitizer)
     : m_simTrackerHit(simTrackerHit), m_volumeID(volumeID) {
 
   m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * kChargePerkeV); // convert energy deposit (in keV) to number of electrons
-  m_layerNumber = GetLayer(m_volumeID, cellIdDecoder);
+  m_layerNumber = digitizer.GetLayer(m_volumeID);
   // m_truthPos is set later in VTXdigi_Modular::operator() via SetTruthPos(...) to avoid double-calculating the sensor transformation matrix
 
-  // check if the simHit was caused by a primary, secondary or delta particle
-  if ( m_simTrackerHit.isProducedBySecondary() ) {
-    // if ddsim dropped the MCParticle that caused this simHit, we assume it was a delta ray
-    // ddsim drops MCParticles below a certain energy cut to save computing cost and disk space.
-    m_mcParticleLevel = MCParticleLevel::Delta;
-  }
-  else {
-    // check if the MCPArticle was created by the generator
-    const int32_t simulatorStatus = m_simTrackerHit.getParticle().getSimulatorStatus();
-    const int32_t mask = 1 << edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
-    const bool causedByPrimary = (simulatorStatus & mask) == 0; // bit is not set -> created in generator
-    if ( causedByPrimary )
-      m_mcParticleLevel = MCParticleLevel::Primary;
-    else
-    {
-      // now check if the MCParticle prod. vertex lies outside this sensors volume (by comparing volumeIDs)
-      const edm4hep::Vector3d prodVertex_temp = m_simTrackerHit.getParticle().getVertex();
-      const dd4hep::Position prodVertex = 0.1 * dd4hep::Position(prodVertex_temp.x, prodVertex_temp.y, prodVertex_temp.z); // convert edm4hep's mm -> dd4hep's cm
-      const dd4hep::DDSegmentation::CellID prodVertex_cellID = cellIDPositionConverter->cellID(prodVertex); // returns 0 if the position is outside of any sensitive volume
-
-      // convert cellID to volumeID - see comment in VTXdigi_Modular::GetVolumeID())
-      dd4hep::DDSegmentation::CellID prodVertex_volumeID;
-      if (prodVertex_cellID == 0)
-        prodVertex_volumeID = 0; // lookupContext(cellID=0) crashes (because cellID 0 does not exist)
-      else
-        prodVertex_volumeID = volumeManager.lookupContext(prodVertex_cellID)->element.volumeID();
-
-      if (prodVertex_volumeID != m_volumeID) {
-        // the MCParticle was created outside of this sensor's sensitive volume
-        m_mcParticleLevel = MCParticleLevel::Secondary;
-      }
-      else {
-        m_mcParticleLevel = MCParticleLevel::Delta;
-      }
-    }
-  }
+  m_mcParticleLevel = ComputeMCParticleLevel(m_simTrackerHit, m_volumeID, digitizer);
 }
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
@@ -63,6 +29,34 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
   std::swap(a.m_truthPos, b.m_truthPos);
   std::swap(a.m_mcParticleLevel, b.m_mcParticleLevel);
 } // swap(Hit&, Hit&)
+
+MCParticleLevel ComputeMCParticleLevel(const edm4hep::SimTrackerHit& simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID, const VTXdigi_Modular& digitizer) {
+  if ( simTrackerHit.isProducedBySecondary() ) {
+    // ddsim drops MCParticles below a certain energy cut to save computing cost and disk space.
+    // so if ddsim dropped the MCParticle that caused this simHit, we assume it was a delta ray
+    return MCParticleLevel::Delta;
+  }
+  else {
+    const int32_t simulatorStatus = simTrackerHit.getParticle().getSimulatorStatus();
+    const int32_t mask = 1 << edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
+    const bool causedByPrimary = (simulatorStatus & mask) == 0; // bit is not set -> created in generator
+    if ( causedByPrimary ) {
+      return MCParticleLevel::Primary;
+    }
+    else {
+      // now check if the MCParticle prod. vertex lies outside this sensors volume (by comparing volumeIDs)
+      const dd4hep::rec::Vector3D prodVertex = ConvertVector(simTrackerHit.getParticle().getVertex());
+      const dd4hep::DDSegmentation::CellID prodVertex_cellID = digitizer.GetCellID(prodVertex);
+      const dd4hep::DDSegmentation::VolumeID prodVertex_volumeID = digitizer.GetVolumeID(prodVertex_cellID);
+      // VolumeID is 0 if pos is outside of any sensitive volume
+
+      if (prodVertex_volumeID == 0 || prodVertex_volumeID != volumeID)
+        return MCParticleLevel::Secondary; // MCParticle created outside of this sensor's sensitive volume
+      else
+        return MCParticleLevel::Delta;
+    }
+  }
+}
 
 // SimulatorStatus bits (see https://edm4hep.web.cern.ch/classedm4hep_1_1_mutable_m_c_particle.html)
 // 29 : "Backscatter",
@@ -120,7 +114,7 @@ std::array<float, 2> Trafo_local_pixIndexCoords(const dd4hep::rec::Vector3D& loc
   std::array<float, 2> pixIndex;
   for (size_t axis = 0; axis < 2; ++axis) {
     const float halfLength = 0.5 * pixelPitch[axis] * pixelCount[axis];
-    if (local_2d[axis] < -halfLength - pixelPitch[axis]*0.1 || local_2d[axis] > halfLength + pixelPitch[axis]*0.1 ) {
+    if (std::abs(local_2d[axis]) < -halfLength - pixelPitch[axis]*0.1 || std::abs(local_2d[axis]) > halfLength + pixelPitch[axis]*0.1 ) {
       // avoid throwing too eagerly for floating point precision issues at the edges (esp. with all the double-float conversions we do...). Clamp instead
       throw std::runtime_error("VTXdigi_tools::Trafo_local_pixIndexCoords(): position" + std::to_string(local_2d[axis]) + " is out of sensor bounds [-" + std::to_string(halfLength) + ", " + std::to_string(halfLength) + "]");
     }
@@ -326,6 +320,9 @@ inline bool HitMap::_OutOfBounds(std::array<int, 2> i_uv) const {
 /* -- Clusterization -- */
 
 std::array<float, 2> Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) const {
+  if (pixels.empty())
+    throw std::runtime_error("Cluster::ComputeCoG: cluster has no pixels");
+
   std::array<float, 2> pos{0.f, 0.f};
   if (!clusterizeEndPixelsOnly) {
     for (const Pixel* pix : pixels) {
@@ -334,30 +331,27 @@ std::array<float, 2> Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) con
     }
     pos[0] /= charge;
     pos[1] /= charge;
-    return pos;
   }
+  else {
+    for (int axis = 0; axis < 2; ++axis) {
+      // find pixels with min and max index along the axis
+      int index_min = std::numeric_limits<int>::max();
+      int index_max = std::numeric_limits<int>::min();
+      for (const Pixel* pix : pixels) {
+        index_min = std::min(index_min, pix->index[axis]);
+        index_max = std::max(index_max, pix->index[axis]);
+      }
+      // compute charge-weighted average of the min and max pixels
+      float charge_min=0.f, charge_max=0.f;
+      for (const Pixel* pix : pixels) {
+        if (pix->index[axis] == index_min) charge_min += pix->charge;
+        if (pix->index[axis] == index_max) charge_max += pix->charge;
+      }
+      float offset = (charge_max - charge_min) / (charge_min + charge_max) / 2.f; // offset in range [-0.5, 0.5] to shift the CoG towards the pixel with more charge
 
-  for (int axis = 0; axis < 2; ++axis) {
-    // find pixels with min and max index along the axis
-    int index_min = std::numeric_limits<int>::max();
-    int index_max = std::numeric_limits<int>::min();
-    for (const Pixel* pix : pixels) {
-      index_min = std::min(index_min, pix->index[axis]);
-      index_max = std::max(index_max, pix->index[axis]);
+      pos[axis] = static_cast<float>(index_min + index_max) * 0.5f + offset;
     }
-    // compute charge-weighted average of the min and max pixels
-    float charge_min=0.f, charge_max=0.f;
-    for (const Pixel* pix : pixels) {
-      if (pix->index[axis] == index_min) charge_min += pix->charge;
-      if (pix->index[axis] == index_max) charge_max += pix->charge;
-    }
-    float offset = (charge_max - charge_min) / (charge_min + charge_max) / 2.f; // offset in range [-0.5, 0.5] to shift the CoG towards the pixel with more charge
-
-    pos[axis] = static_cast<float>(index_min + index_max) * 0.5f + offset;
-
-    (static_cast<float>(index_min)*charge_min + static_cast<float>(index_max)*charge_max) / (charge_min + charge_max);
   }
-
   return pos;
 }
 

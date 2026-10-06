@@ -65,7 +65,12 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
   for (const edm4hep::SimTrackerHit& simTrackerHit : simTrackerHits) {
     if (CheckSimhitLayer(simTrackerHit)){
       const dd4hep::DDSegmentation::VolumeID volumeID = GetVolumeID(simTrackerHit.getCellID());
-      sensorSimHits[volumeID].emplace_back(simTrackerHit, volumeID, m_cellIdDecoder, m_volumeManager, m_cellIDPositionConverter); // simTrackerHits are copied here. Pointers to these are passed around (eg. in hit/pixel/cluster objects).
+      if (volumeID == 0) {
+        info() << "SimTrackerHit in event " << headers.at(0).getEventNumber() << " with cellID " << simTrackerHit.getCellID() << " is not in a valid sensor volume. Skipping this hit." << endmsg;
+        continue;
+      }
+
+      sensorSimHits[volumeID].emplace_back(simTrackerHit, volumeID, *this); // simTrackerHits are copied here. Pointers to these are passed around (eg. in hit/pixel/cluster objects).
 
       switch (sensorSimHits[volumeID].back().mcParticleLevel()) {
         case VTXdigi_tools::MCParticleLevel::Primary:
@@ -140,7 +145,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   if (m_smearing_charge.value() < 0.f)
     throw GaudiException("Charge smearing sigma " + std::to_string(m_smearing_charge.value()) + " e- is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
-  if (m_threshold.value()*m_threshold.value() <= sqrt(25*m_smearing_charge.value()*m_smearing_charge.value() + 25*m_smearing_threshold.value()*m_smearing_threshold.value()))
+  if (m_threshold.value() <= 5 * sqrt(m_smearing_charge.value()*m_smearing_charge.value() + m_smearing_threshold.value()*m_smearing_threshold.value()))
     warning() << "Threshold " << m_threshold.value() << " e- is less than 5 times the charge smearing and threshold dispersion sigma: sqrt(" << m_smearing_charge.value() << "^2 + " << m_smearing_threshold.value() << "^2) e-. This digitiser only applies smearing to pixels that have collected charge from simHits (a tiny bit is enough), so it does not simulate random firing of pixels. (doing this by drawing a noise for every pixel in the detector for every event would be INCREDIBLY slow. A work-around to simulate random pixels firing might be implemented in another algorith)." << endmsg;
   if (m_smearing_time.value() < 0.f)
     throw GaudiException("Time smearing sigma " + std::to_string(m_smearing_time.value()) + " ns is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
@@ -152,7 +157,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   else if (m_positionUncertainty.value().size() == 10) {
     std::string unc_u = "[";
     std::string unc_v = "[";
-    for (int size = 1; size < 5; size++) {
+    for (int size = 0; size < 5; size++) {
       unc_u += std::to_string(m_positionUncertainty.value().at(size)) + ", ";
       unc_v += std::to_string(m_positionUncertainty.value().at(size + 5)) + ", ";
     }
@@ -162,7 +167,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     info() << "Cluster position uncertainty set to " << unc_u << " mm and " << unc_v << " mm for cluster lengths of (1, 2, 3, 4, 5+), in u and v direction, respectively." << endmsg;
   }
   else
-    throw GaudiException("Property ClusterPositionUncertainty must be either empty (for charge-weighted estimation), have exactly 2 values (for fixed uncertainty in u and v), or six values (for cluster-length based estimation).", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+    throw GaudiException("Property ClusterPositionUncertainty must be either empty (assign pitch/sqrt(12)), have exactly 2 values (for fixed uncertainty in u and v), or 10 values (for cluster-length based estimation).", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   m_uniqueIDService = service("uidSvc", false);
   if (!m_uniqueIDService)
@@ -333,39 +338,23 @@ void VTXdigi_Modular::InitLayersAndSensors() {
 
   /* Get pixel pitch from the segmentation (from the readout that matches our simHitCollection)
   *  I don't know of a better way to do this (that also works for the IDEA detector model) */
-  std::string simHitCollectionName;
-  if (this->getProperty("SimTrackHitCollectionName", simHitCollectionName).isFailure())
-    throw GaudiException("Could not retrieve SimTrackHitCollectionName property while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+  const auto simHitLocations = inputLocations("SimTrackHitCollectionName");
+  if (simHitLocations.size() != 1)
+    throw GaudiException("SimTrackHitCollectionName must contain exactly one collection name, got " + std::to_string(simHitLocations.size()), "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+  const std::string simHitCollectionName = simHitLocations.at(0);
+  // doing this->getProperty("SimTrackHitCollectionName", simHitCollectionName) returns a list in string-format which is horrible to use
 
-  dd4hep::Detector::HandleMap readoutHandleMap = m_detector->readouts();
-  int readoutCount = 0;
-  std::string matchedReadoutKey;
-  /* loop over readouts, see if one matches our simHitCollection */
-  for (const auto& [readoutKey, readoutHandle] : readoutHandleMap) {
-    if (simHitCollectionName.find(readoutKey) != std::string::npos) {
-      ++readoutCount;
-      if (readoutCount != 1)
-        continue;
-      matchedReadoutKey = readoutKey;
-      verbose() << "     - Readout \"" << readoutKey << "\" MATCHES SimTrackHitCollectionName \"" << simHitCollectionName << "\". Getting segmentation." << endmsg;
+  const dd4hep::Detector::HandleMap readoutHandleMap = m_detector->readouts();
+  if (readoutHandleMap.find(simHitCollectionName) == readoutHandleMap.end())
+    throw GaudiException("Could not find readout matching SimTrackHitCollectionName \"" + simHitCollectionName + "\" in detector while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+  debug() << "     - Found readout \"" << simHitCollectionName << "\". Getting segmentation." << endmsg;
 
-      const dd4hep::Segmentation& segmentation = m_detector->readout(readoutKey).segmentation();
-      if (!segmentation.isValid())
-        throw GaudiException("Segmentation for readout " + readoutKey + " is not valid while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
-      const auto cellDimensions = segmentation.cellDimensions(0); // this assumes all cells have the same dimensions (ie. only one sensor type in this readout)
-      m_pixelPitch[0] = cellDimensions.at(0) * 10; // convert cm to mm
-      m_pixelPitch[1] = cellDimensions.at(1) * 10;
-      /* TODO: get pixel count from segmentation*/
-    }
-    else {
-      verbose() << "     - Readout \"" << readoutKey << "\" does NOT MATCH SimTrackHitCollectionName \"" << simHitCollectionName << "\". skipping." << endmsg;
-    }
-  } // end loop over readouts
-  if (readoutCount == 0)
-    throw GaudiException("Could not find any readout matching SimTrackHitCollectionName " + simHitCollectionName + " in detector while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
-  else if (readoutCount > 1)
-    warning() << "Found multiple (" << readoutCount << ") readouts matching SimTrackHitCollectionName \"" << simHitCollectionName << "\" in detector while checking geometry consistency. Used the first one found. Enable verbose messages for more info." << endmsg;
-
+  const dd4hep::Segmentation& segmentation = m_detector->readout(simHitCollectionName).segmentation();
+  if (!segmentation.isValid())
+    throw GaudiException("Segmentation for readout " + simHitCollectionName + " is not valid.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
+  const auto cellDimensions = segmentation.cellDimensions(0); // this assumes all cells have the same dimensions (ie. only one sensor type in this readout)
+  m_pixelPitch[0] = cellDimensions.at(0) * 10; // convert cm to mm
+  m_pixelPitch[1] = cellDimensions.at(1) * 10;
 
   /* TODO: Check that local sensor coordinates (u,v,w) are correctly defined wrt. to the global coordinates (already done in VTXdigi_Allpix2 master branch, but VERY clunky). This requires deep understanding of coordinate systems. I think there is a easy way to do this. I have not figured it out yet */
 
@@ -467,7 +456,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
 
           float pixelCountU = m_sensorLength[0] / m_pixelPitch[0];
           float pixelCountV = m_sensorLength[1] / m_pixelPitch[1];
-          if (abs(pixelCountU - std::round(pixelCountU)) > 0.0001 || abs(pixelCountV - std::round(pixelCountV)) > 0.0001)
+          if (std::abs(pixelCountU - std::round(pixelCountU)) > 0.0001 || std::abs(pixelCountV - std::round(pixelCountV)) > 0.0001)
             throw GaudiException("Sensor side length (" + std::to_string(m_sensorLength[0]) + " x " + std::to_string(m_sensorLength[1]) + ") mm and pixel pitch (" + std::to_string(m_pixelPitch[0]) + " x " + std::to_string(m_pixelPitch[1]) + ") mm result in a non-integer pixel count (" + std::to_string(pixelCountU) + " x " + std::to_string(pixelCountV) + ") in subDetector " + m_subDetName.value() + ".", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
           m_pixelCount[0] = std::round(pixelCountU);
           m_pixelCount[1] = std::round(pixelCountV);
@@ -1420,7 +1409,7 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
 void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::VolumeID& volumeID, const VTXdigi_tools::Pixel& pix) const {
   /* executed once for each pixel */
 
-  const int layer = VTXdigi_tools::GetLayer(volumeID, m_cellIdDecoder);
+  const int layer = GetLayer(volumeID);
   const std::array<int, 2> i_uv = pix.index;
 
   ++(*m_hist2d.at(layer).at(hist2d_hitMap_pixelHits))[{i_uv[0], i_uv[1]}];
@@ -1428,7 +1417,7 @@ void VTXdigi_Modular::FillHistograms_perPixel(const dd4hep::DDSegmentation::Volu
 
 void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cluster, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix) const {
   /* executed once for each digiHit */
-  const int layer = VTXdigi_tools::GetLayer(digiHit.getCellID(), m_cellIdDecoder);
+  const int layer = GetLayer(digiHit.getCellID());
   const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(digiHit.getPosition());
   const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::Trafo_global_local(pos_global, trafoMatrix);
 
@@ -1523,7 +1512,7 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cl
 
 void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::VolumeID& volumeID) const {
   /* executed once for each sensor, after all clusters have been created */
-  const int layer = VTXdigi_tools::GetLayer(volumeID, m_cellIdDecoder);
+  const int layer = GetLayer(volumeID);
 
   if (simHits.empty()) {
     debug() << " - No simHits found on this sensor." << endmsg;
@@ -1636,7 +1625,12 @@ void VTXdigi_Modular::PrintCountersSummary() const {
          << " | " << std::setw(colWidths[1]) << std::right << m_counter_digiHitsCreated.value() << " |" << endmsg;
 }
 
-/* ---- Helpers ---- */
+/* ---- Public helpers ---- */
+
+dd4hep::DDSegmentation::CellID VTXdigi_Modular::GetCellID(const dd4hep::rec::Vector3D& pos_global) const {
+  const dd4hep::Position pos = 0.1 * dd4hep::Position(pos_global.x(), pos_global.y(), pos_global.z()); // convert our natively used mm -> dd4hep's cm
+  return m_cellIDPositionConverter->cellID(pos); // returns 0 if the position is outside of any sensitive volume
+}
 
 dd4hep::DDSegmentation::VolumeID VTXdigi_Modular::GetVolumeID(const dd4hep::DDSegmentation::CellID& cellID) const {
   /* - volumeID identifies the detector element volume (eg. sensor)
@@ -1644,6 +1638,11 @@ dd4hep::DDSegmentation::VolumeID VTXdigi_Modular::GetVolumeID(const dd4hep::DDSe
    * - we could convert cellID->volumeID by masking bits of the cellID, but this breaks if the cellID encoding changes later on
    *  -> use the volumeManager to convert correctly, only handle cellID's where absolutely necessary
    * - Note: this throws if a unknown cellID is passed. Catch & return 0 instead */
+  if (cellID == 0) {
+    // cellID 0 is used to indicate that the position is outside of any sensitive volume. Preserve this in volumeID
+    return 0;
+  }
+
   try{
     return m_volumeManager.lookupContext(cellID)->element.volumeID();  // throws if unknown
   }
@@ -1651,4 +1650,8 @@ dd4hep::DDSegmentation::VolumeID VTXdigi_Modular::GetVolumeID(const dd4hep::DDSe
     warning() << "VTXdigi_Modular::GetVolumeID(): Failed to convert cellID to volumeID, returning volumeID 0: " << e.what() << endmsg;
     return 0;
   }
+}
+
+int VTXdigi_Modular::GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID) const {
+  return static_cast<int>(m_cellIdDecoder->get(volumeID, "layer"));
 }

@@ -192,10 +192,10 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not open LUT file \"" + lutFileName + "\".");
 
   std::string line;
-  int lineNumber = 0;
+  int lineCount = 0;
 
   /* Parse pixel-pitch, thickness, in-pixel bin count from header (all in 5th line) */
-  for (; lineNumber < 5; ++lineNumber)
+  for (; lineCount < 5; ++lineCount)
     std::getline(lutFile, line);
   std::istringstream headerStringStream(line);
   std::string headerEntry;
@@ -238,12 +238,31 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   digitizer.debug() << "   - Found matching pixel pitch and sensor thickness in LUT file." << endmsg;
 
   /* Get matrix size (5x5, 7x7, ...) from the length of the first line after the header */
-  if (std::getline(lutFile, line)) {
-    m_matrixSize = static_cast<int>(std::sqrt(std::count(line.begin(), line.end(), ' ') - 2)); // not very robust, but works for valid Allpix2 files. first 3 entries are bin indices
+  bool foundDataLine = false;
+  while (std::getline(lutFile, line)) {
+    if (line.empty() || line[0] == '#') {
+      digitizer.debug() << "VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " << lineCount+1 << ". Ignoring" << endmsg;
+      continue;
+    }
+
+    // count whitespace-separated tokens, robust against repeated spaces, tabs and trailing whitespace / CR
+    std::istringstream lineStream(line);
+    std::string token;
+    int tokenCount = 0;
+    while (lineStream >> token)
+      ++tokenCount;
+
+    const int entryCount = tokenCount - 3; // first 3 entries are bin indices
+    m_matrixSize = static_cast<int>(std::lround(std::sqrt(std::max(entryCount, 0))));
+    if (m_matrixSize * m_matrixSize != entryCount)
+      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): First data line in LUT file has " + std::to_string(entryCount) + " matrix entries (after 3 bin indices), which is not a perfect square. File: " + digitizer.LutFileName());
+
+    foundDataLine = true;
+    break;
   }
-  else {
-    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not read first line after header in LUT file: " + digitizer.LutFileName());
-  }
+  if (!foundDataLine)
+    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not find a data line after header in LUT file: " + digitizer.LutFileName());
+
   if (m_matrixSize < 3 || m_matrixSize % 2 == 0)
     throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".");
   m_matrixSize_half = (m_matrixSize - 1) / 2;
@@ -277,10 +296,12 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   matricesEntrySum_perWBin.resize(m_binCount.at(2), 0.f);
   float matricesEntrySum = 0.f;
 
-  lineNumber = headerLines + 1;
+  lineCount = headerLines + 1;
   while (std::getline(lutFile, line)) {
-    if (line.empty() || line[0] == '#')
-      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " + std::to_string(lineNumber+1) + ". All lines (past the 5 header lines) must contain valid matrix data.");
+    if (line.empty() || line[0] == '#') {
+      digitizer.debug() << "VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " << lineCount+1 << ". Ignoring" << endmsg;
+      continue;
+    }
 
     std::istringstream stringStream(line);
     std::vector<std::string> lineEntries;
@@ -293,7 +314,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     }
 
     if (static_cast<int>(lineEntries.size()) != 3 + m_matrixSize*m_matrixSize)
-      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Invalid number of entries in LUT file at line " + std::to_string(lineNumber+1) + ": found " + std::to_string(lineEntries.size()) + " entries, but expected " + std::to_string(3 + m_matrixSize*m_matrixSize) + " (3 for bin indices, " + std::to_string(m_matrixSize*m_matrixSize) + " for matrix values).");
+      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Invalid number of entries in LUT file at line " + std::to_string(lineCount+1) + ": found " + std::to_string(lineEntries.size()) + " entries, but expected " + std::to_string(3 + m_matrixSize*m_matrixSize) + " (3 for bin indices, " + std::to_string(m_matrixSize*m_matrixSize) + " for matrix values).");
 
     /* First 3 entries are in-pixel binning indices */
     Index_inPix j_uvw({std::stoi(lineEntries[0])-1, std::stoi(lineEntries[1])-1, std::stoi(lineEntries[2])-1});// Allpix2 input is 1-indexed. Insane, I know.
@@ -301,7 +322,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     if (j_uvw.at(0) < 0 || j_uvw.at(0) >= m_binCount[0] ||
         j_uvw.at(1) < 0 || j_uvw.at(1) >= m_binCount[1] ||
         j_uvw.at(2) < 0 || j_uvw.at(2) >= m_binCount[2]) {
-      throw std::runtime_error("Invalid in-pixel bin indices in LUT file at line " + std::to_string(lineNumber+1) + ": got (" + std::to_string(j_uvw.at(0)) + ", " + std::to_string(j_uvw.at(1)) + ", " + std::to_string(j_uvw.at(2)) + "), but expected ranges are [0, " + std::to_string(m_binCount[0]-1) + "], [0, " + std::to_string(m_binCount[1]-1) + "], [0, " + std::to_string(m_binCount[2]-1) + "].");
+      throw std::runtime_error("Invalid in-pixel bin indices in LUT file at line " + std::to_string(lineCount+1) + ": got (" + std::to_string(j_uvw.at(0)) + ", " + std::to_string(j_uvw.at(1)) + ", " + std::to_string(j_uvw.at(2)) + "), but expected ranges are [0, " + std::to_string(m_binCount[0]-1) + "], [0, " + std::to_string(m_binCount[1]-1) + "], [0, " + std::to_string(m_binCount[2]-1) + "].");
     }
 
     /* Parse matrix values & set it */
@@ -314,7 +335,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
       matrixEntries[i] = entry;
       matrixEntrySum += entry;
     }
-    digitizer.verbose() << "   - Parsed matrix for in-pixel bin (" << j_uvw.at(0) << ", " << j_uvw.at(1) << ", " << j_uvw.at(2) << "), entry sum " << std::to_string(matrixEntrySum) << ", setting it now..." << endmsg;
+    // digitizer.verbose() << "   - Parsed matrix for in-pixel bin (" << j_uvw.at(0) << ", " << j_uvw.at(1) << ", " << j_uvw.at(2) << "), entry sum " << std::to_string(matrixEntrySum) << ", setting it now..." << endmsg;
     if (std::isnan(matrixEntrySum))
       throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Charge sharing matrix for in-pixel bin (" + std::to_string(j_uvw.at(0)) + "," + std::to_string(j_uvw.at(1)) + "," + std::to_string(j_uvw.at(2)) + ") contains NaN values (sum of entries is NaN).");
 
@@ -322,13 +343,13 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     matricesEntrySum_perWBin[j_uvw.at(2)] += matrixEntrySum;
     SetMatrix(j_uvw, matrixEntries);
 
-    lineNumber++;
+    lineCount++;
   } // loop over lines containing a matrix each
 
-  if (lineNumber - (headerLines+1) != m_binCount[0] * m_binCount[1] * m_binCount[2])
-    throw std::runtime_error("Invalid number of matrices loaded from file: expected " + std::to_string(m_binCount[0] * m_binCount[1] * m_binCount[2]) + " matrices (inferred from bin count in header) but found " + std::to_string(lineNumber - headerLines) + " lines.");
+  const int matrixCount = lineCount - (headerLines+1);
 
-  const float matrixNumber = static_cast<float>(lineNumber - headerLines);
+  if (matrixCount != m_binCount[0] * m_binCount[1] * m_binCount[2])
+    throw std::runtime_error("Invalid number of matrices loaded from file: expected " + std::to_string(m_binCount[0] * m_binCount[1] * m_binCount[2]) + " matrices (inferred from bin count in header) but found " + std::to_string(matrixCount) + " lines.");
 
   // From which w-level are charges collected?
   float collectedFromW = 0.f;
@@ -344,7 +365,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     m_chargeCollectionDepthCenter = collectedFromW; // the member is initalised to 0.f
   }
 
-  digitizer.info() << " - Loaded lookup table from file. Matrices parsed: " << (lineNumber - headerLines) << ". Charge collected from sensitive volume: " << matricesEntrySum/matrixNumber*100 << " percent (rest is lost, eg recombination). The center of the collection region is at " << m_chargeCollectionDepthCenter << endmsg;
+  digitizer.info() << " - Loaded lookup table from file. Matrices parsed: " << (matrixCount) << ". Charge collected from sensitive volume: " << matricesEntrySum/static_cast<float>(matrixCount)*100 << " percent (rest is lost, eg recombination). The center of the collection region is at " << m_chargeCollectionDepthCenter << endmsg;
 }
 
 void LookupTable::SetMatrix(const Index_inPix& j_uvw, const std::vector<float>& weights) {

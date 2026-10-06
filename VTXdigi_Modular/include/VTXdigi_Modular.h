@@ -28,6 +28,10 @@
 // ROOT
 #include "TRandom3.h"
 
+// C++ STL
+#include <array>
+#include <cmath>
+
 /** @class VTXdigi_Modular
  *
  * Creates trackerHits from simHits. Produces clusters from simHits, outputs either the cluster centre or all hits in the cluster as digitized hits.
@@ -71,6 +75,11 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
 
   inline float MeanDepositionsPerUm() const { return m_LUT_meanDepositionsPerUm.value(); }
 
+  dd4hep::DDSegmentation::CellID GetCellID(const dd4hep::rec::Vector3D& pos_global) const;
+
+  dd4hep::DDSegmentation::VolumeID GetVolumeID(const dd4hep::DDSegmentation::CellID& cellID) const;
+
+  int GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID) const;
 
 private:
 
@@ -106,9 +115,6 @@ private:
   void FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cluster, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix) const;
   void FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::VolumeID& volumeID) const;
 
-  /* -- Helpers -- */
-
-  dd4hep::DDSegmentation::VolumeID GetVolumeID(const dd4hep::DDSegmentation::CellID& cellID) const;
 
   /* -- Properties -- */
 
@@ -129,7 +135,7 @@ private:
 
   /* -- Properties and members related to the various charge collection algorithms-- */
 
-  Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "Drift", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
+  Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "LookupTable", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
   Gaudi::Property<float> m_threshold{this, "Threshold", 0.0f, "Pixel threshold for firing (in e-)."};
   Gaudi::Property<std::vector<float>> m_positionUncertainty{this, "ClusterPositionUncertainty", {}, "Sensor spatial resolution in u and v direction (in mm). Used for the position uncertainty in digiHits"};
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Defaults to 0."};

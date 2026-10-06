@@ -9,10 +9,13 @@
 
 #include "edm4hep/SimTrackerHit.h"
 
+#include <cmath>
 #include <queue>
 #include <unordered_set>
 #include <string_view>
 #include <limits>
+
+struct VTXdigi_Modular; // forward declaration
 
 namespace VTXdigi_tools {
 
@@ -39,9 +42,7 @@ class SimHitWrapper {
 public:
   SimHitWrapper(
     edm4hep::SimTrackerHit simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID,
-    const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder,
-    const dd4hep::VolumeManager& volumeManager,
-    const std::unique_ptr<dd4hep::rec::CellIDPositionConverter>& cellIDPositionConverter);
+    const VTXdigi_Modular& digitizer);
   SimHitWrapper(const SimHitWrapper& other) = default;
   SimHitWrapper(SimHitWrapper&& other) = default;
   SimHitWrapper() = default;
@@ -68,6 +69,8 @@ public:
 };
 
 void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept;
+
+MCParticleLevel ComputeMCParticleLevel(const edm4hep::SimTrackerHit& simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID, const VTXdigi_Modular& digitizer);
 
 /** @brief Find simHits from different MCParticles. If two simHits originate from the same MCParticle (eg. have shared parents), return only the one from the MCParticle further up the family tree. */
 // std::unordered_set<const VTXdigi_tools::SimHitWrapper*>  FindSimHitsWithIndividualParents(const std::vector<SimHitWrapper>& simHits);
@@ -214,9 +217,6 @@ dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<int, 2> pixelIndex, 
 dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter);
 /** @brief Transform a position from pixel index coordinates to sensor-local coordinates, setting w=0 */
 dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch);
-
-
-int GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder);
 
 /* -- Binning tools -- */
 
