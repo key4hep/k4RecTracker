@@ -890,11 +890,10 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
 
   // Reset the global TGeoManager navigator to a canonical state before fitting.
   // The navigator (current node, point, direction, safety/step caches) is process-global
-  // and is mutated by every material lookup during extrapolation. Without this reset,
-  // the material resolved for on-boundary points can depend on the track fitted
-  // previously (even in an earlier event), making fit results order-dependent.
-  gGeoManager->CdTop();
-  gGeoManager->FindNode(m_posInit.X(), m_posInit.Y(), m_posInit.Z()); // seed position, in cm
+  // and is mutated by every material lookup during extrapolation. Without this backup
+  // restore mechanism, the material resolved for on-boundary points can depend on the track
+  // fitted previously (even in an earlier event), making fit results order-dependent.
+  gGeoManager->DoBackupState();
 
   // Initialize the genfit fitter
   std::unique_ptr<genfit::AbsKalmanFitter> genfitFitter = nullptr;
@@ -918,6 +917,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
 
   } else {
 
+    gGeoManager->DoRestoreState();
     throw std::invalid_argument("Unknown fit method: " + FitterType);
   }
 
@@ -942,6 +942,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     m_trackWithFit.setChi2(-1);
     m_trackWithFit.setNdf(-1);
 
+    gGeoManager->DoRestoreState();
     return false;
   }
 
@@ -1087,6 +1088,8 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       m_edm4hepTrack.setNdf(-1);
       m_trackWithFit.setChi2(-1);
       m_trackWithFit.setNdf(-1);
+
+      gGeoManager->DoRestoreState();
       return false;
     }
 
@@ -1103,6 +1106,8 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       m_edm4hepTrack.setNdf(-1);
       m_trackWithFit.setChi2(-1);
       m_trackWithFit.setNdf(-1);
+
+      gGeoManager->DoRestoreState();
       return false;
     }
 
@@ -1126,6 +1131,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       m_trackWithFit.setChi2(-1);
       m_trackWithFit.setNdf(-1);
 
+      gGeoManager->DoRestoreState();
       return false;
     }
 
@@ -1199,7 +1205,9 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     m_trackWithFit.setChi2(genfitTrack.getFitStatus()->getChi2());
     m_trackWithFit.setNdf(genfitTrack.getFitStatus()->getNdf());
 
+    gGeoManager->DoRestoreState();
     return true;
+
   } else {
     m_edm4hepTrack.setChi2(-1);
     m_edm4hepTrack.setNdf(-1);
@@ -1207,6 +1215,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     m_trackWithFit.setChi2(-1);
     m_trackWithFit.setNdf(-1);
 
+    gGeoManager->DoRestoreState();
     return false;
   }
 }
