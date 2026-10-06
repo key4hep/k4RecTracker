@@ -179,12 +179,7 @@ torch::Tensor find_condpoints(const torch::Tensor& betas, const torch::Tensor& u
   return indices_condpoints.index_select(0, sorted_indices);
 }
 
-torch::Tensor get_clustering(const std::vector<float>& output_vector, int num_rows, float tbeta, float td) {
-  // Create tensor from input vector and reshape to (num_rows, 4)
-  torch::Tensor output_model_tensor = torch::from_blob(const_cast<float*>(output_vector.data()), {num_rows, 4},
-                                                       torch::dtype(torch::kFloat32))
-                                          .clone(); // clone to make it contiguous and owned
-
+torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbeta, float td) {
   torch::Tensor X = output_model_tensor.slice(1, 0, 3);   // columns 0,1,2
   torch::Tensor betas = output_model_tensor.select(1, 3); // column 3
 
