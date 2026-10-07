@@ -137,7 +137,7 @@ private:
 
   Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "LookupTable", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
   Gaudi::Property<float> m_threshold{this, "Threshold", 0.0f, "Pixel threshold for firing (in e-)."};
-  Gaudi::Property<std::vector<float>> m_positionUncertainty{this, "ClusterPositionUncertainty", {}, "Sensor spatial resolution in u and v direction (in mm). Used for the position uncertainty in digiHits"};
+  Gaudi::Property<std::vector<float>> m_positionUncertainty{this, "ClusterPositionUncertainty", {}, "Sensor spatial resolution in u and v direction (in mm). Used for the position uncertainty in digiHits. Uses pitch/12 if empty."};
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_threshold{this, "ThresholdDispersion", 0.0f, "Gaussian smearing to be applied to the threshold. (in e-). Drawn per event per sensor per pixel. If 0, no dispersion is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_time{this, "TimeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels time (in ns). Applied to the digiHits time stamp. If 0, no time smearing is applied. Defaults to 0."};

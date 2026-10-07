@@ -337,7 +337,7 @@ inline bool HitMap::_OutOfBounds(std::array<int, 2> i_uv) const {
   );
 }
 
-/* -- Clusterization -- */
+/* --ization -- */
 
 std::array<float, 2> Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) const {
   if (pixels.empty())
@@ -396,19 +396,6 @@ int Cluster::GetSize(const int axis) const {
   }
 
   return max - min + 1; // +1 because of counting: if min=max, cluster size is 1, not 0
-}
-
-std::array<float, 2> Cluster::ComputeCoGUncertainty(const std::array<float, 2>& clusterPos) const {
-  float sig2_u=0.f, sig2_v=0.f;
-  for (const Pixel* pix : pixels) {
-    float du = (pix->index[0] - clusterPos[0]);
-    float dv = (pix->index[1] - clusterPos[1]);
-    sig2_u += pix->charge * du * du;
-    sig2_v += pix->charge * dv * dv;
-  }
-  sig2_u /= charge;
-  sig2_v /= charge;
-  return {std::sqrt(sig2_u), std::sqrt(sig2_v)};
 }
 
 float Cluster::GetSeedPixelCharge() const {

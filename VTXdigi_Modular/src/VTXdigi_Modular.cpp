@@ -152,7 +152,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     throw GaudiException("Time smearing sigma " + std::to_string(m_smearing_time.value()) + " ns is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   if (m_positionUncertainty.value().empty())
-    info() << "Cluster position uncertainty not set. Doing simple charge-weighted uncertainty estimation." << endmsg;
+    info() << "Cluster position uncertainty not set. Using pitch/12 for every cluster." << endmsg;
   else if (m_positionUncertainty.value().size() == 2)
     info() << "Cluster position uncertainty set to (" << m_positionUncertainty.value().at(0) << " mm, " << m_positionUncertainty.value().at(1) << " mm) in u and v direction." << endmsg;
   else if (m_positionUncertainty.value().size() == 10) {
@@ -168,7 +168,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     info() << "Cluster position uncertainty set to " << unc_u << " mm and " << unc_v << " mm for cluster lengths of (1, 2, 3, 4, 5+), in u and v direction, respectively." << endmsg;
   }
   else
-    throw GaudiException("Property ClusterPositionUncertainty must be either empty (assign pitch/sqrt(12)), have exactly 2 values (for fixed uncertainty in u and v), or 10 values (for cluster-length based estimation).", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+    throw GaudiException("Property ClusterPositionUncertainty must be either empty (assign pitch/sqrt(12)), have exactly 2 values (for fixed uncertainty in u and v), or 10 values (for cluster-length based uncertainty).", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   m_uniqueIDService = service("uidSvc", false);
   if (!m_uniqueIDService)
@@ -1278,9 +1278,8 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     digiHit.setU(direction_u);
     digiHit.setV(direction_v);
     if (m_positionUncertainty.value().empty()) {
-      std::array<float, 2> clusterPos_unc = cluster.ComputeCoGUncertainty(clusterPos_index);
-      digiHit.setDu(clusterPos_unc[0] * m_pixelPitch[0]);
-      digiHit.setDv(clusterPos_unc[1] * m_pixelPitch[1]);
+      digiHit.setDu(m_pixelPitch[0] / std::sqrt(12));
+      digiHit.setDv(m_pixelPitch[1] / std::sqrt(12));
     }
     else if (m_positionUncertainty.value().size() == 2) {
       digiHit.setDu(m_positionUncertainty.value().at(0));
