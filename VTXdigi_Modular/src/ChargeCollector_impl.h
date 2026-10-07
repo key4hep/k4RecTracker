@@ -14,6 +14,7 @@ class HitMap; // forward-declaration for include/VTXdigi_tools.h
 using Index_pix = std::array<int, 2>;
 using Index_inPix = std::array<int, 3>;
 
+constexpr double kMinPathCosTheta = 1e-6; // minimum cos(theta) below which a simHit is considered to be parallel to the sensor surface. (theta = angle between simHit momentum and sensor normal)
 constexpr float kPathLengthTolerance = 1.001f; // tolerance factor for how much longer the computed path can be compared to the Geant4 path length.
 // (If the computed path is longer than the Geant4 path, either the linear path approximation breaks down, or the particle begins or ends inside the sensor volume)
 

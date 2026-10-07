@@ -43,29 +43,48 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
     static_cast<double>(simHit.hitPtr()->getMomentum().y),
     static_cast<double>(simHit.hitPtr()->getMomentum().z)
   };
+  if (std::abs(momentum_global[0]) < eps && std::abs(momentum_global[1]) < eps && std::abs(momentum_global[2]) < eps) {
+    digitizer.warning() << "SimHit momentum is zero. Skipping simHit." << endmsg;
+    isValid = false;
+    return;
+  }
+  if (std::abs(simPos.x()) > digitizer.ActiveVolumeDimensions().at(0)/2.f + eps || std::abs(simPos.y()) > digitizer.ActiveVolumeDimensions().at(1)/2.f + eps || std::abs(simPos.z()) > digitizer.ActiveVolumeDimensions().at(2)/2.f + eps) {
+    digitizer.warning() << "SimHit position lies outside the sensor volume: local pos (" << simPos.x() << ", " << simPos.y() << ", " << simPos.z() << ") mm, sensor dimensions (" << digitizer.ActiveVolumeDimensions().at(0) << ", " << digitizer.ActiveVolumeDimensions().at(1) << ", " << digitizer.ActiveVolumeDimensions().at(2) << ") mm. Skipping simHit." << endmsg;
+    isValid = false;
+    return;
+  }
+
   double momentum_local[3];
   trafoMatrix.MasterToLocalVect(momentum_global, momentum_local);
+  const double momentum_local_normSq = momentum_local[0]*momentum_local[0] + momentum_local[1]*momentum_local[1] + momentum_local[2]*momentum_local[2];
 
-  /* Step 1 - travel vector */
-  const double scaleFactor_travel = digitizer.ActiveVolumeDimensions().at(2) / std::abs(momentum_local[2]);
-  travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]);
+  /* Compute linear approximation of the path */
+  lengthG4 = simHit.hitPtr()->getPathLength();
 
-  /* Step 2 - entry point */
-  if (std::abs(simPos.z()) > digitizer.ActiveVolumeDimensions().at(2)/2.f + eps) {
-      digitizer.warning() << "SimHit position is outside the sensor volume (local w = " << simPos.z() << " mm, sensor thickness = " << digitizer.ActiveVolumeDimensions().at(2) << " mm). This should never happen. Forcing it to w=0." << endmsg;
-    simPos.z() = 0.f; // ensures no divide by zero etc
-  }
-  double shiftDist_w;
-  if (travel.z() >= 0.f) {
-    shiftDist_w = simPos.z() + 0.5f * digitizer.ActiveVolumeDimensions().at(2);
-  }
-  else {
-    shiftDist_w = simPos.z() - 0.5f * digitizer.ActiveVolumeDimensions().at(2);
-  }
-  const double scaleFactor_entry = shiftDist_w / travel.z();
-  entry = simPos - scaleFactor_entry * travel;
+  /* Step 1 - compute entry point & travel vector*/
+  if (momentum_local[2]*momentum_local[2] / momentum_local_normSq < kMinPathCosTheta*kMinPathCosTheta) {
+    digitizer.debug() << "SimHit momentum is (almost) parallel to the sensor surface (" << momentum_local[0] << ", " << momentum_local[1] << ", " << momentum_local[2] << ")." << endmsg;
 
-  /* Step 3 - clip path to sensor edges (in u/v) */
+    travel = dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], 0.);
+    travel = 2. * lengthG4 * travel.unit(); // double the length to make sure the clipping in step 2 does not cut off too much (eg. when the pos is exactly at the sensor edge)
+    entry = simPos - 0.5 * travel;
+  }
+  else{
+    const double scaleFactor_travel = digitizer.ActiveVolumeDimensions().at(2) / std::abs(momentum_local[2]);
+    travel = scaleFactor_travel * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]);
+
+    double shiftDist_w;
+    if (travel.z() >= 0.f) {
+      shiftDist_w = simPos.z() + 0.5f * digitizer.ActiveVolumeDimensions().at(2);
+    }
+    else {
+      shiftDist_w = simPos.z() - 0.5f * digitizer.ActiveVolumeDimensions().at(2);
+    }
+    const double scaleFactor_entry = shiftDist_w / travel.z();
+    entry = simPos - scaleFactor_entry * travel;
+  }
+
+  /* Step 2 - clip path to sensor edges (in u/v) */
   std::array<double, 2> t = {0., 1.}; // parametrize path as entry + t*travel; t in [0,1]
   t = ComputePathClippingFactors(t, entry.x(), travel.x(), digitizer.ActiveVolumeDimensions().at(0));
   t = ComputePathClippingFactors(t, entry.y(), travel.y(), digitizer.ActiveVolumeDimensions().at(1));
@@ -87,8 +106,7 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
     }
   }
 
-  /* Step 4 -check that path is not much longer than the length it had in Geant4 */
-  lengthG4 = simHit.hitPtr()->getPathLength();
+  /* Step 3 -check that path is not much longer than the length it had in Geant4. Order of steps 2 and 3 is important! */
   if (travel.r() > kPathLengthTolerance * lengthG4) {
     digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*1000) << " um to " << static_cast<int>(lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
 
@@ -105,15 +123,15 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
     travel = (t_max - t_min) * travel;
   }
 
-
   digitizer.debug() << "       - Constructed path, length " << travel.r()*1000 << " um (G4-length " << lengthG4*1000 << " um), entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, " << endmsg;
   isValid = true;
 }
 
 std::vector<std::pair<float, dd4hep::rec::Vector3D>> Path::SampleDepositions(const float hitCharge, TRandom3& randomGen, const float meanDepositionsPerUm, const TH1D& chargeSamplingHist) const {
-  float probablity = 0.8;
-  float mean = travel.r() * meanDepositionsPerUm * 1000.f; // convert from um to mm
-  int NDepositions = static_cast<int>(randomGen.Binomial(std::round(mean / probablity), probablity)); // convert from um to mm
+  // draw number of depositions from a sub-poissonian distribution
+  float width = 0.8; // width of the sub-poissonian (0.8 resembles what Allpix Squared does very well)
+  float mean = travel.r() * 1000.f * meanDepositionsPerUm ; // convert from mm to um
+  int NDepositions = std::max(1, static_cast<int>(randomGen.Binomial(std::round(mean / width), width)));
 
   std::vector<std::pair<float, dd4hep::rec::Vector3D>> depositions;
   depositions.reserve(NDepositions);
