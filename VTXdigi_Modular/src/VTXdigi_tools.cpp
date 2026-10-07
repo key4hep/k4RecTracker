@@ -290,23 +290,31 @@ void HitMap::FillCharge(std::array<int, 2> i_uv, float charge, const SimHitWrapp
   iter->second.simHits.insert(&simHitWrapper);
 }
 
-void HitMap::ApplyChargeSmearing(const Rndm::Numbers& rndm_charge) {
+void HitMap::ApplyChargeSmearing(const float sigma, TRandom3& randomGen) {
   auto hitIter = m_pixels.begin();
   while (hitIter != m_pixels.end()) {
-    hitIter->second.charge = std::max(hitIter->second.charge + static_cast<float>(rndm_charge()), 0.f); // don't allow negative charge after smearing
+    hitIter->second.charge = std::max(hitIter->second.charge + static_cast<float>(randomGen.Gaus(0, sigma)), 0.f); // don't allow negative charge after smearing
     ++hitIter;
   }
 }
 
-void HitMap::ApplyThreshold(const float threshold, const Rndm::Numbers* rndm_threshold) {
-  auto hitIter = m_pixels.begin();
-  while (hitIter != m_pixels.end()) {
-    // optionally disperse the threshold per pixel (drawn per event per sensor per pixel)
-    const float pixThreshold = rndm_threshold ? threshold + static_cast<float>((*rndm_threshold)()) : threshold;
-    if (hitIter->second.charge < pixThreshold)
-      hitIter = m_pixels.erase(hitIter); // erase returns the iterator to the next element, so this is safe to do while iterating
+void HitMap::ApplyThreshold(const float threshold, const float thresholdDispersion, TRandom3& randomGen) {
+  auto pixelIter = m_pixels.begin();
+  while (pixelIter != m_pixels.end()) {
+    // skip expensive Mersenne Twister step for pixels that are well above threshold
+    if (pixelIter->second.charge > threshold + 8.f * thresholdDispersion) {
+      ++pixelIter;
+      continue;
+    }
+
+    float pixThreshold = threshold;
+    if (thresholdDispersion != 0.f)
+      pixThreshold += static_cast<float>(randomGen.Gaus(0, thresholdDispersion));
+
+    if (pixelIter->second.charge < pixThreshold)
+      pixelIter = m_pixels.erase(pixelIter); // erase returns the iterator to the next element
     else
-      ++hitIter;
+      ++pixelIter;
   }
 }
 

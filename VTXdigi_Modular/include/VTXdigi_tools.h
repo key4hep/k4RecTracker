@@ -9,6 +9,10 @@
 
 #include "edm4hep/SimTrackerHit.h"
 
+// ROOT
+#include "TRandom3.h"
+
+// C++ STL
 #include <cmath>
 #include <queue>
 #include <unordered_set>
@@ -139,11 +143,11 @@ public:
   void FillCharge(std::array<int, 2> i_uv, float charge, const SimHitWrapper& simHitWrapper);
 
   /** @brief For each pixel with charge, vary the charge by an amount drawn from the supplied random generator */
-  void ApplyChargeSmearing(const Rndm::Numbers& rndm_charge);
+  void ApplyChargeSmearing(const float sigma, TRandom3& randomGen);
 
   /** @brief Erase pixels below threshold. If rndm_threshold is given, a per-pixel Gaussian
    *  dispersion is drawn from it and added to the threshold before comparison. */
-  void ApplyThreshold(const float threshold, const Rndm::Numbers* rndm_threshold = nullptr);
+  void ApplyThreshold(float threshold, const float thresholdDispersion, TRandom3& randomGen);
 
   /** @brief Get one pixel's collected charge */
   float GetCharge(std::array<int, 2> i_uv) const;

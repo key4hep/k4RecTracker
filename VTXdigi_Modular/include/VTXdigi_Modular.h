@@ -7,7 +7,6 @@
 #include "GAUDI_VERSION.h"
 #include "Gaudi/Property.h"
 #include "Gaudi/Accumulators/Histogram.h"
-#include "GaudiKernel/IRndmGenSvc.h"
 
 // K4FWCORE
 #include "k4Interface/IGeoSvc.h"
@@ -107,7 +106,7 @@ private:
   std::vector<VTXdigi_tools::Cluster> Clusterize(const VTXdigi_tools::HitMap& hitMap) const;
 
   /** @brief Create a digiHit per cluster */
-  void CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::VolumeID& volumeID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const;
+  void CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::VolumeID& volumeID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters, TRandom3& randomGen) const;
 
   void FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrapper& hit) const;
   void FillHistograms_perPixel(const dd4hep::DDSegmentation::VolumeID& volumeID, const VTXdigi_tools::Pixel& pix) const;
@@ -153,7 +152,6 @@ private:
 
   /* -- Services, geometry variables -- */
 
-  SmartIF<IRndmGenSvc> m_randomService;
   SmartIF<IGeoSvc> m_geoService;
   SmartIF<IUniqueIDGenSvc> m_uniqueIDService;
   std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_cellIdDecoder;
@@ -175,10 +173,6 @@ private:
 
   std::array<float, 2> m_sensorLength = {0.0f, 0.0f};
   TGeoRotation m_sensorNormalRotation = TGeoRotation("sensorNormalRotation"); // rotation to rotate the sensor local coordinate system. Initialised to unit matrix.
-
-  Rndm::Numbers m_rndm_charge; // TODO: Is this multithreading safe?
-  Rndm::Numbers m_rndm_threshold;
-  Rndm::Numbers m_rndm_time;
 
   /* -- Counters -- */
 

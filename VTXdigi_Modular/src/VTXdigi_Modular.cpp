@@ -111,15 +111,14 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
         FillHistograms_perSimHit(simHit);
     }
 
-
     if (m_smearing_charge.value() > 0.f)
-      hitMap.ApplyChargeSmearing(m_rndm_charge);
+      hitMap.ApplyChargeSmearing(m_smearing_charge.value(), randomGen);
     if (m_threshold.value() > 0.f)
-      hitMap.ApplyThreshold(m_threshold.value(), m_smearing_threshold.value() > 0.f ? &m_rndm_threshold : nullptr);
+      hitMap.ApplyThreshold(m_threshold.value(), m_smearing_threshold.value(), randomGen);
 
     std::vector<VTXdigi_tools::Cluster> clusters = Clusterize(hitMap);
 
-    CreateDigiHits(digiHits, digiHitLinks, volumeID, trafoMatrix, clusters);
+    CreateDigiHits(digiHits, digiHitLinks, volumeID, trafoMatrix, clusters, randomGen);
     if (m_debugHistograms.value())
       FillHistograms_perSensor(simHits, digiHits, trafoMatrix, volumeID);
   } /* loop over sensors */
@@ -173,19 +172,6 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
   m_uniqueIDService = service("uidSvc", false);
   if (!m_uniqueIDService)
     throw GaudiException("Unable to get UniqueIDGenSvc from name 'uidSvc'.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-
-
-  m_randomService = service("RndmGenSvc", false);
-  if (!m_randomService)
-    throw GaudiException("Unable to get RndmGenSvc.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-
-  // initialize random number generators
-  if (m_rndm_charge.initialize(m_randomService, Rndm::Gauss(0., m_smearing_charge.value())).isFailure())
-    throw GaudiException("Unable to initialize random number generator for charge smearing.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-  if (m_rndm_threshold.initialize(m_randomService, Rndm::Gauss(0., m_smearing_threshold.value())).isFailure())
-    throw GaudiException("Unable to initialize random number generator for threshold smearing.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-  if (m_rndm_time.initialize(m_randomService, Rndm::Gauss(0., m_smearing_time.value())).isFailure())
-    throw GaudiException("Unable to initialize random number generator for time smearing.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   if (m_subDetName.value() == m_undefinedString)
     throw GaudiException("Property SubDetectorName is not set!", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
@@ -1243,7 +1229,7 @@ std::vector<VTXdigi_tools::Cluster> VTXdigi_Modular::Clusterize(const VTXdigi_to
   }
 }
 
-void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::VolumeID& volumeID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters) const {
+void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHits, edm4hep::TrackerHitSimTrackerHitLinkCollection& digiHitLinks, const dd4hep::DDSegmentation::VolumeID& volumeID, const TGeoHMatrix& trafoMatrix, const std::vector<VTXdigi_tools::Cluster>& clusters, TRandom3& randomGen) const {
 
   // Called for each cluster on a sensor, so volumeID and direction vectors are same among these clusters
   const dd4hep::rec::Vector3D direction_u_3d = VTXdigi_tools::Trafo_local_global(dd4hep::rec::Vector3D(1, 0, 0), trafoMatrix);
@@ -1315,7 +1301,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
       timeStamp = std::min(timeStamp, simHit->hitPtr()->getTime()); // use earliest timestamp among simHits contributing to that pixel
     }
     if (m_smearing_time > 0.f)
-      timeStamp += m_rndm_time;
+      timeStamp += randomGen.Gaus(0., m_smearing_time.value());
     digiHit.setTime(timeStamp);
 
     // Create links to simHits
