@@ -140,6 +140,7 @@ private:
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_threshold{this, "ThresholdDispersion", 0.0f, "Gaussian smearing to be applied to the threshold. (in e-). Drawn per event per sensor per pixel. If 0, no dispersion is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_time{this, "TimeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels time (in ns). Applied to the digiHits time stamp. If 0, no time smearing is applied. Defaults to 0."};
+  Gaudi::Property<bool> m_forceClusterPosToSensitiveSurface{this, "ForceClusterPositionToSensitiveSurface", false, "If true, the cluster position is forced to be on the sensitive surface of the sensor. If false, the cluster vertical position (in the sensor local frame) is given by the ChargeCollector (with the LookupTable method, this is the depth centre of the charge collection computed from the LUT). Defaults to false."};
 
   Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false, "Flag to create and fill debug histograms. Not recommended for multithreading, might lead to crashes. Default is false."};
   Gaudi::Property<int> m_infoPrintInterval{this, "InfoPrintInterval", 100, "Interval for printing information during processing."};
@@ -200,9 +201,15 @@ private:
     hist1d_simHit_particleMomentum_MeV,
     hist1d_simHit_particleMomentum_GeV,
     hist1d_simHit_timeStamp,
+    hist1d_simHit_u,
+    hist1d_simHit_v,
+    hist1d_simHit_w,
     hist1d_simHit_x,
     hist1d_simHit_y,
     hist1d_simHit_z,
+    hist1d_simHit_r,
+    hist1d_simHit_phi,
+    hist1d_simHit_theta,
     hist1d_simHit_z_causedByPrimary,
     hist1d_simHit_z_causedBySecondary,
     hist1d_simHit_vertex_x,
@@ -243,6 +250,15 @@ private:
     hist1d_residual_v_maxEParticleOnSensor,
     hist1d_clusterPosUncertainty_u,
     hist1d_clusterPosUncertainty_v,
+    hist1d_digiHit_u,
+    hist1d_digiHit_v,
+    hist1d_digiHit_w,
+    hist1d_digiHit_x,
+    hist1d_digiHit_y,
+    hist1d_digiHit_z,
+    hist1d_digiHit_r,
+    hist1d_digiHit_phi,
+    hist1d_digiHit_theta,
     hist1d_pathTravel_u,
     hist1d_pathTravel_v,
     hist1d_pathTravel_r,

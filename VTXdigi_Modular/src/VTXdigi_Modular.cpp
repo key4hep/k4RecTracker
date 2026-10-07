@@ -46,7 +46,6 @@ StatusCode VTXdigi_Modular::finalize() {
   return StatusCode::SUCCESS;
 }
 
-
 /* ---- Event loop ---- */
 
 std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> VTXdigi_Modular::operator()
@@ -458,11 +457,14 @@ void VTXdigi_Modular::InitLayersAndSensors() {
 void VTXdigi_Modular::InitHistograms() {
   /* Define axes globally to make adjusting them easier
   * TODO: Make some of these adjustable via Gaudi Parameters? Might not be necessary.*/
-  Gaudi::Accumulators::Axis<float> axis_xy{4000, -20, 20};
+  Gaudi::Accumulators::Axis<float> axis_xy{2000, -100, 100}; // global x/y in mm
   Gaudi::Accumulators::Axis<float> axis_z{4000, -200, 200};
   Gaudi::Accumulators::Axis<float> axis_cosTheta{100, 0, 1};
   Gaudi::Accumulators::Axis<float> axis_theta{4*180, 0, 180};
   Gaudi::Accumulators::Axis<float> axis_phi{4*180, -180, 180};
+
+  Gaudi::Accumulators::Axis<float> axis_uv{1000, -20, 20};
+  Gaudi::Accumulators::Axis<float> axis_w{200, -0.1, 0.1};
 
   Gaudi::Accumulators::Axis<float> axis_MomentumFraction{400, -1.0001f, 1.0001f};
 
@@ -546,59 +548,103 @@ void VTXdigi_Modular::InitHistograms() {
       }
     );
 
+    hist1d.at(hist1d_simHit_u).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pos/u_sensor_local",
+        "SimHit position in sensor local u - Layer " + std::to_string(layer) + ";u [mm];Entries",
+        axis_uv
+      }
+    );
+    hist1d.at(hist1d_simHit_v).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pos/v_sensor_local",
+        "SimHit position in sensor local v - Layer " + std::to_string(layer) + ";v [mm];Entries",
+        axis_uv
+      }
+    );
+    hist1d.at(hist1d_simHit_w).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pos/w_sensor_local",
+        "SimHit position in sensor local w - Layer " + std::to_string(layer) + ";w [mm];Entries",
+        axis_w
+      }
+    );
+
     hist1d.at(hist1d_simHit_x).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/simHit_global_x",
+        "Layer" + std::to_string(layer) + "/simHit_pos/x",
         "Global x-position of simHits - Layer " + std::to_string(layer) + ";x [mm];Entries",
         axis_xy
       }
     );
     hist1d.at(hist1d_simHit_y).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/simHit_global_y",
+        "Layer" + std::to_string(layer) + "/simHit_pos/y",
         "Global y-position of simHits - Layer " + std::to_string(layer) + ";y [mm];Entries",
         axis_xy
       }
     );
     hist1d.at(hist1d_simHit_z).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/simHit_z",
+        "Layer" + std::to_string(layer) + "/simHit_pos/z",
         "Global z-position of simHits - Layer " + std::to_string(layer) + ";z [mm];Entries",
         axis_z
       }
     );
     hist1d.at(hist1d_simHit_z_causedByPrimary).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/simHit_z_causedByPrimary",
+        "Layer" + std::to_string(layer) + "/simHit_pos/z_causedByPrimary",
         "Global z-position of simHits from particles created in the generator (accounts secondaries where MCParticle was deleted in ddsim) - Layer " + std::to_string(layer) + ";z [mm];Entries",
         axis_z
       }
     );
     hist1d.at(hist1d_simHit_z_causedBySecondary).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/simHit_z_causedBySecondary",
+        "Layer" + std::to_string(layer) + "/simHit_pos/z_causedBySecondary",
         "Global z-position of simHits from particles created in simulation (accounts secondaries where MCParticle was deleted in ddsim) - Layer " + std::to_string(layer) + ";z [mm];Entries",
         axis_z
       }
     );
 
+    hist1d.at(hist1d_simHit_r).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pos/r",
+        "Global simHit r position - Layer " + std::to_string(layer) + ";r [mm];Entries",
+        axis_xy
+      }
+    );
+    hist1d.at(hist1d_simHit_phi).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pos/phi",
+        "Global simHit phi position - Layer " + std::to_string(layer) + ";phi [rad];Entries",
+        axis_phi
+      }
+    );
+    hist1d.at(hist1d_simHit_theta).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/simHit_pos/theta",
+        "Global simHit theta position - Layer " + std::to_string(layer) + ";theta [rad];Entries",
+        axis_theta
+      }
+    );
+
     hist1d.at(hist1d_simHit_vertex_x).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/simHit_vertex_x",
+        "Layer" + std::to_string(layer) + "/simHit_pos/vertex_x",
         "X-position of the production vertex of simHits - Layer " + std::to_string(layer) + ";x [mm];Entries",
         axis_xy
       }
     );
     hist1d.at(hist1d_simHit_vertex_y).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/simHit_vertex_y",
+        "Layer" + std::to_string(layer) + "/simHit_pos/vertex_y",
         "Y-position of the production vertex of simHits - Layer " + std::to_string(layer) + ";y [mm];Entries",
         axis_xy
       }
     );
     hist1d.at(hist1d_simHit_vertex_z).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
-        "Layer" + std::to_string(layer) + "/simHit_vertex_z",
+        "Layer" + std::to_string(layer) + "/simHit_pos/vertex_z",
         "Z-position of the production vertex of simHits - Layer " + std::to_string(layer) + ";z [mm];Entries",
         axis_z
       }
@@ -865,7 +911,6 @@ void VTXdigi_Modular::InitHistograms() {
       }
     );
 
-
     hist1d.at(hist1d_clusterPosUncertainty_u).reset(
       new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/digiHit_clusterPosUncertainty_u",
@@ -934,6 +979,73 @@ void VTXdigi_Modular::InitHistograms() {
         axis_particleE
       }
     );
+
+    hist1d.at(hist1d_digiHit_u).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_pos/u_sensor_local",
+        "DigiHit position on the sensor in u (eg. local x) - Layer " + std::to_string(layer) + ";Hit u position [mm];Entries",
+        axis_uv
+      }
+    );
+    hist1d.at(hist1d_digiHit_v).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_pos/v_sensor_local",
+        "DigiHit position on the sensor in v (eg. local y) - Layer " + std::to_string(layer) + ";Hit v position [mm];Entries",
+        axis_uv
+      }
+    );
+    hist1d.at(hist1d_digiHit_w).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_pos/w_sensor_local",
+        "DigiHit position on the sensor in w (eg. local z) - Layer " + std::to_string(layer) + ";Hit w position [mm];Entries",
+        axis_w
+      }
+    );
+
+    hist1d.at(hist1d_digiHit_x).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_pos/x",
+        "DigiHit global x position - Layer " + std::to_string(layer) + ";Hit x position [mm];Entries",
+        axis_xy
+      }
+    );
+    hist1d.at(hist1d_digiHit_y).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_pos/y",
+        "DigiHit global y position - Layer " + std::to_string(layer) + ";Hit y position [mm];Entries",
+        axis_xy
+      }
+    );
+    hist1d.at(hist1d_digiHit_z).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_pos/z",
+        "DigiHit global z position - Layer " + std::to_string(layer) + ";Hit z position [mm];Entries",
+        axis_z
+      }
+    );
+    hist1d.at(hist1d_digiHit_r).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_pos/r",
+        "DigiHit global r position - Layer " + std::to_string(layer) + ";Hit r position [mm];Entries",
+        axis_xy
+      }
+    );
+    hist1d.at(hist1d_digiHit_phi).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_pos/phi",
+        "DigiHit global phi position - Layer " + std::to_string(layer) + ";Hit phi position [rad];Entries",
+        axis_phi
+      }
+    );
+    hist1d.at(hist1d_digiHit_theta).reset(
+      new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float> {this,
+        "Layer" + std::to_string(layer) + "/digiHit_pos/theta",
+        "DigiHit global theta position - Layer " + std::to_string(layer) + ";Hit theta position [rad];Entries",
+        axis_theta
+      }
+    );
+
+
 
 
 
@@ -1255,7 +1367,13 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     // position
     std::array<float, 2> clusterPos_index = cluster.ComputeCoG(m_clusterizeEndPixelsOnly.value());
 
-    const dd4hep::rec::Vector3D clusterPos_local = VTXdigi_tools::Trafo_pixIndex_local(clusterPos_index, m_sensorLength, m_pixelPitch, m_chargeCollector->GetChargeCollectionDepthCenter());
+    float cluster_pos_w;
+    if (m_forceClusterPosToSensitiveSurface.value())
+      cluster_pos_w = 0.f;
+    else
+      cluster_pos_w = m_chargeCollector->GetChargeCollectionDepthCenter();
+
+    const dd4hep::rec::Vector3D clusterPos_local = VTXdigi_tools::Trafo_pixIndex_local(clusterPos_index, m_sensorLength, m_pixelPitch, cluster_pos_w);
     const dd4hep::rec::Vector3D clusterPos_global = VTXdigi_tools::Trafo_local_global(clusterPos_local, trafoMatrix);
     debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_index[0] << ", " << clusterPos_index[1] << "). Has " << cluster.simHits.size() << " contributing simHits." << endmsg;
     digiHit.setPosition(VTXdigi_tools::ConvertVector(clusterPos_global));
@@ -1347,9 +1465,22 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
 
   ++(*m_hist1d.at(layer).at(hist1d_simHit_timeStamp))[simHit.hitPtr()->getTime()];
 
+  ++(*m_hist1d.at(layer).at(hist1d_simHit_u))[simHitPos_local.x()];
+  ++(*m_hist1d.at(layer).at(hist1d_simHit_v))[simHitPos_local.y()];
+  ++(*m_hist1d.at(layer).at(hist1d_simHit_w))[simHitPos_local.z()];
+
   ++(*m_hist1d.at(layer).at(hist1d_simHit_x))[simHitPos_global.x()];
   ++(*m_hist1d.at(layer).at(hist1d_simHit_y))[simHitPos_global.y()];
   ++(*m_hist1d.at(layer).at(hist1d_simHit_z))[simHitPos_global.z()];
+
+  const float r = std::sqrt(simHitPos_global.x()*simHitPos_global.x() + simHitPos_global.y()*simHitPos_global.y());
+  ++(*m_hist1d.at(layer).at(hist1d_simHit_r))[r];
+  const float phi = std::atan2(simHitPos_global.y(), simHitPos_global.x());
+  ++(*m_hist1d.at(layer).at(hist1d_simHit_phi))[phi];
+  const float theta = std::atan2(r, simHitPos_global.z());
+  ++(*m_hist1d.at(layer).at(hist1d_simHit_theta))[theta];
+
+  ++
 
   ++(*m_hist2d.at(layer).at(hist2d_simHit_xy))[{simHitPos_global.x(), simHitPos_global.y()}];
   ++(*m_hist2d.at(layer).at(hist2d_simHit_xz))[{simHitPos_global.x(), simHitPos_global.z()}];
@@ -1397,6 +1528,21 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cl
   const int layer = GetLayer(digiHit.getCellID());
   const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(digiHit.getPosition());
   const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::Trafo_global_local(pos_global, trafoMatrix);
+
+  ++(*m_hist1d.at(layer).at(hist1d_digiHit_u))[ pos_local.x() ];
+  ++(*m_hist1d.at(layer).at(hist1d_digiHit_v))[ pos_local.y() ];
+  ++(*m_hist1d.at(layer).at(hist1d_digiHit_w))[ pos_local.z() ];
+
+  ++(*m_hist1d.at(layer).at(hist1d_digiHit_x))[ pos_global.x() ];
+  ++(*m_hist1d.at(layer).at(hist1d_digiHit_y))[ pos_global.y() ];
+  ++(*m_hist1d.at(layer).at(hist1d_digiHit_z))[ pos_global.z() ];
+
+  const float r = std::sqrt(pos_global.x()*pos_global.x() + pos_global.y()*pos_global.y());
+  ++(*m_hist1d.at(layer).at(hist1d_digiHit_r))[ r ];
+  const float phi = std::atan2(pos_global.y(), pos_global.x());
+  ++(*m_hist1d.at(layer).at(hist1d_digiHit_phi))[ phi ];
+  const float theta = std::atan2(r, pos_global.z());
+  ++(*m_hist1d.at(layer).at(hist1d_digiHit_theta))[ theta ];
 
   ++(*m_hist1d.at(layer).at(hist1d_digiHit_collectedCharge))[ digiHit.getEDep() * VTXdigi_tools::kChargePerkeV ];
   ++(*m_hist1d.at(layer).at(hist1d_digiHit_collectedCharge_seedPixel))[ cluster.GetSeedPixelCharge() ];
