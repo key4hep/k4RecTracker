@@ -71,6 +71,12 @@ MCParticleLevel ComputeMCParticleLevel(const edm4hep::SimTrackerHit& simTrackerH
 
 /* -- helpers -- */
 
+std::string VectorToString(const dd4hep::rec::Vector3D& vec) {
+  std::ostringstream oss;
+  oss << "(" << vec.x() << ", " << vec.y() << ", " << vec.z() << ")";
+  return oss.str();
+}
+
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
   return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
 }
@@ -96,6 +102,20 @@ TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::VolumeID& vol
 
   return M;
 }
+
+dd4hep::rec::Vector3D TrafoVec_global_local(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M) {
+  double local[3];
+  M.MasterToLocalVect(global, local);
+  return dd4hep::rec::Vector3D(local[0], local[1], local[2]);
+}
+
+dd4hep::rec::Vector3D TrafoVec_local_global(const dd4hep::rec::Vector3D& local, const TGeoHMatrix& M) {
+  double global[3];
+  M.LocalToMasterVect(local, global);
+  return dd4hep::rec::Vector3D(global[0], global[1], global[2]);
+}
+
+
 
 dd4hep::rec::Vector3D Trafo_global_local(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M) {
   double local[3];

@@ -177,6 +177,8 @@ private:
 
 /* -- helpers -- */
 
+std::string VectorToString(const dd4hep::rec::Vector3D& vec);
+
 /** @brief Convert a edm4hep::Vector3d to dd4hep::rec::Vector3D */
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);
 /** @brief Convert a edm4hep::Vector3f to dd4hep::rec::Vector3D */
@@ -187,6 +189,9 @@ edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec);
 
 /** @brief Compute the transformation matrix from global detector to local sensor frame for a given sensor volume (defined by its volumeID) */
 TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::VolumeID& volumeID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation);
+
+dd4hep::rec::Vector3D TrafoVec_global_local(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M);
+dd4hep::rec::Vector3D TrafoVec_local_global(const dd4hep::rec::Vector3D& local, const TGeoHMatrix& M);
 
 /** @brief Transform a position from global detector coordinates to sensor-local coordinates, using the sensor transformation matrix */
 dd4hep::rec::Vector3D Trafo_global_local(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M);

@@ -1,6 +1,7 @@
 // VTXdigi_Modular/src/VTXdigi_Modular.cpp
 #include "VTXdigi_Modular.h"
 #include "VTXdigi_tools.h"
+#include <DDRec/CellIDPositionConverter.h>
 #include <GaudiKernel/RndmGenerators.h>
 
 DECLARE_COMPONENT(VTXdigi_Modular)
@@ -223,54 +224,45 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     throw GaudiException("Unable to create CellIDPositionConverter", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   { /* DD4hep has a transformation from the global detector coordinates to each sensors local system. The definition of the local system might change.
-    * We have to make sure that a sensor always sits in the u-v plane in the local system, eg. we might have to swap the axes of the local system.
-    * We accomplish this with a transformation matrix. This is valid for all sensors in the subdetector */
+    * We define a rotation matrix to align the sensor surface axes (u,v,n) with the local system axes (x_local, y_local, z_local) for the first sensor we find, then apply this to all sensors.
+    * Note the local system axes are usually referred to as (u, v, w) == (x_local, y_local, z_local) */
 
-    /* Set the sensor local transformation matrix, st. the sensors normal vector is parallel to w-axis (by simply looking at the first sensor in the map) */
     auto surfaceMapIter = m_surfaceMap->begin();
     if (surfaceMapIter == m_surfaceMap->end())
       throw GaudiException("Surface map for subdetector " + m_subDetName.value() + " is empty.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
-    const unsigned long volumeID = surfaceMapIter->first;
+    const dd4hep::rec::VolumeID volumeID = surfaceMapIter->first;
     const dd4hep::rec::ISurface* surface = surfaceMapIter->second;
 
-    TGeoHMatrix sensorTrafoMatrix = m_volumeManager.lookupDetElement(volumeID).nominal().worldTransformation();
-    double tempVec[3];
-
+    /* first: rotate sensor local coordinates st. u=x_local, v=y_local, n=z_local */
     const double epsilon = 1.0e-6; // reasonable for comparing to 1
 
-    /* first: rotate sensor normal onto W-axis*/
-    sensorTrafoMatrix.MasterToLocalVect(surface->normal().unit(), tempVec);
-    dd4hep::rec::Vector3D n_local(tempVec[0], tempVec[1], tempVec[2]);
+    TGeoHMatrix sensorTrafoMatrix = m_volumeManager.lookupDetElement(volumeID).nominal().worldTransformation();
+    const dd4hep::rec::Vector3D u = VTXdigi_tools::TrafoVec_global_local(surface->u(), sensorTrafoMatrix).unit();
+    const dd4hep::rec::Vector3D v = VTXdigi_tools::TrafoVec_global_local(surface->v(), sensorTrafoMatrix).unit();
+    const dd4hep::rec::Vector3D n = VTXdigi_tools::TrafoVec_global_local(surface->normal(), sensorTrafoMatrix).unit();
 
-    if (std::abs(n_local.x() - 1.0) < epsilon) {
-      debug() << "   - Local sensor normal vector is (1,0,0). Defining rotation matrix to rotate it to (0,0,1)." << endmsg;
-      m_sensorNormalRotation = TGeoRotation("rot",90.,90.,0.);
-    }
-    else if (std::abs(n_local.y() - 1.0) < epsilon) {
-      debug() << "   - Local sensor normal vector is (0,1,0). Defining rotation matrix to rotate it to (0,0,1)." << endmsg;
-      m_sensorNormalRotation = TGeoRotation("rot",0.,-90.,0.);
-    }
-    else if (std::abs(n_local.z() - 1.0) < epsilon) {
-      debug() << "   - Local sensor normal vector is already parallel to (0,0,1)." << endmsg;
-      // no rotation needed
-    }
-    else {
-      error() << "Sensor local normal vector is not aligned with any local axis!" << endmsg;
-    }
+    /* check 1 - u,v,n are orthogonal and right-handed */
+    if (std::abs(u.dot(v)) > epsilon || std::abs(u.dot(n)) > epsilon || std::abs(v.dot(n)) > epsilon)
+      throw GaudiException("Sensor surface axes u " + VTXdigi_tools::VectorToString(u) + ", v " + VTXdigi_tools::VectorToString(v) + ", n " + VTXdigi_tools::VectorToString(n) + " are not orthogonal.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+    if ((u.cross(v) - n).r() > epsilon)
+      throw GaudiException("Sensor surface axes are left-handed (u x v != n). Cannot build a rotation for u " + VTXdigi_tools::VectorToString(u) + ", v " + VTXdigi_tools::VectorToString(v) + ", n " + VTXdigi_tools::VectorToString(n) + ".", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
-    /* TODO: this only makes sure that the sensor normal vector is perpendicular to the surface.
-    * It does NOT make sure that the local x and y are not swapped and have the correct polarity.
-    * I tried coming up with the correct transformation matrix based on the axis rotations, but tbh I am quite stumped by how the rotation acts on the vectors, and how I can fix it. */
-    TGeoHMatrix M = VTXdigi_tools::ComputeSensorTrafoMatrix(volumeID, m_volumeManager, m_sensorNormalRotation);
-    M.MasterToLocalVect(surface->u().unit(), tempVec);
-    if (std::abs(tempVec[0]-1.) > epsilon || std::abs(tempVec[1]) > epsilon || std::abs(tempVec[2]) > epsilon)
-      warning() << "After rotation, local sensor U direction (" << tempVec[0] << "," << tempVec[1] << "," << tempVec[2] << ") is not parallel to (1,0,0) axis!" << endmsg;
-    M.MasterToLocalVect(surface->v().unit(), tempVec);
-    if (std::abs(tempVec[0]) > epsilon || std::abs(tempVec[1]-1.) > epsilon || std::abs(tempVec[2]) > epsilon)
-      warning() << "After rotation, local sensor V direction (" << tempVec[0] << "," << tempVec[1] << "," << tempVec[2] << ") is not parallel to (0,1,0) axis!" << endmsg;
-    M.MasterToLocalVect(surface->normal().unit(), tempVec);
-    if (std::abs(tempVec[0]) > epsilon || std::abs(tempVec[1]) > epsilon || std::abs(tempVec[2]-1.) > epsilon)
-      warning() << "After rotation, local sensor normal direction (" << tempVec[0] << "," << tempVec[1] << "," << tempVec[2] << ") is not parallel to (0,0,1) axis!" << endmsg;
+    /* assemble rotation matrix*/
+    const double rot[9] = { u.x(), v.x(), n.x(),
+                            u.y(), v.y(), n.y(),
+                            u.z(), v.z(), n.z() };
+    m_sensorNormalRotation.SetMatrix(rot);
+    debug() << "   - Sensor local axes are u " << VTXdigi_tools::VectorToString(u) << ", v " << VTXdigi_tools::VectorToString(v) << ", n " << VTXdigi_tools::VectorToString(n) << ". Rotating them onto axes u-x, v-y, n-z in sensor local coordinates ." << endmsg;
+
+
+    /* check 2 - rotation matrix works (this checks my maths) */
+    const TGeoHMatrix sensorTrafoMatrix_corrected = VTXdigi_tools::ComputeSensorTrafoMatrix(volumeID, m_volumeManager, m_sensorNormalRotation);
+    const dd4hep::rec::Vector3D u_corrected = VTXdigi_tools::TrafoVec_global_local(surface->u().unit(), sensorTrafoMatrix_corrected);
+    const dd4hep::rec::Vector3D v_corrected = VTXdigi_tools::TrafoVec_global_local(surface->v().unit(), sensorTrafoMatrix_corrected);
+    const dd4hep::rec::Vector3D n_corrected = VTXdigi_tools::TrafoVec_global_local(surface->normal().unit(), sensorTrafoMatrix_corrected);
+    if ((u_corrected - dd4hep::rec::Vector3D(1., 0., 0.)).r() > epsilon || (v_corrected - dd4hep::rec::Vector3D(0., 1., 0.)).r() > epsilon || (n_corrected - dd4hep::rec::Vector3D(0., 0., 1.)).r() > epsilon)
+      throw GaudiException("After rotation, sensor local axes are u " + VTXdigi_tools::VectorToString(u_corrected) + ", v " + VTXdigi_tools::VectorToString(v_corrected) + ", n " + VTXdigi_tools::VectorToString(n_corrected) + ". Expected u (1,0,0), v (0,1,0), n (0,0,1).", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+    debug() << "   - After rotation, sensor local axes are u " << VTXdigi_tools::VectorToString(u_corrected) << ", v " << VTXdigi_tools::VectorToString(v_corrected) << ", n " << VTXdigi_tools::VectorToString(n_corrected) << "." << endmsg;
   }
 
   /* IDEA / Allegro:
@@ -429,7 +421,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
         const float surfaceLength_v = surface->length_along_v() * 10;
         const float surfaceThickness_above = surface->outerThickness() * 10; // sensor thickness measured from w=0 upwards, including inactive material above the active volume.
         const float surfaceThickness_below = surface->innerThickness() * 10; // same, but below
-        //Note: the sensor local coordinate system (u,v,w) is centered on the active volume, so inactive material upper/lower might be assymetric
+        // Note: the sensor local coordinate system (u,v,w) is centered on the active volume, so inactive material upper/lower might be assymetric
 
         // THIRD: consistency checks on sensor dimensions
         if (solidThickness > (surfaceThickness_above + surfaceThickness_below)) {
