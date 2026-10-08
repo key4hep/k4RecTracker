@@ -11,7 +11,6 @@
 
 namespace VTXdigi_tools {
 using ::VTXdigi_Modular; // "unqualified name introduction from global namespace" (just so I remember what to call this in C++ speak)
-using ::endmsg; // makes the Copilot autocomplete work better
 
 std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& digitizer, const std::string& algorithm) {
   std::unique_ptr<IChargeCollector> chargeCollector;

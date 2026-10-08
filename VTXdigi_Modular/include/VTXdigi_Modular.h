@@ -114,7 +114,7 @@ private:
   void FillHistograms_perPixel(const dd4hep::DDSegmentation::VolumeID& volumeID, const VTXdigi_tools::Pixel& pix) const;
   // void FillHistograms_perDigiHit(const std::unordered_set<const VTXdigi_tools::SimHitWrapper*>& simHits, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix, const int clusterSize, const int clusterSize_u, const int clusterSize_v) const;
   void FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cluster, const edm4hep::TrackerHitPlane& digiHit, const TGeoHMatrix& trafoMatrix) const;
-  void FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::VolumeID& volumeID) const;
+  void FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const size_t firstDigiHitIndex, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::VolumeID& volumeID) const;
 
 
   /* -- Properties -- */

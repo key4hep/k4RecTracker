@@ -131,9 +131,10 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
 
     std::vector<VTXdigi_tools::Cluster> clusters = Clusterize(hitMap);
 
+    const size_t firstDigiHitIndex = digiHits.size(); // digiHits of this sensor are appended after this index
     CreateDigiHits(digiHits, digiHitLinks, volumeID, trafoMatrix, clusters, randomGen);
     if (m_debugHistograms.value())
-      FillHistograms_perSensor(simHits, digiHits, trafoMatrix, volumeID);
+      FillHistograms_perSensor(simHits, digiHits, firstDigiHitIndex, trafoMatrix, volumeID);
   } /* loop over sensors */
 
   debug() << " - Finished digitization. Created " << digiHits.size() << " digiHits from " << simTrackerHits.size() << " simTrackerHits." << endmsg;
@@ -518,8 +519,12 @@ void VTXdigi_Modular::InitHistograms() {
 
   /* Fill histograms per layer */
   for (int layer : m_layers.value()) {
+    Gaudi::Accumulators::Axis<float> axis_z_layer;
     if (layer == 0) {
-      axis_z = Gaudi::Accumulators::Axis<float>{100, -96.5, 96.5}; // Want to cover layer 0 of IDEA vertex det perfectly to avoid binning-edge-effects, so we use a the correct length of 185 mm
+      axis_z_layer = Gaudi::Accumulators::Axis<float>{100, -96.5, 96.5}; // Want to cover layer 0 of IDEA vertex det perfectly to avoid binning-edge-effects, so we use a the correct length of 185 mm
+    }
+    else {
+      axis_z_layer = axis_z;
     }
 
     std::array< std::unique_ptr< Gaudi::Accumulators::StaticHistogram< 1, Gaudi::Accumulators::atomicity::full, float > >, hist1dArrayLen > hist1d;
@@ -1256,15 +1261,15 @@ void VTXdigi_Modular::InitHistograms() {
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/simHit_xy_2D",
         "SimHit x vs y position (global) - Layer " + std::to_string(layer) + ";X position [mm];Y position [mm];Entries",
-        axis_z,
-        axis_z
+        axis_xy,
+        axis_xy
       }
     );
     hist2d.at(hist2d_simHit_xz).reset(
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/simHit_xz_2D",
         "SimHit x vs z position (global) - Layer " + std::to_string(layer) + ";X position [mm];Z position [mm];Entries",
-        axis_z,
+        axis_xy,
         axis_z
       }
     );
@@ -1272,7 +1277,7 @@ void VTXdigi_Modular::InitHistograms() {
       new Gaudi::Accumulators::StaticHistogram<2, Gaudi::Accumulators::atomicity::full, float> {this,
         "Layer" + std::to_string(layer) + "/simHit_yz_2D",
         "SimHit y vs z position (global) - Layer " + std::to_string(layer) + ";Y position [mm];Z position [mm];Entries",
-        axis_z,
+        axis_xy,
         axis_z
       }
     );
@@ -1629,20 +1634,20 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cl
         ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length5plus))[ residual_local.x()*1000.f ];
 
       if (cluster.GetSize(1) == 1)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length1))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length1))[ residual_local.y()*1000.f ];
       else if (cluster.GetSize(1) == 2)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length2))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length2))[ residual_local.y()*1000.f ];
       else if (cluster.GetSize(1) == 3)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length3))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length3))[ residual_local.y()*1000.f ];
       else if (cluster.GetSize(1) == 4)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length4))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length4))[ residual_local.y()*1000.f ];
       else if (cluster.GetSize(1) >= 5)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length5plus))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length5plus))[ residual_local.y()*1000.f ];
     }
   } // loop over contributing simHits
 }
 
-void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::VolumeID& volumeID) const {
+void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::SimHitWrapper>& simHits, const edm4hep::TrackerHitPlaneCollection& digiHits, const size_t firstDigiHitIndex, const TGeoHMatrix& trafoMatrix, const dd4hep::DDSegmentation::VolumeID& volumeID) const {
   /* executed once for each sensor, after all clusters have been created */
   const int layer = GetLayer(volumeID);
 
@@ -1655,9 +1660,9 @@ void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::
   // (needed for comparing to Allpix Squared residuals, when simulating single sensor with particle gun)
   // in case there are multiple simHits from the same MCParticle, any is fine
   size_t maxE_index = 0;
-  float maxE = simHits.at(0).hitPtr()->getParticle().getEnergy(); // assume this is in GeV. Documentation is not clear
+  float maxE = 0.; // assume this is in GeV. Documentation is not clear
 
-  for (size_t i = 1; i < simHits.size(); ++i) {
+  for (size_t i = 0; i < simHits.size(); ++i) {
     const VTXdigi_tools::SimHitWrapper& simHit = simHits.at(i);
     const edm4hep::MCParticle mcParticle = simHit.hitPtr()->getParticle();
     if (mcParticle.getEnergy() > maxE && simHit.mcParticleLevel() == VTXdigi_tools::MCParticleLevel::Primary) {
@@ -1665,7 +1670,11 @@ void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::
       maxE_index = i;
       maxE = mcParticle.getEnergy();
     }
-  } // loop to find simHit with highest MCParticle energy.
+  }
+  if (maxE == 0.) {
+    debug() << " - No simHits from primary particles found on this sensor." << endmsg;
+    return;
+  }
 
   const VTXdigi_tools::SimHitWrapper& simHit = simHits.at(maxE_index);
 
@@ -1673,19 +1682,11 @@ void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::
   // and compute the residuals to the digiHits
   // (necessary in case ddsim is ran with collectSingleDeposits=True)
   const dd4hep::rec::Vector3D simHit_pos_global = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getPosition());
-  const dd4hep::rec::Vector3D simHit_pos_local =VTXdigi_tools::Trafo_global_local(simHit_pos_global, trafoMatrix);
+  const dd4hep::rec::Vector3D simHit_pos_local = VTXdigi_tools::Trafo_global_local(simHit_pos_global, trafoMatrix);
 
-  // transform momentum to local coordinates
-  double momentum_global[3] = {
-    static_cast<double>(simHit.hitPtr()->getMomentum().x),
-    static_cast<double>(simHit.hitPtr()->getMomentum().y),
-    static_cast<double>(simHit.hitPtr()->getMomentum().z)
-  };
-  double momentum_local[3];
-  trafoMatrix.MasterToLocalVect(momentum_global, momentum_local);
-  dd4hep::rec::Vector3D simHit_dir_local = 1/std::abs(momentum_local[2]) * dd4hep::rec::Vector3D(momentum_local[0], momentum_local[1], momentum_local[2]); // normalised to w-component
+  const dd4hep::rec::Vector3D simHit_dir_global = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getMomentum()).unit();
+  const dd4hep::rec::Vector3D simHit_dir_local = VTXdigi_tools::TrafoVec_global_local(simHit_dir_global, trafoMatrix);
 
-  // const float targetDepth = m_chargeCollector->GetChargeCollectionDepthCenter();
   float targetDepth;
   if (m_LUT_shiftTruthPos.value())
     targetDepth = m_chargeCollector->GetChargeCollectionDepthCenter();
@@ -1696,7 +1697,8 @@ void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::
 
   ++(*m_hist1d.at(layer).at(hist1d_highestEnergyParticleOnSensor_energy))[ maxE ]; // in GeV
 
-  for (const auto& digiHit : digiHits) {
+  for (size_t i = firstDigiHitIndex; i < digiHits.size(); ++i) { // only digiHits created on this sensor
+    const edm4hep::TrackerHitPlane digiHit = digiHits.at(i);
     const dd4hep::rec::Vector3D pos_global = VTXdigi_tools::ConvertVector(digiHit.getPosition());
     const dd4hep::rec::Vector3D pos_local = VTXdigi_tools::Trafo_global_local(pos_global, trafoMatrix);
 

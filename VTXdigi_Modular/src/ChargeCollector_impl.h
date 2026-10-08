@@ -8,6 +8,7 @@
 #include <optional>
 
 namespace VTXdigi_tools {
+
 class SimHitWrapper; // forward-declaration for include/VTXdigi_tools.h
 class HitMap; // forward-declaration for include/VTXdigi_tools.h
 
