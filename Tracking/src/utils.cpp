@@ -1,8 +1,5 @@
 #include "utils.h"
 
-#include <TGeoManager.h>
-#include <TGeoNavigator.h>
-
 dd4hep::rec::LayeredCalorimeterData* getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
 
   dd4hep::rec::LayeredCalorimeterData* theExtension = 0;

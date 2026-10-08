@@ -13,6 +13,8 @@
 #include "DD4hep/DetectorSelector.h"
 #include <DDRec/DetectorData.h>
 
+#include <TGeoNavigator.h>
+
 #include "edm4hep/MutableTrack.h"
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackState.h"
