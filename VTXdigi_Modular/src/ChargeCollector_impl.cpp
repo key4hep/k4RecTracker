@@ -87,7 +87,7 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
   if (t[0] != 0.0 || t[1] != 1.0) {
     if (0.0 <= t[0] && t[0] < t[1] && t[1] <= 1.0) {
       /* valid clipping */
-      if (printDebug) digitizer.debug() << "       - Clipping SimHitPath with t [" << t[0] << ", " << t[1] << "]. PathLength changed to " << static_cast<int>((t[1] - t[0]) * travel.r()*1000) << " um from " << static_cast<int>(travel.r()*1000) << " um" << endmsg;
+      if (printDebug) digitizer.debug() << "       - Clipping SimHitPath with t [" << t[0] << ", " << t[1] << "]. PathLength changed to " << static_cast<int>((t[1] - t[0]) * travel.r()*mm_to_um) << " um from " << static_cast<int>(travel.r()*mm_to_um) << " um" << endmsg;
 
       entry = entry + t[0] * travel;
       travel = (t[1] - t[0]) * travel;
@@ -96,7 +96,7 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
       /* invalid clipping, shouldn't happen */
       digitizer.warning() << "VTXdigi_tools::ConstructPath() - invalid clipping factors t = [" << t[0] << ", " << t[1] << "]. Path might lie completely outside the sensor." << endmsg;
       digitizer.debug() << " -> entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, sensor dim. (+-" << digitizer.ActiveVolumeDimensions().at(0)/2 << ", +-" << digitizer.ActiveVolumeDimensions().at(1)/2 << ") mm" << endmsg;
-      digitizer.debug() << " -> Path length " << static_cast<int>(travel.r()*1000) << " um, in G4 " << static_cast<int>(simHit.hitPtr()->getPathLength()*1000) << " um" << endmsg;
+      digitizer.debug() << " -> Path length " << static_cast<int>(travel.r()*mm_to_um) << " um, in G4 " << static_cast<int>(simHit.hitPtr()->getPathLength()*mm_to_um) << " um" << endmsg;
       isValid = false;
       return;
     }
@@ -104,7 +104,7 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
 
   /* Step 3 -check that path is not much longer than the length it had in Geant4. Order of steps 2 and 3 is important! */
   if (travel.r() > kPathLengthTolerance * lengthG4) {
-    if (printDebug) digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*1000) << " um to " << static_cast<int>(lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
+    if (printDebug) digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*mm_to_um) << " um to " << static_cast<int>(lengthG4*mm_to_um) << " um (the respective path length in Geant4)." << endmsg;
 
     /* make sure the path stays centred around the simTrackerHit position */
     const double t_simPos = ( (simPos - entry).dot(travel) ) / (travel.r() * travel.r());
@@ -119,14 +119,14 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
     travel = (t_max - t_min) * travel;
   }
 
-  if (printDebug) digitizer.debug() << "       - Constructed path, length " << travel.r()*1000 << " um (G4-length " << lengthG4*1000 << " um), entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, " << endmsg;
+  if (printDebug) digitizer.debug() << "       - Constructed path, length " << travel.r()*mm_to_um << " um (G4-length " << lengthG4*mm_to_um << " um), entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, " << endmsg;
   isValid = true;
 }
 
 std::vector<std::pair<float, dd4hep::rec::Vector3D>> Path::SampleDepositions(const float hitCharge, TRandom3& randomGen, const float meanDepositionsPerUm, const TH1D& chargeSamplingHist) const {
   // draw number of depositions from a sub-poissonian distribution
   float width = 0.8; // width of the sub-poissonian (0.8 resembles what Allpix Squared does very well)
-  float mean = travel.r() * 1000.f * meanDepositionsPerUm ; // convert from mm to um
+  float mean = travel.r() * mm_to_um * meanDepositionsPerUm ; // convert from mm to um
   int NDepositions = std::max(1, static_cast<int>(randomGen.Binomial(std::round(mean / width), width)));
 
   std::vector<std::pair<float, dd4hep::rec::Vector3D>> depositions;
@@ -233,7 +233,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   /* -> compare the values we just parsed to the values retrieved from the detector geometry */
   const double eps = 1e-12; // reasonable for number O(0.01) (like sensor thickness in mm) with double precision
 
-  const double sensorThickness = std::stod(headerLineEntries.at(0)) / 1000.0; // convert from um to mm
+  const double sensorThickness = std::stod(headerLineEntries.at(0)) * um_to_mm; // convert from um to mm
   if (std::abs(sensorThickness - digitizer.ActiveVolumeDimensions().at(2)) > eps) {
     if (!digitizer.LUT_ignorePitch()) {
       throw GaudiException("Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.ActiveVolumeDimensions().at(2)) + " mm active volume thickness.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
@@ -243,7 +243,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     }
   }
 
-  const std::array<double, 2> pitch = {std::stod(headerLineEntries.at(1)) / 1000.0, std::stod(headerLineEntries.at(2)) / 1000.0};
+  const std::array<double, 2> pitch = {std::stod(headerLineEntries.at(1)) * um_to_mm, std::stod(headerLineEntries.at(2)) * um_to_mm};
   if (std::abs(pitch[0] - digitizer.PixelPitch().at(0)) > eps || std::abs(pitch[1] - digitizer.PixelPitch().at(1)) > eps) {
     if (!digitizer.LUT_ignorePitch())
       throw GaudiException("Pixel pitch mismatch between LUT file and detector geometry: LUT file specifies (" + std::to_string(pitch[0]) + ", " + std::to_string(pitch[1]) + ") mm, but geometry has (" + std::to_string(digitizer.PixelPitch().at(0)) + ", " + std::to_string(digitizer.PixelPitch().at(1)) + ") mm.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);

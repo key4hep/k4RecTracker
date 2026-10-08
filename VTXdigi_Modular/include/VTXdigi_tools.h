@@ -4,6 +4,8 @@
 #include "GaudiKernel/GaudiException.h"
 #include "GaudiKernel/RndmGenerators.h"
 
+#include "DD4hep/DD4hepUnits.h"
+
 #include "DDRec/Surface.h"
 #include "DDRec/CellIDPositionConverter.h"
 
@@ -28,6 +30,18 @@ namespace VTXdigi_tools {
 constexpr float kChargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
 
 constexpr double kSensorBoundaryTolerance = 0.01; // in mm, tolerance for simHits that are just outside the sensor volume. Hits outside the tolerance are skipped, hit outside the sensor volume but within the tolerance are clamped to the sensor volume.
+
+/* Unit conversions
+* - EDM4hep (Geant4) uses mm, DD4hep uses cm
+* usage: val_cm = val_mm * mm_to_cm */
+inline constexpr double mm_to_um = 1e3;
+inline constexpr double um_to_mm = 1e-3;
+inline constexpr double cm_to_mm = 10.0;
+inline constexpr double mm_to_cm = 0.1;
+inline constexpr double um_to_cm = 1e-4;
+static_assert(dd4hep::cm == 1.0, "VTXdigi_Modular assumes DD4hep internal length unit is cm");
+
+
 
 using PixelIndex = std::array<int, 2>; // pixel index (u,v)
 using VoxelIndex = std::array<int, 3>; // index of the in-pixel voxel (u,v,w)

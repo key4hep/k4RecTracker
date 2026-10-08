@@ -6,6 +6,9 @@
 
 DECLARE_COMPONENT(VTXdigi_Modular)
 
+using VTXdigi_tools::cm_to_mm;
+using VTXdigi_tools::mm_to_um;
+
 VTXdigi_Modular::VTXdigi_Modular(const std::string& name, ISvcLocator* svcLoc)
     : MultiTransformer(name, svcLoc,
                        {KeyValues("SimTrackHitCollectionName", {"UNDEFINED_SimTrackHitCollectionName"}),
@@ -219,8 +222,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     throw GaudiException("Unable to retrieve the VolumeManager from the DD4hep detector", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   m_cellIDPositionConverter = std::make_unique<dd4hep::rec::CellIDPositionConverter>(*m_detector);
-  if (!m_cellIDPositionConverter)
-    throw GaudiException("Unable to create CellIDPositionConverter", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+  // throws if fails
 
   { /* DD4hep has a transformation from the global detector coordinates to each sensors local system. The definition of the local system might change.
     * We define a rotation matrix to align the sensor surface axes (u,v,n) with the local system axes (x_local, y_local, z_local) for the first sensor we find, then apply this to all sensors.
@@ -344,8 +346,8 @@ void VTXdigi_Modular::InitLayersAndSensors() {
   if (!segmentation.isValid())
     throw GaudiException("Segmentation for readout " + simHitCollectionName + " is not valid.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
   const auto cellDimensions = segmentation.cellDimensions(0); // this assumes all cells have the same dimensions (ie. only one sensor type in this readout)
-  m_pixelPitch[0] = cellDimensions.at(0) * 10; // convert cm to mm
-  m_pixelPitch[1] = cellDimensions.at(1) * 10;
+  m_pixelPitch[0] = cellDimensions.at(0) * cm_to_mm;
+  m_pixelPitch[1] = cellDimensions.at(1) * cm_to_mm;
 
   /* TODO: Check that local sensor coordinates (u,v,w) are correctly defined wrt. to the global coordinates (already done in VTXdigi_Allpix2 master branch, but VERY clunky). This requires deep understanding of coordinate systems. I think there is a easy way to do this. I have not figured it out yet */
 
@@ -380,18 +382,18 @@ void VTXdigi_Modular::InitLayersAndSensors() {
         // sensorVolume.solid() returns a dd4hep::Solid_type<T> object, generalised as dd4hep::Solid. This can either be a box or a trapezoid (for sensors in IDEA / ALLEGRO)
         try {
           dd4hep::Box sensorBox = sensorVolume.solid(); // directions 0,1,2 do not necessarily correspond to the local sensor u,v,w directions, but might be swapped.
-          solidDimensions[0] = sensorBox.x() * 2 * 10;
-          solidDimensions[1] = sensorBox.y() * 2 * 10;
-          solidDimensions[2] = sensorBox.z() * 2 * 10;
+          solidDimensions[0] = sensorBox.x() * 2 * cm_to_mm;
+          solidDimensions[1] = sensorBox.y() * 2 * cm_to_mm;
+          solidDimensions[2] = sensorBox.z() * 2 * cm_to_mm;
 
           // verbose() << "     - Sensor \"" << sensorKey << "\" (layer " << layerKey << ", module " << moduleKey << ", volumeID " << sensorVolumeID << ") has a dd4hep::Box solid." << endmsg;
         }
         catch (...) {
           try {
             dd4hep::Trd1 sensorTrd1 = sensorVolume.solid();
-            solidDimensions[0] = (sensorTrd1.dX1() + sensorTrd1.dX2()) / 2 * 2 * 10; // average of upper and lower base of trapezoid. Convert half-length in cm to full length in mm
-            solidDimensions[1] = sensorTrd1.dY() * 2 * 10; // Convert half-length in cm to full length in mm
-            solidDimensions[2] = sensorTrd1.dZ() * 2 * 10;
+            solidDimensions[0] = (sensorTrd1.dX1() + sensorTrd1.dX2()) / 2 * 2 * cm_to_mm; // average of upper and lower base of trapezoid. Convert half-length in cm to full length in mm
+            solidDimensions[1] = sensorTrd1.dY() * 2 * cm_to_mm;
+            solidDimensions[2] = sensorTrd1.dZ() * 2 * cm_to_mm;
             // Note: there is some weirdness in dX1() and dX2() with Trd1. I did not dig into this. Assume that these might be a bit funky.
             // verbose() << "     - Sensor \"" << sensorKey << "\" (layer " << layerKey << ", module " << moduleKey << ", volumeID " << sensorVolumeID << ") has a dd4hep::Trd1 solid." << endmsg;
           }
@@ -400,7 +402,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
           }
         }
 
-        const uint thicknessIndex = std::distance(solidDimensions.begin(), std::min_element(solidDimensions.begin(), solidDimensions.end()));
+        const size_t thicknessIndex = std::distance(solidDimensions.begin(), std::min_element(solidDimensions.begin(), solidDimensions.end()));
         const double solidThickness = solidDimensions.at(thicknessIndex);
         const double solidLength_0 = solidDimensions.at((thicknessIndex+1) % 3);
         const double solidLength_1 = solidDimensions.at((thicknessIndex+2) % 3);
@@ -416,10 +418,10 @@ void VTXdigi_Modular::InitLayersAndSensors() {
           throw GaudiException("Surface pointer for sensor " + sensorKey + " (volumeID " + std::to_string(sensorVolumeID) + ") in layer " + std::to_string(layer) + " of subDetector " + m_subDetName.value() + " is null while checking geometry consistency.", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
         }
 
-        const double surfaceLength_u = surface->length_along_u() * 10; // convert cm to mm
-        const double surfaceLength_v = surface->length_along_v() * 10;
-        const double surfaceThickness_above = surface->outerThickness() * 10; // sensor thickness measured from w=0 upwards, including inactive material above the active volume.
-        const double surfaceThickness_below = surface->innerThickness() * 10; // same, but below
+        const double surfaceLength_u = surface->length_along_u() * cm_to_mm;
+        const double surfaceLength_v = surface->length_along_v() * cm_to_mm;
+        const double surfaceThickness_above = surface->outerThickness() * cm_to_mm; // sensor thickness measured from w=0 upwards, including inactive material above the active volume.
+        const double surfaceThickness_below = surface->innerThickness() * cm_to_mm; // same, but below
         // Note: the sensor local coordinate system (u,v,w) is centered on the active volume, so inactive material upper/lower might be assymetric
 
         // THIRD: consistency checks on sensor dimensions
@@ -506,15 +508,15 @@ void VTXdigi_Modular::InitHistograms() {
     static_cast<float>(m_pixelCount[1]+0.5)};
   Gaudi::Accumulators::Axis<float> axis_inpix_u{
     100,
-    -1.f * static_cast<float>(m_pixelPitch[0])/2.f * 1000.f,
-    static_cast<float>(m_pixelPitch[0])/2.f * 1000.f};
+    -1.f * static_cast<float>(m_pixelPitch[0]*mm_to_um)/2.f,
+    static_cast<float>(m_pixelPitch[0]*mm_to_um)/2.f};
   Gaudi::Accumulators::Axis<float> axis_inpix_v{
     100,
-    -1.f * static_cast<float>(m_pixelPitch[1])/2.f * 1000.f,
-    static_cast<float>(m_pixelPitch[1])/2.f * 1000.f};
+    -1.f * static_cast<float>(m_pixelPitch[1]*mm_to_um)/2.f,
+    static_cast<float>(m_pixelPitch[1]*mm_to_um)/2.f};
 
-  Gaudi::Accumulators::Axis<float> axis_pathLength{500, 0.f, static_cast<float>(m_sensorActiveThickness)*1000.f*10.f};
-  Gaudi::Accumulators::Axis<float> axis_pathTravel{1000, -static_cast<float>(m_sensorActiveThickness)*1000.f*10.f, static_cast<float>(m_sensorActiveThickness)*1000.f*10.f};
+  Gaudi::Accumulators::Axis<float> axis_pathLength{500, 0.f, static_cast<float>(m_sensorActiveThickness * mm_to_um * 10.)};
+  Gaudi::Accumulators::Axis<float> axis_pathTravel{1000, -static_cast<float>(m_sensorActiveThickness * mm_to_um * 10.), static_cast<float>(m_sensorActiveThickness * mm_to_um * 10.)};
 
   /* Fill histograms per layer */
   for (int layer : m_layers.value()) {
@@ -1579,8 +1581,8 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cl
   ++(*m_hist2d.at(layer).at(hist2d_clusterSize_u_vs_global_z))[ {pos_global.z(), cluster.GetSize(0)} ];
   ++(*m_hist2d.at(layer).at(hist2d_clusterSize_v_vs_global_z))[ {pos_global.z(), cluster.GetSize(1)} ];
 
-  ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_u))[ digiHit.getDu() * 1000.f ]; // convert to um
-  ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_v))[ digiHit.getDv() * 1000.f ];
+  ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_u))[ digiHit.getDu() * mm_to_um ]; // convert to um
+  ++(*m_hist1d.at(layer).at(hist1d_clusterPosUncertainty_v))[ digiHit.getDv() * mm_to_um ];
 
   ++(*m_hist1d.at(layer).at(hist1d_digiHit_timeStamp))[ digiHit.getTime() ];
 
@@ -1596,8 +1598,8 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cl
 
     const float hit_z = simHitPos_global.z();
 
-    ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondariesDeltas))[ residual_local.x()*1000.f ];
-    ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondariesDeltas))[ residual_local.y()*1000.f ];
+    ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondariesDeltas))[ residual_local.x()*mm_to_um ];
+    ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondariesDeltas))[ residual_local.y()*mm_to_um ];
 
     const VTXdigi_tools::MCParticleLevel mcParticleLevel = simHit->mcParticleLevel();
 
@@ -1605,48 +1607,48 @@ void VTXdigi_Modular::FillHistograms_perDigiHit(const VTXdigi_tools::Cluster& cl
       ++(*m_hist1d.at(layer).at(hist1d_clusterSize_causedByPrimary))[ cluster.GetSize() ];
       ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_global_z_causedByPrimary))[ {hit_z, cluster.GetSize()} ];
 
-      ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimaries))[ residual_local.x()*1000.f ];
-      ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimaries))[ residual_local.y()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimaries))[ residual_local.x()*mm_to_um ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimaries))[ residual_local.y()*mm_to_um ];
     }
     else if (mcParticleLevel == VTXdigi_tools::MCParticleLevel::Secondary) {
       ++(*m_hist1d.at(layer).at(hist1d_clusterSize_causedBySecondary))[ cluster.GetSize() ];
       ++(*m_hist2d.at(layer).at(hist2d_clusterSize_vs_global_z_causedBySecondary))[ {hit_z, cluster.GetSize()} ];
 
-      ++(*m_hist1d.at(layer).at(hist1d_residual_u_toSecondaries))[ residual_local.x()*1000.f ];
-      ++(*m_hist1d.at(layer).at(hist1d_residual_v_toSecondaries))[ residual_local.y()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_toSecondaries))[ residual_local.x()*mm_to_um ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_toSecondaries))[ residual_local.y()*mm_to_um ];
     }
 
     if ( mcParticleLevel == VTXdigi_tools::MCParticleLevel::Primary || mcParticleLevel == VTXdigi_tools::MCParticleLevel::Secondary ) {
-      ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries))[ residual_local.x()*1000.f ];
-      ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries))[ residual_local.y()*1000.f ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries))[ residual_local.x()*mm_to_um ];
+      ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries))[ residual_local.y()*mm_to_um ];
 
-      ++(*m_hist2d.at(layer).at(hist2d_residual_u_toPrimariesSecondaries_vs_global_z))[ {hit_z, residual_local.x()*1000.f} ];
-      ++(*m_hist2d.at(layer).at(hist2d_residual_v_toPrimariesSecondaries_vs_global_z))[ {hit_z, residual_local.y()*1000.f} ];
+      ++(*m_hist2d.at(layer).at(hist2d_residual_u_toPrimariesSecondaries_vs_global_z))[ {hit_z, residual_local.x()*mm_to_um} ];
+      ++(*m_hist2d.at(layer).at(hist2d_residual_v_toPrimariesSecondaries_vs_global_z))[ {hit_z, residual_local.y()*mm_to_um} ];
 
-      ++(*m_hist2d.at(layer).at(hist2d_residual_u_toPrimariesSecondaries_vs_clusterPosUncertainty))[ {std::abs(digiHit.getDu()) * 1000.f, std::abs(residual_local.x())*1000.f} ]; // convert to um
-      ++(*m_hist2d.at(layer).at(hist2d_residual_v_toPrimariesSecondaries_vs_clusterPosUncertainty))[ {std::abs(digiHit.getDv()) * 1000.f, std::abs(residual_local.y())*1000.f} ];
+      ++(*m_hist2d.at(layer).at(hist2d_residual_u_toPrimariesSecondaries_vs_clusterPosUncertainty))[ {std::abs(digiHit.getDu()) * mm_to_um, std::abs(residual_local.x())*mm_to_um} ]; // convert to um
+      ++(*m_hist2d.at(layer).at(hist2d_residual_v_toPrimariesSecondaries_vs_clusterPosUncertainty))[ {std::abs(digiHit.getDv()) * mm_to_um, std::abs(residual_local.y())*mm_to_um} ];
 
       if (cluster.GetSize(0) == 1)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length1))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length1))[ residual_local.x()*mm_to_um ];
       else if (cluster.GetSize(0) == 2)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length2))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length2))[ residual_local.x()*mm_to_um ];
       else if (cluster.GetSize(0) == 3)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length3))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length3))[ residual_local.x()*mm_to_um ];
       else if (cluster.GetSize(0) == 4)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length4))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length4))[ residual_local.x()*mm_to_um ];
       else if (cluster.GetSize(0) >= 5)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length5plus))[ residual_local.x()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_u_toPrimariesSecondaries_length5plus))[ residual_local.x()*mm_to_um ];
 
       if (cluster.GetSize(1) == 1)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length1))[ residual_local.y()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length1))[ residual_local.y()*mm_to_um ];
       else if (cluster.GetSize(1) == 2)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length2))[ residual_local.y()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length2))[ residual_local.y()*mm_to_um ];
       else if (cluster.GetSize(1) == 3)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length3))[ residual_local.y()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length3))[ residual_local.y()*mm_to_um ];
       else if (cluster.GetSize(1) == 4)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length4))[ residual_local.y()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length4))[ residual_local.y()*mm_to_um ];
       else if (cluster.GetSize(1) >= 5)
-        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length5plus))[ residual_local.y()*1000.f ];
+        ++(*m_hist1d.at(layer).at(hist1d_residual_v_toPrimariesSecondaries_length5plus))[ residual_local.y()*mm_to_um ];
     }
   } // loop over contributing simHits
 }
@@ -1708,8 +1710,8 @@ void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::
 
     const dd4hep::rec::Vector3D residual_local = simHit_pos_local_corr - pos_local; // residual = predicted - observed
 
-    ++(*m_hist1d.at(layer).at(hist1d_residual_u_maxEParticleOnSensor))[ residual_local.x()*1000.f ];
-    ++(*m_hist1d.at(layer).at(hist1d_residual_v_maxEParticleOnSensor))[ residual_local.y()*1000.f ];
+    ++(*m_hist1d.at(layer).at(hist1d_residual_u_maxEParticleOnSensor))[ residual_local.x()*mm_to_um ];
+    ++(*m_hist1d.at(layer).at(hist1d_residual_v_maxEParticleOnSensor))[ residual_local.y()*mm_to_um ];
   }
 }
 
@@ -1717,23 +1719,22 @@ void VTXdigi_Modular::FillHistograms_fromChargeCollector_perSimHit(const int lay
   if (!m_debugHistograms.value()) return;
 
   const float pathLength = pathTravel.r(); // in mm
-  const float factor_um_per_mm = 1000.f;
   const dd4hep::rec::Vector3D truthPos_global = VTXdigi_tools::Trafo_local_global(truthPos_local, trafoMatrix);
 
-  ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r))[ pathLength*factor_um_per_mm ]; // convert from mm to um
-  ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r_Geant4))[ pathLength_Geant4*factor_um_per_mm ];
+  ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r))[ pathLength * mm_to_um ];
+  ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r_Geant4))[ pathLength_Geant4 * mm_to_um ];
   if (pathLength_Geant4 != 0.f) {
     ++(*m_hist1dglobal.at(hist1dglobal_pathTravel_r_ratio))[ pathLength / pathLength_Geant4 ];
   }
 
-  ++(*m_hist1d.at(layer).at(hist1d_pathTravel_u))[ pathTravel.x()*factor_um_per_mm ];
-  ++(*m_hist1d.at(layer).at(hist1d_pathTravel_v))[ pathTravel.y()*factor_um_per_mm ];
-  ++(*m_hist1d.at(layer).at(hist1d_pathTravel_r))[ pathLength*factor_um_per_mm ];
+  ++(*m_hist1d.at(layer).at(hist1d_pathTravel_u))[ pathTravel.x() * mm_to_um ];
+  ++(*m_hist1d.at(layer).at(hist1d_pathTravel_v))[ pathTravel.y() * mm_to_um ];
+  ++(*m_hist1d.at(layer).at(hist1d_pathTravel_r))[ pathLength * mm_to_um ];
 
-  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_u_vs_global_z))[ {truthPos_global.z(), pathTravel.x()*factor_um_per_mm} ];
-  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_v_vs_global_z))[ {truthPos_global.z(), pathTravel.y()*factor_um_per_mm} ];
-  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_w_vs_global_z))[ {truthPos_global.z(), pathTravel.z()*factor_um_per_mm} ];
-  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_vs_global_z))[ {truthPos_global.z(), pathLength*factor_um_per_mm} ];
+  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_u_vs_global_z))[ {truthPos_global.z(), pathTravel.x() * mm_to_um} ];
+  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_v_vs_global_z))[ {truthPos_global.z(), pathTravel.y() * mm_to_um} ];
+  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_w_vs_global_z))[ {truthPos_global.z(), pathTravel.z() * mm_to_um} ];
+  ++(*m_hist2d.at(layer).at(hist2d_pathTravel_vs_global_z))[ {truthPos_global.z(), pathLength * mm_to_um} ];
 }
 
 void VTXdigi_Modular::PrintCountersSummary() const {
