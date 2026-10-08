@@ -143,24 +143,6 @@ torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbe
 /////////////////////
 
 /**
- * @brief Checks if a symmetric matrix is positive semi-definite (PSD) within a given tolerance.
- *
- * This function determines whether the input symmetric matrix `M` is positive semi-definite by
- * computing its eigenvalues and verifying that none of them are significantly negative. A matrix
- * is considered positive semi-definite if all its eigenvalues are non-negative.
- *
- * @param M   The symmetric matrix to check (TMatrixDSym).
- * @param tol A small tolerance value to account for numerical inaccuracies. Eigenvalues
- *            greater than -tol are considered non-negative.
- *
- * @return true if the matrix is positive semi-definite within the specified tolerance;
- *         false otherwise.
- *
- * @note This function uses `TMatrixDSymEigen` from ROOT to compute the eigenvalues.
- */
-bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol);
-
-/**
  * @brief Simple 2D point structure representing a hit in the XY plane.
  *
  * This structure is used to store the coordinates of a point in a 2D Cartesian
@@ -175,25 +157,29 @@ struct Point2D_xy {
   double y;
 };
 
-/**
- * @brief Simple 2D point structure in cylindrical coordinates (R, z).
- *
- * This structure represents a point in a cylindrical coordinate system,
- * where R denotes the radial distance from the reference axis and z
- * represents the longitudinal coordinate.
- *
- * The structure is intentionally minimal and is designed for lightweight
- * numerical operations without additional metadata such as uncertainties
- * or weights.
- */
-struct Point2D_Rz {
-  double R;
-  double z;
-};
-
 namespace ConversionUnits {
 constexpr double c_mm_s = 2.998e11;       // speed of light mm/s
 constexpr double a_lcio = 1e-15 * c_mm_s; // conversion constant
 } // namespace ConversionUnits
+
+/**
+ * @brief RAII guard that preserves the caller's TGeoNavigator while the navigation state is modified.
+ *
+ * On construction, it remembers the current navigator of gGeoManager and makes a dedicated navigator
+ * current (one per thread, created on first use). On destruction, it makes the caller's navigator
+ * current again, so its state is left untouched on every exit path, including exceptions.
+ *
+ * A dedicated navigator is used instead of TGeoManager::DoBackupState()/DoRestoreState(), because the
+ * latter only save the position in the volume hierarchy (not the current point, direction, safety, ...)
+ * and TGeoNavigator has no setters for part of its state.
+ */
+class GeoNavigatorStateGuard {
+public:
+  GeoNavigatorStateGuard();
+  ~GeoNavigatorStateGuard();
+
+private:
+  Int_t m_callerIndex;
+};
 
 #endif // UTILS_HPP

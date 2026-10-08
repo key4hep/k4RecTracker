@@ -1,5 +1,8 @@
 #include "utils.h"
 
+#include <TGeoManager.h>
+#include <TGeoNavigator.h>
+
 dd4hep::rec::LayeredCalorimeterData* getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
 
   dd4hep::rec::LayeredCalorimeterData* theExtension = 0;
@@ -215,13 +218,10 @@ torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbe
   return clustering;
 }
 
-bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol) {
-  TMatrixDSymEigen eig(M);
-  TVectorD eigenValues = eig.GetEigenValues();
-
-  for (int i = 0; i < eigenValues.GetNrows(); ++i) {
-    if (eigenValues[i] < -tol)
-      return false;
-  }
-  return true;
+GeoNavigatorStateGuard::GeoNavigatorStateGuard()
+    : m_callerIndex(gGeoManager->GetListOfNavigators()->IndexOf(gGeoManager->GetCurrentNavigator())) {
+  thread_local const Int_t fitIndex = gGeoManager->GetListOfNavigators()->IndexOf(gGeoManager->AddNavigator());
+  gGeoManager->SetCurrentNavigator(fitIndex);
 }
+
+GeoNavigatorStateGuard::~GeoNavigatorStateGuard() { gGeoManager->SetCurrentNavigator(m_callerIndex); }
