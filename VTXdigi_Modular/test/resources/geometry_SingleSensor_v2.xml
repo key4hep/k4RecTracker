@@ -3,14 +3,14 @@
   xmlns:xs="http://www.w3.org/2001/XMLSchema"
   xs:noNamespaceSchemaLocation="http://www.lcsim.org/schemas/compact/1.0/compact.xsd">
 
-  <info name="SingleSensor_for_LUT_digitiser"
-    title="Geometry file for a single semiconductor sensor for lookup-table-based digitiser, for test purposes"
+  <info name="SingleSensor_for_CCMap_digitiser"
+    title="Geometry file for a single semiconductor sensor for charge collection map-based digitiser, for test purposes"
     author="Armin Ilg, Jona Dilg"
     url="no"
     status="development"
     version="v01">
     <comment>
-      Version v01 of the single-sensor geometry file for the lookup-table-based digitiser, for test purposes
+      Version v01 of the single-sensor geometry file for the charge collection map-based digitiser, for test purposes
     </comment>
   </info>
 

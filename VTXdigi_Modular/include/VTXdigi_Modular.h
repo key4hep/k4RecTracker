@@ -66,13 +66,13 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
 
   inline float Threshold() const { return m_threshold; }
 
-  inline bool LUT_ignorePitch() const { return m_LUT_ignorePitch.value(); }
+  inline bool ShiftTruthPos() const { return m_path_shiftTruthPos.value(); }
 
-  inline bool LUT_shiftTruthPos() const { return m_LUT_shiftTruthPos.value(); }
+  inline float MeanDepositionsPerUm() const { return m_path_meanDepositionsPerUm.value(); }
 
-  inline std::string LutFileName() const { return m_LUT_FileName; }
+  inline std::string CCMap_FileName() const { return m_CCMap_FileName; }
 
-  inline float MeanDepositionsPerUm() const { return m_LUT_meanDepositionsPerUm.value(); }
+  inline bool CCMap_IgnorePitch() const { return m_CCMap_ignorePitch.value(); }
 
   dd4hep::DDSegmentation::CellID GetCellID(const dd4hep::rec::Vector3D& pos_global) const;
 
@@ -131,27 +131,27 @@ private:
 
 
   /* -- Properties mainlyrelated to the main event loop -- */
-
   Gaudi::Property<std::vector<int>> m_layers{this, "Layers", {}, "Which layers to run on (0-indexed). If empty, all layers are run."};
 
   /* -- Properties and members related to the various charge collection algorithms-- */
-
-  Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "LookupTable", "Method used for charge collection: \"Fast\", \"Drift\", \"LookupTable\", etc."};
+  Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "ChargeCollectionMap", "Method used for charge collection: \"Fast\", \"Drift\", \"ChargeCollectionMap\", \"Debug\"etc."};
   Gaudi::Property<float> m_threshold{this, "Threshold", 0.0f, "Pixel threshold for firing (in e-)."};
   Gaudi::Property<std::vector<float>> m_positionUncertainty{this, "ClusterPositionUncertainty", {}, "Sensor spatial resolution in u and v direction (in mm). Used for the position uncertainty in digiHits. Uses pitch/12 if empty."};
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_threshold{this, "ThresholdDispersion", 0.0f, "Gaussian smearing to be applied to the threshold. (in e-). Drawn per event per sensor per pixel. If 0, no dispersion is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_time{this, "TimeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels time (in ns). Applied to the digiHits time stamp. If 0, no time smearing is applied. Defaults to 0."};
-  Gaudi::Property<bool> m_forceClusterPosToSensitiveSurface{this, "ForceClusterPositionToSensitiveSurface", false, "If true, the cluster position is forced to be on the sensitive surface of the sensor. If false, the cluster vertical position (in the sensor local frame) is given by the ChargeCollector (with the LookupTable method, this is the depth centre of the charge collection computed from the LUT). Note that enabling this option is sometimesneeded for compatibility, but drastically decreases the accuracy of cluster positions for shallow tracks. Defaults to false."};
+  Gaudi::Property<bool> m_forceClusterPosToSensitiveSurface{this, "ForceClusterPositionToSensitiveSurface", false, "If true, the cluster position is forced to be on the sensitive surface of the sensor. If false, the cluster vertical position (in the sensor local frame) is given by the ChargeCollector (with the ChargeCollectionMap method, this is the depth centre of the charge collection computed from the charge collection map). Note that enabling this option is sometimesneeded for compatibility, but drastically decreases the accuracy of cluster positions for shallow tracks. Defaults to false."};
 
   Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false, "Flag to create and fill debug histograms. Not recommended for multithreading, might lead to crashes. Default is false."};
   Gaudi::Property<int> m_infoPrintInterval{this, "InfoPrintInterval", 100, "Interval for printing information during processing."};
 
-  /* LUT */
-  Gaudi::Property<std::string> m_LUT_FileName{this, "LookupTableFile", "", "File to load the lookup table from. Must be given if ChargeCollectionMethod is set to \"LookupTable\"."};
-  Gaudi::Property<bool> m_LUT_ignorePitch{this, "LookupTableIgnorePitch", false, "Ignore the sensor thickness and pixel pitch values stored in the LUT file. Useful for slightly stretching/shrinking the LUT to fit curved sensors where the sensor length is not an integer multiple of the pixel pitch. If empty, the LUT file values are used."};
-  Gaudi::Property<bool> m_LUT_shiftTruthPos{this, "LookupTableShiftTruthPosition", false, "Internally shift the truth position of the simHit. Only affects the output histograms, does not affect any collection. If turned to false, angled particle trajectories will bias the residual plots in case of LUT tables with uneven charge collection across the sensor thickness."};
-  Gaudi::Property<float> m_LUT_meanDepositionsPerUm{this, "LookupTableMeanDepositionsPerUm", 2.65f, "Mean number of deposition clusters per um of path length in the sensor. Only used if ChargeCollectionMethod is set to \"LookupTable\". Defaults to 2.65, optimised to match the Allpix Squared simulation."};
+  /* Path computation */
+  Gaudi::Property<bool> m_path_shiftTruthPos{this, "ShiftTruthPosition", false, "Internally shift the truth position of the simHit. Only affects the output histograms, does not affect any collection. If turned to false, angled particle trajectories will bias the residual plots in case of charge collection maps with assymetric charge collection across the sensor thickness."};
+  Gaudi::Property<float> m_path_meanDepositionsPerUm{this, "MeanDepositionsPerUm", 2.65f, "Mean number of deposition clusters per um of path length in the sensor. Only used if the ChargeCollectionMethod uses the path computation. Defaults to 2.65, optimised to match the Allpix Squared simulation."};
+
+  /* Charge Collection Map (CCMap) */
+  Gaudi::Property<std::string> m_CCMap_FileName{this, "ChargeCollectionMap", "", "File to load the charge collection map from. Must be given if ChargeCollectionMethod is set to \"ChargeCollectionMap\"."};
+  Gaudi::Property<bool> m_CCMap_ignorePitch{this, "ChargeCollectionMap_IgnorePitch", false, "Ignore the sensor thickness and pixel pitch values stored in the CCMap file. Useful for slightly stretching/shrinking the CCMap to fit curved sensors where the sensor length is not an integer multiple of the pixel pitch. Defaults to false."};
 
   /* -- Services, geometry variables -- */
 

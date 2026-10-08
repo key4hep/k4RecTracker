@@ -1694,7 +1694,7 @@ void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::
   const dd4hep::rec::Vector3D simHit_dir_local = VTXdigi_tools::TrafoVec_global_local(simHit_dir_global, trafoMatrix);
 
   float targetDepth;
-  if (m_LUT_shiftTruthPos.value())
+  if (m_path_shiftTruthPos.value())
     targetDepth = m_chargeCollector->GetChargeCollectionDepthCenter();
   else
     targetDepth = 0.f;

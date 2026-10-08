@@ -16,8 +16,8 @@ constexpr double kMinPathCosTheta = 1e-6; // minimum cos(theta) below which a si
 constexpr float kPathLengthTolerance = 1.001f; // tolerance factor for how much longer the computed path can be compared to the Geant4 path length.
 // (If the computed path is longer than the Geant4 path, either the linear path approximation breaks down, or the particle begins or ends inside the sensor volume)
 
-constexpr float kLutEntryMinimum = 1.e-5f; // LUT entries below this value are set to zero, to minimise unnecessary computations in hot loop.
-// result is quite sensitive to this, so choose carefully. 1e-5 seems to be a good compromise between accuracy and performance for the TPSCo 65nm CIS LUT
+constexpr float kCCMapEntryMinimum = 1.e-5f; // CCMap entries below this value are set to zero, to minimise unnecessary computations in hot loop.
+// result is quite sensitive to this, so choose carefully. 1e-5 seems to be a good compromise between accuracy and performance for the TPSCo 65nm CIS charge collection maps
 
 /** @brief Computes & then holds position & information about a simHits path through the sensor */
 struct Path {
@@ -39,10 +39,10 @@ struct Path {
 std::array<double, 2> ComputePathClippingFactors(std::array<double, 2> t, const double entry_ax, const double travel_ax, const double sensorLength_ax);
 
 
-/* -- Charge collector algorithm: LUT-based -- */
+/* -- Charge collector algorithm: Charge collection map-based -- */
 
-class LookupTable {
-  /* TODO: use sparse storage (instead of storing ALL lut entries, even though ~80% are empty (for TPSCo 65nm CIS)). Make sure to keep each matrix contiguous, because we iterate over those. (maybe even move to iterator over matrix instead of getting each weight individually). This will also improve performance in HitMap::FillCharge() because ~80% less operations have to be performed. */
+class ChargeCollectionMap {
+  /* TODO: use sparse storage (instead of storing ALL CCMap entries, even though ~80% are empty (for TPSCo 65nm CIS)). Make sure to keep each matrix contiguous, because we iterate over those. (maybe even move to iterator over matrix instead of getting each weight individually). This will also improve performance in HitMap::FillCharge() because ~80% less operations have to be performed. */
 
   std::array<int, 3> m_voxelCount;
   int m_matrixSize;
@@ -52,10 +52,10 @@ class LookupTable {
 
 public:
 
-  /** @brief Construct lookup table from a file
-   * @note Checks that parameters from the LUT file match those in the digitiser */
-  LookupTable(const std::string& lutFileName, const VTXdigi_Modular& digitizer); // load weights from file
-  LookupTable() = default;
+  /** @brief Construct charge collection map from a file
+   * @note Checks that parameters from the charge collection map file match those in the digitiser */
+  ChargeCollectionMap(const std::string& ccmapFileName, const VTXdigi_Modular& digitizer); // load weights from file
+  ChargeCollectionMap() = default;
 
   double GetChargeCollectionDepthCenter() const { return m_chargeCollectionDepthCenter; }
 
@@ -85,19 +85,19 @@ private:
   /** @brief Convert 3D in-pixel bin indices and a matrix row/column to a flat index for m_matrices */
   int FindIndex (const VoxelIndex& voxI, const int col, const int row) const;
 
-}; // class LookupTable
+}; // class ChargeCollectionMap
 
-class ChargeCollector_LUT : public IChargeCollector {
+class ChargeCollector_CCMap : public IChargeCollector {
 
-  LookupTable m_LUT;
+  ChargeCollectionMap m_CCMap;
   std::unique_ptr<const TH1D> m_chargeSamplingHist; // histogram to sample deposition charges from.
   float m_meanDepositionsPerUm; // mean number of deposition clusters per um of path length in the sensor to sample deposition count from
 
-  const bool m_shiftTruthPos; // if true, the truth position in the simHitWrapper is shifted to the depth in the sensor where most charge is collected, to get useful residual plots. Mirrors VTXdigi_Modular::m_LUT_shiftTruthPosition Gaudi property.
+  const bool m_shiftTruthPos; // if true, the truth position in the simHitWrapper is shifted to the depth in the sensor where most charge is collected, to get useful residual plots. Mirrors VTXdigi_Modular::m_shiftTruthPosition Gaudi property.
 
 public:
 
-  explicit ChargeCollector_LUT(const VTXdigi_Modular& digitizer);
+  explicit ChargeCollector_CCMap(const VTXdigi_Modular& digitizer);
 
   void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix, TRandom3& randomGen) const override;
 

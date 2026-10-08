@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from numpy import array as arr
 
-output_file = "lookup_table_dummy.init"
+output_file = "charge_collection_map_dummy.init"
 
 n_voxels = [3, 3, 3]  # u v w
 matrix_size = 5
@@ -93,7 +93,7 @@ with open(output_file, "w") as f:
     for i_u in range(n_voxels[0]):
         for i_v in range(n_voxels[1]):
             for i_w in range(n_voxels[2]):
-                # line begins with indices, LUT is 1-indexed...
+                # line begins with indices, CCMap is 1-indexed...
                 line = f"{i_u + 1:n} {i_v + 1:n} {i_w + 1:n}"
 
                 matrix = GetMatrix(i_u, i_v, i_w)

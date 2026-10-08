@@ -62,7 +62,7 @@ class SimHitWrapper {
   dd4hep::DDSegmentation::VolumeID m_volumeID; // this is the CellID without segmentation bits
   float m_charge;
   int m_layerNumber;
-  mutable dd4hep::rec::Vector3D m_truthPos; // simHit truth position, local coordinates. Mutable because it might be adjusted in const ChargeCollector::FillHit() to account for charge collection biases (see ChargeCollector_impl.h ChargeCollector_LUT::MoveTruthPosition() for more info).
+  mutable dd4hep::rec::Vector3D m_truthPos; // simHit truth position, local coordinates. Mutable because it might be adjusted in const ChargeCollector::FillHit() to account for charge collection biases (see ChargeCollector_impl.h ChargeCollector_CCMap::MoveTruthPosition() for more info).
   MCParticleLevel m_mcParticleLevel;
 
 public:

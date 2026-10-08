@@ -3,7 +3,7 @@
   xmlns:xs="http://www.w3.org/2001/XMLSchema"
   xs:noNamespaceSchemaLocation="http://www.lcsim.org/schemas/compact/1.0/compact.xsd">
 
-  <info name="SingleSensor_for_LUT_digitiser"
+  <info name="SingleSensor_for_LookupTable_digitiser"
     title="Geometry file for a single semiconductor sensor for lookup-table-based digitiser, for test purposes"
     author="Armin Ilg, Jona Dilg"
     url="no"

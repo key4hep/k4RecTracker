@@ -3,7 +3,7 @@ set -uo pipefail
 ###############################################################################
 # Test script
 #
-# Runs the VTXdigi with a lookup table dummy on ALLEGRO o1 v03
+# Runs the VTXdigi with a charge collection map dummy on ALLEGRO o1 v03
 # Then checks if the output collections exist and are non-empty
 #
 # Requirements:
@@ -34,7 +34,7 @@ File_Detector="${K4GEO}/FCCee/ALLEGRO/compact/ALLEGRO_o1_v03/ALLEGRO_o1_v03.xml"
 File_SimOutput="simHits.root"
 
 File_DigiSteering="${Dir_TestSrc}/test_ALLEGRO/steering_digi.py"
-File_LookupTable="${Dir_TestSrc}/resources/lookup_table_dummy_pixelVol20x20x43p5um.init"
+File_ChargeCollectionMap="${Dir_TestSrc}/resources/charge_collection_map_dummy_pixelVol20x20x43p5um.init"
 File_DigiOutput="output.root"
 
 check_file() {
@@ -58,7 +58,7 @@ echo "  Checking input files"
 check_file "${File_SimSteering}"
 check_file "${File_Detector}"
 check_file "${File_DigiSteering}"
-check_file "${File_LookupTable}"
+check_file "${File_ChargeCollectionMap}"
 
 rm -f "${File_SimOutput}"
 rm -f "${File_DigiOutput}"
@@ -85,14 +85,14 @@ echo ""
 
 
 
-echo "  [2/3] Running digitization with VTXdigi_Modular using a lookup table..."
+echo "  [2/3] Running digitization with VTXdigi_Modular using a charge collection map..."
 
 k4run "${File_DigiSteering}" \
     -n "${NEvts}" \
     --IOSvc.Input "${File_SimOutput}" \
     --IOSvc.Output "${File_DigiOutput}" \
     --GeoSvc.detectors "${File_Detector}" \
-    --VTXBdigi_inner.LookupTableFile "${File_LookupTable}"
+    --VTXBdigi_inner.ChargeCollectionMap "${File_ChargeCollectionMap}"
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Digitization failed."

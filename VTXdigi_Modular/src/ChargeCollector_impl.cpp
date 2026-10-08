@@ -15,8 +15,8 @@ using ::VTXdigi_Modular; // "unqualified name introduction from global namespace
 std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& digitizer, const std::string& algorithm) {
   std::unique_ptr<IChargeCollector> chargeCollector;
 
-  if (algorithm == "LookupTable") {
-    chargeCollector = std::make_unique<ChargeCollector_LUT>(digitizer);
+  if (algorithm == "ChargeCollectionMap") {
+    chargeCollector = std::make_unique<ChargeCollector_CCMap>(digitizer);
   } else if (algorithm == "Drift") {
     throw GaudiException("ChargeCollector_Drift not implemented yet.", "VTXdigi_Modular::CreateChargeCollector()", StatusCode::FAILURE);
   } else if (algorithm == "Fast") {
@@ -187,32 +187,32 @@ std::array<double, 2> ComputePathClippingFactors(std::array<double, 2> t, const 
 
 
 
-/* -- LUT approach -- */
+/* -- CCMap approach -- */
 
-LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& digitizer) {
+ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const VTXdigi_Modular& digitizer) {
   const bool printDebug = digitizer.msgLevel() <= MSG::DEBUG;
 
-  if (printDebug) digitizer.debug() << " - Constructing LUT from file \"" << lutFileName << "\"." << endmsg;
+  if (printDebug) digitizer.debug() << " - Constructing CCMap from file \"" << ccmapFileName << "\"." << endmsg;
 
-  /* parse the LUT in Allpix Squared format
-   * See https://indico.cern.ch/event/1489052/contributions/6475539/attachments/3063712/5418424/Allpix_workshop_Lemoine.pdf (slide 10) for more info on fields in the LUT file */
+  /* parse the CCMap in Allpix Squared format
+   * See https://indico.cern.ch/event/1489052/contributions/6475539/attachments/3063712/5418424/Allpix_workshop_Lemoine.pdf (slide 10) for more info on fields in the CCMap file */
 
-  if (lutFileName.empty())
-    throw GaudiException("LUT file name is empty. A LUT file must be given to load the lookup table.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+  if (ccmapFileName.empty())
+    throw GaudiException("CCMap file name is empty. A CCMap file must be given to load the map from.", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
   const int headerLines = 5;
 
-  if (printDebug) digitizer.debug() << "   - Opening LUT file \"" << lutFileName << "\"." << endmsg;
-  std::ifstream lutFile(lutFileName);
-  if (!lutFile.is_open())
-    throw GaudiException("Could not open LUT file \"" + lutFileName + "\".", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+  if (printDebug) digitizer.debug() << "   - Opening CCMap file \"" << ccmapFileName << "\"." << endmsg;
+  std::ifstream ccmapFile(ccmapFileName);
+  if (!ccmapFile.is_open())
+    throw GaudiException("Could not open CCMap file \"" + ccmapFileName + "\".", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
   std::string line;
   int lineCount = 0;
 
   /* Parse pixel-pitch, thickness, in-pixel bin count from header (all in 5th line) */
   for (; lineCount < 5; ++lineCount)
-    std::getline(lutFile, line);
+    std::getline(ccmapFile, line);
   std::istringstream headerStringStream(line);
   std::string headerEntry;
   std::vector<std::string> headerLineEntries;
@@ -223,42 +223,42 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   }
 
   if (headerLineEntries.size() != 11)
-    throw GaudiException("Invalid number of entries in LUT file in 5th header line: found " + std::to_string(headerLineEntries.size()) + " entries, expected 11.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+    throw GaudiException("Invalid number of entries in CCMap file in 5th header line: found " + std::to_string(headerLineEntries.size()) + " entries, expected 11.", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
   for (int j=0; j<3; j++) {
     m_voxelCount.at(j) = std::stoi(headerLineEntries.at(7+j));
   }
-  if (printDebug) digitizer.debug() << "   - found in-pixel bin count of (" << m_voxelCount.at(0) << ", " << m_voxelCount.at(1) << ", " << m_voxelCount.at(2) << ") from LUT file header." << endmsg;
+  if (printDebug) digitizer.debug() << "   - found in-pixel bin count of (" << m_voxelCount.at(0) << ", " << m_voxelCount.at(1) << ", " << m_voxelCount.at(2) << ") from CCMap file header." << endmsg;
 
   /* -> compare the values we just parsed to the values retrieved from the detector geometry */
   const double eps = 1e-12; // reasonable for number O(0.01) (like sensor thickness in mm) with double precision
 
   const double sensorThickness = std::stod(headerLineEntries.at(0)) * um_to_mm; // convert from um to mm
   if (std::abs(sensorThickness - digitizer.ActiveVolumeDimensions().at(2)) > eps) {
-    if (!digitizer.LUT_ignorePitch()) {
-      throw GaudiException("Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.ActiveVolumeDimensions().at(2)) + " mm active volume thickness.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+    if (!digitizer.CCMap_IgnorePitch()) {
+      throw GaudiException("Sensor thickness mismatch between CCMap file and detector geometry: CCMap file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.ActiveVolumeDimensions().at(2)) + " mm active volume thickness.", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
     }
     else {
-      digitizer.warning() << "Sensor thickness mismatch between LUT file and detector geometry. LUT file: " << sensorThickness << "mm, geometry (active volume thickness): " << digitizer.ActiveVolumeDimensions().at(2) << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
+      digitizer.warning() << "Sensor thickness mismatch between CCMap file and detector geometry. CCMap file: " << sensorThickness << "mm, geometry (active volume thickness): " << digitizer.ActiveVolumeDimensions().at(2) << "mm. Ignored because ChargeCollectionMap_IgnorePitch is set to true." << endmsg;
     }
   }
 
   const std::array<double, 2> pitch = {std::stod(headerLineEntries.at(1)) * um_to_mm, std::stod(headerLineEntries.at(2)) * um_to_mm};
   if (std::abs(pitch[0] - digitizer.PixelPitch().at(0)) > eps || std::abs(pitch[1] - digitizer.PixelPitch().at(1)) > eps) {
-    if (!digitizer.LUT_ignorePitch())
-      throw GaudiException("Pixel pitch mismatch between LUT file and detector geometry: LUT file specifies (" + std::to_string(pitch[0]) + ", " + std::to_string(pitch[1]) + ") mm, but geometry has (" + std::to_string(digitizer.PixelPitch().at(0)) + ", " + std::to_string(digitizer.PixelPitch().at(1)) + ") mm.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+    if (!digitizer.CCMap_IgnorePitch())
+      throw GaudiException("Pixel pitch mismatch between CCMap file and detector geometry: CCMap file specifies (" + std::to_string(pitch[0]) + ", " + std::to_string(pitch[1]) + ") mm, but geometry has (" + std::to_string(digitizer.PixelPitch().at(0)) + ", " + std::to_string(digitizer.PixelPitch().at(1)) + ") mm.", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
     else
-      digitizer.warning() << "Pixel pitch mismatch between LUT file and detector geometry. LUT file: " << pitch[0] << "mm, geometry: " << digitizer.PixelPitch().at(0) << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
+      digitizer.warning() << "Pixel pitch mismatch between CCMap file and detector geometry. CCMap file: " << pitch[0] << "mm, geometry: " << digitizer.PixelPitch().at(0) << "mm. Ignored because ChargeCollectionMap_IgnorePitch is set to true." << endmsg;
   }
 
-  if (printDebug) digitizer.debug() << "   - Found matching pixel pitch and sensor thickness in LUT file." << endmsg;
+  if (printDebug) digitizer.debug() << "   - Found matching pixel pitch and sensor thickness in CCMap file." << endmsg;
 
   /* Get matrix size (5x5, 7x7, ...) from the length of the first line after the header */
   bool foundDataLine = false;
-  while (std::getline(lutFile, line)) {
+  while (std::getline(ccmapFile, line)) {
     if (line.empty() || line[0] == '#') {
-      if (printDebug) digitizer.debug() << "VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " << lineCount+1 << ". Ignoring" << endmsg;
+      if (printDebug) digitizer.debug() << "VTXdigi_tools::ChargeCollectionMap::ChargeCollectionMap(): Empty or comment line found in CCMap file at line " << lineCount+1 << ". Ignoring" << endmsg;
       continue;
     }
 
@@ -272,25 +272,25 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     const int entryCount = tokenCount - 3; // first 3 entries are bin indices
     m_matrixSize = static_cast<int>(std::lround(std::sqrt(std::max(entryCount, 0))));
     if (m_matrixSize * m_matrixSize != entryCount)
-      throw GaudiException("First data line in LUT file has " + std::to_string(entryCount) + " matrix entries (after 3 bin indices), which is not a perfect square. File: " + digitizer.LutFileName(), "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+      throw GaudiException("First data line in CCMap file has " + std::to_string(entryCount) + " matrix entries (after 3 bin indices), which is not a perfect square. File: " + digitizer.CCMap_FileName(), "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
     foundDataLine = true;
     break;
   }
   if (!foundDataLine)
-    throw GaudiException("Could not find a data line after header in LUT file: " + digitizer.LutFileName(), "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+    throw GaudiException("Could not find a data line after header in CCMap file: " + digitizer.CCMap_FileName(), "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
   if (m_matrixSize < 3 || m_matrixSize % 2 == 0)
-    throw GaudiException("Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+    throw GaudiException("Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
   m_matrixSize_half = (m_matrixSize - 1) / 2;
   if (printDebug) digitizer.debug() << "   - Inferred matrix size of " << m_matrixSize << " from first line." << endmsg;
 
   /* Set up the matrix vector */
   m_matrices.resize(m_voxelCount.at(0) * m_voxelCount.at(1) * m_voxelCount.at(2) * m_matrixSize * m_matrixSize, 0.f);
 
-  /* set up mapping from Allpix2 LUT format
+  /* set up mapping from Allpix2 CCMap format
   *   (row-major, starts on bottom left)
-  * to the format expected by the LookupTable class
+  * to the format expected by the ChargeCollectionMap class
   *   (row-major, starts on top-left) */
   std::unordered_map<int, int> indexMapping; // i: index in local format; indexMapping[i]: index in Allpix2 format
   for (int i_u = 0; i_u < m_matrixSize; i_u++) {
@@ -302,20 +302,20 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   }
 
   /* Now we can finally start parsing the matrix values */
-  lutFile.clear();
-  lutFile.seekg(0, std::ios::beg);
+  ccmapFile.clear();
+  ccmapFile.seekg(0, std::ios::beg);
   for (int i=0; i<headerLines; ++i) // advance past header again
-    std::getline(lutFile, line);
+    std::getline(ccmapFile, line);
 
-  if (printDebug) digitizer.debug() << "   - Parsing LUT file, filling into lookup table." << endmsg;
+  if (printDebug) digitizer.debug() << "   - Parsing CCMap file, filling into CCMap objects." << endmsg;
   std::vector<float> matricesEntrySum_perWBin;
   matricesEntrySum_perWBin.resize(m_voxelCount.at(2), 0.f);
   float matricesEntrySum = 0.f;
 
   lineCount = headerLines + 1;
-  while (std::getline(lutFile, line)) {
+  while (std::getline(ccmapFile, line)) {
     if (line.empty() || line[0] == '#') {
-      if (printDebug)  digitizer.debug() << "VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " << lineCount+1 << ". Ignoring" << endmsg;
+      if (printDebug)  digitizer.debug() << "VTXdigi_tools::ChargeCollectionMap::ChargeCollectionMap(): Empty or comment line found in CCMap file at line " << lineCount+1 << ". Ignoring" << endmsg;
       continue;
     }
 
@@ -330,7 +330,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     }
 
     if (static_cast<int>(lineEntries.size()) != 3 + m_matrixSize*m_matrixSize)
-      throw GaudiException("Invalid number of entries in LUT file at line " + std::to_string(lineCount+1) + ": found " + std::to_string(lineEntries.size()) + " entries, but expected " + std::to_string(3 + m_matrixSize*m_matrixSize) + " (3 for bin indices, " + std::to_string(m_matrixSize*m_matrixSize) + " for matrix values).", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+      throw GaudiException("Invalid number of entries in CCMap file at line " + std::to_string(lineCount+1) + ": found " + std::to_string(lineEntries.size()) + " entries, but expected " + std::to_string(3 + m_matrixSize*m_matrixSize) + " (3 for bin indices, " + std::to_string(m_matrixSize*m_matrixSize) + " for matrix values).", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
     /* First 3 entries are in-pixel binning indices */
     VoxelIndex voxI({std::stoi(lineEntries[0])-1, std::stoi(lineEntries[1])-1, std::stoi(lineEntries[2])-1});// Allpix2 input is 1-indexed. Insane, I know.
@@ -338,7 +338,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     if (voxI.at(0) < 0 || voxI.at(0) >= m_voxelCount[0] ||
         voxI.at(1) < 0 || voxI.at(1) >= m_voxelCount[1] ||
         voxI.at(2) < 0 || voxI.at(2) >= m_voxelCount[2]) {
-      throw GaudiException("Invalid in-pixel bin indices in LUT file at line " + std::to_string(lineCount+1) + ": got (" + std::to_string(voxI.at(0)) + ", " + std::to_string(voxI.at(1)) + ", " + std::to_string(voxI.at(2)) + "), but expected ranges are [0, " + std::to_string(m_voxelCount[0]-1) + "], [0, " + std::to_string(m_voxelCount[1]-1) + "], [0, " + std::to_string(m_voxelCount[2]-1) + "].", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+      throw GaudiException("Invalid in-pixel bin indices in CCMap file at line " + std::to_string(lineCount+1) + ": got (" + std::to_string(voxI.at(0)) + ", " + std::to_string(voxI.at(1)) + ", " + std::to_string(voxI.at(2)) + "), but expected ranges are [0, " + std::to_string(m_voxelCount[0]-1) + "], [0, " + std::to_string(m_voxelCount[1]-1) + "], [0, " + std::to_string(m_voxelCount[2]-1) + "].", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
     }
 
     /* Parse matrix values & set it */
@@ -346,14 +346,14 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     float matrixEntrySum = 0.f;
     for (int i = 0; i < m_matrixSize*m_matrixSize; i++) {
       float entry = std::stof(lineEntries[3 + indexMapping[i]]); // NaN check done on sum
-      if (entry < kLutEntryMinimum)
+      if (entry < kCCMapEntryMinimum)
         entry = 0.f; // avoid very small entries for performace
       matrixEntries[i] = entry;
       matrixEntrySum += entry;
     }
     // digitizer.verbose() << "   - Parsed matrix for in-pixel bin (" << voxI.at(0) << ", " << voxI.at(1) << ", " << voxI.at(2) << "), entry sum " << std::to_string(matrixEntrySum) << ", setting it now..." << endmsg;
     if (std::isnan(matrixEntrySum))
-      throw GaudiException("VTXdigi_tools::LookupTable::LookupTable(): Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") contains NaN values (sum of entries is NaN).", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+      throw GaudiException("VTXdigi_tools::ChargeCollectionMap::ChargeCollectionMap(): Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") contains NaN values (sum of entries is NaN).", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
     matricesEntrySum += matrixEntrySum;
     matricesEntrySum_perWBin[voxI.at(2)] += matrixEntrySum;
@@ -365,7 +365,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   const int matrixCount = lineCount - (headerLines+1);
 
   if (matrixCount != m_voxelCount[0] * m_voxelCount[1] * m_voxelCount[2])
-    throw GaudiException("Invalid number of matrices loaded from file: expected " + std::to_string(m_voxelCount[0] * m_voxelCount[1] * m_voxelCount[2]) + " matrices (inferred from bin count in header) but found " + std::to_string(matrixCount) + " lines.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+    throw GaudiException("Invalid number of matrices loaded from file: expected " + std::to_string(m_voxelCount[0] * m_voxelCount[1] * m_voxelCount[2]) + " matrices (inferred from bin count in header) but found " + std::to_string(matrixCount) + " lines.", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
   // From which w-level are charges collected?
   double collectedFromW = 0.0;
@@ -376,17 +376,17 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   }
   collectedFromW /= matricesEntrySum;
 
-  if (std::abs(collectedFromW) > 0.5 * sensorThickness) throw GaudiException("Invalid charge collection depth inferred from LUT file: " + std::to_string(collectedFromW) + " mm. This is outside the sensor volume, which extends from " + std::to_string(-0.5*sensorThickness) + " mm to " + std::to_string(0.5*sensorThickness) + " mm.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+  if (std::abs(collectedFromW) > 0.5 * sensorThickness) throw GaudiException("Invalid charge collection depth inferred from CCMap file: " + std::to_string(collectedFromW) + " mm. This is outside the sensor volume, which extends from " + std::to_string(-0.5*sensorThickness) + " mm to " + std::to_string(0.5*sensorThickness) + " mm.", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
   if (std::abs(collectedFromW) >= 1.e-5) {
     m_chargeCollectionDepthCenter = static_cast<double>(collectedFromW); // the member is initalised to 0.0
   }
 
-  digitizer.info() << " - Loaded lookup table from file. Matrices parsed: " << (matrixCount) << ". Charge collected from sensitive volume: " << matricesEntrySum/static_cast<double>(matrixCount)*100 << " percent (rest is lost, eg recombination). The center of the collection region is at " << m_chargeCollectionDepthCenter << endmsg;
+  digitizer.info() << " - Loaded CCMap from file. Matrices parsed: " << (matrixCount) << ". Charge collected from sensitive volume: " << matricesEntrySum/static_cast<double>(matrixCount)*100 << " percent (rest is lost, eg recombination). The center of the collection region is at " << m_chargeCollectionDepthCenter << endmsg;
 }
 
-void LookupTable::SetMatrix(const VoxelIndex& voxI, const std::vector<float>& weights) {
+void ChargeCollectionMap::SetMatrix(const VoxelIndex& voxI, const std::vector<float>& weights) {
   if (static_cast<int>(weights.size()) != m_matrixSize*m_matrixSize)
-    throw GaudiException("VTXdigi_tools::LookupTable::SetMatrix: weights size (" + std::to_string(weights.size()) + ") does not match matrix size (" + std::to_string(m_matrixSize*m_matrixSize) + ")", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+    throw GaudiException("VTXdigi_tools::ChargeCollectionMap::SetMatrix: weights size (" + std::to_string(weights.size()) + ") does not match matrix size (" + std::to_string(m_matrixSize*m_matrixSize) + ")", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
   /* check if matrix is valid */
   float sum = 0.f;
@@ -396,9 +396,9 @@ void LookupTable::SetMatrix(const VoxelIndex& voxI, const std::vector<float>& we
     }
   }
   if (std::isnan(sum))
-    throw GaudiException("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") contains NaN values.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+    throw GaudiException("VTXdigi_tools::ChargeCollectionMap::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") contains NaN values.", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
   if (sum < 0 || sum > 1.f + 1.e-5f)
-    throw GaudiException("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") has a weight sum of " + std::to_string(sum) + ", but needs to lie in [0,1].", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+    throw GaudiException("VTXdigi_tools::ChargeCollectionMap::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") has a weight sum of " + std::to_string(sum) + ", but needs to lie in [0,1].", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
   for (int row = 0; row < m_matrixSize; ++row) {
     for (int col = 0; col < m_matrixSize; ++col) {
@@ -409,7 +409,7 @@ void LookupTable::SetMatrix(const VoxelIndex& voxI, const std::vector<float>& we
   }
 }
 
-void LookupTable::SetAllMatrices(const std::vector<float>& weights) {
+void ChargeCollectionMap::SetAllMatrices(const std::vector<float>& weights) {
   for (int j_u = 0; j_u < m_voxelCount.at(0); ++j_u) {
     for (int j_v = 0; j_v < m_voxelCount.at(1); ++j_v) {
       for (int j_w = 0; j_w < m_voxelCount.at(2); ++j_w) {
@@ -419,15 +419,15 @@ void LookupTable::SetAllMatrices(const std::vector<float>& weights) {
   }
 }
 
-int LookupTable::FindIndex (const VoxelIndex& voxI, const int col, const int row) const {
+int ChargeCollectionMap::FindIndex (const VoxelIndex& voxI, const int col, const int row) const {
   #ifndef NDEBUG
     if (voxI[0] < 0 || voxI[0] >= m_voxelCount[0]
       || voxI[1] < 0 || voxI[1] >= m_voxelCount[1]
       || voxI[2] < 0 || voxI[2] >= m_voxelCount[2] ) {
-      throw GaudiException("VTXdigi_tools::LookupTable::FindIndex: in-pix bin out of range", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+      throw GaudiException("VTXdigi_tools::ChargeCollectionMap::FindIndex: in-pix bin out of range", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
     }
     if (col < 0 || col >= m_matrixSize || row < 0 || row >= m_matrixSize) {
-      throw GaudiException("VTXdigi_tools::LookupTable::FindIndex: col or row out of range", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+      throw GaudiException("VTXdigi_tools::ChargeCollectionMap::FindIndex: col or row out of range", "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
     }
   #endif
 
@@ -436,12 +436,12 @@ int LookupTable::FindIndex (const VoxelIndex& voxI, const int col, const int row
   return index_matrix * m_matrixSize * m_matrixSize + index_element;
 }
 
-ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer),
-  m_LUT(digitizer.LutFileName(), digitizer),
-  m_shiftTruthPos(digitizer.LUT_shiftTruthPos()) {
+ChargeCollector_CCMap::ChargeCollector_CCMap(const VTXdigi_Modular& digitizer) : IChargeCollector(digitizer),
+  m_CCMap(digitizer.CCMap_FileName(), digitizer),
+  m_shiftTruthPos(digitizer.ShiftTruthPos()) {
 
-  /* LUT is constructed in place (from file) */
-  m_chargeCollectionDepthCenter = m_LUT.GetChargeCollectionDepthCenter();
+  /* CCMap is constructed in place (from file) */
+  m_chargeCollectionDepthCenter = m_CCMap.GetChargeCollectionDepthCenter();
 
   /* Load charge deposition sampling parameters */
   m_meanDepositionsPerUm = digitizer.MeanDepositionsPerUm();
@@ -452,21 +452,21 @@ ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : ICh
 
   std::unique_ptr<TFile> file(TFile::Open(chargeDepFileName.c_str(), "READ"));
   if (!file || file->IsZombie())
-    throw GaudiException("Could not open deposition charge histogram file " + chargeDepFileName + ", cannot continue.", "VTXdigi_Modular::ChargeCollector_LUT::ChargeCollector_LUT()", StatusCode::FAILURE);
+    throw GaudiException("Could not open deposition charge histogram file " + chargeDepFileName + ", cannot continue.", "VTXdigi_Modular::ChargeCollector_CCMap::ChargeCollector_CCMap()", StatusCode::FAILURE);
 
   TH1D* hist_chargeDep = file->Get<TH1D>("deposition_charge");
   if (!hist_chargeDep)
-    throw GaudiException("Could not find histogram \"deposition_charge\" in file "+ chargeDepFileName + ", cannot continue.", "VTXdigi_Modular::ChargeCollector_LUT::ChargeCollector_LUT()", StatusCode::FAILURE);
+    throw GaudiException("Could not find histogram \"deposition_charge\" in file "+ chargeDepFileName + ", cannot continue.", "VTXdigi_Modular::ChargeCollector_CCMap::ChargeCollector_CCMap()", StatusCode::FAILURE);
 
   // move ownership from TFile to this class
   hist_chargeDep->SetDirectory(nullptr);
   hist_chargeDep->ComputeIntegral(); // so that we don't compute the integral later down the line (which would be slow & I am not sure about thread safety)
   m_chargeSamplingHist.reset(hist_chargeDep);
 
-  m_digitizer.info() << " - ChargeCollector_LUT constructed successfully." << endmsg;
+  m_digitizer.info() << " - ChargeCollector_CCMap constructed successfully." << endmsg;
 }
 
-void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix, TRandom3& randomGen) const {
+void ChargeCollector_CCMap::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix, TRandom3& randomGen) const {
 
   Path path(simHit, trafoMatrix, m_digitizer);
   if (!path.isValid) [[unlikely]]
@@ -479,9 +479,9 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
   const auto pixelPitch = m_digitizer.PixelPitch();
   const auto pixelCount = m_digitizer.PixelCount();
   const auto thickness = m_digitizer.ActiveVolumeDimensions().at(2);
-  const auto lutVoxelCount = m_LUT.GetVoxelCount();
+  const auto ccmapVoxelCount = m_CCMap.GetVoxelCount();
   for (const auto& [charge, pos] : path.SampleDepositions(simHit.charge(), randomGen, m_meanDepositionsPerUm, *m_chargeSamplingHist)) {
-    const auto [pixI, voxI] = VTXdigi_tools::Trafo_local_pixIVoxI(pos, pixelPitch, pixelCount, thickness, lutVoxelCount);
+    const auto [pixI, voxI] = VTXdigi_tools::Trafo_local_pixIVoxI(pos, pixelPitch, pixelCount, thickness, ccmapVoxelCount);
 
     DistributeVoxelCharge(hitMap, pixI, voxI, charge, simHit);
   }
@@ -489,20 +489,20 @@ void ChargeCollector_LUT::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, c
   m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix);
 }
 
-void ChargeCollector_LUT::DistributeVoxelCharge(HitMap& hitMap, const PixelIndex& pixI, const VoxelIndex& voxI, const float charge, const SimHitWrapper& simHit) const {
+void ChargeCollector_CCMap::DistributeVoxelCharge(HitMap& hitMap, const PixelIndex& pixI, const VoxelIndex& voxI, const float charge, const SimHitWrapper& simHit) const {
 
   /* cache things, this is the hottest loop */
-  const int lutSize = m_LUT.GetSize();
-  const int i_u_origin = pixI[0] - m_LUT.GetSizeHalf(); // pix index of leftmost pixel in LUT matrix
-  const int i_v_origin = pixI[1] - m_LUT.GetSizeHalf();
+  const int ccmapSize = m_CCMap.GetSize();
+  const int i_u_origin = pixI[0] - m_CCMap.GetSizeHalf(); // pix index of leftmost pixel in CCMap matrix
+  const int i_v_origin = pixI[1] - m_CCMap.GetSizeHalf();
   const int pixelCount_u = static_cast<int>(m_digitizer.PixelCount().at(0));
   const int pixelCount_v = static_cast<int>(m_digitizer.PixelCount().at(1));
 
   const int col_min = std::max(0, -i_u_origin);
-  const int col_max = std::min(lutSize, pixelCount_u - i_u_origin);
+  const int col_max = std::min(ccmapSize, pixelCount_u - i_u_origin);
 
   const int row_min = std::max(0, -i_v_origin);
-  const int row_max = std::min(lutSize, pixelCount_v - i_v_origin);
+  const int row_max = std::min(ccmapSize, pixelCount_v - i_v_origin);
 
   for (int col = col_min; col < col_max; ++col) {
     const int i_u = i_u_origin + col; // convert from col in [0, matrixSize) to pixel offset in [-matrixSize_half, matrixSize_half]. Note size_half = (size-1)/2
@@ -510,13 +510,13 @@ void ChargeCollector_LUT::DistributeVoxelCharge(HitMap& hitMap, const PixelIndex
     for (int row = row_min; row < row_max; ++row) {
       const int i_v = i_v_origin + row;
 
-      const float chargeToAdd = m_LUT.GetWeight(voxI, col, row) * charge;
+      const float chargeToAdd = m_CCMap.GetWeight(voxI, col, row) * charge;
       hitMap.FillCharge({i_u, i_v}, chargeToAdd, simHit);
     }
   }
 }
 
-void ChargeCollector_LUT::MoveTruthPosition(const SimHitWrapper& simHit, const Path& path) const {
+void ChargeCollector_CCMap::MoveTruthPosition(const SimHitWrapper& simHit, const Path& path) const {
   if (m_chargeCollectionDepthCenter == 0.0)
     return;
 
