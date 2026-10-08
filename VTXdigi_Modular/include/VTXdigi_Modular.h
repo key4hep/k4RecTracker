@@ -58,9 +58,9 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
 
   /* -- Accessors for charge collector -- */
 
-  inline std::array<float, 3> ActiveVolumeDimensions() const { return {m_sensorLength[0], m_sensorLength[1], m_sensorActiveThickness}; }
+  inline std::array<double, 3> ActiveVolumeDimensions() const { return {m_pixelPitch[0]*m_pixelCount[0], m_pixelPitch[1]*m_pixelCount[1], m_sensorActiveThickness}; }
 
-  inline std::array<float, 2> PixelPitch() const { return m_pixelPitch; }
+  inline std::array<double, 2> PixelPitch() const { return m_pixelPitch; }
 
   inline std::array<size_t, 2> PixelCount() const { return m_pixelCount; }
 
@@ -79,6 +79,8 @@ struct VTXdigi_Modular final : k4FWCore::MultiTransformer <std::tuple<edm4hep::T
   dd4hep::DDSegmentation::VolumeID GetVolumeID(const dd4hep::DDSegmentation::CellID& cellID) const;
 
   int GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID) const;
+
+
 
 private:
 
@@ -140,7 +142,7 @@ private:
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_threshold{this, "ThresholdDispersion", 0.0f, "Gaussian smearing to be applied to the threshold. (in e-). Drawn per event per sensor per pixel. If 0, no dispersion is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_time{this, "TimeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels time (in ns). Applied to the digiHits time stamp. If 0, no time smearing is applied. Defaults to 0."};
-  Gaudi::Property<bool> m_forceClusterPosToSensitiveSurface{this, "ForceClusterPositionToSensitiveSurface", false, "If true, the cluster position is forced to be on the sensitive surface of the sensor. If false, the cluster vertical position (in the sensor local frame) is given by the ChargeCollector (with the LookupTable method, this is the depth centre of the charge collection computed from the LUT). Defaults to false."};
+  Gaudi::Property<bool> m_forceClusterPosToSensitiveSurface{this, "ForceClusterPositionToSensitiveSurface", false, "If true, the cluster position is forced to be on the sensitive surface of the sensor. If false, the cluster vertical position (in the sensor local frame) is given by the ChargeCollector (with the LookupTable method, this is the depth centre of the charge collection computed from the LUT). Note that enabling this option is sometimesneeded for compatibility, but drastically decreases the accuracy of cluster positions for shallow tracks. Defaults to false."};
 
   Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false, "Flag to create and fill debug histograms. Not recommended for multithreading, might lead to crashes. Default is false."};
   Gaudi::Property<int> m_infoPrintInterval{this, "InfoPrintInterval", 100, "Interval for printing information during processing."};
@@ -167,12 +169,11 @@ private:
   std::unique_ptr<VTXdigi_tools::IChargeCollector> m_chargeCollector = nullptr;
 
   std::array<size_t, 2> m_pixelCount = {0, 0};
-  std::array<float, 2> m_pixelPitch = {0.0f, 0.0f};
-  float m_sensorActiveThickness = 0.0f; // also in mm
-  float m_inactiveMaterialAbove = 0.0f; // in mm, inactive material above the active volume in sensor normal direction
-  float m_inactiveMaterialBelow = 0.0f;
+  std::array<double, 2> m_pixelPitch = {0.0, 0.0};
+  double m_sensorActiveThickness = 0.0; // also in mm
+  double m_inactiveMaterialAbove = 0.0; // in mm, inactive material above the active volume in sensor normal direction
+  double m_inactiveMaterialBelow = 0.0;
 
-  std::array<float, 2> m_sensorLength = {0.0f, 0.0f};
   TGeoRotation m_sensorNormalRotation = TGeoRotation("sensorNormalRotation"); // rotation to rotate the sensor local coordinate system. Initialised to unit matrix.
 
   /* -- Counters -- */

@@ -18,12 +18,20 @@
 #include <unordered_set>
 #include <string_view>
 #include <limits>
+#include <algorithm>
+#include <utility>
 
 struct VTXdigi_Modular; // forward declaration
 
 namespace VTXdigi_tools {
 
 constexpr float kChargePerkeV = 273.97f; // in electrons, for silicon (1 eh-pair ~ 3.65 eV)
+
+constexpr double kSensorBoundaryTolerance = 0.01; // in mm, tolerance for simHits that are just outside the sensor volume. Hits outside the tolerance are skipped, hit outside the sensor volume but within the tolerance are clamped to the sensor volume.
+
+using PixelIndex = std::array<int, 2>; // pixel index (u,v)
+using VoxelIndex = std::array<int, 3>; // index of the in-pixel voxel (u,v,w)
+using PixelCoords = std::array<double, 2>; // local position on sensor in terms of pixel index (0 at pixel centre)
 
 /* -- SimHitWrapper -- */
 
@@ -85,9 +93,9 @@ MCParticleLevel ComputeMCParticleLevel(const edm4hep::SimTrackerHit& simTrackerH
 struct Pixel {
   float charge;
   std::unordered_set<const SimHitWrapper*> simHits;
-  std::array<int, 2> index; // This info is saved in (a) the map key, and (b) here inside the Pixel object. This is inefficient. But it makes the code a bit nicer not having to pass the index around separately.
+  PixelIndex index; // This info is saved in (a) the map key, and (b) here inside the Pixel object. This is inefficient. But it makes the code a bit nicer not having to pass the index around separately.
 
-  Pixel(std::array<int, 2> pix) : charge(0.f), index(pix) {
+  Pixel(PixelIndex pix) : charge(0.f), index(pix) {
     simHits.reserve(2); // avoid too many reallocations, will rarely see more than 2 simTrackerHits contributing to the same pixel
   }
   Pixel() : charge(0.f), index({-1, -1}) {
@@ -109,24 +117,24 @@ struct Cluster {
   /** @brief get the charge in the seed pixel (eg. pixel with the highest charge) */
   float GetSeedPixelCharge() const;
 
-  /** @brief Compute the charge-weighted centre-of-gravity of a cluster in terms of pixel inx coordinates
+  /** @brief Compute the charge-weighted centre-of-gravity of a cluster in terms of pixel index coordinates
    * @returns CoG in terms of pixel index coordinates */
-  std::array<float, 2> ComputeCoG(const bool clusterizeEndPixelsOnly) const;
+  PixelCoords ComputeCoG(const bool clusterizeEndPixelsOnly) const;
 };
 
 /** @brief Get the indices of all direct neighbors of a pixel */
-std::array<std::array<int, 2>, 4> GetDirectNeighbors(const std::array<int, 2>& i_uv);
-std::array<std::array<int, 2>, 8> GetNeighbors(const std::array<int, 2>& i_uv);
+std::array<PixelIndex, 4> GetDirectNeighbors(const PixelIndex& pixI);
+std::array<PixelIndex, 8> GetNeighbors(const PixelIndex& pixI);
 
 /* -- HitMap -- */
 
 struct Hash_PixIndex {
-  size_t operator()(const std::array<int, 2>& i_uv) const noexcept {
-    return (static_cast<uint64_t>(i_uv[0]) << 32) ^ static_cast<uint32_t>(i_uv[1]);
+  size_t operator()(const PixelIndex& pixI) const noexcept {
+    return (static_cast<uint64_t>(pixI[0]) << 32) ^ static_cast<uint32_t>(pixI[1]);
   }
 };
 
-using PixelMap = std::unordered_map<std::array<int, 2>, Pixel, Hash_PixIndex>;
+using PixelMap = std::unordered_map<PixelIndex, Pixel, Hash_PixIndex>;
 
 /** @brief HitMap of all pixel hits on a sensor
  * @note uses a std::unordered_map to only store pixels that have charge, which is more memory efficient for large pixel counts and low occupancy. */
@@ -140,7 +148,7 @@ public:
   HitMap(std::array<size_t, 2> pixCount);
 
   /** @brief Add charge and a simHit to a pixel */
-  void FillCharge(std::array<int, 2> i_uv, float charge, const SimHitWrapper& simHitWrapper);
+  void FillCharge(PixelIndex pixI, float charge, const SimHitWrapper& simHitWrapper);
 
   /** @brief For each pixel with charge, vary the charge by an amount drawn from the supplied random generator */
   void ApplyChargeSmearing(const float sigma, TRandom3& randomGen);
@@ -150,7 +158,7 @@ public:
   void ApplyThreshold(float threshold, const float thresholdDispersion, TRandom3& randomGen);
 
   /** @brief Get one pixel's collected charge */
-  float GetCharge(std::array<int, 2> i_uv) const;
+  float GetCharge(PixelIndex pixI) const;
 
   /** @brief Get the total charge across all pixels */
   float GetTotalCharge() const;
@@ -172,12 +180,18 @@ public:
 
 private:
   /** @brief Returns true if the pixel is out of bounds */
-  inline bool _OutOfBounds(std::array<int, 2> i_uv) const;
+  inline bool _OutOfBounds(PixelIndex pixI) const;
 }; // class HitMap
 
 /* -- helpers -- */
 
 std::string VectorToString(const dd4hep::rec::Vector3D& vec);
+
+/** @brief true if pos lies inside the box of full side lengths `dims` centred on the origin, enlarged by `tolerance` on every side */
+bool IsInsideVolume(const dd4hep::rec::Vector3D& pos, const std::array<double, 3>& dims, const double tolerance);
+
+/** @brief clamp pos onto the box of full side lengths `dims` centred on the origin */
+dd4hep::rec::Vector3D ClampToVolume(const dd4hep::rec::Vector3D& pos, const std::array<double, 3>& dims);
 
 /** @brief Convert a edm4hep::Vector3d to dd4hep::rec::Vector3D */
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);
@@ -185,7 +199,6 @@ dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec);
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3f vec);
 /** @brief Convert a dd4hep::rec::Vector3D to edm4hep::Vector3d */
 edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec);
-
 
 /** @brief Compute the transformation matrix from global detector to local sensor frame for a given sensor volume (defined by its volumeID) */
 TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::VolumeID& volumeID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation);
@@ -200,42 +213,28 @@ dd4hep::rec::Vector3D Trafo_local_global(const dd4hep::rec::Vector3D& local, con
 
 /** @brief Transform a position from sensor-local sensor coordinates to pixel index coordinates
  * @note the origin lies at the centre of the (0,0) pixel, pixel centres are at multiples of one */
-std::array<float, 2> Trafo_local_pixIndexCoords(const dd4hep::rec::Vector3D& local, const std::array<float, 2> pixelPitch, const std::array<size_t, 2> pixelCount);
+PixelCoords Trafo_local_pixCoords(const dd4hep::rec::Vector3D& local, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount);
 
 /** @brief Transform a position from pixel index coordinates to sensor-local coordinates */
-dd4hep::rec::Vector3D Trafo_pixIndexCoords_local(const std::array<float, 2>& pixIndexCoords, const float w, const std::array<float, 2> pixelPitch, const std::array<size_t, 2> pixelCount);
+dd4hep::rec::Vector3D Trafo_pixCoords_local(const PixelCoords pixCoords, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount, const double w);
 
 /** @brief Compute the indices of the pixel (i_u, i_v) that a given sensor-local position lies in */
-std::array<int, 2> Trafo_local_pixIndex(const dd4hep::rec::Vector3D& pos, const std::array<float, 2> pixelPitch, const std::array<size_t, 2> pixelCount);
+PixelIndex Trafo_local_pixI(const dd4hep::rec::Vector3D& pos, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount);
 
-/** @brief Compute the inices of the in-pixel bin (j_u, j_v, j_w) that a given sensor-local position lies in */
-std::array<int, 3> Trafo_local_inpixIndex(const dd4hep::rec::Vector3D& pos, const std::array<int, 3>& binCount, const std::array<float, 2>& pixelPitch, const std::array<float, 3>& activeVolumeDimensions);
+/** @brief Compute the pixel index (i_u, i_v) and the in-pixel bin (j_u, j_v, j_w) that a given sensor-local position lies in
+ * @note Both are derived from one fine-grid index per axis, so they are always consistent. Positions must lie inside the active volume (up to rounding), see ClampToVolume(). */
+std::pair<PixelIndex, VoxelIndex> Trafo_local_pixIVoxI(const dd4hep::rec::Vector3D& pos, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount, const double sensorActiveThickness, const std::array<int, 3> voxelCount);
 
 /** @brief Transform a position from pixel index coordinates to sensor-local coordinates
  * @note The w coordinate is set to depletedRegionDepthCenter.*/
-dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter);
-/** @brief Transform a position from pixel index coordinates to sensor-local coordinates, setting w=0 */
-dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch);
-
-/** @brief Transform a position from pixel index coordinates to sensor-local coordinates
- * @note The w coordinate is set to depletedRegionDepthCenter */
-dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter);
-/** @brief Transform a position from pixel index coordinates to sensor-local coordinates, setting w=0 */
-dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch);
+dd4hep::rec::Vector3D Trafo_pixI_local(const PixelIndex pixelIndex, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount, const double w);
 
 /* -- Binning tools -- */
 
 /** @brief Given a histogram definition (x0, binWidth, nBins) and a value x, compute the bin index i in which x falls.
- * @return Int, -1 if x is out of range.
- * @note Bins are 0-indexed (vs ROOT's 1-indexing) */
-int ComputeBinIndex(float x, float binX0, float binWidth, int binN);
+ * @return Bin index, clamped to [0, nBins-1]
+ * @note Bins are 0-indexed (vs ROOT's 1-indexing)
+ * @note Never fails, user must make sure parameters are valid (for position, this is done in the operator via ClampToVolume() ) */
+int ComputeBinIndex(double x, double binX0, double binWidth, int binN);
 
-/** @brief Given a binning definition (x0, binWidth, nBins), compute the center position of a given bin index i in the histogram
- * @return Float, the center position of the bin
- * @note Bins are 0-indexed (vs ROOT's 1-indexing) */
-float ComputeBinCenter(int i, float binX0, float binWidth);
-/** @brief Given a binning definition (x0, x1, nBins), compute the center position of a given bin index i in the histogram
- * @return Float, the center position of the bin
- * @note Bins are 0-indexed (vs ROOT's 1-indexing) */
-float ComputeBinCenter(int i, float binX0, float binX1, int binN);
 } // namespace VTXdigi_tools

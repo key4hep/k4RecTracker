@@ -5,7 +5,9 @@
 #include <DD4hep/Objects.h>
 #include <DD4hep/VolumeManager.h>
 #include <DDRec/Vector3D.h>
+#include <DDSegmentation/Segmentation.h>
 #include <Parsers/Primitives.h>
+#include <array>
 #include <edm4hep/Vector3d.h>
 
 namespace VTXdigi_tools {
@@ -77,6 +79,23 @@ std::string VectorToString(const dd4hep::rec::Vector3D& vec) {
   return oss.str();
 }
 
+bool IsInsideVolume(const dd4hep::rec::Vector3D& pos, const std::array<double, 3>& dims, const double tolerance) {
+  return std::abs(pos.x()) <= 0.5 * dims[0] + tolerance
+      && std::abs(pos.y()) <= 0.5 * dims[1] + tolerance
+      && std::abs(pos.z()) <= 0.5 * dims[2] + tolerance;
+}
+
+dd4hep::rec::Vector3D ClampToVolume(const dd4hep::rec::Vector3D& pos, const std::array<double, 3>& dims) {
+  return dd4hep::rec::Vector3D(
+    std::clamp(pos.x(), -0.5 * dims[0], 0.5 * dims[0]),
+    std::clamp(pos.y(), -0.5 * dims[1], 0.5 * dims[1]),
+    std::clamp(pos.z(), -0.5 * dims[2], 0.5 * dims[2]));
+}
+
+int GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
+  return static_cast<int>(cellIdDecoder->get(volumeID, "layer"));
+}
+
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
   return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
 }
@@ -129,147 +148,86 @@ dd4hep::rec::Vector3D Trafo_local_global(const dd4hep::rec::Vector3D& local, con
   return dd4hep::rec::Vector3D(global[0], global[1], global[2]);
 }
 
-std::array<float, 2> Trafo_local_pixIndexCoords(const dd4hep::rec::Vector3D& local, const std::array<float, 2> pixelPitch, const std::array<size_t, 2> pixelCount) {
-  const std::array<float, 2> local_2d = {static_cast<float>(local.x()), static_cast<float>(local.y())};
-  std::array<float, 2> pixIndex;
+PixelCoords Trafo_local_pixCoords(const dd4hep::rec::Vector3D& local, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount) {
+  const std::array<double, 2> local_2d = {local.x(), local.y()};
+  PixelCoords pixC;
   for (size_t axis = 0; axis < 2; ++axis) {
-    const float halfLength = 0.5 * pixelPitch[axis] * pixelCount[axis];
-    if (std::abs(local_2d[axis]) < -halfLength - pixelPitch[axis]*0.1 || std::abs(local_2d[axis]) > halfLength + pixelPitch[axis]*0.1 ) {
-      // avoid throwing too eagerly for floating point precision issues at the edges (esp. with all the double-float conversions we do...). Clamp instead
-      throw std::runtime_error("VTXdigi_tools::Trafo_local_pixIndexCoords(): position" + std::to_string(local_2d[axis]) + " is out of sensor bounds [-" + std::to_string(halfLength) + ", " + std::to_string(halfLength) + "]");
-    }
-    const float clamped = std::clamp(local_2d[axis], -halfLength, halfLength);
-    pixIndex[axis] = (clamped + halfLength) / pixelPitch[axis] - 0.5f; // shift from [-halfLength, halfLength] to [-0.5, pixelCount - 0.5]
+    const double halfLength = 0.5 * pixelPitch[axis] * pixelCount[axis];
+    const double clamped = std::clamp(local_2d[axis], -halfLength, halfLength);
+    pixC[axis] = (clamped + halfLength) / pixelPitch[axis] - 0.5; // shift from [-halfLength, halfLength] to [-0.5, pixelCount - 0.5]
   }
-  return pixIndex;
+  return pixC;
 }
 
-dd4hep::rec::Vector3D Trafo_pixIndexCoords_local(const std::array<float, 2>& pixIndexCoords, const float w, const std::array<float, 2> pixelPitch, const std::array<size_t, 2> pixelCount) {
-  std::array<float, 2> local;
-  for (size_t axis = 0; axis < 2; ++axis) {
-    const float halfLength = 0.5 * pixelPitch[axis] * pixelCount[axis];
-    local[axis] = (pixIndexCoords[axis] + 0.5f) * pixelPitch[axis] - halfLength; // shift from [-0.5, pixelCount - 0.5] to [-halfLength, halfLength]
-  }
-  return dd4hep::rec::Vector3D(local[0], local[1], w);
-}
+dd4hep::rec::Vector3D Trafo_pixCoords_local(const PixelCoords pixCoords,  const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount, const double w) {
+  /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
+  double u = (pixCoords[0] + 0.5) * pixelPitch[0] - 0.5 * pixelPitch[0] * pixelCount[0]; // in mm. Add 0.5*pixelPitch to shift from pixel edge to center, since index 0 is defined as the center of the pixel.
+  double v = (pixCoords[1] + 0.5) * pixelPitch[1] - 0.5 * pixelPitch[1] * pixelCount[1];
 
-int GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
-  return static_cast<int>(cellIdDecoder->get(volumeID, "layer"));
+  return dd4hep::rec::Vector3D(u, v, w);
 }
-
 
 
 /* -- Binning things -- */
 
-int ComputeBinIndex(float x, float binX0, float binWidth, int binN) {
-  /** Get the bin index for a given x value
-   *  binX0 is the lower edge of the first bin
-   *  binWidth is the width of the bins
-   *  binN is the number of bins
-   *  return -1 if x is out of range
-   */
+int ComputeBinIndex(double x, double binX0, double binWidth, int binN) {
+  #ifndef NDEBUG
+    if (binN <= 0) throw std::runtime_error("VTXdigi_tools::ComputeBinIndex(): binN must be positive");
+    if (binWidth <= 0.0) throw std::runtime_error("VTXdigi_tools::ComputeBinIndex(): binWidth must be positive");
+  #endif
 
-  if (binN <= 0) throw std::runtime_error("VTXdigi_tools::ComputeBinIndex(): binN must be positive");
-  if (binWidth <= 0.0) throw std::runtime_error("VTXdigi_tools::ComputeBinIndex(): binWidth must be positive");
-
-  float relativePos = (x - binX0) / binWidth; // shift to [0, binN]
-  if (relativePos < 0.0f || relativePos > static_cast<float>(binN))
-    return -1;
-  if (relativePos == static_cast<float>(binN))
-    return binN - 1; // include upper edge in last bin (makes sense for pixels)
-  return static_cast<int>(relativePos);
+  const double relativePos = (x - binX0) / binWidth; // shift to [0, binN]
+  return std::clamp(static_cast<int>(std::floor(relativePos)), 0, binN - 1);
 } // ComputeBinIndex()
 
-float ComputeBinCenter(int i, float binX0, float binWidth) {
-  if (i < 0) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): bin index must be non-negative");
-  if (binWidth <= 0.0) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): binWidth must be positive");
-
-  return binX0 + (static_cast<float>(i) + 0.5f) * binWidth; // add 0.5*binWidth to shift from lower edge to center
-} // ComputeBinCenter()
-float ComputeBinCenter(int i, float binX0, float binX1, int binN) {
-  if (binN <= 0) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): binN must be positive");
-  if (binX1 <= binX0) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): binX1 must be greater than binX0");
-  if (i < 0 || i >= binN) throw std::runtime_error("VTXdigi_tools::ComputeBinCenter(): bin index out of bounds");
-
-  const float binWidth = (binX1 - binX0) / static_cast<float>(binN);
-  return ComputeBinCenter(i, binX0, binWidth);
-} // ComputeBinCenter()
-
-std::array<int, 2> Trafo_local_pixIndex(const dd4hep::rec::Vector3D& pos, const std::array<float, 2> pixelPitch, const std::array<size_t, 2> pixelCount) {
-  const float length_u_half = 0.5 * pixelPitch[0] * pixelCount[0];
-  int i_u = ComputeBinIndex(
-    pos.x(),
+PixelIndex Trafo_local_pixI(const dd4hep::rec::Vector3D& local, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount) {
+  PixelIndex pixI;
+  const double length_u_half = 0.5 * pixelPitch[0] * pixelCount[0];
+  pixI[0] = ComputeBinIndex(
+    local.x(),
     -length_u_half,
     pixelPitch[0],
     pixelCount[0]);
 
-  const float length_v_half = 0.5 * pixelPitch[1] * pixelCount[1];
-  int i_v = ComputeBinIndex(
-    pos.y(),
+  const double length_v_half = 0.5 * pixelPitch[1] * pixelCount[1];
+  pixI[1] = ComputeBinIndex(
+    local.y(),
     -length_v_half,
     pixelPitch[1],
     pixelCount[1]);
 
-  return {i_u, i_v};
-} // Trafo_local_pixIndex()
+  return pixI;
+} // Trafo_local_pixI()
 
+std::pair<PixelIndex, VoxelIndex> Trafo_local_pixIVoxI(const dd4hep::rec::Vector3D& local, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount, const double sensorActiveThickness, const std::array<int, 3> voxelCount) {
+  const std::array<double, 2> local_uv = {local.x(), local.y()};
+  PixelIndex pixI;
+  VoxelIndex voxI;
 
-std::array<int, 3> Trafo_local_inpixIndex(const dd4hep::rec::Vector3D& pos, const std::array<int, 3>& binCount, const std::array<float, 2>& pixelPitch, const std::array<float, 3>& activeVolumeDimensions) {
-  std::array<int, 3> indices;
-
-  const float posShifted_u = pos.x() + 0.5 * activeVolumeDimensions[0]; // shift to [0, length_u]
-  if (posShifted_u < 0.0 || posShifted_u > activeVolumeDimensions[0]) {
-    indices[0] = -1; // out of bounds
-  }
-  else {
-    float posInPixel_u = std::fmod(posShifted_u,  pixelPitch[0]);
-    if (posInPixel_u < 0.0) posInPixel_u +=  pixelPitch[0]; // ensure positive remainder
-    indices[0] = ComputeBinIndex(posInPixel_u, 0.0,  pixelPitch[0] / binCount[0], binCount[0]);
-  }
-
-  const float posShifted_v = pos.y() + 0.5 * activeVolumeDimensions[1];
-  if (posShifted_v < 0.0 || posShifted_v > activeVolumeDimensions[1]) {
-    indices[1] = -1; // out of bounds
-  }
-  else {
-    float posInPixel_v = std::fmod(posShifted_v, pixelPitch[1]);
-    if (posInPixel_v < 0.0) posInPixel_v += pixelPitch[1];
-    indices[1] = ComputeBinIndex(posInPixel_v, 0.0, pixelPitch[1] / binCount[1], binCount[1]);
+  // binning in u/v: pixel + voxel grid
+  for (int axis = 0; axis < 2; ++axis) {
+    const int g = ComputeBinIndex(
+      local_uv[axis],
+      -0.5 * pixelPitch[axis] * pixelCount[axis],
+      pixelPitch[axis] / voxelCount[axis],
+      static_cast<int>(pixelCount[axis]) * voxelCount[axis]);
+    pixI[axis] = g / voxelCount[axis];
+    voxI[axis] = g % voxelCount[axis];
   }
 
-  // vertical (w) binning: shift to [0, thickness]
-  const float posShifted_w = pos.z() + 0.5 * activeVolumeDimensions[2];
-  indices[2] = ComputeBinIndex(posShifted_w, 0.0, activeVolumeDimensions[2] / binCount[2], binCount[2]); // no fmod, so out-of-bounds is caught
+  // binning in w: only voxel grid
+  voxI[2] = ComputeBinIndex(local.z(), -0.5 * sensorActiveThickness, sensorActiveThickness / voxelCount[2], voxelCount[2]);
 
-  return indices;
-} // Trafo_local_inpixIndex()
+  return {pixI, voxI};
+} // Trafo_local_pixIVoxI()
 
-dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter) {
+dd4hep::rec::Vector3D Trafo_pixI_local(const PixelIndex pixI, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount, const double w) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
 
-  float u = (static_cast<float>(pixelIndex[0]) + 0.5f) * pixelPitch[0] - 0.5f * sensorLength[0]; // in mm
-  float v = (static_cast<float>(pixelIndex[1]) + 0.5f) * pixelPitch[1] - 0.5f * sensorLength[1];
-  float w = depletedRegionDepthCenter;
+  double u = (pixI[0] + 0.5) * pixelPitch[0] - 0.5 * pixelPitch[0] * pixelCount[0]; // in mm
+  double v = (pixI[1] + 0.5) * pixelPitch[1] - 0.5 * pixelPitch[1] * pixelCount[1];
 
   return dd4hep::rec::Vector3D(u, v, w);
-}
-
-dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<int, 2> pixelIndex, const std::array<float, 2> sensorLength, const std::array<float, 2> pixelPitch) {
-  return Trafo_pixIndex_local(pixelIndex, sensorLength, pixelPitch, 0.f);
-}
-
-dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch, float depletedRegionDepthCenter) {
-  /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
-
-  float u = (index[0] + 0.5f) * pixelPitch[0] - 0.5f * sensorLength[0]; // in mm. Add 0.5*pixelPitch to shift from pixel edge to center, since index 0 is defined as the center of the pixel.
-  float v = (index[1] + 0.5f) * pixelPitch[1] - 0.5f * sensorLength[1];
-  float w = depletedRegionDepthCenter;
-
-  return dd4hep::rec::Vector3D(u, v, w);
-}
-
-dd4hep::rec::Vector3D Trafo_pixIndex_local(const std::array<float, 2> index, const std::array<float, 2> sensorLength,  const std::array<float, 2> pixelPitch) {
-  return Trafo_pixIndex_local(index, sensorLength, pixelPitch, 0.f);
 }
 
 /* -- HitMap -- */
@@ -279,13 +237,13 @@ HitMap::HitMap(std::array<size_t, 2> pixelCount) : m_pixCount(pixelCount) {
   m_pixels.reserve(pixelCount[0] * pixelCount[1] / inverseOccupancy); // avoid too many reallocations
 }
 
-void HitMap::FillCharge(std::array<int, 2> i_uv, float charge, const SimHitWrapper& simHitWrapper) {
+void HitMap::FillCharge(PixelIndex pixI, float charge, const SimHitWrapper& simHitWrapper) {
   if (charge < 1.e-6f)
     return; // skip very small charge additions for performance (this is NECESSARY to skip in-pix bins with weight ~0)
-  if (_OutOfBounds(i_uv)) [[unlikely]]
-    throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(i_uv[0]) + ", " + std::to_string(i_uv[1]) + ") out of range");
+  if (_OutOfBounds(pixI)) [[unlikely]]
+    throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " + std::to_string(pixI[1]) + ") out of range");
 
-  auto [iter, inserted] = m_pixels.try_emplace(i_uv, Pixel(i_uv));
+  auto [iter, inserted] = m_pixels.try_emplace(pixI, Pixel(pixI));
   iter->second.charge += charge;
   iter->second.simHits.insert(&simHitWrapper);
 }
@@ -318,11 +276,12 @@ void HitMap::ApplyThreshold(const float threshold, const float thresholdDispersi
   }
 }
 
-float HitMap::GetCharge(std::array<int, 2> i_uv) const {
-  if (_OutOfBounds(i_uv)) [[unlikely]] {
-    throw std::runtime_error("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(i_uv[0]) + ", " + std::to_string(i_uv[1]) + ") out of range");
+
+float HitMap::GetCharge(PixelIndex pixI) const {
+  if (_OutOfBounds(pixI)) [[unlikely]] {
+    throw std::runtime_error("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " + std::to_string(pixI[1]) + ") out of range");
   }
-  auto it = m_pixels.find(i_uv);
+  auto it = m_pixels.find(pixI);
   if (it == m_pixels.end())
     return 0.f; // if pixel not found, charge is 0
   return it->second.charge;
@@ -330,35 +289,35 @@ float HitMap::GetCharge(std::array<int, 2> i_uv) const {
 
 float HitMap::GetTotalCharge() const {
   float totalCharge = 0.f;
-  for (const auto& [i_uv, pixHit] : m_pixels) {
+  for (const auto& [pixI, pixHit] : m_pixels) {
     totalCharge += pixHit.charge;
   }
   return totalCharge;
 }
 
-inline bool HitMap::_OutOfBounds(std::array<int, 2> i_uv) const {
+inline bool HitMap::_OutOfBounds(PixelIndex pixI) const {
   return (
-    i_uv[0] < 0
-    || i_uv[0] >= static_cast<int>(m_pixCount[0])
-    || i_uv[1] < 0
-    || i_uv[1] >= static_cast<int>(m_pixCount[1])
+    pixI[0] < 0
+    || pixI[0] >= static_cast<int>(m_pixCount[0])
+    || pixI[1] < 0
+    || pixI[1] >= static_cast<int>(m_pixCount[1])
   );
 }
 
-/* --ization -- */
+/* -- Clusterization -- */
 
-std::array<float, 2> Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) const {
+PixelCoords Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) const {
   if (pixels.empty())
     throw std::runtime_error("Cluster::ComputeCoG: cluster has no pixels");
 
-  std::array<float, 2> pos{0.f, 0.f};
+  PixelCoords pixCoords{0.f, 0.f};
   if (!clusterizeEndPixelsOnly) {
     for (const Pixel* pix : pixels) {
-      pos[0] += pix->index[0] * pix->charge;
-      pos[1] += pix->index[1] * pix->charge;
+      pixCoords[0] += pix->index[0] * pix->charge;
+      pixCoords[1] += pix->index[1] * pix->charge;
     }
-    pos[0] /= charge;
-    pos[1] /= charge;
+    pixCoords[0] /= charge;
+    pixCoords[1] /= charge;
   }
   else {
     for (int axis = 0; axis < 2; ++axis) {
@@ -377,10 +336,10 @@ std::array<float, 2> Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) con
       }
       float offset = (charge_max - charge_min) / (charge_min + charge_max) / 2.f; // offset in range [-0.5, 0.5] to shift the CoG towards the pixel with more charge
 
-      pos[axis] = static_cast<float>(index_min + index_max) * 0.5f + offset;
+      pixCoords[axis] = static_cast<float>(index_min + index_max) * 0.5f + offset;
     }
   }
-  return pos;
+  return pixCoords;
 }
 
 int Cluster::GetSize(const int axis) const {
@@ -417,24 +376,24 @@ float Cluster::GetSeedPixelCharge() const {
 }
 
 
-std::array<std::array<int, 2>, 4> GetDirectNeighbors(const std::array<int, 2>& i_uv) {
+std::array<PixelIndex, 4> GetDirectNeighbors(const PixelIndex& pixI) {
   return {{
-    {i_uv[0] - 1, i_uv[1]}, // left
-    {i_uv[0] + 1, i_uv[1]}, // right
-    {i_uv[0], i_uv[1] - 1}, // down
-    {i_uv[0], i_uv[1] + 1}  // up
+    {pixI[0] - 1, pixI[1]}, // left
+    {pixI[0] + 1, pixI[1]}, // right
+    {pixI[0], pixI[1] - 1}, // down
+    {pixI[0], pixI[1] + 1}  // up
   }};
 }
-std::array<std::array<int, 2>, 8> GetNeighbors(const std::array<int, 2>& i_uv) {
+std::array<PixelIndex, 8> GetNeighbors(const PixelIndex& pixI) {
   return {{
-    {i_uv[0] - 1, i_uv[1]}, // left
-    {i_uv[0] - 1, i_uv[1] + 1}, // upper left
-    {i_uv[0], i_uv[1] + 1}, // up
-    {i_uv[0] + 1, i_uv[1] + 1}, // upper right
-    {i_uv[0] + 1, i_uv[1]}, // right
-    {i_uv[0] + 1, i_uv[1] - 1}, // lower right
-    {i_uv[0], i_uv[1] - 1}, // lower
-    {i_uv[0] - 1, i_uv[1] - 1}, // lower left
+    {pixI[0] - 1, pixI[1]}, // left
+    {pixI[0] - 1, pixI[1] + 1}, // upper left
+    {pixI[0], pixI[1] + 1}, // up
+    {pixI[0] + 1, pixI[1] + 1}, // upper right
+    {pixI[0] + 1, pixI[1]}, // right
+    {pixI[0] + 1, pixI[1] - 1}, // lower right
+    {pixI[0], pixI[1] - 1}, // lower
+    {pixI[0] - 1, pixI[1] - 1}, // lower left
   }};
 }
 
@@ -460,42 +419,40 @@ std::vector<Cluster> HitMap::ComputeClusters() const {
   /* Breadth First Search (BFS) implementation for clustering */
 
   std::vector<Cluster> clusters;
-  std::unordered_set<std::array<int, 2>, Hash_PixIndex> visited;
+  std::unordered_set<PixelIndex, Hash_PixIndex> visited;
 
   for (const auto& p : m_pixels) {
-    const std::array<int, 2> seed_uv = p.first;
-    if (visited.contains(seed_uv))
+    const PixelIndex seedI = p.first;
+    if (visited.contains(seedI))
       continue;
 
     clusters.emplace_back(); // create new cluster
     clusters.back().pixels.reserve(10); // 10 should include >90% of clusters. i guess.
 
-    std::queue<std::array<int, 2>> queue;
-    queue.push(seed_uv);
-    visited.insert(seed_uv);
+    std::queue<PixelIndex> queue;
+    queue.push(seedI);
+    visited.insert(seedI);
 
     while (!queue.empty()) {
-      const std::array<int, 2> current_uv = queue.front();
+      const PixelIndex currentI = queue.front();
       queue.pop();
 
       /* Add pixl to cluster */
-      const Pixel* pixel = &(m_pixels.at(current_uv)); // get pixel pointer from map
+      const Pixel* pixel = &(m_pixels.at(currentI)); // get pixel pointer from map
       clusters.back().pixels.push_back(pixel);
       clusters.back().charge += pixel->charge;
       for (const SimHitWrapper* simHitWrapper : pixel->simHits) {
         clusters.back().simHits.insert(simHitWrapper);
       }
       /* Add all neighboring pixels to queue */
-      // for (const auto& neighbor_uv : GetDirectNeighbors(current_uv)) {
-      for (const auto& neighbor_uv : GetNeighbors(current_uv)) {
-        if (!m_pixels.contains(neighbor_uv))
+      for (const auto& neighborI : GetNeighbors(currentI)) {
+        if (!m_pixels.contains(neighborI))
           continue;
-        if (visited.contains(neighbor_uv))
+        if (visited.contains(neighborI))
           continue;
-        queue.push(neighbor_uv);
-        visited.insert(neighbor_uv);
+        queue.push(neighborI);
+        visited.insert(neighborI);
       }
-
     } // loop over queue
   } // loop over cluster-seeds
   return clusters;
