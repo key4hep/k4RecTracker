@@ -184,9 +184,8 @@ struct TracksFromGenParticles final
         auto& entry = particleHitIndex[pid];
         if (entry.subdetCounts.empty())
           entry.subdetCounts.resize(m_trackerIDs.size(), 0);
-        entry.hits.push_back({hit.x(), hit.y(), hit.z(),
-                              hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2],
-                              hit.getTime()});
+        entry.hits.push_back({hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1],
+                              hit.getMomentum()[2], hit.getTime()});
         const std::uint64_t cellID = hit.getCellID();
         int systemID = m_systemEncoder.get(cellID, m_indexSystem);
         for (size_t idxTracker = 0; idxTracker < m_trackerIDs.size(); idxTracker++) {
