@@ -32,6 +32,7 @@
 #include <exception>
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include <utils.h>
@@ -166,6 +167,37 @@ struct TracksFromGenParticles final
     auto outputTrackCollection = edm4hep::TrackCollection();
     auto MCRecoTrackParticleAssociationCollection = edm4hep::TrackMCParticleLinkCollection();
 
+    // Build index: MCParticle ObjectID → {hits, subdetector hit counts}
+    // This avoids O(N_particles × N_hits) by scanning hits once up front.
+    struct HitData {
+      std::vector<std::array<double, 7>> hits;
+      std::vector<int> subdetCounts;
+    };
+    std::unordered_map<int, HitData> particleHitIndex;
+    for (size_t ih = 0; ih < simTrackerHitCollVec.size(); ih++) {
+      const edm4hep::SimTrackerHitCollection* coll = simTrackerHitCollVec[ih];
+      for (const auto& hit : *coll) {
+        if (hit.isProducedBySecondary())
+          continue;
+        const edm4hep::MCParticle particle = hit.getParticle();
+        int pid = particle.getObjectID().index;
+        auto& entry = particleHitIndex[pid];
+        if (entry.subdetCounts.empty())
+          entry.subdetCounts.resize(m_trackerIDs.size(), 0);
+        entry.hits.push_back({hit.x(), hit.y(), hit.z(),
+                              hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2],
+                              hit.getTime()});
+        const std::uint64_t cellID = hit.getCellID();
+        int systemID = m_systemEncoder.get(cellID, m_indexSystem);
+        for (size_t idxTracker = 0; idxTracker < m_trackerIDs.size(); idxTracker++) {
+          if (systemID == m_trackerIDs[idxTracker]) {
+            entry.subdetCounts[idxTracker]++;
+            break;
+          }
+        }
+      }
+    }
+
     // loop over the gen particles, find charged ones, and create the corresponding reco particles
     int iparticle = 0;
     for (const edm4hep::MCParticle& genParticle : genParticleColl) {
@@ -236,41 +268,13 @@ struct TracksFromGenParticles final
           edm4hep::Vector3f(genParticleVertex[0], genParticleVertex[1], genParticleVertex[2]);
       trackFromGen.addToTrackStates(trackState_IP);
 
-      // find SimTrackerHits associated to genParticle (and not produced by secondaries)
-      // store hit position, momentum and time
-      // and calculate number of hits in each subdetector
+      // look up hits for this particle from the pre-built index
+      auto hitIt = particleHitIndex.find(genParticle.getObjectID().index);
       std::vector<std::array<double, 7>> trackHits;
-      std::vector<int> v(m_trackerIDs.size());
-      for (size_t ih = 0; ih < simTrackerHitCollVec.size(); ih++) {
-        const edm4hep::SimTrackerHitCollection* coll = simTrackerHitCollVec[ih];
-        for (const auto& hit : *coll) {
-          // skip hits that are produced by secondary particles:
-          // they are pointing to the parent particles if the secondary one
-          // is not kept in the MCParticle collection
-          if (hit.isProducedBySecondary())
-            continue;
-
-          // check that the ID of the particle that created the it is the same as the MCParticle being considered
-          const edm4hep::MCParticle particle = hit.getParticle();
-          if (particle.getObjectID() == genParticle.getObjectID()) {
-
-            // store hit position, track momentum at hit and hit time in trackHits
-            std::array<double, 7> ahit{
-                hit.x(),      hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2],
-                hit.getTime()};
-            trackHits.push_back(ahit);
-
-            // find systemID of hit and increase hit counter for corresponding subdetector
-            const std::uint64_t cellID = hit.getCellID();
-            int systemID = m_systemEncoder.get(cellID, m_indexSystem);
-            for (size_t idxTracker = 0; idxTracker < m_trackerIDs.size(); idxTracker++) {
-              if (systemID == m_trackerIDs[idxTracker]) {
-                v[idxTracker]++;
-                break;
-              }
-            }
-          }
-        }
+      std::vector<int> v(m_trackerIDs.size(), 0);
+      if (hitIt != particleHitIndex.end()) {
+        trackHits = hitIt->second.hits;
+        v = hitIt->second.subdetCounts;
       }
 
       if (!trackHits.empty()) {
