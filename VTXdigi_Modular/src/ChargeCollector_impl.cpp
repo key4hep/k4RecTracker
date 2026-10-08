@@ -18,16 +18,16 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
   if (algorithm == "LookupTable") {
     chargeCollector = std::make_unique<ChargeCollector_LUT>(digitizer);
   } else if (algorithm == "Drift") {
-    throw std::runtime_error("ChargeCollector_Drift not implemented yet.");
+    throw GaudiException("ChargeCollector_Drift not implemented yet.", "VTXdigi_Modular::CreateChargeCollector()", StatusCode::FAILURE);
   } else if (algorithm == "Fast") {
-    throw std::runtime_error("ChargeCollector_Fast not implemented yet.");
+    throw GaudiException("ChargeCollector_Fast not implemented yet.", "VTXdigi_Modular::CreateChargeCollector()", StatusCode::FAILURE);
   } else if (algorithm == "SinglePixel") {
     chargeCollector = std::make_unique<ChargeCollector_SinglePixel>(digitizer);
   } else if (algorithm == "Debug") {
     chargeCollector = std::make_unique<ChargeCollector_Debug>(digitizer);
   }
   else {
-    throw std::runtime_error("Unknown ChargeCollector type: " + algorithm);
+    throw GaudiException("Unknown ChargeCollector type: " + algorithm, "VTXdigi_Modular::CreateChargeCollector()", StatusCode::FAILURE);
   }
 
   digitizer.info() << " - Created charge collector with algorithm " << algorithm << ". Charge collection depth center at " << chargeCollector->GetChargeCollectionDepthCenter() << " mm." << endmsg;
@@ -198,14 +198,14 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
    * See https://indico.cern.ch/event/1489052/contributions/6475539/attachments/3063712/5418424/Allpix_workshop_Lemoine.pdf (slide 10) for more info on fields in the LUT file */
 
   if (lutFileName.empty())
-    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): LUT file name is empty. A LUT file must be given to load the lookup table.");
+    throw GaudiException("LUT file name is empty. A LUT file must be given to load the lookup table.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
   const int headerLines = 5;
 
   if (printDebug) digitizer.debug() << "   - Opening LUT file \"" << lutFileName << "\"." << endmsg;
   std::ifstream lutFile(lutFileName);
   if (!lutFile.is_open())
-    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not open LUT file \"" + lutFileName + "\".");
+    throw GaudiException("Could not open LUT file \"" + lutFileName + "\".", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
   std::string line;
   int lineCount = 0;
@@ -223,7 +223,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   }
 
   if (headerLineEntries.size() != 11)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Invalid number of entries in LUT file in 5th header line: found " + std::to_string(headerLineEntries.size()) + " entries, expected 11.");
+    throw GaudiException("Invalid number of entries in LUT file in 5th header line: found " + std::to_string(headerLineEntries.size()) + " entries, expected 11.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
   for (int j=0; j<3; j++) {
     m_voxelCount.at(j) = std::stoi(headerLineEntries.at(7+j));
@@ -236,7 +236,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   const double sensorThickness = std::stod(headerLineEntries.at(0)) / 1000.0; // convert from um to mm
   if (std::abs(sensorThickness - digitizer.ActiveVolumeDimensions().at(2)) > eps) {
     if (!digitizer.LUT_ignorePitch()) {
-      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.ActiveVolumeDimensions().at(2)) + " mm active volume thickness.");
+      throw GaudiException("Sensor thickness mismatch between LUT file and detector geometry: LUT file specifies " + std::to_string(sensorThickness) + " mm, but geometry has " + std::to_string(digitizer.ActiveVolumeDimensions().at(2)) + " mm active volume thickness.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
     }
     else {
       digitizer.warning() << "Sensor thickness mismatch between LUT file and detector geometry. LUT file: " << sensorThickness << "mm, geometry (active volume thickness): " << digitizer.ActiveVolumeDimensions().at(2) << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
@@ -246,7 +246,8 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   const std::array<double, 2> pitch = {std::stod(headerLineEntries.at(1)) / 1000.0, std::stod(headerLineEntries.at(2)) / 1000.0};
   if (std::abs(pitch[0] - digitizer.PixelPitch().at(0)) > eps || std::abs(pitch[1] - digitizer.PixelPitch().at(1)) > eps) {
     if (!digitizer.LUT_ignorePitch())
-      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Pixel pitch mismatch between LUT file and detector geometry: LUT file specifies (" + std::to_string(pitch[0]) + ", " + std::to_string(pitch[1]) + ") mm, but geometry has (" + std::to_string(digitizer.PixelPitch().at(0)) + ", " + std::to_string(digitizer.PixelPitch().at(1)) + ") mm.");
+      throw GaudiException("Pixel pitch mismatch between LUT file and detector geometry: LUT file specifies (" + std::to_string(pitch[0]) + ", " + std::to_string(pitch[1]) + ") mm, but geometry has (" + std::to_string(digitizer.PixelPitch().at(0)) + ", " + std::to_string(digitizer.PixelPitch().at(1)) + ") mm.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
+
     else
       digitizer.warning() << "Pixel pitch mismatch between LUT file and detector geometry. LUT file: " << pitch[0] << "mm, geometry: " << digitizer.PixelPitch().at(0) << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
   }
@@ -271,16 +272,16 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     const int entryCount = tokenCount - 3; // first 3 entries are bin indices
     m_matrixSize = static_cast<int>(std::lround(std::sqrt(std::max(entryCount, 0))));
     if (m_matrixSize * m_matrixSize != entryCount)
-      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): First data line in LUT file has " + std::to_string(entryCount) + " matrix entries (after 3 bin indices), which is not a perfect square. File: " + digitizer.LutFileName());
+      throw GaudiException("First data line in LUT file has " + std::to_string(entryCount) + " matrix entries (after 3 bin indices), which is not a perfect square. File: " + digitizer.LutFileName(), "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
     foundDataLine = true;
     break;
   }
   if (!foundDataLine)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not find a data line after header in LUT file: " + digitizer.LutFileName());
+    throw GaudiException("Could not find a data line after header in LUT file: " + digitizer.LutFileName(), "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
   if (m_matrixSize < 3 || m_matrixSize % 2 == 0)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".");
+    throw GaudiException("Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
   m_matrixSize_half = (m_matrixSize - 1) / 2;
   if (printDebug) digitizer.debug() << "   - Inferred matrix size of " << m_matrixSize << " from first line." << endmsg;
 
@@ -329,7 +330,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     }
 
     if (static_cast<int>(lineEntries.size()) != 3 + m_matrixSize*m_matrixSize)
-      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Invalid number of entries in LUT file at line " + std::to_string(lineCount+1) + ": found " + std::to_string(lineEntries.size()) + " entries, but expected " + std::to_string(3 + m_matrixSize*m_matrixSize) + " (3 for bin indices, " + std::to_string(m_matrixSize*m_matrixSize) + " for matrix values).");
+      throw GaudiException("Invalid number of entries in LUT file at line " + std::to_string(lineCount+1) + ": found " + std::to_string(lineEntries.size()) + " entries, but expected " + std::to_string(3 + m_matrixSize*m_matrixSize) + " (3 for bin indices, " + std::to_string(m_matrixSize*m_matrixSize) + " for matrix values).", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
     /* First 3 entries are in-pixel binning indices */
     VoxelIndex voxI({std::stoi(lineEntries[0])-1, std::stoi(lineEntries[1])-1, std::stoi(lineEntries[2])-1});// Allpix2 input is 1-indexed. Insane, I know.
@@ -337,7 +338,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     if (voxI.at(0) < 0 || voxI.at(0) >= m_voxelCount[0] ||
         voxI.at(1) < 0 || voxI.at(1) >= m_voxelCount[1] ||
         voxI.at(2) < 0 || voxI.at(2) >= m_voxelCount[2]) {
-      throw std::runtime_error("Invalid in-pixel bin indices in LUT file at line " + std::to_string(lineCount+1) + ": got (" + std::to_string(voxI.at(0)) + ", " + std::to_string(voxI.at(1)) + ", " + std::to_string(voxI.at(2)) + "), but expected ranges are [0, " + std::to_string(m_voxelCount[0]-1) + "], [0, " + std::to_string(m_voxelCount[1]-1) + "], [0, " + std::to_string(m_voxelCount[2]-1) + "].");
+      throw GaudiException("Invalid in-pixel bin indices in LUT file at line " + std::to_string(lineCount+1) + ": got (" + std::to_string(voxI.at(0)) + ", " + std::to_string(voxI.at(1)) + ", " + std::to_string(voxI.at(2)) + "), but expected ranges are [0, " + std::to_string(m_voxelCount[0]-1) + "], [0, " + std::to_string(m_voxelCount[1]-1) + "], [0, " + std::to_string(m_voxelCount[2]-1) + "].", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
     }
 
     /* Parse matrix values & set it */
@@ -352,7 +353,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
     }
     // digitizer.verbose() << "   - Parsed matrix for in-pixel bin (" << voxI.at(0) << ", " << voxI.at(1) << ", " << voxI.at(2) << "), entry sum " << std::to_string(matrixEntrySum) << ", setting it now..." << endmsg;
     if (std::isnan(matrixEntrySum))
-      throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") contains NaN values (sum of entries is NaN).");
+      throw GaudiException("VTXdigi_tools::LookupTable::LookupTable(): Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") contains NaN values (sum of entries is NaN).", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
     matricesEntrySum += matrixEntrySum;
     matricesEntrySum_perWBin[voxI.at(2)] += matrixEntrySum;
@@ -364,7 +365,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   const int matrixCount = lineCount - (headerLines+1);
 
   if (matrixCount != m_voxelCount[0] * m_voxelCount[1] * m_voxelCount[2])
-    throw std::runtime_error("Invalid number of matrices loaded from file: expected " + std::to_string(m_voxelCount[0] * m_voxelCount[1] * m_voxelCount[2]) + " matrices (inferred from bin count in header) but found " + std::to_string(matrixCount) + " lines.");
+    throw GaudiException("Invalid number of matrices loaded from file: expected " + std::to_string(m_voxelCount[0] * m_voxelCount[1] * m_voxelCount[2]) + " matrices (inferred from bin count in header) but found " + std::to_string(matrixCount) + " lines.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
   // From which w-level are charges collected?
   double collectedFromW = 0.0;
@@ -375,7 +376,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   }
   collectedFromW /= matricesEntrySum;
 
-  if (std::abs(collectedFromW) > 0.5 * sensorThickness) throw std::runtime_error("Invalid charge collection depth inferred from LUT file: " + std::to_string(collectedFromW) + " mm. This is outside the sensor volume, which extends from " + std::to_string(-0.5*sensorThickness) + " mm to " + std::to_string(0.5*sensorThickness) + " mm.");
+  if (std::abs(collectedFromW) > 0.5 * sensorThickness) throw GaudiException("Invalid charge collection depth inferred from LUT file: " + std::to_string(collectedFromW) + " mm. This is outside the sensor volume, which extends from " + std::to_string(-0.5*sensorThickness) + " mm to " + std::to_string(0.5*sensorThickness) + " mm.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
   if (std::abs(collectedFromW) >= 1.e-5) {
     m_chargeCollectionDepthCenter = static_cast<double>(collectedFromW); // the member is initalised to 0.0
   }
@@ -385,7 +386,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
 
 void LookupTable::SetMatrix(const VoxelIndex& voxI, const std::vector<float>& weights) {
   if (static_cast<int>(weights.size()) != m_matrixSize*m_matrixSize)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: weights size (" + std::to_string(weights.size()) + ") does not match matrix size (" + std::to_string(m_matrixSize*m_matrixSize) + ")");
+    throw GaudiException("VTXdigi_tools::LookupTable::SetMatrix: weights size (" + std::to_string(weights.size()) + ") does not match matrix size (" + std::to_string(m_matrixSize*m_matrixSize) + ")", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
   /* check if matrix is valid */
   float sum = 0.f;
@@ -395,9 +396,9 @@ void LookupTable::SetMatrix(const VoxelIndex& voxI, const std::vector<float>& we
     }
   }
   if (std::isnan(sum))
-    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") contains NaN values.");
+    throw GaudiException("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") contains NaN values.", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
   if (sum < 0 || sum > 1.f + 1.e-5f)
-    throw std::runtime_error("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") has a weight sum of " + std::to_string(sum) + ", but needs to lie in [0,1].");
+    throw GaudiException("VTXdigi_tools::LookupTable::SetMatrix: Charge sharing matrix for in-pixel bin (" + std::to_string(voxI.at(0)) + "," + std::to_string(voxI.at(1)) + "," + std::to_string(voxI.at(2)) + ") has a weight sum of " + std::to_string(sum) + ", but needs to lie in [0,1].", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
 
   for (int row = 0; row < m_matrixSize; ++row) {
     for (int col = 0; col < m_matrixSize; ++col) {
@@ -423,10 +424,10 @@ int LookupTable::FindIndex (const VoxelIndex& voxI, const int col, const int row
     if (voxI[0] < 0 || voxI[0] >= m_voxelCount[0]
       || voxI[1] < 0 || voxI[1] >= m_voxelCount[1]
       || voxI[2] < 0 || voxI[2] >= m_voxelCount[2] ) {
-      throw std::runtime_error("VTXdigi_tools::LookupTable::FindIndex: in-pix bin out of range");
+      throw GaudiException("VTXdigi_tools::LookupTable::FindIndex: in-pix bin out of range", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
     }
     if (col < 0 || col >= m_matrixSize || row < 0 || row >= m_matrixSize) {
-      throw std::runtime_error("VTXdigi_tools::LookupTable::FindIndex: col or row out of range");
+      throw GaudiException("VTXdigi_tools::LookupTable::FindIndex: col or row out of range", "VTXdigi_Modular::LookupTable::LookupTable()", StatusCode::FAILURE);
     }
   #endif
 
@@ -451,11 +452,11 @@ ChargeCollector_LUT::ChargeCollector_LUT(const VTXdigi_Modular& digitizer) : ICh
 
   std::unique_ptr<TFile> file(TFile::Open(chargeDepFileName.c_str(), "READ"));
   if (!file || file->IsZombie())
-    throw std::runtime_error("Could not open deposition charge histogram file " + chargeDepFileName + ", cannot continue.");
+    throw GaudiException("Could not open deposition charge histogram file " + chargeDepFileName + ", cannot continue.", "VTXdigi_Modular::ChargeCollector_LUT::ChargeCollector_LUT()", StatusCode::FAILURE);
 
   TH1D* hist_chargeDep = file->Get<TH1D>("deposition_charge");
   if (!hist_chargeDep)
-    throw std::runtime_error("Could not find histogram \"deposition_charge\" in file "+ chargeDepFileName + ", cannot continue.");
+    throw GaudiException("Could not find histogram \"deposition_charge\" in file "+ chargeDepFileName + ", cannot continue.", "VTXdigi_Modular::ChargeCollector_LUT::ChargeCollector_LUT()", StatusCode::FAILURE);
 
   // move ownership from TFile to this class
   hist_chargeDep->SetDirectory(nullptr);

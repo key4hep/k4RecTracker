@@ -19,7 +19,6 @@ StatusCode VTXdigi_Modular::initialize() {
   info() << "INITIALIZING VTXdigi_Modular..." << endmsg;
 
   info() << "OutputLevel set to " << msgSvc()->outputLevel(name()) << endmsg;
-  // TODO: implement if-clause for debug/verbose messages in hot loops (to avoid constructing the message string when the message won't be printed) -> this will improve performance significantly
 
   InitServicesAndGeometry();
 
@@ -1314,6 +1313,11 @@ void VTXdigi_Modular::InitHistograms() {
 /* ---- Eventloop functions ---- */
 
 bool VTXdigi_Modular::CheckEventSetup(const edm4hep::SimTrackerHitCollection& simTrackerHits, const edm4hep::EventHeaderCollection& headers) const {
+  if (headers.size() != 1) {
+    throw GaudiException("EventHeaderCollection size is not 1, but " + std::to_string(headers.size()) + ". This is unexpected.", "VTXdigi_Modular::CheckEventSetup", StatusCode::FAILURE);
+    return false;
+  }
+
   if (m_counter_eventsRead.value() % m_infoPrintInterval.value() == 0)
     info() << "PROCESSING event [run " << headers.at(0).getRunNumber() << ", event " << headers.at(0).getEventNumber() << ", found " << simTrackerHits.size() << " simHits]. " << m_counter_eventsRead.value() << " events so far." << endmsg;
   /* events are not necessarily numbered sequentially... */
@@ -1369,10 +1373,10 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
 
   for (auto& cluster : clusters) {
     if (cluster.simHits.empty()) {
-      error() << "Cluster with no contributing simHits found." << endmsg;
+      throw GaudiException("Cluster with no contributing simHits found.", "VTXdigi_Modular::CreateDigiHits", StatusCode::FAILURE);
     }
     if (cluster.charge <= 0) {
-      error() << "Cluster with non-positive charge found." << endmsg;
+      throw GaudiException("Cluster with non-positive charge found.", "VTXdigi_Modular::CreateDigiHits", StatusCode::FAILURE);
     }
 
     edm4hep::MutableTrackerHitPlane digiHit = digiHits.create();

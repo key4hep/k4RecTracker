@@ -172,8 +172,8 @@ dd4hep::rec::Vector3D Trafo_pixCoords_local(const PixelCoords pixCoords,  const 
 
 int ComputeBinIndex(double x, double binX0, double binWidth, int binN) {
   #ifndef NDEBUG
-    if (binN <= 0) throw std::runtime_error("VTXdigi_tools::ComputeBinIndex(): binN must be positive");
-    if (binWidth <= 0.0) throw std::runtime_error("VTXdigi_tools::ComputeBinIndex(): binWidth must be positive");
+    if (binN <= 0) throw GaudiException("VTXdigi_tools::ComputeBinIndex(): binN must be positive", "VTXdigi_Modular::ComputeBinIndex()", StatusCode::FAILURE);
+    if (binWidth <= 0.0) throw GaudiException("VTXdigi_tools::ComputeBinIndex(): binWidth must be positive", "VTXdigi_Modular::ComputeBinIndex()", StatusCode::FAILURE);
   #endif
 
   const double relativePos = (x - binX0) / binWidth; // shift to [0, binN]
@@ -241,7 +241,7 @@ void HitMap::FillCharge(PixelIndex pixI, float charge, const SimHitWrapper& simH
   if (charge < 1.e-6f)
     return; // skip very small charge additions for performance (this is NECESSARY to skip in-pix bins with weight ~0)
   if (_OutOfBounds(pixI)) [[unlikely]]
-    throw std::runtime_error("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " + std::to_string(pixI[1]) + ") out of range");
+    throw GaudiException("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " + std::to_string(pixI[1]) + ") out of range", "VTXdigi_Modular::HitMap::FillCharge()", StatusCode::FAILURE);
 
   auto [iter, inserted] = m_pixels.try_emplace(pixI, Pixel(pixI));
   iter->second.charge += charge;
@@ -279,7 +279,7 @@ void HitMap::ApplyThreshold(const float threshold, const float thresholdDispersi
 
 float HitMap::GetCharge(PixelIndex pixI) const {
   if (_OutOfBounds(pixI)) [[unlikely]] {
-    throw std::runtime_error("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " + std::to_string(pixI[1]) + ") out of range");
+    throw GaudiException("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " + std::to_string(pixI[1]) + ") out of range", "VTXdigi_Modular::HitMap::GetCharge()", StatusCode::FAILURE);
   }
   auto it = m_pixels.find(pixI);
   if (it == m_pixels.end())
@@ -308,7 +308,7 @@ inline bool HitMap::_OutOfBounds(PixelIndex pixI) const {
 
 PixelCoords Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) const {
   if (pixels.empty())
-    throw std::runtime_error("Cluster::ComputeCoG: cluster has no pixels");
+    throw GaudiException("Cluster::ComputeCoG: cluster has no pixels", "VTXdigi_Modular::Cluster::ComputeCoG()", StatusCode::FAILURE);
 
   PixelCoords pixCoords{0.f, 0.f};
   if (!clusterizeEndPixelsOnly) {
@@ -359,7 +359,7 @@ int Cluster::GetSize(const int axis) const {
     }
   }
   else {
-    throw std::runtime_error("Cluster::GetClusterSize: axis must be 0 (u) or 1 (v), got " + std::to_string(axis));
+    throw GaudiException("Cluster::GetClusterSize: axis must be 0 (u) or 1 (v), got " + std::to_string(axis), "VTXdigi_Modular::Cluster::GetClusterSize()", StatusCode::FAILURE);
   }
 
   return max - min + 1; // +1 because of counting: if min=max, cluster size is 1, not 0
