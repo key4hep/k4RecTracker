@@ -50,6 +50,8 @@ StatusCode VTXdigi_Modular::finalize() {
 
 std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection> VTXdigi_Modular::operator()
   (const edm4hep::SimTrackerHitCollection& simTrackerHits, const edm4hep::EventHeaderCollection& headers) const {
+  const bool printDebug = msgLevel() <= MSG::DEBUG;
+
   if (!CheckEventSetup(simTrackerHits, headers)) {
     return std::make_tuple(edm4hep::TrackerHitPlaneCollection(), edm4hep::TrackerHitSimTrackerHitLinkCollection());
   }
@@ -110,11 +112,11 @@ std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitL
 
       if (!VTXdigi_tools::IsInsideVolume(simHit.truthPos(), ActiveVolumeDimensions(), 0.0)) [[unlikely]] {
         const dd4hep::rec::Vector3D pos_clamped = VTXdigi_tools::ClampToVolume(simHit.truthPos(), ActiveVolumeDimensions());
-        debug() << "     - Clamping simHit truth position from (" << simHit.truthPos().x() << ", " << simHit.truthPos().y() << ", " << simHit.truthPos().z() << ") local to sensor volume." << endmsg;
+        if (printDebug) debug() << "     - Clamping simHit truth position from (" << simHit.truthPos().x() << ", " << simHit.truthPos().y() << ", " << simHit.truthPos().z() << ") local to sensor volume." << endmsg;
         simHit.SetTruthPos(pos_clamped); // clamp to avoid issues with binning (this also avoids checks in hot loops)
       }
 
-      debug() << "     - Processing simHit, charge dep. " << simHit.charge() << " e at (" << simHit.truthPos().x() << ", " << simHit.truthPos().y() << ", " << simHit.truthPos().z() << ") local, (" << pos_global.x() << ", " << pos_global.y() << ", " << pos_global.z() << ") global" << endmsg;
+      if (printDebug) debug() << "     - Processing simHit, charge dep. " << simHit.charge() << " e at (" << simHit.truthPos().x() << ", " << simHit.truthPos().y() << ", " << simHit.truthPos().z() << ") local, (" << pos_global.x() << ", " << pos_global.y() << ", " << pos_global.z() << ") global" << endmsg;
 
       m_chargeCollector->FillHit(simHit, hitMap, trafoMatrix, randomGen); // uses the selected charge collection method
 
@@ -382,7 +384,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
           solidDimensions[1] = sensorBox.y() * 2 * 10;
           solidDimensions[2] = sensorBox.z() * 2 * 10;
 
-          verbose() << "     - Sensor \"" << sensorKey << "\" (layer " << layerKey << ", module " << moduleKey << ", volumeID " << sensorVolumeID << ") has a dd4hep::Box solid." << endmsg;
+          // verbose() << "     - Sensor \"" << sensorKey << "\" (layer " << layerKey << ", module " << moduleKey << ", volumeID " << sensorVolumeID << ") has a dd4hep::Box solid." << endmsg;
         }
         catch (...) {
           try {
@@ -391,7 +393,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
             solidDimensions[1] = sensorTrd1.dY() * 2 * 10; // Convert half-length in cm to full length in mm
             solidDimensions[2] = sensorTrd1.dZ() * 2 * 10;
             // Note: there is some weirdness in dX1() and dX2() with Trd1. I did not dig into this. Assume that these might be a bit funky.
-            verbose() << "     - Sensor \"" << sensorKey << "\" (layer " << layerKey << ", module " << moduleKey << ", volumeID " << sensorVolumeID << ") has a dd4hep::Trd1 solid." << endmsg;
+            // verbose() << "     - Sensor \"" << sensorKey << "\" (layer " << layerKey << ", module " << moduleKey << ", volumeID " << sensorVolumeID << ") has a dd4hep::Trd1 solid." << endmsg;
           }
           catch (...) {
             throw GaudiException("Unknown sensor solid type found (neither dd4hep::Box nor dd4hep::Trd1).", "VTXdigi_Modular::InitLayersAndSensors()", StatusCode::FAILURE);
@@ -1385,7 +1387,6 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
 
     const dd4hep::rec::Vector3D clusterPos_local = VTXdigi_tools::Trafo_pixCoords_local(clusterPos_pixC, m_pixelPitch, m_pixelCount, cluster_pos_w);
     const dd4hep::rec::Vector3D clusterPos_global = VTXdigi_tools::Trafo_local_global(clusterPos_local, trafoMatrix);
-    debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_pixC[0] << ", " << clusterPos_pixC[1] << "). Has " << cluster.simHits.size() << " contributing simHits." << endmsg;
     digiHit.setPosition(VTXdigi_tools::ConvertVector(clusterPos_global));
 
     // pos uncertainty
@@ -1416,7 +1417,7 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
       if (clusterSize_v >= 5)
         digiHit.setDv(m_positionUncertainty.value().at(9));
     }
-    debug() << "         - Set digiHit position uncertainty to (" << digiHit.getDu() << ", " << digiHit.getDv() << ") mm." << endmsg;
+    if ( msgLevel() <= MSG::DEBUG) debug() << "     - Found cluster with " << cluster.pixels.size() << " pixels, charge " << cluster.charge << ", center at (" << clusterPos_pixC[0] << ", " << clusterPos_pixC[1] << "). Has " << cluster.simHits.size() << " contributing simHits. pos uncertainty (" << digiHit.getDu() << ", " << digiHit.getDv() << ")" << endmsg;
 
     // collect timestamp
     const VTXdigi_tools::Pixel* seedPixel = cluster.pixels.front();
@@ -1489,8 +1490,6 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   ++(*m_hist1d.at(layer).at(hist1d_simHit_phi))[phi];
   const float theta = std::atan2(r, simHitPos_global.z());
   ++(*m_hist1d.at(layer).at(hist1d_simHit_theta))[theta];
-
-  ++
 
   ++(*m_hist2d.at(layer).at(hist2d_simHit_xy))[{simHitPos_global.x(), simHitPos_global.y()}];
   ++(*m_hist2d.at(layer).at(hist2d_simHit_xz))[{simHitPos_global.x(), simHitPos_global.z()}];

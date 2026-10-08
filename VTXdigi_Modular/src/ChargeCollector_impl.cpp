@@ -36,6 +36,7 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
 }
 
 Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular&  digitizer) {
+  const bool printDebug = digitizer.msgLevel() <= MSG::DEBUG;
   simPos = simHit.truthPos();
 
   const double momentumEps = 1e-10;
@@ -87,7 +88,7 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
   if (t[0] != 0.0 || t[1] != 1.0) {
     if (0.0 <= t[0] && t[0] < t[1] && t[1] <= 1.0) {
       /* valid clipping */
-      digitizer.debug() << "       - Clipping SimHitPath with t [" << t[0] << ", " << t[1] << "]. PathLength changed to " << static_cast<int>((t[1] - t[0]) * travel.r()*1000) << " um from " << static_cast<int>(travel.r()*1000) << " um" << endmsg;
+      if (printDebug) digitizer.debug() << "       - Clipping SimHitPath with t [" << t[0] << ", " << t[1] << "]. PathLength changed to " << static_cast<int>((t[1] - t[0]) * travel.r()*1000) << " um from " << static_cast<int>(travel.r()*1000) << " um" << endmsg;
 
       entry = entry + t[0] * travel;
       travel = (t[1] - t[0]) * travel;
@@ -104,7 +105,7 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
 
   /* Step 3 -check that path is not much longer than the length it had in Geant4. Order of steps 2 and 3 is important! */
   if (travel.r() > kPathLengthTolerance * lengthG4) {
-    digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*1000) << " um to " << static_cast<int>(lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
+    if (printDebug) digitizer.debug() << "       - Shortening path length from " << static_cast<int>(travel.r()*1000) << " um to " << static_cast<int>(lengthG4*1000) << " um (the respective path length in Geant4)." << endmsg;
 
     /* make sure the path stays centred around the simTrackerHit position */
     const double t_simPos = ( (simPos - entry).dot(travel) ) / (travel.r() * travel.r());
@@ -119,7 +120,7 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
     travel = (t_max - t_min) * travel;
   }
 
-  digitizer.debug() << "       - Constructed path, length " << travel.r()*1000 << " um (G4-length " << lengthG4*1000 << " um), entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, " << endmsg;
+  if (printDebug) digitizer.debug() << "       - Constructed path, length " << travel.r()*1000 << " um (G4-length " << lengthG4*1000 << " um), entry (" << entry.x() << ", " << entry.y() << ", " << entry.z() << ") mm, exit (" << entry.x() + travel.x() << ", " << entry.y() + travel.y() << ", " << entry.z() + travel.z() << ") mm, " << endmsg;
   isValid = true;
 }
 
@@ -190,7 +191,9 @@ std::array<double, 2> ComputePathClippingFactors(std::array<double, 2> t, const 
 /* -- LUT approach -- */
 
 LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& digitizer) {
-  digitizer.debug() << " - Constructing LUT from file \"" << lutFileName << "\"." << endmsg;
+  const bool printDebug = digitizer.msgLevel() <= MSG::DEBUG;
+
+  if (printDebug) digitizer.debug() << " - Constructing LUT from file \"" << lutFileName << "\"." << endmsg;
 
   /* parse the LUT in Allpix Squared format
    * See https://indico.cern.ch/event/1489052/contributions/6475539/attachments/3063712/5418424/Allpix_workshop_Lemoine.pdf (slide 10) for more info on fields in the LUT file */
@@ -200,7 +203,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
 
   const int headerLines = 5;
 
-  digitizer.debug() << "   - Opening LUT file \"" << lutFileName << "\"." << endmsg;
+  if (printDebug) digitizer.debug() << "   - Opening LUT file \"" << lutFileName << "\"." << endmsg;
   std::ifstream lutFile(lutFileName);
   if (!lutFile.is_open())
     throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Could not open LUT file \"" + lutFileName + "\".");
@@ -226,7 +229,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   for (int j=0; j<3; j++) {
     m_voxelCount.at(j) = std::stoi(headerLineEntries.at(7+j));
   }
-  digitizer.debug() << "   - found in-pixel bin count of (" << m_voxelCount.at(0) << ", " << m_voxelCount.at(1) << ", " << m_voxelCount.at(2) << ") from LUT file header." << endmsg;
+  if (printDebug) digitizer.debug() << "   - found in-pixel bin count of (" << m_voxelCount.at(0) << ", " << m_voxelCount.at(1) << ", " << m_voxelCount.at(2) << ") from LUT file header." << endmsg;
 
   /* -> compare the values we just parsed to the values retrieved from the detector geometry */
   const double eps = 1e-12; // reasonable for number O(0.01) (like sensor thickness in mm) with double precision
@@ -249,13 +252,13 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
       digitizer.warning() << "Pixel pitch mismatch between LUT file and detector geometry. LUT file: " << pitch[0] << "mm, geometry: " << digitizer.PixelPitch().at(0) << "mm. Ignored because LookupTableIgnorePitch is set to true." << endmsg;
   }
 
-  digitizer.debug() << "   - Found matching pixel pitch and sensor thickness in LUT file." << endmsg;
+  if (printDebug) digitizer.debug() << "   - Found matching pixel pitch and sensor thickness in LUT file." << endmsg;
 
   /* Get matrix size (5x5, 7x7, ...) from the length of the first line after the header */
   bool foundDataLine = false;
   while (std::getline(lutFile, line)) {
     if (line.empty() || line[0] == '#') {
-      digitizer.debug() << "VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " << lineCount+1 << ". Ignoring" << endmsg;
+      if (printDebug) digitizer.debug() << "VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " << lineCount+1 << ". Ignoring" << endmsg;
       continue;
     }
 
@@ -280,7 +283,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   if (m_matrixSize < 3 || m_matrixSize % 2 == 0)
     throw std::runtime_error("VTXdigi_tools::LookupTable::LookupTable(): Matrix size must be an odd integer >= 3, but is " + std::to_string(m_matrixSize) + ".");
   m_matrixSize_half = (m_matrixSize - 1) / 2;
-  digitizer.debug() << "   - Inferred matrix size of " << m_matrixSize << " from first line." << endmsg;
+  if (printDebug) digitizer.debug() << "   - Inferred matrix size of " << m_matrixSize << " from first line." << endmsg;
 
   /* Set up the matrix vector */
   m_matrices.resize(m_voxelCount.at(0) * m_voxelCount.at(1) * m_voxelCount.at(2) * m_matrixSize * m_matrixSize, 0.f);
@@ -304,8 +307,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   for (int i=0; i<headerLines; ++i) // advance past header again
     std::getline(lutFile, line);
 
-  digitizer.debug() << "   - Parsing LUT file, filling into lookup table." << endmsg;
-
+  if (printDebug) digitizer.debug() << "   - Parsing LUT file, filling into lookup table." << endmsg;
   std::vector<float> matricesEntrySum_perWBin;
   matricesEntrySum_perWBin.resize(m_voxelCount.at(2), 0.f);
   float matricesEntrySum = 0.f;
@@ -313,7 +315,7 @@ LookupTable::LookupTable(const std::string& lutFileName, const VTXdigi_Modular& 
   lineCount = headerLines + 1;
   while (std::getline(lutFile, line)) {
     if (line.empty() || line[0] == '#') {
-      digitizer.debug() << "VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " << lineCount+1 << ". Ignoring" << endmsg;
+      if (printDebug)  digitizer.debug() << "VTXdigi_tools::LookupTable::LookupTable(): Empty or comment line found in LUT file at line " << lineCount+1 << ". Ignoring" << endmsg;
       continue;
     }
 
@@ -559,9 +561,9 @@ void ChargeCollector_Debug::FillHit(const SimHitWrapper& simHit, HitMap& hitMap,
   const float charge = simHit.charge();
   const PixelIndex pixI = Trafo_local_pixI(pos_local, m_digitizer.PixelPitch(), m_digitizer.PixelCount());
 
-  m_digitizer.verbose() << "     - Filling pixels for SimHit at local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ")" << endmsg;
-  m_digitizer.verbose() << "       - and pixel indices                         (" << pixI[0] << ", " << pixI[1] << ")" << endmsg;
-  m_digitizer.verbose() << "       - Charge " << simHit.charge() << " e." << endmsg;
+
+
+
 
   hitMap.FillCharge(pixI, 0.5*charge, simHit);
   if (pixI[0] + 1 < static_cast<int>(m_digitizer.PixelCount()[0]))
@@ -571,7 +573,11 @@ void ChargeCollector_Debug::FillHit(const SimHitWrapper& simHit, HitMap& hitMap,
   if (pixI[1] + 2 < static_cast<int>(m_digitizer.PixelCount()[1]))
     hitMap.FillCharge({pixI[0], pixI[1] + 2}, 0.1*charge, simHit);
 
-  m_digitizer.verbose() << "       - Total charge collected in hitMap: " << hitMap.GetTotalCharge() << " e." << endmsg;
+  if (m_digitizer.msgLevel() <= MSG::VERBOSE) {
+    m_digitizer.verbose() << "     - Filling pixels for SimHit at local position (" << pos_local.x() << ", " << pos_local.y() << ", " << pos_local.z() << ")" << endmsg;
+    m_digitizer.verbose() << "       - and pixel indices                         (" << pixI[0] << ", " << pixI[1] << ")" << endmsg;
+    m_digitizer.verbose() << "       - Charge " << simHit.charge() << " e. Total charge collected in hitMap: " << hitMap.GetTotalCharge() << " e." << endmsg;
+  }
 }
 
 } // n amespace VTXdigi_tools
