@@ -57,7 +57,7 @@ WireMeasurement::WireMeasurement(const edm4hep::SenseWireHit& hit,
   const int superlayer = decoder->get(cellid, "superlayer");
   const int layer = decoder->get(cellid, "layer");
   const int sector = has_sectors ? decoder->get(cellid, "sector") : 0;
-  const int nphi = decoder->get(cellid, "nphi");
+  const int nphi = has_sectors ? decoder->get(cellid, "tube") : decoder->get(cellid, "nphi");
 
   const int ilayer = wire_info->CalculateILayerFromCellIDFields(layer, superlayer);
   const auto& l = wire_info->database.at(ilayer);

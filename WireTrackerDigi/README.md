@@ -1,4 +1,4 @@
-# Drift chamber (DCH) digitizers
+# Drift chamber (DCH) and Straw Tube Tracker (STT) digitizers
 
 ## DCHdigi_v01
 
@@ -8,11 +8,12 @@
 * It requires that the cellID contain the layer and number of cell within the layer (nphi). It does not matter if the segmentation comes from geometrical segmentation by using twisted tubes and hyperboloids (and the cellID is created out of volume IDs), or the segmentation is virtual DD4hep segmentation
 * New digitized hit class is used as an EDM4hep data extension, to be integrated into EDM4hep
 * Debug histograms are created if `create_debug_histograms` option is enabled (output file name can be given)
-* Stand alone test run simulation of the drift chamber based on twisted tubes, and then apply the digitizer. Dedicated directory with all the files needed is given in `DCHdigi/test/test_DCHdigi/`
+* Stand alone test run simulation of the drift chamber based on twisted tubes, and then apply the digitizer. Dedicated directory with all the files needed is given in `WireTrackerDigi/test/test_DCHdigi/`
 * Random number generator uses the seeds calculated on an event basis by the UID service, from the podio header information (run/event number)
 * This digitizer is meant to be used with `DriftChamber_o1_v02` from k4geo and is expected to work for the upcoming `DriftChamber_o1_v03`
 
-## DCHdigi_v02
+## WireTrackerDigi_v01 (available alias DCHdigi_v02)
+*In comparison to DCH_v01, this version works for both drift chambers and straw-tube trackers and will produce only one DigiHit per cell, combining all SimHits in the same
 * SimHits in one cell are grouped in 'trains' (by time of arrival at the readout), with each train creating one DigiHit (for a single particle traversing one cell, this typically leads to one DigiHit in the cell). Trains are separated by cell dead time (`Deadtime_ns`)
 * Smearing of the digitized hit position along the wire and radially is done according to the input parameter values (`zResolution_mm` and `xyResolution_mm`, respectively). The digitized hit position is the projection of the simulated hit position onto the sense wire (at the center of the cell)
 * Time of DigiHit consists of SimHit creation time +  drift time to wire + signal travelling time along the wire to the readout
@@ -20,7 +21,7 @@
 * dN/dx information is added via Delphes parametrisation. The cluster size is not calculated at the moment, only the total number of clusters for the DigiHit
 * It requires that the cellID contain the layer and number of cell within the layer (nphi). It does not matter if the segmentation comes from geometrical segmentation by using twisted tubes and hyperboloids (and the cellID is created out of volume IDs), or the segmentation is virtual DD4hep segmentation
 * Random number generator uses the seeds calculated on an event basis by the UID service, from the podio header information (run/event number)
-* This digitizer is meant to be used with `DriftChamber_o1_v02` from k4geo and is expected to work for the upcoming `DriftChamber_o1_v03`
+* This digitizer is meant to be used with `DriftChamber_o1_v02` and `STT_o1_v01` from k4geo and is expected to work for the upcoming `DriftChamber_o1_v03`
 
 
 ## DCHsimpleDigitizerExtendedEdm
