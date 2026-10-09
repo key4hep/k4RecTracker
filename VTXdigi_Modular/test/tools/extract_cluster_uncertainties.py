@@ -29,9 +29,7 @@ def FetchRootObj(FilePath, Dir, ObjName):
     rObj = rDir.Get(ObjName)
     if not rObj:
         rFile.Close()
-        raise KeyError(
-            f"Object {ObjName} not found in directory{Dir} in .root file {FilePath}"
-        )
+        raise KeyError(f"Object {ObjName} not found in directory{Dir} in .root file {FilePath}")
 
     # change ownership of the object to the current process (so it doesn't get deleted when the file is closed)
     rObjClone = rObj.Clone()

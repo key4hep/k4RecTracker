@@ -12,13 +12,15 @@
 
 namespace VTXdigi_tools {
 
-SimHitWrapper::SimHitWrapper(
-  edm4hep::SimTrackerHit simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID, const VTXdigi_Modular& digitizer)
+SimHitWrapper::SimHitWrapper(edm4hep::SimTrackerHit simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID,
+                             const VTXdigi_Modular& digitizer)
     : m_simTrackerHit(simTrackerHit), m_volumeID(volumeID) {
 
-  m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) * kChargePerkeV); // convert energy deposit (in keV) to number of electrons
+  m_charge = static_cast<float>(m_simTrackerHit.getEDep() * (dd4hep::GeV / dd4hep::keV) *
+                                kChargePerkeV); // convert energy deposit (in keV) to number of electrons
   m_layerNumber = digitizer.GetLayer(m_volumeID);
-  // m_truthPos is set later in VTXdigi_Modular::operator() via SetTruthPos(...) to avoid double-calculating the sensor transformation matrix
+  // m_truthPos is set later in VTXdigi_Modular::operator() via SetTruthPos(...) to avoid double-calculating the sensor
+  // transformation matrix
 
   m_mcParticleLevel = ComputeMCParticleLevel(m_simTrackerHit, m_volumeID, digitizer);
 }
@@ -32,20 +34,19 @@ void swap(SimHitWrapper& a, SimHitWrapper& b) noexcept {
   std::swap(a.m_mcParticleLevel, b.m_mcParticleLevel);
 } // swap(Hit&, Hit&)
 
-MCParticleLevel ComputeMCParticleLevel(const edm4hep::SimTrackerHit& simTrackerHit, dd4hep::DDSegmentation::VolumeID volumeID, const VTXdigi_Modular& digitizer) {
-  if ( simTrackerHit.isProducedBySecondary() ) {
+MCParticleLevel ComputeMCParticleLevel(const edm4hep::SimTrackerHit& simTrackerHit,
+                                       dd4hep::DDSegmentation::VolumeID volumeID, const VTXdigi_Modular& digitizer) {
+  if (simTrackerHit.isProducedBySecondary()) {
     // ddsim drops MCParticles below a certain energy cut to save computing cost and disk space.
     // so if ddsim dropped the MCParticle that caused this simHit, we assume it was a delta ray
     return MCParticleLevel::Delta;
-  }
-  else {
+  } else {
     const int32_t simulatorStatus = simTrackerHit.getParticle().getSimulatorStatus();
     const int32_t mask = 1 << edm4hep::MCParticle::BITCreatedInSimulation; // should be bit 30
-    const bool causedByPrimary = (simulatorStatus & mask) == 0; // bit is not set -> created in generator
-    if ( causedByPrimary ) {
+    const bool causedByPrimary = (simulatorStatus & mask) == 0;            // bit is not set -> created in generator
+    if (causedByPrimary) {
       return MCParticleLevel::Primary;
-    }
-    else {
+    } else {
       // now check if the MCParticle prod. vertex lies outside this sensors volume (by comparing volumeIDs)
       const dd4hep::rec::Vector3D prodVertex = ConvertVector(simTrackerHit.getParticle().getVertex());
       const dd4hep::DDSegmentation::CellID prodVertex_cellID = digitizer.GetCellID(prodVertex);
@@ -80,33 +81,30 @@ std::string VectorToString(const dd4hep::rec::Vector3D& vec) {
 }
 
 bool IsInsideVolume(const dd4hep::rec::Vector3D& pos, const std::array<double, 3>& dims, const double tolerance) {
-  return std::abs(pos.x()) <= 0.5 * dims[0] + tolerance
-      && std::abs(pos.y()) <= 0.5 * dims[1] + tolerance
-      && std::abs(pos.z()) <= 0.5 * dims[2] + tolerance;
+  return std::abs(pos.x()) <= 0.5 * dims[0] + tolerance && std::abs(pos.y()) <= 0.5 * dims[1] + tolerance &&
+         std::abs(pos.z()) <= 0.5 * dims[2] + tolerance;
 }
 
 dd4hep::rec::Vector3D ClampToVolume(const dd4hep::rec::Vector3D& pos, const std::array<double, 3>& dims) {
-  return dd4hep::rec::Vector3D(
-    std::clamp(pos.x(), -0.5 * dims[0], 0.5 * dims[0]),
-    std::clamp(pos.y(), -0.5 * dims[1], 0.5 * dims[1]),
-    std::clamp(pos.z(), -0.5 * dims[2], 0.5 * dims[2]));
+  return dd4hep::rec::Vector3D(std::clamp(pos.x(), -0.5 * dims[0], 0.5 * dims[0]),
+                               std::clamp(pos.y(), -0.5 * dims[1], 0.5 * dims[1]),
+                               std::clamp(pos.z(), -0.5 * dims[2], 0.5 * dims[2]));
 }
 
-int GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID, const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
+int GetLayer(const dd4hep::DDSegmentation::VolumeID& volumeID,
+             const std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder>& cellIdDecoder) {
   return static_cast<int>(cellIdDecoder->get(volumeID, "layer"));
 }
 
-dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) {
-  return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z);
-}
+dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3d vec) { return dd4hep::rec::Vector3D(vec.x, vec.y, vec.z); }
 dd4hep::rec::Vector3D ConvertVector(edm4hep::Vector3f vec) {
   return dd4hep::rec::Vector3D(static_cast<double>(vec.x), static_cast<double>(vec.y), static_cast<double>(vec.z));
 }
-edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec) {
-  return edm4hep::Vector3d(vec.x(), vec.y(), vec.z());
-}
+edm4hep::Vector3d ConvertVector(dd4hep::rec::Vector3D vec) { return edm4hep::Vector3d(vec.x(), vec.y(), vec.z()); }
 
-TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::VolumeID& volumeID, const dd4hep::VolumeManager& volumeManager, const TGeoRotation& sensorNormalRotation) {
+TGeoHMatrix ComputeSensorTrafoMatrix(const dd4hep::DDSegmentation::VolumeID& volumeID,
+                                     const dd4hep::VolumeManager& volumeManager,
+                                     const TGeoRotation& sensorNormalRotation) {
   TGeoHMatrix M = volumeManager.lookupDetElement(volumeID).nominal().worldTransformation();
 
   /* rotate the local coordinate system st. sensor U is (1,0,0), V is (0,1,0) and normal vector is (0,0,1) */
@@ -134,8 +132,6 @@ dd4hep::rec::Vector3D TrafoVec_local_global(const dd4hep::rec::Vector3D& local, 
   return dd4hep::rec::Vector3D(global[0], global[1], global[2]);
 }
 
-
-
 dd4hep::rec::Vector3D Trafo_global_local(const dd4hep::rec::Vector3D& global, const TGeoHMatrix& M) {
   double local[3];
   M.MasterToLocal(global, local);
@@ -148,80 +144,85 @@ dd4hep::rec::Vector3D Trafo_local_global(const dd4hep::rec::Vector3D& local, con
   return dd4hep::rec::Vector3D(global[0], global[1], global[2]);
 }
 
-PixelCoords Trafo_local_pixCoords(const dd4hep::rec::Vector3D& local, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount) {
+PixelCoords Trafo_local_pixCoords(const dd4hep::rec::Vector3D& local, const std::array<double, 2> pixelPitch,
+                                  const std::array<size_t, 2> pixelCount) {
   const std::array<double, 2> local_2d = {local.x(), local.y()};
   PixelCoords pixC;
   for (size_t axis = 0; axis < 2; ++axis) {
     const double halfLength = 0.5 * pixelPitch[axis] * pixelCount[axis];
     const double clamped = std::clamp(local_2d[axis], -halfLength, halfLength);
-    pixC[axis] = (clamped + halfLength) / pixelPitch[axis] - 0.5; // shift from [-halfLength, halfLength] to [-0.5, pixelCount - 0.5]
+    pixC[axis] = (clamped + halfLength) / pixelPitch[axis] -
+                 0.5; // shift from [-halfLength, halfLength] to [-0.5, pixelCount - 0.5]
   }
   return pixC;
 }
 
-dd4hep::rec::Vector3D Trafo_pixCoords_local(const PixelCoords pixCoords,  const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount, const double w) {
+dd4hep::rec::Vector3D Trafo_pixCoords_local(const PixelCoords pixCoords, const std::array<double, 2> pixelPitch,
+                                            const std::array<size_t, 2> pixelCount, const double w) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
-  double u = (pixCoords[0] + 0.5) * pixelPitch[0] - 0.5 * pixelPitch[0] * pixelCount[0]; // in mm. Add 0.5*pixelPitch to shift from pixel edge to center, since index 0 is defined as the center of the pixel.
+  double u = (pixCoords[0] + 0.5) * pixelPitch[0] -
+             0.5 * pixelPitch[0] * pixelCount[0]; // in mm. Add 0.5*pixelPitch to shift from pixel edge to center, since
+                                                  // index 0 is defined as the center of the pixel.
   double v = (pixCoords[1] + 0.5) * pixelPitch[1] - 0.5 * pixelPitch[1] * pixelCount[1];
 
   return dd4hep::rec::Vector3D(u, v, w);
 }
 
-
 /* -- Binning things -- */
 
 int ComputeBinIndex(double x, double binX0, double binWidth, int binN) {
-  #ifndef NDEBUG
-    if (binN <= 0) throw GaudiException("VTXdigi_tools::ComputeBinIndex(): binN must be positive", "VTXdigi_Modular::ComputeBinIndex()", StatusCode::FAILURE);
-    if (binWidth <= 0.0) throw GaudiException("VTXdigi_tools::ComputeBinIndex(): binWidth must be positive", "VTXdigi_Modular::ComputeBinIndex()", StatusCode::FAILURE);
-  #endif
+#ifndef NDEBUG
+  if (binN <= 0)
+    throw GaudiException("VTXdigi_tools::ComputeBinIndex(): binN must be positive",
+                         "VTXdigi_Modular::ComputeBinIndex()", StatusCode::FAILURE);
+  if (binWidth <= 0.0)
+    throw GaudiException("VTXdigi_tools::ComputeBinIndex(): binWidth must be positive",
+                         "VTXdigi_Modular::ComputeBinIndex()", StatusCode::FAILURE);
+#endif
 
   const double relativePos = (x - binX0) / binWidth; // shift to [0, binN]
   return std::clamp(static_cast<int>(std::floor(relativePos)), 0, binN - 1);
 } // ComputeBinIndex()
 
-PixelIndex Trafo_local_pixI(const dd4hep::rec::Vector3D& local, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount) {
+PixelIndex Trafo_local_pixI(const dd4hep::rec::Vector3D& local, const std::array<double, 2> pixelPitch,
+                            const std::array<size_t, 2> pixelCount) {
   PixelIndex pixI;
   const double length_u_half = 0.5 * pixelPitch[0] * pixelCount[0];
-  pixI[0] = ComputeBinIndex(
-    local.x(),
-    -length_u_half,
-    pixelPitch[0],
-    pixelCount[0]);
+  pixI[0] = ComputeBinIndex(local.x(), -length_u_half, pixelPitch[0], pixelCount[0]);
 
   const double length_v_half = 0.5 * pixelPitch[1] * pixelCount[1];
-  pixI[1] = ComputeBinIndex(
-    local.y(),
-    -length_v_half,
-    pixelPitch[1],
-    pixelCount[1]);
+  pixI[1] = ComputeBinIndex(local.y(), -length_v_half, pixelPitch[1], pixelCount[1]);
 
   return pixI;
 } // Trafo_local_pixI()
 
-std::pair<PixelIndex, VoxelIndex> Trafo_local_pixIVoxI(const dd4hep::rec::Vector3D& local, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount, const double sensorActiveThickness, const std::array<int, 3> voxelCount) {
+std::pair<PixelIndex, VoxelIndex> Trafo_local_pixIVoxI(const dd4hep::rec::Vector3D& local,
+                                                       const std::array<double, 2> pixelPitch,
+                                                       const std::array<size_t, 2> pixelCount,
+                                                       const double sensorActiveThickness,
+                                                       const std::array<int, 3> voxelCount) {
   const std::array<double, 2> local_uv = {local.x(), local.y()};
   PixelIndex pixI;
   VoxelIndex voxI;
 
   // binning in u/v: pixel + voxel grid
   for (int axis = 0; axis < 2; ++axis) {
-    const int g = ComputeBinIndex(
-      local_uv[axis],
-      -0.5 * pixelPitch[axis] * pixelCount[axis],
-      pixelPitch[axis] / voxelCount[axis],
-      static_cast<int>(pixelCount[axis]) * voxelCount[axis]);
+    const int g =
+        ComputeBinIndex(local_uv[axis], -0.5 * pixelPitch[axis] * pixelCount[axis], pixelPitch[axis] / voxelCount[axis],
+                        static_cast<int>(pixelCount[axis]) * voxelCount[axis]);
     pixI[axis] = g / voxelCount[axis];
     voxI[axis] = g % voxelCount[axis];
   }
 
   // binning in w: only voxel grid
-  voxI[2] = ComputeBinIndex(local.z(), -0.5 * sensorActiveThickness, sensorActiveThickness / voxelCount[2], voxelCount[2]);
+  voxI[2] =
+      ComputeBinIndex(local.z(), -0.5 * sensorActiveThickness, sensorActiveThickness / voxelCount[2], voxelCount[2]);
 
   return {pixI, voxI};
 } // Trafo_local_pixIVoxI()
 
-dd4hep::rec::Vector3D Trafo_pixI_local(const PixelIndex pixI, const std::array<double, 2> pixelPitch, const std::array<size_t, 2> pixelCount, const double w) {
+dd4hep::rec::Vector3D Trafo_pixI_local(const PixelIndex pixI, const std::array<double, 2> pixelPitch,
+                                       const std::array<size_t, 2> pixelCount, const double w) {
   /* returns the position of the center of pixel i_u, i_v in the local sensor frame */
 
   double u = (pixI[0] + 0.5) * pixelPitch[0] - 0.5 * pixelPitch[0] * pixelCount[0]; // in mm
@@ -241,7 +242,9 @@ void HitMap::FillCharge(PixelIndex pixI, float charge, const SimHitWrapper& simH
   if (charge < 1.e-6f)
     return; // skip very small charge additions for performance (this is NECESSARY to skip in-pix bins with weight ~0)
   if (_OutOfBounds(pixI)) [[unlikely]]
-    throw GaudiException("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " + std::to_string(pixI[1]) + ") out of range", "VTXdigi_Modular::HitMap::FillCharge()", StatusCode::FAILURE);
+    throw GaudiException("HitMap::FillCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " +
+                             std::to_string(pixI[1]) + ") out of range",
+                         "VTXdigi_Modular::HitMap::FillCharge()", StatusCode::FAILURE);
 
   auto [iter, inserted] = m_pixels.try_emplace(pixI, Pixel(pixI));
   iter->second.charge += charge;
@@ -251,7 +254,8 @@ void HitMap::FillCharge(PixelIndex pixI, float charge, const SimHitWrapper& simH
 void HitMap::ApplyChargeSmearing(const float sigma, TRandom3& randomGen) {
   auto hitIter = m_pixels.begin();
   while (hitIter != m_pixels.end()) {
-    hitIter->second.charge = std::max(hitIter->second.charge + static_cast<float>(randomGen.Gaus(0, sigma)), 0.f); // don't allow negative charge after smearing
+    hitIter->second.charge = std::max(hitIter->second.charge + static_cast<float>(randomGen.Gaus(0, sigma)),
+                                      0.f); // don't allow negative charge after smearing
     ++hitIter;
   }
 }
@@ -276,10 +280,11 @@ void HitMap::ApplyThreshold(const float threshold, const float thresholdDispersi
   }
 }
 
-
 float HitMap::GetCharge(PixelIndex pixI) const {
   if (_OutOfBounds(pixI)) [[unlikely]] {
-    throw GaudiException("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " + std::to_string(pixI[1]) + ") out of range", "VTXdigi_Modular::HitMap::GetCharge()", StatusCode::FAILURE);
+    throw GaudiException("HitMap::GetCharge: pixel i_u or i_v ( " + std::to_string(pixI[0]) + ", " +
+                             std::to_string(pixI[1]) + ") out of range",
+                         "VTXdigi_Modular::HitMap::GetCharge()", StatusCode::FAILURE);
   }
   auto it = m_pixels.find(pixI);
   if (it == m_pixels.end())
@@ -296,19 +301,16 @@ float HitMap::GetTotalCharge() const {
 }
 
 inline bool HitMap::_OutOfBounds(PixelIndex pixI) const {
-  return (
-    pixI[0] < 0
-    || pixI[0] >= static_cast<int>(m_pixCount[0])
-    || pixI[1] < 0
-    || pixI[1] >= static_cast<int>(m_pixCount[1])
-  );
+  return (pixI[0] < 0 || pixI[0] >= static_cast<int>(m_pixCount[0]) || pixI[1] < 0 ||
+          pixI[1] >= static_cast<int>(m_pixCount[1]));
 }
 
 /* -- Clusterization -- */
 
 PixelCoords Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) const {
   if (pixels.empty())
-    throw GaudiException("Cluster::ComputeCoG: cluster has no pixels", "VTXdigi_Modular::Cluster::ComputeCoG()", StatusCode::FAILURE);
+    throw GaudiException("Cluster::ComputeCoG: cluster has no pixels", "VTXdigi_Modular::Cluster::ComputeCoG()",
+                         StatusCode::FAILURE);
 
   PixelCoords pixCoords{0.f, 0.f};
   if (!clusterizeEndPixelsOnly) {
@@ -318,8 +320,7 @@ PixelCoords Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) const {
     }
     pixCoords[0] /= charge;
     pixCoords[1] /= charge;
-  }
-  else {
+  } else {
     for (int axis = 0; axis < 2; ++axis) {
       // find pixels with min and max index along the axis
       int index_min = std::numeric_limits<int>::max();
@@ -329,12 +330,15 @@ PixelCoords Cluster::ComputeCoG(const bool clusterizeEndPixelsOnly) const {
         index_max = std::max(index_max, pix->index[axis]);
       }
       // compute charge-weighted average of the min and max pixels
-      float charge_min=0.f, charge_max=0.f;
+      float charge_min = 0.f, charge_max = 0.f;
       for (const Pixel* pix : pixels) {
-        if (pix->index[axis] == index_min) charge_min += pix->charge;
-        if (pix->index[axis] == index_max) charge_max += pix->charge;
+        if (pix->index[axis] == index_min)
+          charge_min += pix->charge;
+        if (pix->index[axis] == index_max)
+          charge_max += pix->charge;
       }
-      float offset = (charge_max - charge_min) / (charge_min + charge_max) / 2.f; // offset in range [-0.5, 0.5] to shift the CoG towards the pixel with more charge
+      float offset = (charge_max - charge_min) / (charge_min + charge_max) /
+                     2.f; // offset in range [-0.5, 0.5] to shift the CoG towards the pixel with more charge
 
       pixCoords[axis] = static_cast<float>(index_min + index_max) * 0.5f + offset;
     }
@@ -351,15 +355,14 @@ int Cluster::GetSize(const int axis) const {
       min = std::min(min, pix->index[0]);
       max = std::max(max, pix->index[0]);
     }
-  }
-  else if (axis == 1) { // v
+  } else if (axis == 1) { // v
     for (const Pixel* pix : pixels) {
       min = std::min(min, pix->index[1]);
       max = std::max(max, pix->index[1]);
     }
-  }
-  else {
-    throw GaudiException("Cluster::GetClusterSize: axis must be 0 (u) or 1 (v), got " + std::to_string(axis), "VTXdigi_Modular::Cluster::GetClusterSize()", StatusCode::FAILURE);
+  } else {
+    throw GaudiException("Cluster::GetClusterSize: axis must be 0 (u) or 1 (v), got " + std::to_string(axis),
+                         "VTXdigi_Modular::Cluster::GetClusterSize()", StatusCode::FAILURE);
   }
 
   return max - min + 1; // +1 because of counting: if min=max, cluster size is 1, not 0
@@ -375,28 +378,26 @@ float Cluster::GetSeedPixelCharge() const {
   return maxCharge;
 }
 
-
 std::array<PixelIndex, 4> GetDirectNeighbors(const PixelIndex& pixI) {
   return {{
-    {pixI[0] - 1, pixI[1]}, // left
-    {pixI[0] + 1, pixI[1]}, // right
-    {pixI[0], pixI[1] - 1}, // down
-    {pixI[0], pixI[1] + 1}  // up
+      {pixI[0] - 1, pixI[1]}, // left
+      {pixI[0] + 1, pixI[1]}, // right
+      {pixI[0], pixI[1] - 1}, // down
+      {pixI[0], pixI[1] + 1}  // up
   }};
 }
 std::array<PixelIndex, 8> GetNeighbors(const PixelIndex& pixI) {
   return {{
-    {pixI[0] - 1, pixI[1]}, // left
-    {pixI[0] - 1, pixI[1] + 1}, // upper left
-    {pixI[0], pixI[1] + 1}, // up
-    {pixI[0] + 1, pixI[1] + 1}, // upper right
-    {pixI[0] + 1, pixI[1]}, // right
-    {pixI[0] + 1, pixI[1] - 1}, // lower right
-    {pixI[0], pixI[1] - 1}, // lower
-    {pixI[0] - 1, pixI[1] - 1}, // lower left
+      {pixI[0] - 1, pixI[1]},     // left
+      {pixI[0] - 1, pixI[1] + 1}, // upper left
+      {pixI[0], pixI[1] + 1},     // up
+      {pixI[0] + 1, pixI[1] + 1}, // upper right
+      {pixI[0] + 1, pixI[1]},     // right
+      {pixI[0] + 1, pixI[1] - 1}, // lower right
+      {pixI[0], pixI[1] - 1},     // lower
+      {pixI[0] - 1, pixI[1] - 1}, // lower left
   }};
 }
-
 
 std::vector<Cluster> HitMap::ComputeClusters_singePixels() const {
   std::vector<Cluster> clusters;
@@ -426,7 +427,7 @@ std::vector<Cluster> HitMap::ComputeClusters() const {
     if (visited.contains(seedI))
       continue;
 
-    clusters.emplace_back(); // create new cluster
+    clusters.emplace_back();            // create new cluster
     clusters.back().pixels.reserve(10); // 10 should include >90% of clusters. i guess.
 
     std::queue<PixelIndex> queue;

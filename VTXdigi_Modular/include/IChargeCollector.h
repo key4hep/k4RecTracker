@@ -8,13 +8,14 @@ struct VTXdigi_Modular;
 
 namespace VTXdigi_tools {
 
-  class SimHitWrapper; // forward-declare things in include/VTXdigi_tools.h
-  class HitMap;
+class SimHitWrapper; // forward-declare things in include/VTXdigi_tools.h
+class HitMap;
 
 class IChargeCollector {
 public:
   virtual ~IChargeCollector() = default;
-  virtual void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix, TRandom3& randomGen) const = 0;
+  virtual void FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix,
+                       TRandom3& randomGen) const = 0;
 
   double GetChargeCollectionDepthCenter() const { return m_chargeCollectionDepthCenter; }
 
@@ -22,7 +23,11 @@ protected:
   explicit IChargeCollector(const VTXdigi_Modular& digitizer) : m_digitizer(digitizer) {}
 
   const VTXdigi_Modular& m_digitizer;
-  double m_chargeCollectionDepthCenter=0; // Defines the vertical center of the charge collection region in the sensitive volume. Needed for correct digiHit positions (and residual plots) with charge collection maps where the charge collection varies along their depth (like TPSCo 65nm CIS). in mm, wrt. the sensor local w coordinate (w=0 at center of sensitive volume)
+  double m_chargeCollectionDepthCenter =
+      0; // Defines the vertical center of the charge collection region in the sensitive volume. Needed for correct
+         // digiHit positions (and residual plots) with charge collection maps where the charge collection varies along
+         // their depth (like TPSCo 65nm CIS). in mm, wrt. the sensor local w coordinate (w=0 at center of sensitive
+         // volume)
 };
 
 std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& digitizer, const std::string& algorithm);
