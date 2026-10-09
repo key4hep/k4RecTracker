@@ -129,14 +129,18 @@ torch::Tensor find_condpoints(const torch::Tensor& betas, const torch::Tensor& u
  * exceeds `tbeta`, then iteratively assigns points within distance `td` of
  * each conditional point to the same cluster.
  *
- * @param output_model_tensor Tensor containing point data in the format [x, y, z, beta].
+ * @param output_model_tensor Tensor containing point data in the format
+ *        [coord_0, ..., coord_{nEmbeddingCoordinates-1}, beta].
  * @param tbeta Beta threshold for selecting conditional points.
  * @param td Distance threshold for clustering points around conditional points.
+ * @param nEmbeddingCoordinates Number of leading embedding-space coordinates per point; distances are computed
+ *        on these coordinates and the value immediately after them is interpreted as beta.
  *
  * @return A 1D torch::Tensor of type Long containing cluster assignments for each point.
  *         Points assigned to cluster 0 are considered unclustered.
  */
-torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbeta, float td);
+torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbeta, float td,
+                             int64_t nEmbeddingCoordinates);
 
 /////////////////////
 /// Miscellaneous ///
