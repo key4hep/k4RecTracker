@@ -19,7 +19,7 @@ VTXdigi_Modular::VTXdigi_Modular(const std::string& name, ISvcLocator* svcLoc)
                         KeyValues("SimTrkHitRelationsCollection", {"UNDEFINED_SimTrkHitRelationsCollection"})}) {
   info() << "Constructed successfully" << endmsg;
 }
-s StatusCode VTXdigi_Modular::initialize() {
+StatusCode VTXdigi_Modular::initialize() {
   info() << "INITIALIZING VTXdigi_Modular..." << endmsg;
 
   info() << "OutputLevel set to " << msgSvc()->outputLevel(name()) << endmsg;
