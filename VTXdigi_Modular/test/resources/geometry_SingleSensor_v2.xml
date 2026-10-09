@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<lccdd xmlns:compact="http://www.lcsim.org/schemas/compact/1.0"
+  xmlns:xs="http://www.w3.org/2001/XMLSchema"
+  xs:noNamespaceSchemaLocation="http://www.lcsim.org/schemas/compact/1.0/compact.xsd">
+
+  <info name="SingleSensor_for_CCMap_digitiser"
+    title="Geometry file for a single semiconductor sensor for charge collection map-based digitiser, for test purposes"
+    author="Armin Ilg, Jona Dilg"
+    url="no"
+    status="development"
+    version="v01">
+    <comment>
+      Version v01 of the single-sensor geometry file for the charge collection map-based digitiser, for test purposes
+    </comment>
+  </info>
+
+  <includes>
+    <gdmlFile ref="${K4GEO}/FCCee/IDEA/compact/IDEA_o1_v03/elements_o1_v01.xml"/>
+    <gdmlFile ref="${K4GEO}/FCCee/IDEA/compact/IDEA_o1_v03/materials_o1_v03.xml"/>
+  </includes>
+
+  <display>
+    <vis name="VTXSensitiveVis"         alpha="1.0" r="1.0"     g="1.0"     b="0.0"   showDaughters="true"  visible="true"/>
+    <vis name="VXDVis" alpha="0.2" r="0.1" g=".5" b=".5" showDaughters="false" visible="true"/>
+    <vis name="VisibleBlue" alpha="0.1" r="0.0" g="0.0" b="1.0" showDaughters="true" visible="true"/>
+  </display>
+
+  <regions>
+    <region name="VTXBRegion"/>
+  </regions>
+
+  <define>
+    <!-- Somehow these cannot be included from with "<include ref="${DD4hepINSTALL}/DDDetectors/compact/detector_types.xml"/>" as would normally be done -->
+    <constant name="DetType_TRACKER"         value =  " 0x1 "/>
+    <constant name="DetType_BARREL"          value =  " 0x10 "/>
+    <constant name="DetType_VERTEX"          value =  " 0x40 "/>
+    <constant name="DetType_PIXEL"           value =  " 0x100 "/>
+
+    <constant name="world_size" value="25*m"/>
+    <constant name="world_x" value="world_size"/>
+    <constant name="world_y" value="world_size"/>
+    <constant name="world_z" value="world_size"/>
+
+    <constant name="GlobalTrackerReadoutID" type="string" value="system:5,side:-2,layer:5,module:12,sensor:8"/>
+
+    <constant name="VTXIB_pitch_z"      value="0.020*mm"/>
+    <constant name="VTXIB_pitch_phi"    value="0.020*mm"/>
+
+    <constant name="VTXIB_sensor_z" value="300.*VTXIB_pitch_z"/>
+    <constant name="VTXIB_sensor_rphi" value="300.*VTXIB_pitch_phi"/>
+    <constant name="VTXIB_insensitive_thickness_below"  value="0e-03*mm"/>
+    <constant name="VTXIB_sensitive_thickness"          value="50e-03*mm"/>
+    <constant name="VTXIB_insensitive_thickness_above"  value="0e-03*mm"/>
+    <constant name="VTXIB_sensor_thickness"   value="VTXIB_insensitive_thickness_below+VTXIB_sensitive_thickness+VTXIB_insensitive_thickness_above"/>
+
+    <constant name="CentralBeamPipe_zmax" value="9.0*cm"/>
+
+    <constant name="tracker_region_zmax" value="2250. * mm"/>
+    <constant name="tracker_region_rmax" value="2015. * mm"/>
+  </define>
+
+  <readouts> <comment>  Definition of the readout segmentation/definition </comment>
+    <readout name="VertexBarrelCollection">
+      <segmentation type="MultiSegmentation" key="layer">
+        <segmentation name="VTXIBgrid" type="CartesianGridXY" key_min="0" key_max="0" grid_size_x="VTXIB_pitch_phi" grid_size_y="VTXIB_pitch_z"/>
+      </segmentation>
+      <id>${GlobalTrackerReadoutID},x:32:-16,y:-16</id>
+    </readout>
+  </readouts>
+
+  <detectors>
+    <!-- Need to define an assembly for the detector to be placed in, large enough so that the whole single sensor is in it -->
+    <detector name="Vertex" type="DD4hep_SubdetectorAssembly" vis="VXDVis">
+      <type_flags type=" DetType_TRACKER + DetType_PIXEL + DetType_VERTEX"/>
+      <shape type="Tube" rmin="0." rmax="2.*cm" dz="10.*cm" material="Vacuum"/>
+
+      <composite name="VertexBarrel"/>
+    </detector>
+
+
+    <detector name="VertexBarrel" type="VertexBarrel_detailed_o1_v03" vis="VXDVis" id="1" readout="VertexBarrelCollection"  region="VTXBRegion">
+      <envelope vis="VXDVis">
+          <shape type="Assembly"/>
+      </envelope>
+
+      <type_flags type=" DetType_TRACKER + DetType_PIXEL + DetType_VERTEX + DetType_BARREL"/>
+
+      <stave name="VTXIBStave1" length="VTXIB_sensor_z/2.">
+        <sensor name="sensor" r="0.0*mm" thickness="VTXIB_sensor_thickness" material="Silicon">
+            <component name="sensor"    sensitive="True"  vis="VTXSensitiveVis" xmin="-VTXIB_sensor_rphi/2.0" xmax="VTXIB_sensor_rphi/2.0" ymin="-VTXIB_sensor_z/2.0" ymax="+VTXIB_sensor_z/2.0" sensor_insensitive_thickness_below="VTXIB_insensitive_thickness_below" thickness="VTXIB_sensitive_thickness" sensor_insensitive_thickness_above="VTXIB_insensitive_thickness_above"/>
+        </sensor>
+      </stave>
+      <layer nLadders="1" phi0="0.0" r="1.0*cm" offset="0." id="0" nmodules="1" name="VTXIBStave1" step="0." dr="0." motherVolLength="2.*VTXIB_sensor_z" motherVolThickness="2.0*cm"/>
+    </detector>
+  </detectors>
+
+  <plugins>
+    <plugin name="DD4hepVolumeManager"/>
+    <plugin name="InstallSurfaceManager"/>
+  </plugins>
+
+  <!-- Tracking volume large enough to contain the single sensor -->
+  <parallelworld_volume name="tracking_volume" anchor="/world" material="Vacuum" connected="true"
+      vis="VisibleBlue">
+      <shape type="Polycone" material="Vacuum">
+          <!-- small-angle approximation for tan(theta) -->
+          <zplane z="-2.*m" rmin="120*mrad * 2.*m" rmax="2.*m" />
+          <zplane z="-CentralBeamPipe_zmax" rmin="0" rmax="2.*m" />
+          <zplane z="+CentralBeamPipe_zmax" rmin="0" rmax="2.*m" />
+          <zplane z="+2.*m" rmin="120*mrad * 2.*m" rmax="2.*m" />
+      </shape>
+  </parallelworld_volume>
+</lccdd>
