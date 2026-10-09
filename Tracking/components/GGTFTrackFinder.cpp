@@ -51,11 +51,11 @@
 /** @struct GGTFTrackFinder
  *
  * Gaudi MultiTransformer that generates a Track collection by analyzing the digitalized hits through the
- * GGTFTrackFinder. The first step takes the raw hits and it returns a collection of 4-dimensional points inside an
- * embedding space. Each 4-dim point has 3 geometric coordinates and 1 charge, the meaning of which can be described
- * intuitively by a potential, which attracts hits belonging to the same cluster and drives away those that do not.
- * This collection of 4-dim points is analysed by a clustering step, which groups together hits belonging to the
- * same track.
+ * GGTFTrackFinder. The first step takes the raw hits and it returns a collection of points inside an embedding
+ * space whose dimension is configured through the EmbeddingCoordinates property, plus one trailing charge value.
+ * The meaning of the charge can be described intuitively by a potential, which attracts hits belonging to the
+ * same cluster and drives away those that do not. This collection of points is analysed by a clustering step,
+ * which groups together hits belonging to the same track.
  *
  *  input:
  *    - digitalized hits from DC (global coordinates) : edm4hep::SenseWireHitCollection
@@ -148,7 +148,7 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
     appendWireHits(inputWireHitCollections, batch);
 
     const torch::Tensor modelOutput = runInference(batch.features);
-    const torch::Tensor clusterIds = get_clustering(modelOutput, m_tbeta, m_td);
+    const torch::Tensor clusterIds = get_clustering(modelOutput, m_tbeta, m_td, m_embeddingCoordinates.value());
 
     buildTracks(clusterIds, batch, inputPlanarHitCollections, inputWireHitCollections, outputTracks);
 
@@ -295,7 +295,8 @@ private:
    * @brief Run the ONNX model for one event.
    *
    * @param features Flattened input feature buffer containing seven float values per hit.
-   * @return Owned CPU tensor containing four float values per hit.
+   * @return Owned CPU tensor containing EmbeddingCoordinates + 1 float values per hit (the last one is the
+   *         cluster potential).
    * @throws std::logic_error if the session is not initialized.
    * @throws std::runtime_error if the input or output shape is invalid.
    */
@@ -325,14 +326,17 @@ private:
 
     const auto outputInfo = outputs.front().GetTensorTypeAndShapeInfo();
     const std::size_t outputElementCount = outputInfo.GetElementCount();
-    const std::size_t expectedElementCount = nHits * kOutputValuesPerHit;
+    const std::size_t valuesPerHit = m_embeddingCoordinates.value() + 1; // embedding coordinates + cluster potential
+    const std::size_t expectedElementCount = nHits * valuesPerHit;
     if (outputElementCount != expectedElementCount) {
-      throw std::runtime_error("Unexpected ONNX output size: expected four values per hit");
+      throw std::runtime_error("Unexpected ONNX output size: expected " + std::to_string(valuesPerHit) +
+                               " values per hit (" + std::to_string(m_embeddingCoordinates.value()) +
+                               " embedding coordinates + 1 cluster potential)");
     }
 
     const float* outputData = outputs.front().GetTensorData<float>();
     const std::vector<std::int64_t> outputShape = {static_cast<std::int64_t>(nHits),
-                                                   static_cast<std::int64_t>(kOutputValuesPerHit)};
+                                                   static_cast<std::int64_t>(valuesPerHit)};
     return torch::from_blob(const_cast<float*>(outputData), outputShape, torch::dtype(torch::kFloat32)).clone();
   }
 
@@ -399,7 +403,6 @@ private:
   }
 
   static constexpr std::size_t kFeatureCount = 7;
-  static constexpr std::size_t kOutputValuesPerHit = 4;
   mutable std::atomic<std::uint64_t> m_eventCounter{0}; // Thread-safe processed-event counter.
 
   std::unique_ptr<Ort::Env> m_environment;       // ONNX Runtime environment.
@@ -410,6 +413,10 @@ private:
   std::string m_outputName;                      // Owned ONNX output name.
 
   Gaudi::Property<std::string> m_modelPath{this, "ModelPath", "", "Path to the ONNX model file"};
+  Gaudi::Property<std::size_t> m_embeddingCoordinates{
+      this, "EmbeddingCoordinates", 3,
+      "Number of embedding-space coordinates per hit in the ONNX model output; the model must produce one "
+      "additional trailing value per hit, the cluster potential (beta)"};
   Gaudi::Property<std::size_t> m_maxHits{this, "MaxHits", 20000, "Maximum number of hits accepted per event"};
   Gaudi::Property<double> m_tbeta{this, "Tbeta", 0.6, "Threshold used to identify cluster core points"};
   Gaudi::Property<double> m_td{this, "Td", 0.3, "Radius used to assign nearby hits to a cluster core"};
