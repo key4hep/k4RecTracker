@@ -38,7 +38,6 @@ inline constexpr double mm_to_um = 1e3;
 inline constexpr double um_to_mm = 1e-3;
 inline constexpr double cm_to_mm = 10.0;
 inline constexpr double mm_to_cm = 0.1;
-inline constexpr double um_to_cm = 1e-4;
 static_assert(dd4hep::cm == 1.0, "VTXdigi_Modular assumes DD4hep internal length unit is cm");
 
 

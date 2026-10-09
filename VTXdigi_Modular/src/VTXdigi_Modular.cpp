@@ -158,8 +158,11 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
    */
   if (m_threshold.value() < 0.f)
     throw GaudiException("Threshold " + std::to_string(m_threshold.value()) + " e- is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+  if (m_smearing_threshold.value() < 0.f)
+    throw GaudiException("Threshold smearing sigma " + std::to_string(m_smearing_threshold.value()) + " e- is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
   if (m_smearing_charge.value() < 0.f)
     throw GaudiException("Charge smearing sigma " + std::to_string(m_smearing_charge.value()) + " e- is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
+
 
   if (m_threshold.value() <= 5 * sqrt(m_smearing_charge.value()*m_smearing_charge.value() + m_smearing_threshold.value()*m_smearing_threshold.value()))
     warning() << "Threshold " << m_threshold.value() << " e- is less than 5 times the charge smearing and threshold dispersion sigma: sqrt(" << m_smearing_charge.value() << "^2 + " << m_smearing_threshold.value() << "^2) e-. This digitiser only applies smearing to pixels that have collected charge from simHits (a tiny bit is enough), so it does not simulate random firing of pixels. (doing this by drawing a noise for every pixel in the detector for every event would be INCREDIBLY slow. A work-around to simulate random pixels firing might be implemented in another algorith)." << endmsg;
@@ -167,7 +170,7 @@ void VTXdigi_Modular::InitServicesAndGeometry() {
     throw GaudiException("Time smearing sigma " + std::to_string(m_smearing_time.value()) + " ns is negative.", "VTXdigi_Modular::InitServicesAndGeometry()", StatusCode::FAILURE);
 
   if (m_positionUncertainty.value().empty())
-    info() << "Cluster position uncertainty not set. Using pitch/12 for every cluster." << endmsg;
+    info() << "Cluster position uncertainty not set. Using pitch/sqrt(12) for every cluster." << endmsg;
   else if (m_positionUncertainty.value().size() == 2)
     info() << "Cluster position uncertainty set to (" << m_positionUncertainty.value().at(0) << " mm, " << m_positionUncertainty.value().at(1) << " mm) in u and v direction." << endmsg;
   else if (m_positionUncertainty.value().size() == 10) {

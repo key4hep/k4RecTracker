@@ -20,7 +20,7 @@ vtxb_digitizer = VTXdigi_Modular(
     TrackerHitCollectionName=["VTXBDigis"],
     SubDetectorName="VertexBarrel",
     Clusterize=True,
-    ChargeCollectionMethod="ChargeCollectionMap",  # "Debug" / "SinglePixel" / "ChargeCollectionMap"
+    ChargeCollectionMethod="ChargeCollectionMap",
     ChargeCollectionMap="SET_FROM_COMMAND_LINE",
     ShiftTruthPosition=True,
     ClusterPositionUncertainty=[],
@@ -29,6 +29,7 @@ vtxb_digitizer = VTXdigi_Modular(
     ChargeSmearing=10,
     TimeSmearing=10,
     OutputLevel=VERBOSE,
+    DebugHistograms=True,
 )
 
 from Configurables import AuditorSvc, ChronoAuditor, UniqueIDGenSvc

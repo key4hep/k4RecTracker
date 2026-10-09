@@ -134,19 +134,19 @@ private:
   Gaudi::Property<std::vector<int>> m_layers{this, "Layers", {}, "Which layers to run on (0-indexed). If empty, all layers are run."};
 
   /* -- Properties and members related to the various charge collection algorithms-- */
-  Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "ChargeCollectionMap", "Method used for charge collection: \"Fast\", \"Drift\", \"ChargeCollectionMap\", \"Debug\"etc."};
+  Gaudi::Property<std::string> m_chargeCollectionMethod{this, "ChargeCollectionMethod", "ChargeCollectionMap", "Method used for charge collection: \"ChargeCollectionMap\", \"Debug\" etc."};
   Gaudi::Property<float> m_threshold{this, "Threshold", 0.0f, "Pixel threshold for firing (in e-)."};
-  Gaudi::Property<std::vector<float>> m_positionUncertainty{this, "ClusterPositionUncertainty", {}, "Sensor spatial resolution in u and v direction (in mm). Used for the position uncertainty in digiHits. Uses pitch/12 if empty."};
+  Gaudi::Property<std::vector<float>> m_positionUncertainty{this, "ClusterPositionUncertainty", {}, "Sensor spatial resolution in u and v direction (in mm). Used for the position uncertainty in digiHits. Uses pitch/sqrt(12) if empty."};
   Gaudi::Property<float> m_smearing_charge{this, "ChargeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels collected charge (in e-). Applied after charge collection but before thresholding. If 0, no noise is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_threshold{this, "ThresholdDispersion", 0.0f, "Gaussian smearing to be applied to the threshold. (in e-). Drawn per event per sensor per pixel. If 0, no dispersion is applied. Defaults to 0."};
   Gaudi::Property<float> m_smearing_time{this, "TimeSmearing", 0.0f, "Gaussian smearing to be applied to a pixels time (in ns). Applied to the digiHits time stamp. If 0, no time smearing is applied. Defaults to 0."};
-  Gaudi::Property<bool> m_forceClusterPosToSensitiveSurface{this, "ForceClusterPositionToSensitiveSurface", false, "If true, the cluster position is forced to be on the sensitive surface of the sensor. If false, the cluster vertical position (in the sensor local frame) is given by the ChargeCollector (with the ChargeCollectionMap method, this is the depth centre of the charge collection computed from the charge collection map). Note that enabling this option is sometimesneeded for compatibility, but drastically decreases the accuracy of cluster positions for shallow tracks. Defaults to false."};
+  Gaudi::Property<bool> m_forceClusterPosToSensitiveSurface{this, "ForceClusterPositionToSensitiveSurface", false, "If true, the cluster position is forced to be on the sensitive surface of the sensor. If false, the cluster vertical position (in the sensor local frame) is given by the ChargeCollector (with the ChargeCollectionMap method, this is the depth centre of the charge collection computed from the charge collection map). Note that enabling this option is sometimes needed for compatibility, but drastically decreases the accuracy of cluster positions for shallow tracks. Defaults to false."};
 
   Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false, "Flag to create and fill debug histograms. Not recommended for multithreading, might lead to crashes. Default is false."};
   Gaudi::Property<int> m_infoPrintInterval{this, "InfoPrintInterval", 100, "Interval for printing information during processing."};
 
   /* Path computation */
-  Gaudi::Property<bool> m_path_shiftTruthPos{this, "ShiftTruthPosition", false, "Internally shift the truth position of the simHit. Only affects the output histograms, does not affect any collection. If turned to false, angled particle trajectories will bias the residual plots in case of charge collection maps with assymetric charge collection across the sensor thickness."};
+  Gaudi::Property<bool> m_path_shiftTruthPos{this, "ShiftTruthPosition", false, "Internally shift the truth position of the simHit. Only affects the output histograms, does not affect any collection. If turned to false, angled particle trajectories will bias the residual plots in case of charge collection maps with assymmetric charge collection across the sensor thickness."};
   Gaudi::Property<float> m_path_meanDepositionsPerUm{this, "MeanDepositionsPerUm", 2.65f, "Mean number of deposition clusters per um of path length in the sensor. Only used if the ChargeCollectionMethod uses the path computation. Defaults to 2.65, optimised to match the Allpix Squared simulation."};
 
   /* Charge Collection Map (CCMap) */
