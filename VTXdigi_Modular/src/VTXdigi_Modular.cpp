@@ -438,7 +438,7 @@ void VTXdigi_Modular::InitLayersAndSensors() {
 
   /* Loop over all sensors in the subDetector and check that they have the same dimensions
    *  This takes << 1s for the IDEA VTX */
-  int moduleNumber = 0, sensorNumber = 0;
+  int sensorNumber = 0;
   bool membersDefined = false;
   for (const auto& [layerKey, layerObj] : m_subDetector.children()) {
     dd4hep::VolumeID layerVolumeID = layerObj.volumeID();
@@ -457,7 +457,6 @@ void VTXdigi_Modular::InitLayersAndSensors() {
               << endmsg;
 
     for (const auto& [moduleKey, moduleObj] : layerObj.children()) {
-      ++moduleNumber;
       for (const auto& [sensorKey, sensorObj] : moduleObj.children()) {
         ++sensorNumber;
 
