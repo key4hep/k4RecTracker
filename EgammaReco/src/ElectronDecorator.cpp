@@ -1,5 +1,7 @@
 #include "ElectronDecorator.h"
 
+#include "utils.h"
+
 #include <GaudiKernel/MsgStream.h>
 
 #include <algorithm>
@@ -16,168 +18,13 @@ struct ClusterTrackMap {
     std::vector<edm4hep::Track> tracks;
 };
 
-// struct for storing brem Recovered clustera and assocated track for target PFO
+// struct for storing brem Recovered cluster and assocated track for target PFO
 struct bremRecoveredClusterTrackMap {
     std::vector<edm4hep::Cluster> clusters;
     std::vector<edm4hep::Track> tracks;
 };
 
-
-struct ThreeVector {
-    double x, y, z;
-    
-    ThreeVector() : x(0), y(0), z(0) {}
-    ThreeVector(double x0, double y0, double z0) : x(x0), y(y0), z(z0) {}
-
-    double mag() const { return std::sqrt(x*x + y*y + z*z); }
-    double magXY() const { return std::sqrt(x*x + y*y); }
-    double phi() const { return std::atan2(y,x); } // -pi to pi
-    double theta() const { return std::acos(z / mag()); } // 0 to pi
-    double eta() const { return -std::log(std::tan(theta()/2.)); }
-  };
-
-double deltaPhi(const double p1, const double p2) {
-    double oo2pi = 1./(2.*M_PI);
-
-    if (std::abs(p1-p2) <= M_PI)
-      return p1 - p2;
-
-    double n = std::round((p1-p2)*oo2pi);
-
-    return p1 - p2 - n*2.*M_PI;
-  }
-
-ThreeVector getMomentum(const edm4hep::TrackState& state, double Bz)
-{
-    double phi        = state.phi;
-    double omega      = state.omega;
-    double tanLambda  = state.tanLambda;
-
-    double pt = (0.299792458 * Bz / std::abs(omega))*dd4hep::MeV/dd4hep::GeV;
-
-    double px = pt * std::cos(phi);
-    double py = pt * std::sin(phi);
-    double pz = pt * tanLambda;
-
-    return ThreeVector(px, py, pz);
-}
-
-double getFieldFromCompact() {
-    dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
-    const double position[3] = {0, 0, 0};      // position to calculate magnetic field at (the origin in this case)
-    double magneticFieldVector[3] = {0, 0, 0}; // initialise object to hold magnetic field
-    mainDetector.field().magneticField(position, magneticFieldVector); // get the magnetic field vector from DD4hep
-    return magneticFieldVector[2] / dd4hep::tesla;                     // z component at (0,0,0)
-  }
-
-
-bool GetPointInZ(const double zPlane,        // z plane (endcap) coordinate
-                   const ThreeVector& refPt,   // reference point
-                   const ThreeVector& momVec,  // momentum
-                   ThreeVector& intersectPt) { // output intersection point
-    // protect from zero division
-    if (std::abs(momVec.z) < std::numeric_limits<float>::epsilon()) {
-      throw std::invalid_argument("BremRecoveryUtility: invalid momentum.z (zero division)");
-
-      return false;
-    }
-
-    // check the assumption
-    if (std::abs(refPt.z) > std::abs(zPlane)) {
-      throw std::invalid_argument("BremRecoveryUtility: invalid refPoint.z (ref. point outside the endcap)");
-
-      return false;
-    }
-
-    intersectPt.z = momVec.z > 0. ? std::abs(zPlane) : -std::abs(zPlane);
-    //std::cout<<"intersectPt.z: "<<intersectPt.z<<std::endl;
-    //std::cout<<"momVec.z: "<<momVec.z<<std::endl;
-    const double genericTime = (intersectPt.z - refPt.z)/momVec.z;
-    //std::cout<<"genericTime: "<<genericTime<<std::endl;
-    //std::cout<<"momVec.x: "<<momVec.x<<std::endl;
-    //std::cout<<"refPt.x: "<<refPt.x<<std::endl;
-    intersectPt.x = refPt.x + momVec.x*genericTime;
-    intersectPt.y = refPt.y + momVec.y*genericTime;
-
-    return true;
-  }
-
-/* if track reherence point is not at origin */
-bool GetPointOnCircle(const double radius,        // (barrel) radius
-                        const ThreeVector& refPt,   // reference point
-                        const ThreeVector& momVec,  // momentum
-                        ThreeVector& intersectPt) { // output intersection point
-    double refPtXY = refPt.magXY();
-    double momVecXY = momVec.magXY();
-    // protect from zero division
-    if (std::abs(momVecXY) < std::numeric_limits<float>::epsilon()) {
-      throw std::invalid_argument("BremRecoveryUtility: invalid pt (zero division)");
-
-      return false;
-    }
-
-    // check the assumption
-    if (std::abs(refPtXY) > radius) {
-      throw std::invalid_argument("BremRecoveryUtility: invalid refPoint (ref. point outside the barrel)");
-
-      return false;
-    }
-    // suppose a triangle OAP in the XY plane
-    //      A        A is the reference point
-    //      /\       O is the detector origin
-    //     /  \      P is the intersection point
-    //    ------     then the length OP = radius
-    //   O      P
-
-    // now do some middle school Euclidean geometry
-    // cos(O+P) = refPt*momVec / |refPt|*|momVec|
-    double normedInnerProd = (refPt.x*momVec.x + refPt.y*momVec.y) / (refPtXY*momVecXY);
-    // sine rule : radius/sin(P+O) = |refPt|/sin(P)
-    double sinP = refPtXY*std::sqrt(1. - normedInnerProd*normedInnerProd)/radius;
-    double angOplusP = std::acos(normedInnerProd);
-    double angP = std::asin(sinP); // always smaller than pi/2 by definition
-    double angO = angOplusP - angP;
-    // sine rule again : lenAP/sin(O) = |refPt|/sin(P)
-    double lenAP = refPtXY*std::sin(angO)/sinP;
-    double genericTime = lenAP/momVecXY; // this is what we wanted
-
-    // now done with the geometry, come back to 3D
-    intersectPt.x = refPt.x + momVec.x*genericTime;
-    intersectPt.y = refPt.y + momVec.y*genericTime;
-    intersectPt.z = refPt.z + momVec.z*genericTime;
-
-    return true;
-  }
-
-/* if track reference at the origin */
-bool GetPointOnCircleForRefAtOrigin(const double radius,        // (barrel) radius
-                        const ThreeVector& refPt,   // reference point
-                        const ThreeVector& momVec,  // momentum
-                        ThreeVector& intersectPt) { // output intersection point
-    double refPtXY = refPt.magXY();
-    double momVecXY = momVec.magXY();
-    // protect from zero division
-    if (std::abs(momVecXY) < std::numeric_limits<float>::epsilon()) {
-      throw std::invalid_argument("BremRecoveryUtility: invalid pt (zero division)");
-
-      return false;
-    }
-
-    // check the assumption
-    if (std::abs(refPtXY) > radius) {
-      throw std::invalid_argument("BremRecoveryUtility: invalid refPoint (ref. point outside the barrel)");
-
-      return false;
-    }
-    double genericTime = radius/momVecXY; // this is what we wanted
-
-    // now done with the geometry, come back to 3D
-    intersectPt.x = refPt.x + momVec.x*genericTime;
-    intersectPt.y = refPt.y + momVec.y*genericTime;
-    intersectPt.z = refPt.z + momVec.z*genericTime;
-
-    return true;
-  }
+   
 
 ElectronDecorator::ElectronDecorator( const std::string& name,ISvcLocator* svc)
 
@@ -196,7 +43,7 @@ std::cout << "pandoraReading constructor called" << std::endl;
 }
 
 edm4hep::ReconstructedParticleCollection 
-ElectronDresser::operator()(const edm4hep::ReconstructedParticleCollection& input,
+ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& input,
                            const edm4hep::ClusterCollection& clusters,
                            const edm4hep::TrackCollection& tracks) const {
 
@@ -246,14 +93,19 @@ ElectronDresser::operator()(const edm4hep::ReconstructedParticleCollection& inpu
 
            for (const auto& track : pfo.getTracks()) { // PFO track loop starts
               if (track.isAvailable()) {
-                  auto state = track.getTrackStates(edm4hep::TrackState::AtIP);
+                  //auto state = track.getTrackStates(edm4hep::TrackState::AtIP);
+                  edm4hep::TrackState  state;
+                  auto stateHolder = track.getTrackState(edm4hep::TrackState::AtIP);
+
+                  if (stateHolder.has_value()) {
+                    state = stateHolder.value();
+    
+                  }
+
                   const auto momVec = getMomentum(state, m_Bz);
 
                   float p = std::sqrt(momVec.x*momVec.x + momVec.y*momVec.y + momVec.z*momVec.z);
 
-                  // massless approximation
-
-                  Total_Input_PFO_Track_Energy = Total_Input_PFO_Track_Energy+p;
                   entry.tracks.push_back(track);
               }
            }  //  PFO track loop ends
@@ -278,8 +130,6 @@ ElectronDresser::operator()(const edm4hep::ReconstructedParticleCollection& inpu
 
           if (entry.tracks.size() <= 1)
             continue;
-
-          std::cout<<"!!!!!!!!!!!!!!!!!!!!!!!!!there are more than one track==============="<<std::endl;
 
           const auto clusterPos = entry.cluster.getPosition();
 
@@ -322,8 +172,13 @@ ElectronDresser::operator()(const edm4hep::ReconstructedParticleCollection& inpu
 
             bool aStatus = false;
             const auto& track1st = entry.tracks[0];
+            edm4hep::TrackState  trackState1st;
+            //const auto& trackState1st = track1st.getTrackStates(edm4hep::TrackState::AtIP);
+            auto state1st = track1st.getTrackState(edm4hep::TrackState::AtIP);
 
-            const auto& trackState1st = track1st.getTrackStates(edm4hep::TrackState::AtIP);
+            if (state1st.has_value()) {
+                trackState1st = state1st.value();
+            }
             const auto refPt = ThreeVector(trackState1st.referencePoint.x, trackState1st.referencePoint.y, trackState1st.referencePoint.z);
             const auto momVec = getMomentum( trackState1st, m_Bz);
             double zPlane = eCalEndCapInnerZ;
@@ -497,9 +352,8 @@ ElectronDresser::operator()(const edm4hep::ReconstructedParticleCollection& inpu
             particle.addToClusters(cluster);
             clusterEnergy += cluster.getEnergy();
          }                                                           // for cluster ends
-          std::cout << "clusterEnergy = " << clusterEnergy << std::endl;                                     
+          //std::cout << "clusterEnergy = " << clusterEnergy << std::endl;                                     
           particle.setEnergy(clusterEnergy);
        }// for bremMap ends
-
-
+       return output;
 }
