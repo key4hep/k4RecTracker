@@ -34,8 +34,12 @@ File_Detector="${K4GEO}/FCCee/ALLEGRO/compact/ALLEGRO_o1_v03/ALLEGRO_o1_v03.xml"
 File_SimOutput="simHits.root"
 
 File_DigiSteering="${Dir_TestSrc}/test_ALLEGRO/steering_digi.py"
-File_ChargeCollectionMap="${Dir_TestSrc}/resources/charge_collection_map_dummy_pixelVol20x20x43p5um.init"
+File_CCMap_creation_script="${Dir_TestSrc}/tools/generate-dummy-CCMap.py"
+File_CCMap="ccmap.init"
 File_DigiOutput="output.root"
+
+Sensor_Pitch=20.0
+Sensor_Thickness=43.5
 
 check_file() {
     local file_path="$1"
@@ -58,7 +62,6 @@ echo "  Checking input files"
 check_file "${File_SimSteering}"
 check_file "${File_Detector}"
 check_file "${File_DigiSteering}"
-check_file "${File_ChargeCollectionMap}"
 
 rm -f "${File_SimOutput}"
 rm -f "${File_DigiOutput}"
@@ -87,12 +90,21 @@ echo ""
 
 echo "  [2/3] Running digitization with VTXdigi_Modular using a charge collection map..."
 
+python "${File_CCMap_creation_script}" \
+    --fileName "${File_CCMap}" \
+    --pitch "${Sensor_Pitch}" \
+    --thickness "${Sensor_Thickness}" || {
+    echo "ERROR: Failed to create dummy charge collection map."
+    exit 1
+}
+check_file "${File_CCMap}"
+
 k4run "${File_DigiSteering}" \
     -n "${NEvts}" \
     --IOSvc.Input "${File_SimOutput}" \
     --IOSvc.Output "${File_DigiOutput}" \
     --GeoSvc.detectors "${File_Detector}" \
-    --VTXBdigi_inner.ChargeCollectionMap "${File_ChargeCollectionMap}"
+    --VTXBdigi_inner.ChargeCollectionMap "${File_CCMap}"
 
 if [ $? -ne 0 ]; then
     echo "ERROR: Digitization failed."
@@ -147,7 +159,7 @@ EOF
 
 echo ""
 echo "  Cleaning up temporary files..."
-# rm -rf "${File_SimOutput}" __pycache__
+rm -rf "${File_SimOutput}" "$File_CCMap}" __pycache__
 
 echo ""
 echo "========================================================================"

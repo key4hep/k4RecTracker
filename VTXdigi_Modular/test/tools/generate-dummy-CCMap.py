@@ -1,18 +1,14 @@
-import os
+import argparse
 
 import numpy as np
-import pandas as pd
-from numpy import array as arr
 
-output_file = "charge_collection_map_dummy.init"
-
-n_voxels = [3, 3, 3]  # u v w
-matrix_size = 5
-pixel_size = [43.5, 25.0, 25.0]  # thickness, pitch_u, pitch_v
-normalisation = 1.0
+NORMALISATION = 1.0
+# N_VOXELS and MATRIX_SIZE cannot be changed, the logic of GetMatrix depends on these exact numbers
+N_VOXELS = [3, 3, 3]  # u v w
+MATRIX_SIZE = 5
 
 
-def GetMatrix(i_u, i_v, i_w, printMatrix=False):
+def GetMatrix(i_u, i_v, i_w, matrix_size, normalisation, printMatrix=False):
     w_efficiencies = [
         0.01,
         0.2,
@@ -76,29 +72,57 @@ def GetMatrix(i_u, i_v, i_w, printMatrix=False):
     return matrix
 
 
-def WriteHeader(file):
-    f.write(f"this is just a header that will be filled\n")
-    f.write(f"internal {normalisation}\n")
-    f.write(f"##TURN## ##TILT## 1.0\n")
-    f.write(f"0.0 0.0 0.0\n")
-    f.write(
-        f"{pixel_size[0]} {pixel_size[1]} {pixel_size[2]} 0.0 0.0 0.0 0.0 {n_voxels[0]:n} {n_voxels[1]:n} {n_voxels[2]:n} 0.0\n"
+def WriteHeader(file, pixel_dimensions, n_voxels, normalisation):
+    file.write(f"this is just a header that will be filled\n")
+    file.write(f"internal {normalisation}\n")
+    file.write(f"##TURN## ##TILT## 1.0\n")
+    file.write(f"0.0 0.0 0.0\n")
+    file.write(
+        f"{pixel_dimensions[0]} {pixel_dimensions[1]} {pixel_dimensions[2]} 0.0 0.0 0.0 0.0 {n_voxels[0]:n} {n_voxels[1]:n} {n_voxels[2]:n} 0.0\n"
     )
     return
 
 
-with open(output_file, "w") as f:
-    WriteHeader(f)
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate a dummy charge collection map for VTXdigi_Modular tests",
+    )
+    parser.add_argument("--fileName", help="output file", required=True)
+    parser.add_argument(
+        "--pitch", type=float, metavar="UM", help="pixel pitch in um", required=True
+    )
+    parser.add_argument(
+        "--thickness",
+        type=float,
+        metavar="UM",
+        help="sensor thickness in um",
+        required=True,
+    )
+    args = parser.parse_args()
+    print(f"[generate-dummy-CCmap.py] Generating file {args.fileName}")
+    print(
+        f"[generate-dummy-CCmap.py] with pitch {args.pitch} um and thickness {args.thickness} um"
+    )
 
-    for i_u in range(n_voxels[0]):
-        for i_v in range(n_voxels[1]):
-            for i_w in range(n_voxels[2]):
-                # line begins with indices, CCMap is 1-indexed...
-                line = f"{i_u + 1:n} {i_v + 1:n} {i_w + 1:n}"
+    pixel_dimensions = [args.thickness, args.pitch, args.pitch]  # thickness, pitch_u, pitch_v
 
-                matrix = GetMatrix(i_u, i_v, i_w)
-                # matrix is stored row-wise in the line
-                for j_v in range(matrix_size):
-                    line += " " + " ".join(f"{val:.4f}" for val in matrix[:, j_v])
-                line += "\n"
-                _ = f.write(line)
+    with open(args.fileName, "w") as file:
+        WriteHeader(file, pixel_dimensions, N_VOXELS, NORMALISATION)
+
+        for i_u in range(N_VOXELS[0]):
+            for i_v in range(N_VOXELS[1]):
+                for i_w in range(N_VOXELS[2]):
+                    # line begins with indices, CCMap is 1-indexed...
+                    line = f"{i_u + 1:n} {i_v + 1:n} {i_w + 1:n}"
+
+                    matrix = GetMatrix(i_u, i_v, i_w, MATRIX_SIZE, NORMALISATION)
+
+                    # matrix is stored row-wise in the line
+                    for j_v in range(MATRIX_SIZE):
+                        line += " " + " ".join(f"{val:.4f}" for val in matrix[:, j_v])
+                    line += "\n"
+                    _ = file.write(line)
+
+
+if __name__ == "__main__":
+    main()
