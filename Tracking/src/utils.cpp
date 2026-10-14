@@ -215,13 +215,13 @@ torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbe
   return clustering;
 }
 
-bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol) {
-  TMatrixDSymEigen eig(M);
-  TVectorD eigenValues = eig.GetEigenValues();
+GeoNavigatorStateGuard::GeoNavigatorStateGuard()
+    : m_callerIndex(gGeoManager->GetListOfNavigators()->IndexOf(gGeoManager->GetCurrentNavigator())),
+      m_fitNavigator(gGeoManager->AddNavigator()) {
+  gGeoManager->SetCurrentNavigator(gGeoManager->GetListOfNavigators()->IndexOf(m_fitNavigator));
+}
 
-  for (int i = 0; i < eigenValues.GetNrows(); ++i) {
-    if (eigenValues[i] < -tol)
-      return false;
-  }
-  return true;
+GeoNavigatorStateGuard::~GeoNavigatorStateGuard() {
+  gGeoManager->SetCurrentNavigator(m_callerIndex);
+  gGeoManager->RemoveNavigator(m_fitNavigator);
 }
