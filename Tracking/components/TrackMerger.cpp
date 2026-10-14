@@ -170,10 +170,22 @@ private:
     // Parameters whose tolerance is negative are not considered (always pass).
     float d0_value, z0_value, phi_value, omega_value, tanLambda_value;
     if (m_useSignificance) {
-      d0_value = significance(ts1->D0, ts2->D0, *ts1, *ts2, TP::d0);
-      z0_value = significance(ts1->Z0, ts2->Z0, *ts1, *ts2, TP::z0);
-      phi_value = significance(ts1->phi, ts2->phi, *ts1, *ts2, TP::phi);
-      tanLambda_value = significance(ts1->tanLambda, ts2->tanLambda, *ts1, *ts2, TP::tanLambda);
+      for (const auto param : {TP::d0, TP::z0, TP::phi, TP::omega, TP::tanLambda}) {
+        if (!(ts1->getCovMatrix(param, param) + ts2->getCovMatrix(param, param) > 0.f)) {
+          warning() << "Combined uncertainty is zero (or not finite) for track state parameter "
+                    << static_cast<int>(param)
+                    << "; falling back to the absolute difference instead of the significance" << endmsg;
+        }
+      }
+      d0_value = significance(ts1->D0, ts2->D0, std::sqrt(ts1->getCovMatrix(TP::d0, TP::d0)),
+                              std::sqrt(ts2->getCovMatrix(TP::d0, TP::d0)));
+      z0_value = significance(ts1->Z0, ts2->Z0, std::sqrt(ts1->getCovMatrix(TP::z0, TP::z0)),
+                              std::sqrt(ts2->getCovMatrix(TP::z0, TP::z0)));
+      phi_value = significance(ts1->phi, ts2->phi, std::sqrt(ts1->getCovMatrix(TP::phi, TP::phi)),
+                               std::sqrt(ts2->getCovMatrix(TP::phi, TP::phi)));
+      tanLambda_value =
+          significance(ts1->tanLambda, ts2->tanLambda, std::sqrt(ts1->getCovMatrix(TP::tanLambda, TP::tanLambda)),
+                       std::sqrt(ts2->getCovMatrix(TP::tanLambda, TP::tanLambda)));
       omega_value = ptSignificance(*ts1, *ts2);
     } else {
       d0_value = std::abs(ts1->D0 - ts2->D0);
@@ -200,16 +212,12 @@ private:
   // A negative tolerance means the corresponding parameter is not considered for matching.
   static bool withinTolerance(float value, float tolerance) { return tolerance < 0.f || value <= tolerance; }
 
-  float significance(float par1, float par2, const edm4hep::TrackState& ts1, const edm4hep::TrackState& ts2,
-                     TP param) const {
+  // Difference of two values normalised by the combined uncertainty. Falls back to the plain difference if the
+  // combined uncertainty vanishes; the caller warns about that case.
+  static float significance(float par1, float par2, float sig1, float sig2) {
     const float diff = std::abs(par1 - par2);
-    const float sigma = std::sqrt(ts1.getCovMatrix(param, param) + ts2.getCovMatrix(param, param));
-    if (!(sigma > 0.f)) {
-      warning() << "Combined uncertainty is zero (or not finite) for track state parameter " << static_cast<int>(param)
-                << "; falling back to the absolute difference instead of the significance" << endmsg;
-      return diff;
-    }
-    return diff / sigma;
+    const float sigma = std::sqrt(sig1 * sig1 + sig2 * sig2);
+    return sigma > 0.f ? diff / sigma : diff;
   }
 
   // pt derived from the signed curvature omega [1/mm] and the (constant) z-component of the magnetic field [T].
@@ -220,15 +228,7 @@ private:
     const float pt2 = ptFromOmega(ts2.omega);
     const float sigmaPt1 = pt1 * std::sqrt(ts1.getCovMatrix(TP::omega, TP::omega)) / std::abs(ts1.omega);
     const float sigmaPt2 = pt2 * std::sqrt(ts2.getCovMatrix(TP::omega, TP::omega)) / std::abs(ts2.omega);
-    const float diff = std::abs(pt1 - pt2);
-    const float sigma = std::sqrt(sigmaPt1 * sigmaPt1 + sigmaPt2 * sigmaPt2);
-    if (!(sigma > 0.f)) {
-      warning() << "Combined pt uncertainty is zero (or not finite); falling back to the absolute pt difference "
-                   "instead of the significance"
-                << endmsg;
-      return diff;
-    }
-    return diff / sigma;
+    return significance(pt1, pt2, sigmaPt1, sigmaPt2);
   }
 
   float m_Bz{0.f};
