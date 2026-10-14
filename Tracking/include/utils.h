@@ -167,9 +167,13 @@ constexpr double a_lcio = 1e-15 * c_mm_s; // conversion constant
 /**
  * @brief RAII guard that preserves the caller's TGeoNavigator while the navigation state is modified.
  *
- * On construction, it remembers the current navigator of gGeoManager and makes a dedicated navigator
- * current (one per thread, created on first use). On destruction, it makes the caller's navigator
- * current again, so its state is left untouched on every exit path, including exceptions.
+ * On construction, it remembers the current navigator of gGeoManager, creates a dedicated navigator and
+ * makes it current. On destruction, it makes the caller's navigator current again and deletes the
+ * dedicated navigator, so both the caller's navigator and the list of navigators of gGeoManager are left
+ * untouched on every exit path, including exceptions. Each guard starts from a fresh navigator, so the
+ * result does not depend on previous uses.
+ *
+ * Not thread-safe: use it only from the thread that initialized the geometry.
  *
  * A dedicated navigator is used instead of TGeoManager::DoBackupState()/DoRestoreState(), because the
  * latter only save the position in the volume hierarchy (not the current point, direction, safety, ...)
@@ -179,9 +183,13 @@ class GeoNavigatorStateGuard {
 public:
   GeoNavigatorStateGuard();
   ~GeoNavigatorStateGuard();
+  // The guard owns m_fitNavigator: a copy would delete it twice
+  GeoNavigatorStateGuard(const GeoNavigatorStateGuard&) = delete;
+  GeoNavigatorStateGuard& operator=(const GeoNavigatorStateGuard&) = delete;
 
 private:
   Int_t m_callerIndex;
+  TGeoNavigator* m_fitNavigator;
 };
 
 #endif // UTILS_HPP

@@ -896,9 +896,6 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
   navigator->ResetState();
   navigator->CdTop();
   navigator->FindNode(m_posInit.X(), m_posInit.Y(), m_posInit.Z()); // seed position, in cm
-  const TVector3 seedDir = m_momInit.Unit();
-  navigator->SetCurrentDirection(seedDir.X(), seedDir.Y(), seedDir.Z());
-  navigator->SetLastSafetyForPoint(0., m_posInit.X(), m_posInit.Y(), m_posInit.Z());
 
   // Initialize the genfit fitter
   std::unique_ptr<genfit::AbsKalmanFitter> genfitFitter = nullptr;
