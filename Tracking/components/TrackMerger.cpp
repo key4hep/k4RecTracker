@@ -65,8 +65,10 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
   Gaudi::Property<float> m_phiTolerance{
       this, "PhiTolerance", 3.f,
       "Maximum allowed |phi(inner) - phi(outer)| for a match. Negative disables this criterion."};
-  Gaudi::Property<float> m_omegaTolerance{this, "OmegaTolerance", 2.f,
-                                          "Maximum allowed separation for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_omegaTolerance{
+      this, "OmegaTolerance", 2.f,
+      "Maximum allowed |omega(inner) - omega(outer)| for a match. With UseSignificance, omega is converted to pT "
+      "and the pT significance is used instead. Negative disables this criterion."};
   Gaudi::Property<float> m_tanLambdaTolerance{
       this, "TanLambdaTolerance", 3.f,
       "Maximum allowed |tanLambda(inner) - tanLambda(outer)| for a match. Negative disables this criterion."};
