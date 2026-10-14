@@ -183,15 +183,12 @@ private:
                     << "; falling back to the absolute difference instead of the significance" << endmsg;
         }
       }
-      d0_value = significance(ts1->D0, ts2->D0, std::sqrt(ts1->getCovMatrix(TP::d0, TP::d0)),
-                              std::sqrt(ts2->getCovMatrix(TP::d0, TP::d0)));
-      z0_value = significance(ts1->Z0, ts2->Z0, std::sqrt(ts1->getCovMatrix(TP::z0, TP::z0)),
-                              std::sqrt(ts2->getCovMatrix(TP::z0, TP::z0)));
-      phi_value = significance(ts1->phi, ts2->phi, std::sqrt(ts1->getCovMatrix(TP::phi, TP::phi)),
-                               std::sqrt(ts2->getCovMatrix(TP::phi, TP::phi)));
-      tanLambda_value =
-          significance(ts1->tanLambda, ts2->tanLambda, std::sqrt(ts1->getCovMatrix(TP::tanLambda, TP::tanLambda)),
-                       std::sqrt(ts2->getCovMatrix(TP::tanLambda, TP::tanLambda)));
+      d0_value = significance(ts1->D0, ts2->D0, ts1->getCovMatrix(TP::d0, TP::d0), ts2->getCovMatrix(TP::d0, TP::d0));
+      z0_value = significance(ts1->Z0, ts2->Z0, ts1->getCovMatrix(TP::z0, TP::z0), ts2->getCovMatrix(TP::z0, TP::z0));
+      phi_value =
+          significance(ts1->phi, ts2->phi, ts1->getCovMatrix(TP::phi, TP::phi), ts2->getCovMatrix(TP::phi, TP::phi));
+      tanLambda_value = significance(ts1->tanLambda, ts2->tanLambda, ts1->getCovMatrix(TP::tanLambda, TP::tanLambda),
+                                     ts2->getCovMatrix(TP::tanLambda, TP::tanLambda));
       omega_value = ptSignificance(*ts1, *ts2);
     } else {
       d0_value = std::abs(ts1->D0 - ts2->D0);
@@ -220,9 +217,9 @@ private:
 
   // Difference of two values normalised by the combined uncertainty. Falls back to the plain difference if the
   // combined uncertainty vanishes; the caller warns about that case.
-  static float significance(float par1, float par2, float sig1, float sig2) {
+  static float significance(float par1, float par2, float var1, float var2) {
     const float diff = std::abs(par1 - par2);
-    const float sigma = std::sqrt(sig1 * sig1 + sig2 * sig2);
+    const float sigma = std::sqrt(var1 + var2);
     return sigma > 0.f ? diff / sigma : diff;
   }
 
@@ -232,9 +229,10 @@ private:
   float ptSignificance(const edm4hep::TrackState& ts1, const edm4hep::TrackState& ts2) const {
     const float pt1 = ptFromOmega(ts1.omega);
     const float pt2 = ptFromOmega(ts2.omega);
-    const float sigmaPt1 = pt1 * std::sqrt(ts1.getCovMatrix(TP::omega, TP::omega)) / std::abs(ts1.omega);
-    const float sigmaPt2 = pt2 * std::sqrt(ts2.getCovMatrix(TP::omega, TP::omega)) / std::abs(ts2.omega);
-    return significance(pt1, pt2, sigmaPt1, sigmaPt2);
+    // Error propagation: var(pt) = (pt / omega)^2 * var(omega)
+    const float varPt1 = pt1 * pt1 * ts1.getCovMatrix(TP::omega, TP::omega) / (ts1.omega * ts1.omega);
+    const float varPt2 = pt2 * pt2 * ts2.getCovMatrix(TP::omega, TP::omega) / (ts2.omega * ts2.omega);
+    return significance(pt1, pt2, varPt1, varPt2);
   }
 
   float m_Bz{0.f};
