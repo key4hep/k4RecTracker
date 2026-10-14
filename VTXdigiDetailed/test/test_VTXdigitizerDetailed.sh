@@ -45,6 +45,7 @@ ddsim --steeringFile ${CLDCONFIG}/share/CLDConfig/cld_steer.py \
       --gun.particle ${PARTICLE} \
       --numberOfEvents ${N_EVENTS} \
       --outputFile ${TEMP_SIM} \
+      --random.enableEventSeed --random.seed 42 \
       > /dev/null 2>&1
 
 if [ $? -ne 0 ]; then
