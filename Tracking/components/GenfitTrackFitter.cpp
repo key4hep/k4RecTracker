@@ -305,6 +305,10 @@ struct GenfitTrackFitter final
   // GenFit and ROOT geometry navigation use process-global mutable state.
   // Do not allow the scheduler to execute this algorithm concurrently for
   // different events.
+  // If changing to multi-threaded be careful with side effects when 
+  // resetting the TGeoManager, that will apply globally. In addition
+  // dereferencing gGeoManager->GetListOfNavigators() may crash
+  // for any thread that is not the one that initialized the geometry
   bool isReEntrant() const override { return false; }
 
   std::tuple<edm4hep::TrackCollection, edm4hep::TrackCollection, edm4hep::TrackerHitPlaneCollection>
