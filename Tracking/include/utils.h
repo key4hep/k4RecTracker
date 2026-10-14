@@ -183,7 +183,7 @@ class GeoNavigatorStateGuard {
 public:
   GeoNavigatorStateGuard();
   ~GeoNavigatorStateGuard();
-  // The guard owns m_fitNavigator: a copy would delete it twice
+
   GeoNavigatorStateGuard(const GeoNavigatorStateGuard&) = delete;
   GeoNavigatorStateGuard& operator=(const GeoNavigatorStateGuard&) = delete;
 
