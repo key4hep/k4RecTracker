@@ -41,6 +41,7 @@ merger = TrackMerger(
     InputOuterTracks=OUTER_COLL,
     OutTracks=OUT_COLL,
     Greedy=True,
+    UseSignificance=False,
     D0Tolerance=D0_TOL,
     Z0Tolerance=Z0_TOL,
     PhiTolerance=PHI_TOL,

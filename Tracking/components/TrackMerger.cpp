@@ -74,6 +74,10 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
       "Maximum allowed |tanLambda(inner) - tanLambda(outer)| for a match. Negative disables this criterion."};
 
   StatusCode initialize() override {
+    // The magnetic field is only needed to convert omega to pT for the pT significance.
+    if (!m_useSignificance || m_omegaTolerance < 0.f) {
+      return StatusCode::SUCCESS;
+    }
     dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
     const double position[3] = {0, 0, 0};
     double magneticFieldVector[3] = {0, 0, 0};
