@@ -166,6 +166,6 @@ mgr = ApplicationMgr(
     TopAlg=[dch_digitizer, vtxb_digitizer, vtxd_digitizer, siwrb_digitizer, siwrd_digitizer, GGTF],
     EvtSel="NONE",
     EvtMax=-1,
-    ExtSvc=[EventDataSvc("EventDataSvc"), UniqueIDGenSvc("uidSvc"), RndmGenSvc()],
+    ExtSvc=[geoservice, EventDataSvc("EventDataSvc"), UniqueIDGenSvc("uidSvc"), RndmGenSvc()],
     OutputLevel=INFO,
 )

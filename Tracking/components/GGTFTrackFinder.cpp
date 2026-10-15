@@ -86,6 +86,10 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
       error() << "ModelPath is empty; an ONNX model file must be configured." << endmsg;
       return StatusCode::FAILURE;
     }
+    if (m_embeddingCoordinates.value() == 0) {
+      error() << "EmbeddingCoordinates must be greater than 0." << endmsg;
+      return StatusCode::FAILURE;
+    }
 
     try {
       m_memoryInfo =
@@ -105,6 +109,20 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
       Ort::AllocatorWithDefaultOptions allocator;
       m_inputName = m_session->GetInputNameAllocated(0, allocator).get();
       m_outputName = m_session->GetOutputNameAllocated(0, allocator).get();
+
+      // Models may return extra per-hit values, so only a lower bound on the values per hit is checked.
+      const auto outputShape = m_session->GetOutputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+      if (outputShape.size() != 2) {
+        error() << "Expected a rank-2 model output [nHits, values per hit], got rank " << outputShape.size() << endmsg;
+        return StatusCode::FAILURE;
+      }
+      // outputShape[1] is -1 if the dimension is dynamic, then it can only be checked for each event
+      if (outputShape[1] > 0 && static_cast<std::size_t>(outputShape[1]) < m_embeddingCoordinates.value() + 1) {
+        error() << "The model returns " << outputShape[1]
+                << " values per hit but at least EmbeddingCoordinates + 1 = " << m_embeddingCoordinates.value() + 1
+                << " are needed" << endmsg;
+        return StatusCode::FAILURE;
+      }
     } catch (const Ort::Exception& exception) {
       error() << "Failed to initialize ONNX Runtime: " << exception.what() << endmsg;
       return StatusCode::FAILURE;
@@ -325,18 +343,18 @@ private:
     }
 
     const auto outputInfo = outputs.front().GetTensorTypeAndShapeInfo();
-    const std::size_t outputElementCount = outputInfo.GetElementCount();
+    const std::vector<std::int64_t> outputDims = outputInfo.GetShape();
     const std::size_t valuesPerHit = m_embeddingCoordinates.value() + 1; // embedding coordinates + cluster potential
     if (nHits == 0) {
       return torch::empty({0, static_cast<std::int64_t>(valuesPerHit)}, torch::dtype(torch::kFloat32));
     }
     // Models may append extra per-hit values after the cluster potential; only the
     // leading embedding coordinates and the cluster potential are used.
-    if (outputElementCount % nHits != 0) {
-      throw std::runtime_error("Unexpected ONNX output size: " + std::to_string(outputElementCount) +
-                               " values is not a multiple of the hit count " + std::to_string(nHits));
+    if (outputDims.size() != 2 || outputDims[0] != static_cast<std::int64_t>(nHits)) {
+      throw std::runtime_error("Unexpected ONNX output shape: expected [" + std::to_string(nHits) +
+                               ", values per hit]");
     }
-    const std::size_t outputValuesPerHit = outputElementCount / nHits;
+    const std::size_t outputValuesPerHit = static_cast<std::size_t>(outputDims[1]);
     if (outputValuesPerHit < valuesPerHit) {
       throw std::runtime_error("Unexpected ONNX output size: expected at least " + std::to_string(valuesPerHit) +
                                " values per hit (" + std::to_string(m_embeddingCoordinates.value()) +
