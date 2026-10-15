@@ -157,11 +157,6 @@ GGTF = GGTFTrackFinder(
 )
 
 ############### Application Manager
-import subprocess
-
-ifilename = "https://fccsw.web.cern.ch/fccsw/filesForSimDigiReco/IDEA/DataAlgFORGEANT.root"
-subprocess.run(["wget", "--no-clobber", ifilename])
-
 mgr = ApplicationMgr(
     TopAlg=[dch_digitizer, vtxb_digitizer, vtxd_digitizer, siwrb_digitizer, siwrd_digitizer, GGTF],
     EvtSel="NONE",
