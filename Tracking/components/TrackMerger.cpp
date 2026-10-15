@@ -177,7 +177,7 @@ private:
     float d0_value, z0_value, phi_value, omega_value, tanLambda_value;
     if (m_useSignificance) {
       for (const auto param : {TP::d0, TP::z0, TP::phi, TP::omega, TP::tanLambda}) {
-        if (!(ts1->getCovMatrix(param, param) + ts2->getCovMatrix(param, param) > 0.f)) {
+        if (ts1->getCovMatrix(param, param) + ts2->getCovMatrix(param, param) <= 0.f) {
           warning() << "Combined uncertainty is zero (or not finite) for track state parameter "
                     << static_cast<int>(param)
                     << "; falling back to the absolute difference instead of the significance" << endmsg;
