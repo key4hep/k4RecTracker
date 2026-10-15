@@ -296,7 +296,7 @@ private:
    *
    * @param features Flattened input feature buffer containing seven float values per hit.
    * @return Owned CPU tensor containing EmbeddingCoordinates + 1 float values per hit (the last one is the
-   *         cluster potential).
+   *         cluster potential). Any additional per-hit model outputs are dropped.
    * @throws std::logic_error if the session is not initialized.
    * @throws std::runtime_error if the input or output shape is invalid.
    */
@@ -327,17 +327,29 @@ private:
     const auto outputInfo = outputs.front().GetTensorTypeAndShapeInfo();
     const std::size_t outputElementCount = outputInfo.GetElementCount();
     const std::size_t valuesPerHit = m_embeddingCoordinates.value() + 1; // embedding coordinates + cluster potential
-    const std::size_t expectedElementCount = nHits * valuesPerHit;
-    if (outputElementCount != expectedElementCount) {
-      throw std::runtime_error("Unexpected ONNX output size: expected " + std::to_string(valuesPerHit) +
+    if (nHits == 0) {
+      return torch::empty({0, static_cast<std::int64_t>(valuesPerHit)}, torch::dtype(torch::kFloat32));
+    }
+    // Models may append extra per-hit values after the cluster potential; only the
+    // leading embedding coordinates and the cluster potential are used.
+    if (outputElementCount % nHits != 0) {
+      throw std::runtime_error("Unexpected ONNX output size: " + std::to_string(outputElementCount) +
+                               " values is not a multiple of the hit count " + std::to_string(nHits));
+    }
+    const std::size_t outputValuesPerHit = outputElementCount / nHits;
+    if (outputValuesPerHit < valuesPerHit) {
+      throw std::runtime_error("Unexpected ONNX output size: expected at least " + std::to_string(valuesPerHit) +
                                " values per hit (" + std::to_string(m_embeddingCoordinates.value()) +
-                               " embedding coordinates + 1 cluster potential)");
+                               " embedding coordinates + 1 cluster potential), got " +
+                               std::to_string(outputValuesPerHit));
     }
 
     const float* outputData = outputs.front().GetTensorData<float>();
     const std::vector<std::int64_t> outputShape = {static_cast<std::int64_t>(nHits),
-                                                   static_cast<std::int64_t>(valuesPerHit)};
-    return torch::from_blob(const_cast<float*>(outputData), outputShape, torch::dtype(torch::kFloat32)).clone();
+                                                   static_cast<std::int64_t>(outputValuesPerHit)};
+    return torch::from_blob(const_cast<float*>(outputData), outputShape, torch::dtype(torch::kFloat32))
+        .narrow(1, 0, static_cast<std::int64_t>(valuesPerHit))
+        .clone();
   }
 
   /**

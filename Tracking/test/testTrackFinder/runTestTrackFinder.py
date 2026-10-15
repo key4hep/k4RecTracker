@@ -150,6 +150,7 @@ GGTF = GGTFTrackFinder(
     InputWireHitCollections=["DCH_DigiCollection"],
     OutputTracksGGTF=["GGTFTracks"],
     ModelPath=args.modelPath,
+    EmbeddingCoordinates=3,
     Tbeta=args.tbeta,
     Td=args.td,
     OutputLevel=INFO,
@@ -165,6 +166,6 @@ mgr = ApplicationMgr(
     TopAlg=[dch_digitizer, vtxb_digitizer, vtxd_digitizer, siwrb_digitizer, siwrd_digitizer, GGTF],
     EvtSel="NONE",
     EvtMax=-1,
-    ExtSvc=[geoservice, EventDataSvc("EventDataSvc"), UniqueIDGenSvc("uidSvc"), RndmGenSvc()],
+    ExtSvc=[EventDataSvc("EventDataSvc"), UniqueIDGenSvc("uidSvc"), RndmGenSvc()],
     OutputLevel=INFO,
 )
