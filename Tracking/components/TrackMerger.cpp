@@ -247,6 +247,11 @@ private:
   float signedPtFromOmega(float omega) const { return static_cast<float>(ConversionUnits::a_lcio) * m_Bz / omega; }
 
   float ptSignificance(const edm4hep::TrackState& ts1, const edm4hep::TrackState& ts2) const {
+    if (ts1.omega == 0.f || ts2.omega == 0.f) {
+      debug() << "Track state with omega == 0; using the omega significance instead of the pT significance" << endmsg;
+      return significance(ts1.omega, ts2.omega, ts1.getCovMatrix(TP::omega, TP::omega),
+                          ts2.getCovMatrix(TP::omega, TP::omega));
+    }
     const float pt1 = signedPtFromOmega(ts1.omega);
     const float pt2 = signedPtFromOmega(ts2.omega);
     // Error propagation: var(pt) = (pt / omega)^2 * var(omega)
