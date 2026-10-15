@@ -205,8 +205,8 @@ private:
     debug() << fmt::format("Comparing Loc {} vs {} ({}): d0={:.4f}, z0={:.4f}, phi={:.4f}, omega={:.4f}, "
                            "tanLambda={:.4f} -> Match: {}",
                            static_cast<int>(loc1), static_cast<int>(loc2),
-                           m_useSignificance ? "significance" : "absolute", d0_value, z0_value, phi_value,
-                           omega_value, tanLambda_value, match)
+                           m_useSignificance ? "significance" : "absolute", d0_value, z0_value, phi_value, omega_value,
+                           tanLambda_value, match)
             << endmsg;
 
     return match;
