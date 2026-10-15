@@ -64,7 +64,8 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
       "Maximum allowed |Z0(inner) - Z0(outer)| for a match. Negative disables this criterion."};
   Gaudi::Property<float> m_phiTolerance{
       this, "PhiTolerance", 3.f,
-      "Maximum allowed |phi(inner) - phi(outer)| for a match. Negative disables this criterion."};
+      "Maximum allowed |phi(inner) - phi(outer)|, wrapped into [-pi, pi], for a match. Negative disables this "
+      "criterion."};
   Gaudi::Property<float> m_omegaTolerance{
       this, "OmegaTolerance", 2.f,
       "Maximum allowed |omega(inner) - omega(outer)| for a match. With UseSignificance, omega is converted to pT "
@@ -185,15 +186,16 @@ private:
       }
       d0_value = significance(ts1->D0, ts2->D0, ts1->getCovMatrix(TP::d0, TP::d0), ts2->getCovMatrix(TP::d0, TP::d0));
       z0_value = significance(ts1->Z0, ts2->Z0, ts1->getCovMatrix(TP::z0, TP::z0), ts2->getCovMatrix(TP::z0, TP::z0));
-      phi_value =
-          significance(ts1->phi, ts2->phi, ts1->getCovMatrix(TP::phi, TP::phi), ts2->getCovMatrix(TP::phi, TP::phi));
+      // Pass the wrapped difference against 0 so that states on either side of phi = +-pi are compared correctly.
+      phi_value = significance(deltaPhi(ts1->phi, ts2->phi), 0.f, ts1->getCovMatrix(TP::phi, TP::phi),
+                               ts2->getCovMatrix(TP::phi, TP::phi));
       tanLambda_value = significance(ts1->tanLambda, ts2->tanLambda, ts1->getCovMatrix(TP::tanLambda, TP::tanLambda),
                                      ts2->getCovMatrix(TP::tanLambda, TP::tanLambda));
       omega_value = ptSignificance(*ts1, *ts2);
     } else {
       d0_value = std::abs(ts1->D0 - ts2->D0);
       z0_value = std::abs(ts1->Z0 - ts2->Z0);
-      phi_value = std::abs(ts1->phi - ts2->phi);
+      phi_value = std::abs(deltaPhi(ts1->phi, ts2->phi));
       omega_value = std::abs(ts1->omega - ts2->omega);
       tanLambda_value = std::abs(ts1->tanLambda - ts2->tanLambda);
     }
@@ -211,6 +213,9 @@ private:
 
     return match;
   }
+
+  // Difference phi1 - phi2 wrapped into [-pi, pi].
+  static float deltaPhi(float phi1, float phi2) { return std::remainder(phi1 - phi2, 2.f * static_cast<float>(M_PI)); }
 
   // A negative tolerance means the corresponding parameter is not considered for matching.
   static bool withinTolerance(float value, float tolerance) { return tolerance < 0.f || value <= tolerance; }
