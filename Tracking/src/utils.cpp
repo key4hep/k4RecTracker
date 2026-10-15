@@ -179,9 +179,10 @@ torch::Tensor find_condpoints(const torch::Tensor& betas, const torch::Tensor& u
   return indices_condpoints.index_select(0, sorted_indices);
 }
 
-torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbeta, float td) {
-  torch::Tensor X = output_model_tensor.slice(1, 0, 3);   // columns 0,1,2
-  torch::Tensor betas = output_model_tensor.select(1, 3); // column 3
+torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbeta, float td,
+                             int64_t nEmbeddingCoordinates) {
+  torch::Tensor X = output_model_tensor.slice(1, 0, nEmbeddingCoordinates);   // embedding coordinates
+  torch::Tensor betas = output_model_tensor.select(1, nEmbeddingCoordinates); // cluster potential
 
   int64_t n_points = betas.size(0);
   torch::Tensor clustering = torch::zeros({n_points}, torch::dtype(torch::kLong));
