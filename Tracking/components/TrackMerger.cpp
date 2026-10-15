@@ -70,8 +70,8 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
       "criterion."};
   Gaudi::Property<float> m_omegaTolerance{
       this, "OmegaTolerance", 2.f,
-      "Maximum allowed |omega(inner) - omega(outer)| for a match. With UseSignificance, omega is converted to pT "
-      "and the pT significance is used instead. Negative disables this criterion."};
+      "Maximum allowed |omega(inner) - omega(outer)| for a match. With UseSignificance, omega is converted to the "
+      "signed pT (charge sign times pT) and its significance is used instead. Negative disables this criterion."};
   Gaudi::Property<float> m_tanLambdaTolerance{
       this, "TanLambdaTolerance", 3.f,
       "Maximum allowed |tanLambda(inner) - tanLambda(outer)| for a match. Negative disables this criterion."};
@@ -236,12 +236,15 @@ private:
     return sigma > 0.f ? diff / sigma : diff;
   }
 
-  // pt derived from the signed curvature omega [1/mm] and the (constant) z-component of the magnetic field [T].
-  float ptFromOmega(float omega) const { return 0.3f * m_Bz / (std::abs(omega) * 1000.f); }
+  // Signed pt (charge sign times pt) derived from the signed curvature omega [1/mm] and the (constant) z-component of
+  // the magnetic field [T]. Keeping the sign makes segments with opposite charge incompatible.
+  float signedPtFromOmega(float omega) const {
+    return static_cast<float>(ConversionUnits::a_lcio) * m_Bz / omega;
+  }
 
   float ptSignificance(const edm4hep::TrackState& ts1, const edm4hep::TrackState& ts2) const {
-    const float pt1 = ptFromOmega(ts1.omega);
-    const float pt2 = ptFromOmega(ts2.omega);
+    const float pt1 = signedPtFromOmega(ts1.omega);
+    const float pt2 = signedPtFromOmega(ts2.omega);
     // Error propagation: var(pt) = (pt / omega)^2 * var(omega)
     const float varPt1 = pt1 * pt1 * ts1.getCovMatrix(TP::omega, TP::omega) / (ts1.omega * ts1.omega);
     const float varPt2 = pt2 * pt2 * ts2.getCovMatrix(TP::omega, TP::omega) / (ts2.omega * ts2.omega);
