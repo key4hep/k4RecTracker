@@ -123,4 +123,33 @@ set_tests_properties(${test_name}_check PROPERTIES
   WORKING_DIRECTORY "${test_dir}"
   FIXTURES_REQUIRED ${test_name}_output_fixture
 )
+
+SET(test_name "test_SimTrackerHitCellMerger")
+SET(test_dir "${CMAKE_SOURCE_DIR}/Tracking/test/testSimTrackerHitCellMerger")
+
+ADD_TEST(NAME ${test_name}_setup
+  COMMAND python3 test_simtrackerhit_cell_merger.py setup --input input.root)
+set_test_env(${test_name}_setup)
+set_tests_properties(${test_name}_setup PROPERTIES
+  WORKING_DIRECTORY "${test_dir}"
+  FIXTURES_SETUP ${test_name}_input_fixture
+)
+
+ADD_TEST(NAME ${test_name}_run
+  COMMAND k4run test_simtrackerhit_cell_merger_steer.py --input input.root --output output.root)
+set_test_env(${test_name}_run)
+set_tests_properties(${test_name}_run PROPERTIES
+  WORKING_DIRECTORY "${test_dir}"
+  FIXTURES_REQUIRED ${test_name}_input_fixture
+  FIXTURES_SETUP ${test_name}_output_fixture
+)
+
+ADD_TEST(NAME ${test_name}_check
+  COMMAND python3 test_simtrackerhit_cell_merger.py check --output output.root)
+set_test_env(${test_name}_check)
+set_tests_properties(${test_name}_check PROPERTIES
+  WORKING_DIRECTORY "${test_dir}"
+  FIXTURES_REQUIRED ${test_name}_output_fixture
+)
+
 #endif()
