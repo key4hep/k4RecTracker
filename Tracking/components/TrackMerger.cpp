@@ -22,14 +22,16 @@
 #include "edm4hep/TrackState.h"
 #include "edm4hep/TrackerHit.h"
 #include "k4FWCore/Transformer.h"
+#include "k4Interface/IGeoSvc.h"
 
 #include "edm4hep/MCParticleCollection.h"
 
-#include "DD4hep/DD4hepUnits.h"
 #include "DD4hep/Detector.h"
 
 #include <cmath>
 #include <string>
+
+#include <utils.h>
 
 // Type aliases for improved readability
 using TrackColl = edm4hep::TrackCollection;
@@ -79,11 +81,17 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
     if (!m_useSignificance || m_omegaTolerance < 0.f) {
       return StatusCode::SUCCESS;
     }
-    dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
-    const double position[3] = {0, 0, 0};
-    double magneticFieldVector[3] = {0, 0, 0};
-    mainDetector.field().magneticField(position, magneticFieldVector);
-    m_Bz = magneticFieldVector[2] / dd4hep::tesla;
+    if (!m_geoSvc.retrieve()) {
+      error() << "Unable to retrieve the GeoSvc, which is needed for the magnetic field" << endmsg;
+      return StatusCode::FAILURE;
+    }
+    m_Bz = getBzAtOrigin(*m_geoSvc->getDetector());
+    if (m_Bz == 0.f) {
+      error() << "Magnetic field is zero, so pT cannot be derived from omega. Load a geometry with a field, or "
+                 "disable the omega/pT criterion (OmegaTolerance < 0 or UseSignificance = false)"
+              << endmsg;
+      return StatusCode::FAILURE;
+    }
     debug() << "B field (T) is : " << m_Bz << endmsg;
     return StatusCode::SUCCESS;
   }
@@ -240,6 +248,7 @@ private:
     return significance(pt1, pt2, varPt1, varPt2);
   }
 
+  ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
   float m_Bz{0.f};
 };
 

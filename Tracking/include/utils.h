@@ -28,6 +28,14 @@
 #include <marlinutil/HelixClass_double.h>
 #include <torch/torch.h>
 
+/**
+ * @brief Returns the z component of the magnetic field at the origin, in Tesla.
+ *
+ * Returns 0 if the detector has no field defined (e.g. no geometry loaded); callers that need a field should check
+ * for that.
+ */
+double getBzAtOrigin(const dd4hep::Detector& detector);
+
 /////////////////////////////////
 /// Track propagation to Ecal ///
 /////////////////////////////////
