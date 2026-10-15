@@ -17,6 +17,7 @@
  * limitations under the License.
  */
 
+#include "Gaudi/Accumulators.h"
 #include "edm4hep/Track.h"
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackState.h"
@@ -30,6 +31,7 @@
 
 #include <cmath>
 #include <string>
+#include <utility>
 
 #include <utils.h>
 
@@ -185,11 +187,15 @@ private:
     // Parameters whose tolerance is negative are not considered (always pass).
     float d0_value, z0_value, phi_value, omega_value, tanLambda_value;
     if (m_useSignificance) {
-      for (const auto param : {TP::d0, TP::z0, TP::phi, TP::omega, TP::tanLambda}) {
-        if (ts1->getCovMatrix(param, param) + ts2->getCovMatrix(param, param) <= 0.f) {
-          warning() << "Combined uncertainty is zero (or not finite) for track state parameter "
-                    << static_cast<int>(param)
-                    << "; falling back to the absolute difference instead of the significance" << endmsg;
+      // Only check parameters whose criterion is enabled. The warning is rate-limited by the counter, which also
+      // reports the total number of occurrences at finalize.
+      for (const auto& [param, tolerance] :
+           {std::pair{TP::d0, m_d0Tolerance.value()}, std::pair{TP::z0, m_z0Tolerance.value()},
+            std::pair{TP::phi, m_phiTolerance.value()}, std::pair{TP::omega, m_omegaTolerance.value()},
+            std::pair{TP::tanLambda, m_tanLambdaTolerance.value()}}) {
+        if (tolerance >= 0.f && ts1->getCovMatrix(param, param) + ts2->getCovMatrix(param, param) <= 0.f) {
+          ++m_zeroUncertaintyWarning;
+          debug() << "Combined uncertainty is zero for track state parameter " << static_cast<int>(param) << endmsg;
         }
       }
       d0_value = significance(ts1->D0, ts2->D0, ts1->getCovMatrix(TP::d0, TP::d0), ts2->getCovMatrix(TP::d0, TP::d0));
@@ -238,9 +244,7 @@ private:
 
   // Signed pt (charge sign times pt) derived from the signed curvature omega [1/mm] and the (constant) z-component of
   // the magnetic field [T]. Keeping the sign makes segments with opposite charge incompatible.
-  float signedPtFromOmega(float omega) const {
-    return static_cast<float>(ConversionUnits::a_lcio) * m_Bz / omega;
-  }
+  float signedPtFromOmega(float omega) const { return static_cast<float>(ConversionUnits::a_lcio) * m_Bz / omega; }
 
   float ptSignificance(const edm4hep::TrackState& ts1, const edm4hep::TrackState& ts2) const {
     const float pt1 = signedPtFromOmega(ts1.omega);
@@ -251,6 +255,8 @@ private:
     return significance(pt1, pt2, varPt1, varPt2);
   }
 
+  mutable Gaudi::Accumulators::MsgCounter<MSG::WARNING> m_zeroUncertaintyWarning{
+      this, "Combined uncertainty of a track parameter is zero; using the absolute difference instead", 10};
   ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
   float m_Bz{0.f};
 };
