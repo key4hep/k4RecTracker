@@ -212,7 +212,8 @@ private:
       for (const auto& [param, tolerance] :
            {std::pair{TP::d0, d0Cut}, std::pair{TP::z0, z0Cut}, std::pair{TP::phi, phiCut},
             std::pair{TP::omega, omegaCut}, std::pair{TP::tanLambda, tanLambdaCut}}) {
-        if (tolerance >= 0.f && ts1->getCovMatrix(param, param) + ts2->getCovMatrix(param, param) <= 0.f) {
+        // Negated on purpose: NaN compares false, so `<= 0.f` would not catch it
+        if (tolerance >= 0.f && !(ts1->getCovMatrix(param, param) + ts2->getCovMatrix(param, param) > 0.f)) {
           ++m_zeroUncertaintyWarning;
           debug() << "Combined uncertainty is zero for track state parameter " << static_cast<int>(param) << endmsg;
         }
