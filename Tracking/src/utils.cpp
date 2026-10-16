@@ -1,5 +1,14 @@
 #include "utils.h"
 
+#include "DD4hep/DD4hepUnits.h"
+
+double getBzAtOrigin(const dd4hep::Detector& detector) {
+  const double position[3] = {0, 0, 0};
+  double magneticFieldVector[3] = {0, 0, 0};
+  detector.field().magneticField(position, magneticFieldVector);
+  return magneticFieldVector[2] / dd4hep::tesla;
+}
+
 dd4hep::rec::LayeredCalorimeterData* getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
 
   dd4hep::rec::LayeredCalorimeterData* theExtension = 0;
