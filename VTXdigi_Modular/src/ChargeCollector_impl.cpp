@@ -585,22 +585,27 @@ void ChargeCollector_CCMap::FillHit(const SimHitWrapper& simHit, HitMap& hitMap,
   const auto pixelCount = m_digitizer.PixelCount();
   const auto thickness = m_digitizer.ActiveVolumeDimensions().at(2);
   const auto ccmapVoxelCount = m_CCMap.GetVoxelCount();
-  for (const auto& [charge, pos] :
-       path.SampleDepositions(simHit.charge(), randomGen, m_meanDepositionsPerUm, *m_chargeSamplingHist)) {
-    const auto [pixI, voxI] =
-        VTXdigi_tools::Trafo_local_pixIVoxI(pos, pixelPitch, pixelCount, thickness, ccmapVoxelCount);
+  for (auto& [charge, pos] : path.SampleDepositions(simHit.charge(), randomGen, m_meanDepositionsPerUm, *m_chargeSamplingHist)) {
 
-    DistributeVoxelCharge(hitMap, pixI, voxI, charge, simHit);
+    // Move the CCMap downwards st. the charge collection is centres around the sensor center (w=0).  Otherwise angled tracks would produce a horizontal offset in the charge collection. This offset is physically correct and not a problem if we set the cluster local w coordinate to w=chargeCollectionDepthCenter. In the real detector, aligning each plane would take care of the offset. But for us, the reconstruction (that is Conformal tracking) cannot deal with digiHits that are not on the sensor sensitive surface (w=0). So we do this instead.
+    // This has the tradeoff that part of the CCMap is now outside of the sensor volume. We assume that that part of the map does not collect a significant amount of charge (Good approximation for TPSCo 65nm CIS with thickness > 30 um)
+    // We achieve shifting the CCMap downwards by shifting the path upwards instead. This is equivalent, but much less annoying to implement.
+    // TODO: because is in a rather hot loop, we might consider pre-shifting at the path, or even at the CCMap level
+    pos.z() += m_chargeCollectionDepthCenter;
+    if (std::abs(pos.z()) > 0.5 * thickness) {
+      // drop charges we just shifted outside of the sensor volume.
+      continue;
+    }
+
+    const auto [pixI, voxI] = VTXdigi_tools::Trafo_local_pixIVoxI(pos, pixelPitch, pixelCount, thickness, ccmapVoxelCount);
+    DistributeVoxelCharge(hitMap, charge, pixI, voxI, simHit);
   }
 
-  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4,
-                                                           simHit.truthPos(), trafoMatrix);
+  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix);
 }
 
-void ChargeCollector_CCMap::DistributeVoxelCharge(HitMap& hitMap, const PixelIndex& pixI, const VoxelIndex& voxI,
-                                                  const float charge, const SimHitWrapper& simHit) const {
-
-  /* cache things, this is the hottest loop */
+void ChargeCollector_CCMap::DistributeVoxelCharge(HitMap& hitMap, const float charge, const PixelIndex& pixI, const VoxelIndex& voxI, const SimHitWrapper& simHit) const {
+  /* cache things because this is the hottest loop */
   const int ccmapSize = m_CCMap.GetSize();
   const int i_u_origin = pixI[0] - m_CCMap.GetSizeHalf(); // pix index of leftmost pixel in CCMap matrix
   const int i_v_origin = pixI[1] - m_CCMap.GetSizeHalf();
@@ -614,12 +619,12 @@ void ChargeCollector_CCMap::DistributeVoxelCharge(HitMap& hitMap, const PixelInd
   const int row_max = std::min(ccmapSize, pixelCount_v - i_v_origin);
 
   for (int col = col_min; col < col_max; ++col) {
-    const int i_u = i_u_origin + col; // convert from col in [0, matrixSize) to pixel offset in [-matrixSize_half,
-                                      // matrixSize_half]. Note size_half = (size-1)/2
+    const int i_u = i_u_origin + col;
+    // convert from col in [0, matrixSize) to pixel offset in [-matrixSize_half, matrixSize_half]
+    // Note that size_half = (size-1)/2
 
     for (int row = row_min; row < row_max; ++row) {
       const int i_v = i_v_origin + row;
-
       const float chargeToAdd = m_CCMap.GetWeight(voxI, col, row) * charge;
       hitMap.FillCharge({i_u, i_v}, chargeToAdd, simHit);
     }

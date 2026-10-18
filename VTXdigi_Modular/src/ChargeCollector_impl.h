@@ -115,8 +115,8 @@ public:
 
 private:
   /** @brief Fill charge into the hitmap, according to a in-pixel bin's charge sharing weights */
-  void DistributeVoxelCharge(HitMap& hitMap, const PixelIndex& pixI, const VoxelIndex& voxI, const float charge,
-                             const SimHitWrapper& simHit) const;
+  void DistributeVoxelCharge(HitMap& hitMap, const float charge, const PixelIndex& pixI, const VoxelIndex& voxI, const SimHitWrapper& simHit) const;
+
 
   /** @brief Move the truth position in the simHitWrapper along the computed path to the depleted region center (as
    * defined by the digitizer Gaudi property)
