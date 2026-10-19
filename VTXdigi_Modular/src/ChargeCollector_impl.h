@@ -28,18 +28,20 @@ constexpr float kCCMapEntryMinimum =
 struct Path {
   dd4hep::rec::Vector3D entry;  // in local coordinates, in mm
   dd4hep::rec::Vector3D travel; // in local coordinates, in mm
-  dd4hep::rec::Vector3D simPos; // in local coordinates, in mm
   float lengthG4;
+  float charge; // simHit deposited charge, in e
   bool isValid = false;
 
   Path() = default;
   /** @brief Construct path information from a simHit and the sensor's transformation matrix
-   * @note set Path::valid. false means the path would not intersect the sensor volume */
-  Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer);
+   * @note set Path::valid. false means the path would not intersect the sensor volume
+   * @param w_offset the offset in the w-direction (local z-direction). Used to get the same effect as shifting the
+   * CCMap the opposite direction. Charge shifted outside the sensor volume is silenty droppend. When in doubt use
+   * w_offset = 0.0 */
+  Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer, double w_offset);
 
-  std::vector<std::pair<float, dd4hep::rec::Vector3D>> SampleDepositions(const float hitCharge, TRandom3& randomGen,
-                                                                         const float meanDepositionsPerUm,
-                                                                         const TH1D& chargeSamplingHist) const;
+  std::vector<std::pair<float, dd4hep::rec::Vector3D>>
+  SampleDepositions(TRandom3& randomGen, const float meanDepositionsPerUm, const TH1D& chargeSamplingHist) const;
 };
 
 /** @brief Compute the factors by which to clip a path along a given axis (to clip it to the sensor volume) */
@@ -58,13 +60,13 @@ class ChargeCollectionMap {
   int m_matrixSize;
   int m_matrixSize_half;         // =(matrixSize-1)/2 (for better performance in hot loop)
   std::vector<float> m_matrices; // charge sharing matrices, one per in-pixel bin (flattened for better performance)
-  double m_chargeCollectionDepthCenter;
+  double m_chargeCollectionDepthCenter = 0.0;
+  const bool m_shiftCollectionDepthToCenter;
 
 public:
   /** @brief Construct charge collection map from a file
    * @note Checks that parameters from the charge collection map file match those in the digitiser */
   ChargeCollectionMap(const std::string& ccmapFileName, const VTXdigi_Modular& digitizer); // load weights from file
-  ChargeCollectionMap() = default;
 
   double GetChargeCollectionDepthCenter() const { return m_chargeCollectionDepthCenter; }
 
@@ -90,6 +92,17 @@ public:
   inline int GetVoxelCount(int i) const { return m_voxelCount.at(i); }
   inline std::array<int, 3> GetVoxelCount() const { return m_voxelCount; }
 
+  /** @brief Get the vertical shift to apply to the path in case the CCMap collects charge assyemetrically around the
+  vertical center
+  @note Returns a positive value to shift the path upwards (to +w). This is mathematically equivalent to shifting the
+  CCMap downwards, which is needed if the charge collection centre is above w=0.
+  @note Returns 0 if Gaudi property m_shiftCollectionDepthToCenter==false */
+  inline double VerticalPathShift() const {
+    if (m_shiftCollectionDepthToCenter)
+      return m_chargeCollectionDepthCenter;
+    return 0.0;
+  }
+
 private:
   /** @brief Convert 3D in-pixel bin indices and a matrix row/column to a flat index for m_matrices */
   int FindIndex(const VoxelIndex& voxI, const int col, const int row) const;
@@ -103,10 +116,6 @@ class ChargeCollector_CCMap : public IChargeCollector {
   float m_meanDepositionsPerUm; // mean number of deposition clusters per um of path length in the sensor to sample
                                 // deposition count from
 
-  const bool m_shiftTruthPos; // if true, the truth position in the simHitWrapper is shifted to the depth in the sensor
-                              // where most charge is collected, to get useful residual plots. Mirrors
-                              // VTXdigi_Modular::m_shiftTruthPosition Gaudi property.
-
 public:
   explicit ChargeCollector_CCMap(const VTXdigi_Modular& digitizer);
 
@@ -115,21 +124,8 @@ public:
 
 private:
   /** @brief Fill charge into the hitmap, according to a in-pixel bin's charge sharing weights */
-  void DistributeVoxelCharge(HitMap& hitMap, const float charge, const PixelIndex& pixI, const VoxelIndex& voxI, const SimHitWrapper& simHit) const;
-
-
-  /** @brief Move the truth position in the simHitWrapper along the computed path to the depleted region center (as
-   * defined by the digitizer Gaudi property)
-   * @note This is necessary to get meaningful residual plots for sensors where charge is not collected across the whole
-   * sensor thickness. In TPSCo 65nm CIS the depletion region only extends ~10 um down into the sensor, so charges are
-   * only collected close to the upper sensor surface. For tracks passing through the sensor, the simHit position is
-   * defined at the sensor center. So for angled tracks, the residual (which is truth - reco) would be dominated by the
-   * track angle instead of the charge collection effects we want to study. By moving the truth position to the depleted
-   * region center, we get residuals that are dominated by charge collection effects.
-   * @note Only used for plotting the residuals, does not change the output collections in any way.
-   * @note If the path does not reach the depleted region center, the truth position is moved to the path end closest to
-   * the depleted region center */
-  void MoveTruthPosition(const SimHitWrapper& simHit, const Path& path) const;
+  void DistributeVoxelCharge(HitMap& hitMap, const float charge, const PixelIndex& pixI, const VoxelIndex& voxI,
+                             const SimHitWrapper& simHit) const;
 };
 
 /* -- Charge collector algorithms for debugging -- */

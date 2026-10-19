@@ -1415,12 +1415,8 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     // position
     VTXdigi_tools::PixelCoords clusterPos_pixC = cluster.ComputeCoG(m_clusterizeEndPixelsOnly.value());
 
-    double cluster_pos_w;
-    if (m_forceClusterPosToSensitiveSurface.value())
-      cluster_pos_w = 0.f;
-    else
-      cluster_pos_w = m_chargeCollector->GetChargeCollectionDepthCenter();
-
+    const double cluster_pos_w =
+        0.0; // clusters need to be on sensor sensitive surface (w=0) for Conformal tracking to work
     const dd4hep::rec::Vector3D clusterPos_local =
         VTXdigi_tools::Trafo_pixCoords_local(clusterPos_pixC, m_pixelPitch, m_pixelCount, cluster_pos_w);
     const dd4hep::rec::Vector3D clusterPos_global = VTXdigi_tools::Trafo_local_global(clusterPos_local, trafoMatrix);
@@ -1755,11 +1751,7 @@ void VTXdigi_Modular::FillHistograms_perSensor(const std::vector<VTXdigi_tools::
   const dd4hep::rec::Vector3D simHit_dir_global = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getMomentum()).unit();
   const dd4hep::rec::Vector3D simHit_dir_local = VTXdigi_tools::TrafoVec_global_local(simHit_dir_global, trafoMatrix);
 
-  float targetDepth;
-  if (m_path_shiftTruthPos.value())
-    targetDepth = m_chargeCollector->GetChargeCollectionDepthCenter();
-  else
-    targetDepth = 0.f;
+  float targetDepth = 0.0; // all digiHits need to be created at w=0
   const float t = (targetDepth - simHit_pos_local.z()) / simHit_dir_local.z();
   const dd4hep::rec::Vector3D simHit_pos_local_corr =
       simHit_pos_local + t * simHit_dir_local; // extrapolated position to the charge collection depth

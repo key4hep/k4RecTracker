@@ -34,15 +34,15 @@ std::unique_ptr<IChargeCollector> CreateChargeCollector(const VTXdigi_Modular& d
                          StatusCode::FAILURE);
   }
 
-  digitizer.info() << " - Created charge collector with algorithm " << algorithm
-                   << ". Charge collection depth center at " << chargeCollector->GetChargeCollectionDepthCenter()
-                   << " mm." << endmsg;
+  digitizer.info() << " - Created charge collector with algorithm " << algorithm << endmsg;
   return chargeCollector;
 }
 
-Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer) {
+Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VTXdigi_Modular& digitizer,
+           double w_offset) {
   const bool printDebug = digitizer.msgLevel() <= MSG::DEBUG;
-  simPos = simHit.truthPos();
+  const dd4hep::rec::Vector3D simPos = simHit.truthPos();
+  charge = simHit.charge();
 
   const double momentumEps = 1e-10;
   double momentum_global[3] = {static_cast<double>(simHit.hitPtr()->getMomentum().x),
@@ -140,6 +140,30 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
     travel = (t_max - t_min) * travel;
   }
 
+  /* Step 4 - apply w_offset (if any) */
+  if (w_offset != 0.0) {
+    entry.z() += w_offset;
+    // now trim the path to sensor thickness again
+    const double thickness = digitizer.ActiveVolumeDimensions().at(2);
+    dd4hep::rec::Vector3D exit = entry + travel;
+    if (std::abs(entry.z()) > 0.5 * thickness && std::abs(exit.z()) > 0.5 * thickness) {
+      // Both entry and exit are outside the sensor. drop this path
+      isValid = false;
+      return;
+    }
+    t = {0., 1.};
+    t = ComputePathClippingFactors(t, entry.z(), travel.z(), thickness);
+    /* No need to do the checks here, valid clipping is ensured */
+    if (t[0] != 0.0) {
+      entry = entry + t[0] * travel;
+      travel = (t[1] - t[0]) * travel;
+      charge *= (1.0 - t[0]); // scale charge by the fraction of the path that is still inside the sensor
+    } else if (t[1] != 1.0) {
+      travel = t[1] * travel;
+      charge *= t[1]; // scale charge by the fraction of the path that is still inside the sensor
+    }
+  }
+
   if (printDebug)
     digitizer.debug() << "       - Constructed path, length " << travel.r() * mm_to_um << " um (G4-length "
                       << lengthG4 * mm_to_um << " um), entry (" << entry.x() << ", " << entry.y() << ", " << entry.z()
@@ -148,9 +172,8 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
   isValid = true;
 }
 
-std::vector<std::pair<float, dd4hep::rec::Vector3D>> Path::SampleDepositions(const float hitCharge, TRandom3& randomGen,
-                                                                             const float meanDepositionsPerUm,
-                                                                             const TH1D& chargeSamplingHist) const {
+std::vector<std::pair<float, dd4hep::rec::Vector3D>>
+Path::SampleDepositions(TRandom3& randomGen, const float meanDepositionsPerUm, const TH1D& chargeSamplingHist) const {
   // draw number of depositions from a sub-poissonian distribution
   float width = 0.8; // width of the sub-poissonian (0.8 resembles what Allpix Squared does very well)
   float mean = travel.r() * mm_to_um * meanDepositionsPerUm; // convert from mm to um
@@ -161,18 +184,18 @@ std::vector<std::pair<float, dd4hep::rec::Vector3D>> Path::SampleDepositions(con
   float totalDepositedCharge = 0;
 
   for (int i_dep = 0; i_dep < NDepositions; ++i_dep) {
-    int charge = static_cast<int>(chargeSamplingHist.GetRandom(&randomGen));
+    int depositionCharge = static_cast<int>(chargeSamplingHist.GetRandom(&randomGen));
 
     const double t = randomGen.Rndm(); // uniform in (0,1)
     const dd4hep::rec::Vector3D pos = entry + t * travel;
 
-    depositions.push_back(std::make_pair(charge, pos));
-    totalDepositedCharge += charge;
+    depositions.push_back(std::make_pair(depositionCharge, pos));
+    totalDepositedCharge += depositionCharge;
   }
 
   // rescale charges to ensure total charge is equal to simHit.charge()
   // will be important when drawing each depositions charge from the straggling distribution
-  const float chargeScaler = hitCharge / static_cast<float>(totalDepositedCharge);
+  const float chargeScaler = charge / static_cast<float>(totalDepositedCharge);
   for (auto& dep : depositions) {
     dep.first *= chargeScaler;
   }
@@ -212,7 +235,8 @@ std::array<double, 2> ComputePathClippingFactors(std::array<double, 2> t, const 
 
 /* -- CCMap approach -- */
 
-ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const VTXdigi_Modular& digitizer) {
+ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const VTXdigi_Modular& digitizer)
+    : m_shiftCollectionDepthToCenter(digitizer.CCMap_ShiftCollectionDepthToCenter()) {
   const bool printDebug = digitizer.msgLevel() <= MSG::DEBUG;
 
   if (printDebug)
@@ -263,24 +287,16 @@ ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const
     digitizer.debug() << "   - found in-pixel bin count of (" << m_voxelCount.at(0) << ", " << m_voxelCount.at(1)
                       << ", " << m_voxelCount.at(2) << ") from CCMap file header." << endmsg;
 
-  /* -> compare the values we just parsed to the values retrieved from the detector geometry */
+  /* compare CCMap parameters (pitch, thickness) to the detector geometry */
+
   const double eps = 1e-12; // reasonable for number O(0.01) (like sensor thickness in mm) with double precision
 
-  const double sensorThickness = std::stod(headerLineEntries.at(0)) * um_to_mm; // convert from um to mm
-  if (std::abs(sensorThickness - digitizer.ActiveVolumeDimensions().at(2)) > eps) {
-    if (!digitizer.CCMap_IgnorePitch()) {
-      throw GaudiException("Sensor thickness mismatch between CCMap file and detector geometry: CCMap file specifies " +
-                               std::to_string(sensorThickness) + " mm, but geometry has " +
-                               std::to_string(digitizer.ActiveVolumeDimensions().at(2)) +
-                               " mm active volume thickness.",
-                           "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
-    } else {
-      digitizer.warning() << "Sensor thickness mismatch between CCMap file and detector geometry. CCMap file: "
-                          << sensorThickness
-                          << "mm, geometry (active volume thickness): " << digitizer.ActiveVolumeDimensions().at(2)
-                          << "mm. Ignored because ChargeCollectionMap_IgnorePitch is set to true." << endmsg;
-    }
-  }
+  const double ccmapThickness = std::stod(headerLineEntries.at(0)) * um_to_mm;
+  if (std::abs(ccmapThickness - digitizer.ActiveVolumeDimensions().at(2)) > eps)
+    throw GaudiException("Sensor thickness mismatch between CCMap file and detector geometry: CCMap file specifies " +
+                             std::to_string(ccmapThickness) + " mm, but geometry has " +
+                             std::to_string(digitizer.ActiveVolumeDimensions().at(2)) + " mm active volume thickness.",
+                         "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
   const std::array<double, 2> pitch = {std::stod(headerLineEntries.at(1)) * um_to_mm,
                                        std::stod(headerLineEntries.at(2)) * um_to_mm};
@@ -299,8 +315,7 @@ ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const
                           << "mm. Ignored because ChargeCollectionMap_IgnorePitch is set to true." << endmsg;
   }
 
-  if (printDebug)
-    digitizer.debug() << "   - Found matching pixel pitch and sensor thickness in CCMap file." << endmsg;
+  digitizer.debug() << "   - Found matching pixel pitch and sensor thickness in CCMap file." << endmsg;
 
   /* Get matrix size (5x5, 7x7, ...) from the length of the first line after the header */
   bool foundDataLine = false;
@@ -343,7 +358,7 @@ ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const
     digitizer.debug() << "   - Inferred matrix size of " << m_matrixSize << " from first line." << endmsg;
 
   /* Set up the matrix vector */
-  m_matrices.resize(m_voxelCount.at(0) * m_voxelCount.at(1) * m_voxelCount.at(2) * m_matrixSize * m_matrixSize, 0.f);
+  m_matrices.assign(m_voxelCount.at(0) * m_voxelCount.at(1) * m_voxelCount.at(2) * m_matrixSize * m_matrixSize, 0.f);
 
   /* set up mapping from Allpix2 CCMap format
    *   (row-major, starts on bottom left)
@@ -369,6 +384,8 @@ ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const
   std::vector<float> matricesEntrySum_perWBin;
   matricesEntrySum_perWBin.resize(m_voxelCount.at(2), 0.f);
   float matricesEntrySum = 0.f;
+
+  std::vector<bool> matrixIsSet(m_voxelCount.at(0) * m_voxelCount.at(1) * m_voxelCount.at(2), false);
 
   lineCount = headerLines + 1;
   while (std::getline(ccmapFile, line)) {
@@ -397,19 +414,27 @@ ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const
                                std::to_string(m_matrixSize * m_matrixSize) + " for matrix values).",
                            "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
-    /* First 3 entries are in-pixel binning indices */
+    /* Get voxel indices (first 3 line entries) */
     VoxelIndex voxI({std::stoi(lineEntries[0]) - 1, std::stoi(lineEntries[1]) - 1,
                      std::stoi(lineEntries[2]) - 1}); // Allpix2 input is 1-indexed. Insane, I know.
 
     if (voxI.at(0) < 0 || voxI.at(0) >= m_voxelCount[0] || voxI.at(1) < 0 || voxI.at(1) >= m_voxelCount[1] ||
-        voxI.at(2) < 0 || voxI.at(2) >= m_voxelCount[2]) {
+        voxI.at(2) < 0 || voxI.at(2) >= m_voxelCount[2])
       throw GaudiException("Invalid in-pixel bin indices in CCMap file at line " + std::to_string(lineCount + 1) +
                                ": got (" + std::to_string(voxI.at(0)) + ", " + std::to_string(voxI.at(1)) + ", " +
                                std::to_string(voxI.at(2)) + "), but expected ranges are [0, " +
                                std::to_string(m_voxelCount[0] - 1) + "], [0, " + std::to_string(m_voxelCount[1] - 1) +
                                "], [0, " + std::to_string(m_voxelCount[2] - 1) + "].",
                            "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
-    }
+
+    const int matrixIndex =
+        voxI.at(0) + voxI.at(1) * m_voxelCount.at(0) + voxI.at(2) * m_voxelCount.at(0) * m_voxelCount.at(1);
+    if (matrixIsSet.at(matrixIndex))
+      throw GaudiException("Duplicate matrix for in-pixel bin indices (" + std::to_string(voxI.at(0)) + ", " +
+                               std::to_string(voxI.at(1)) + ", " + std::to_string(voxI.at(2)) +
+                               ") found in CCMap file at line " + std::to_string(lineCount + 1),
+                           "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
+    matrixIsSet.at(matrixIndex) = true;
 
     /* Parse matrix values & set it */
     std::vector<float> matrixEntries(m_matrixSize * m_matrixSize, 0.);
@@ -421,8 +446,6 @@ ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const
       matrixEntries[i] = entry;
       matrixEntrySum += entry;
     }
-    // digitizer.verbose() << "   - Parsed matrix for in-pixel bin (" << voxI.at(0) << ", " << voxI.at(1) << ", " <<
-    // voxI.at(2) << "), entry sum " << std::to_string(matrixEntrySum) << ", setting it now..." << endmsg;
     if (std::isnan(matrixEntrySum))
       throw GaudiException(
           "VTXdigi_tools::ChargeCollectionMap::ChargeCollectionMap(): Charge sharing matrix for in-pixel bin (" +
@@ -437,39 +460,90 @@ ChargeCollectionMap::ChargeCollectionMap(const std::string& ccmapFileName, const
     lineCount++;
   } // loop over lines containing a matrix each
 
-  const int matrixCount = lineCount - (headerLines + 1);
-
-  if (matrixCount != m_voxelCount[0] * m_voxelCount[1] * m_voxelCount[2])
-    throw GaudiException("Invalid number of matrices loaded from file: expected " +
-                             std::to_string(m_voxelCount[0] * m_voxelCount[1] * m_voxelCount[2]) +
-                             " matrices (inferred from bin count in header) but found " + std::to_string(matrixCount) +
-                             " lines.",
+  if (matricesEntrySum <= 0.f)
+    throw GaudiException("VTXdigi_tools::ChargeCollectionMap::ChargeCollectionMap(): Sum of all entries in CCMap is "
+                         "zero or negative. This is not allowed.",
                          "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
 
-  // From which w-level are charges collected?
-  double collectedFromW = 0.0;
-  for (int j_w = 0; j_w < m_voxelCount.at(2); j_w++) {
-    const double binHeight = sensorThickness / m_voxelCount.at(2);
-    const double w_bin_center = j_w * binHeight + 0.5 * binHeight - 0.5 * sensorThickness;
-    collectedFromW += matricesEntrySum_perWBin.at(j_w) * w_bin_center;
-  }
-  collectedFromW /= matricesEntrySum;
-
-  if (std::abs(collectedFromW) > 0.5 * sensorThickness)
-    throw GaudiException("Invalid charge collection depth inferred from CCMap file: " + std::to_string(collectedFromW) +
-                             " mm. This is outside the sensor volume, which extends from " +
-                             std::to_string(-0.5 * sensorThickness) + " mm to " +
-                             std::to_string(0.5 * sensorThickness) + " mm.",
-                         "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
-  if (std::abs(collectedFromW) >= 1.e-5) {
-    m_chargeCollectionDepthCenter = static_cast<double>(collectedFromW); // the member is initalised to 0.0
+  /* check that each matrix has been set */
+  for (int j_u = 0; j_u < m_voxelCount.at(0); j_u++) {
+    for (int j_v = 0; j_v < m_voxelCount.at(1); j_v++) {
+      for (int j_w = 0; j_w < m_voxelCount.at(2); j_w++) {
+        const int matrixIndex = j_u + j_v * m_voxelCount.at(0) + j_w * m_voxelCount.at(0) * m_voxelCount.at(1);
+        if (!matrixIsSet.at(matrixIndex))
+          throw GaudiException("Missing matrix for in-pixel bin indices (" + std::to_string(j_u) + ", " +
+                                   std::to_string(j_v) + ", " + std::to_string(j_w) +
+                                   ") in CCMap file: " + digitizer.CCMap_FileName(),
+                               "VTXdigi_Modular::ChargeCollectionMap::ChargeCollectionMap()", StatusCode::FAILURE);
+      }
+    }
   }
 
+  const int matrixCount = m_voxelCount.at(0) * m_voxelCount.at(1) * m_voxelCount.at(2);
   digitizer.info() << " - Loaded CCMap from file. Matrices parsed: " << (matrixCount)
                    << ". Charge collected from sensitive volume: "
                    << matricesEntrySum / static_cast<double>(matrixCount) * 100
-                   << " percent (rest is lost, eg recombination). The center of the collection region is at "
-                   << m_chargeCollectionDepthCenter << endmsg;
+                   << " percent (rest is lost, eg recombination)." << endmsg;
+
+  /* Calculate the centre of the charge collection depth distribution and check if shifting the CCMap by
+   * -meanCollectionDepth is acceptable (ie. does not lose too much charge) The shift is applied in the Path-computation
+   * for every simHit */
+  double meanCollectionDepth = 0.0;
+  for (int j_w = 0; j_w < m_voxelCount.at(2); j_w++) {
+    const double binHeight = ccmapThickness / m_voxelCount.at(2);
+    const double w_bin_center = j_w * binHeight + 0.5 * binHeight - 0.5 * ccmapThickness;
+    meanCollectionDepth += matricesEntrySum_perWBin.at(j_w) * w_bin_center;
+  }
+  meanCollectionDepth /= matricesEntrySum;
+
+  if (std::abs(meanCollectionDepth) >= 1.e-5) {
+    m_chargeCollectionDepthCenter = static_cast<double>(meanCollectionDepth); // initalised to 0.0
+  }
+
+  if (m_shiftCollectionDepthToCenter) {
+    if (std::abs(meanCollectionDepth) >= 1.e-5) {
+      // check how much charge is lost by shifting the CCMap by -meanCollectionDepth
+      double collectedCharge = 0.0, collectedCharge_shifted = 0.0;
+      for (int j_w = 0; j_w < m_voxelCount.at(2); j_w++) {
+        const double binHeight = ccmapThickness / m_voxelCount.at(2);
+        const double w_bin_center = j_w * binHeight + 0.5 * binHeight - 0.5 * ccmapThickness;
+        collectedCharge += matricesEntrySum_perWBin.at(j_w);
+        if (std::abs(w_bin_center - meanCollectionDepth) < ccmapThickness / 2.0)
+          collectedCharge_shifted += matricesEntrySum_perWBin.at(j_w);
+      }
+
+      // print messages
+      const double maxChargeLoss = 0.005; // 0.5% charge loss due to shifting is acceptable
+      if (collectedCharge_shifted < collectedCharge * (1.0 - maxChargeLoss)) {
+        digitizer.warning() << " - Shifting CCMap vertically by -meanCollectionDepth = " << -meanCollectionDepth
+                            << " mm to center the collection region around the sensor's sensitive surface (w=0). This "
+                               "will result in a loss of "
+                            << (collectedCharge - collectedCharge_shifted) / collectedCharge * 100
+                            << " percent of the charge (because the voxels of the CCMap that are shifted outside the "
+                               "sensor active volume collect this fraction of the whole CCMap). Anything above 0.5 "
+                               "percent is worrisome. Refer to the readme."
+                            << endmsg;
+      } else {
+        digitizer.info() << " - Will apply a vertical shift by meanCollectionDepth = " << meanCollectionDepth
+                         << " mm to charges deposited in the CCMap to center the collection region around the sensor's "
+                            "sensitive surface (w=0). This will result in a loss of "
+                         << (collectedCharge - collectedCharge_shifted) / collectedCharge * 100
+                         << " percent of the charge (loss < 0.5 percent is likely fine)" << endmsg;
+      }
+    } // if collectionDepth != 0
+    else {
+      digitizer.info()
+          << " - No vertical shift will be applied to charges deposited in the CCMap, as meanCollectionDepth = "
+          << meanCollectionDepth << " mm is already centred around the sensor's sensitive surface (w=0)." << endmsg;
+    }
+  } // if (m_shiftCollectionDepthToCenter)
+  else {
+    digitizer.warning() << " - No vertical shift will be applied to charges deposited in the CCMap, as "
+                           "ChargeCollectionMap_ShiftCollectionDepthToCenter is set to false. This will introduce a "
+                           "horizontal offset for angled tracks if the charge collection is not symmetric around w=0. "
+                           "The charge collection centre in w is "
+                        << m_chargeCollectionDepthCenter << " mm." << endmsg;
+  }
 }
 
 void ChargeCollectionMap::SetMatrix(const VoxelIndex& voxI, const std::vector<float>& weights) {
@@ -502,7 +576,8 @@ void ChargeCollectionMap::SetMatrix(const VoxelIndex& voxI, const std::vector<fl
     for (int col = 0; col < m_matrixSize; ++col) {
       /* weights are given in row-major order, starting at top left.
        * We store charge sharing matrices in col-major order, starting at bottom left (lowest bin index) */
-      m_matrices.at(FindIndex(voxI, col, row)) = weights.at((m_matrixSize - 1 - row) * m_matrixSize + col);
+      const int index = FindIndex(voxI, col, row);
+      m_matrices.at(index) = weights.at((m_matrixSize - 1 - row) * m_matrixSize + col);
     }
   }
 }
@@ -536,11 +611,8 @@ int ChargeCollectionMap::FindIndex(const VoxelIndex& voxI, const int col, const 
 }
 
 ChargeCollector_CCMap::ChargeCollector_CCMap(const VTXdigi_Modular& digitizer)
-    : IChargeCollector(digitizer), m_CCMap(digitizer.CCMap_FileName(), digitizer),
-      m_shiftTruthPos(digitizer.ShiftTruthPos()) {
-
-  /* CCMap is constructed in place (from file) */
-  m_chargeCollectionDepthCenter = m_CCMap.GetChargeCollectionDepthCenter();
+    : IChargeCollector(digitizer), m_CCMap(digitizer.CCMap_FileName(), digitizer) {
+  // creates the charge collector map in place
 
   /* Load charge deposition sampling parameters */
   m_meanDepositionsPerUm = digitizer.MeanDepositionsPerUm();
@@ -572,40 +644,29 @@ ChargeCollector_CCMap::ChargeCollector_CCMap(const VTXdigi_Modular& digitizer)
 void ChargeCollector_CCMap::FillHit(const SimHitWrapper& simHit, HitMap& hitMap, const TGeoHMatrix& trafoMatrix,
                                     TRandom3& randomGen) const {
 
-  Path path(simHit, trafoMatrix, m_digitizer);
+  // shift path vertically if the CCMap collects charge assymetrically. This is mathematically equivalent to shifting
+  // the CCMap.
+  Path path(simHit, trafoMatrix, m_digitizer, m_CCMap.VerticalPathShift());
   if (!path.isValid) [[unlikely]]
     return;
-
-  if (m_shiftTruthPos) {
-    MoveTruthPosition(simHit, path); // shifts the sim hit position to the depth in the sensor where most charge is
-                                     // collected, to get usesful residual plots.
-  }
 
   const auto pixelPitch = m_digitizer.PixelPitch();
   const auto pixelCount = m_digitizer.PixelCount();
   const auto thickness = m_digitizer.ActiveVolumeDimensions().at(2);
   const auto ccmapVoxelCount = m_CCMap.GetVoxelCount();
-  for (auto& [charge, pos] : path.SampleDepositions(simHit.charge(), randomGen, m_meanDepositionsPerUm, *m_chargeSamplingHist)) {
-
-    // Move the CCMap downwards st. the charge collection is centres around the sensor center (w=0).  Otherwise angled tracks would produce a horizontal offset in the charge collection. This offset is physically correct and not a problem if we set the cluster local w coordinate to w=chargeCollectionDepthCenter. In the real detector, aligning each plane would take care of the offset. But for us, the reconstruction (that is Conformal tracking) cannot deal with digiHits that are not on the sensor sensitive surface (w=0). So we do this instead.
-    // This has the tradeoff that part of the CCMap is now outside of the sensor volume. We assume that that part of the map does not collect a significant amount of charge (Good approximation for TPSCo 65nm CIS with thickness > 30 um)
-    // We achieve shifting the CCMap downwards by shifting the path upwards instead. This is equivalent, but much less annoying to implement.
-    // TODO: because is in a rather hot loop, we might consider pre-shifting at the path, or even at the CCMap level
-    pos.z() += m_chargeCollectionDepthCenter;
-    if (std::abs(pos.z()) > 0.5 * thickness) {
-      // drop charges we just shifted outside of the sensor volume.
-      continue;
-    }
-
-    const auto [pixI, voxI] = VTXdigi_tools::Trafo_local_pixIVoxI(pos, pixelPitch, pixelCount, thickness, ccmapVoxelCount);
+  for (auto& [charge, pos] : path.SampleDepositions(randomGen, m_meanDepositionsPerUm, *m_chargeSamplingHist)) {
+    const auto [pixI, voxI] =
+        VTXdigi_tools::Trafo_local_pixIVoxI(pos, pixelPitch, pixelCount, thickness, ccmapVoxelCount);
     DistributeVoxelCharge(hitMap, charge, pixI, voxI, simHit);
   }
 
-  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4, simHit.truthPos(), trafoMatrix);
+  m_digitizer.FillHistograms_fromChargeCollector_perSimHit(simHit.layer(), path.travel, path.lengthG4,
+                                                           simHit.truthPos(), trafoMatrix);
 }
 
-void ChargeCollector_CCMap::DistributeVoxelCharge(HitMap& hitMap, const float charge, const PixelIndex& pixI, const VoxelIndex& voxI, const SimHitWrapper& simHit) const {
-  /* cache things because this is the hottest loop */
+void ChargeCollector_CCMap::DistributeVoxelCharge(HitMap& hitMap, const float charge, const PixelIndex& pixI,
+                                                  const VoxelIndex& voxI, const SimHitWrapper& simHit) const {
+  /* cache EVERYTHING because this is the hottest loop */
   const int ccmapSize = m_CCMap.GetSize();
   const int i_u_origin = pixI[0] - m_CCMap.GetSizeHalf(); // pix index of leftmost pixel in CCMap matrix
   const int i_v_origin = pixI[1] - m_CCMap.GetSizeHalf();
@@ -622,32 +683,12 @@ void ChargeCollector_CCMap::DistributeVoxelCharge(HitMap& hitMap, const float ch
     const int i_u = i_u_origin + col;
     // convert from col in [0, matrixSize) to pixel offset in [-matrixSize_half, matrixSize_half]
     // Note that size_half = (size-1)/2
-
     for (int row = row_min; row < row_max; ++row) {
       const int i_v = i_v_origin + row;
       const float chargeToAdd = m_CCMap.GetWeight(voxI, col, row) * charge;
       hitMap.FillCharge({i_u, i_v}, chargeToAdd, simHit);
     }
   }
-}
-
-void ChargeCollector_CCMap::MoveTruthPosition(const SimHitWrapper& simHit, const Path& path) const {
-  if (m_chargeCollectionDepthCenter == 0.0)
-    return;
-
-  /* shift the sim hit position along the path to the depth that is closest to the target w (ie. target depth) */
-
-  double t = (m_chargeCollectionDepthCenter - path.entry.z()) /
-             path.travel.z(); // how far along the path do we need to go to get to the target depth?
-  // t in [0,1] means it's within the path, otherwise it's outside of the path and we will shift to the closest end
-  // (entry or exit)
-
-  if (t < 0.0)
-    t = 0.0;
-  else if (t > 1.0)
-    t = 1.0;
-
-  simHit.SetTruthPos(path.entry + t * path.travel);
 }
 
 /* -- Single pixel approach -- */

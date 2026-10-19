@@ -77,13 +77,13 @@ struct VTXdigi_Modular final
 
   inline float Threshold() const { return m_threshold; }
 
-  inline bool ShiftTruthPos() const { return m_path_shiftTruthPos.value(); }
-
   inline float MeanDepositionsPerUm() const { return m_path_meanDepositionsPerUm.value(); }
 
   inline std::string CCMap_FileName() const { return m_CCMap_FileName; }
 
   inline bool CCMap_IgnorePitch() const { return m_CCMap_ignorePitch.value(); }
+
+  inline bool CCMap_ShiftCollectionDepthToCenter() const { return m_CCMap_shiftCollectionDepthToCenter.value(); }
 
   dd4hep::DDSegmentation::CellID GetCellID(const dd4hep::rec::Vector3D& pos_global) const;
 
@@ -183,13 +183,6 @@ private:
   Gaudi::Property<float> m_smearing_time{this, "TimeSmearing", 0.0f,
                                          "Gaussian smearing to be applied to a pixels time (in ns). Applied to the "
                                          "digiHits time stamp. If 0, no time smearing is applied. Defaults to 0."};
-  Gaudi::Property<bool> m_forceClusterPosToSensitiveSurface{
-      this, "ForceClusterPositionToSensitiveSurface", false,
-      "If true, the cluster position is forced to be on the sensitive surface of the sensor. If false, the cluster "
-      "vertical position (in the sensor local frame) is given by the ChargeCollector (with the ChargeCollectionMap "
-      "method, this is the depth centre of the charge collection computed from the charge collection map). Note that "
-      "enabling this option is sometimes needed for compatibility, but drastically decreases the accuracy of cluster "
-      "positions for shallow tracks. Defaults to false."};
 
   Gaudi::Property<bool> m_debugHistograms{this, "DebugHistograms", false,
                                           "Flag to create and fill debug histograms. Not recommended for "
@@ -198,11 +191,6 @@ private:
                                            "Interval for printing information during processing."};
 
   /* Path computation */
-  Gaudi::Property<bool> m_path_shiftTruthPos{
-      this, "ShiftTruthPosition", false,
-      "Internally shift the truth position of the simHit. Only affects the output histograms, does not affect any "
-      "collection. If turned to false, angled particle trajectories will bias the residual plots in case of charge "
-      "collection maps with assymmetric charge collection across the sensor thickness."};
   Gaudi::Property<float> m_path_meanDepositionsPerUm{
       this, "MeanDepositionsPerUm", 2.65f,
       "Mean number of deposition clusters per um of path length in the sensor. Only used if the ChargeCollectionMethod "
@@ -217,6 +205,11 @@ private:
       "Ignore the sensor thickness and pixel pitch values stored in the CCMap file. Useful for slightly "
       "stretching/shrinking the CCMap to fit curved sensors where the sensor length is not an integer multiple of the "
       "pixel pitch. Defaults to false."};
+  Gaudi::Property<bool> m_CCMap_shiftCollectionDepthToCenter{
+      this, "ChargeCollectionMap_ShiftCollectionDepthToCenter", true,
+      "Shift the collection depth of the CCMap to be vertically centered in the sensor (w=0). Because digiHits are "
+      "required to lie on the sensitive surface, this ensures that angled tracks do not introduce an offset (to first "
+      "order). Defaults to true."};
 
   /* -- Services, geometry variables -- */
 
