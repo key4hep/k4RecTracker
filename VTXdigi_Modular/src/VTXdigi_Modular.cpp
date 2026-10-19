@@ -624,6 +624,7 @@ void VTXdigi_Modular::InitHistograms() {
   Gaudi::Accumulators::Axis<float> axis_cosTheta{100, 0, 1};
   Gaudi::Accumulators::Axis<float> axis_theta{4 * 180, 0, 180};
   Gaudi::Accumulators::Axis<float> axis_phi{4 * 180, -180, 180};
+  Gaudi::Accumulators::Axis<float> axis_incidenceAngle{4 * 90, 0, 90};
 
   Gaudi::Accumulators::Axis<float> axis_uv{1000, -20, 20};
   Gaudi::Accumulators::Axis<float> axis_w{200, -0.1, 0.1};
@@ -751,6 +752,25 @@ void VTXdigi_Modular::InitHistograms() {
         .reset(new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float>{
             this, "Layer" + std::to_string(layer) + "/simHit_pos/theta",
             "Global simHit theta position - Layer " + std::to_string(layer) + ";theta [rad];Entries", axis_theta});
+
+    hist1d.at(hist1d_simHit_incidenceAngle)
+        .reset(new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float>{
+            this, "Layer" + std::to_string(layer) + "/simHit_pos/incidenceAngle",
+            "Incidence angle onto sensor of simHits (0 deg = normal) - Layer " + std::to_string(layer) +
+                ";incidence angle [deg];Entries",
+            axis_incidenceAngle});
+    hist1d.at(hist1d_simHit_incidenceAngle_u)
+        .reset(new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float>{
+            this, "Layer" + std::to_string(layer) + "/simHit_pos/incidenceAngle_u",
+            "Incidence angle onto sensor of simHits in u-direction (0 deg = normal) - Layer " + std::to_string(layer) +
+                ";incidence angle [deg];Entries",
+            axis_incidenceAngle});
+    hist1d.at(hist1d_simHit_incidenceAngle_v)
+        .reset(new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float>{
+            this, "Layer" + std::to_string(layer) + "/simHit_pos/incidenceAngle_v",
+            "Incidence angle onto sensor of simHits in v-direction (0 deg = normal) - Layer " + std::to_string(layer) +
+                ";incidence angle [deg];Entries",
+            axis_incidenceAngle});
 
     hist1d.at(hist1d_simHit_vertex_x)
         .reset(new Gaudi::Accumulators::StaticHistogram<1, Gaudi::Accumulators::atomicity::full, float>{
@@ -1485,6 +1505,9 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
   const VTXdigi_tools::PixelIndex pixI = VTXdigi_tools::Trafo_local_pixI(simHitPos_local, m_pixelPitch, m_pixelCount);
 
   const dd4hep::rec::Vector3D simHitMomentum = VTXdigi_tools::ConvertVector(simHit.hitPtr()->getMomentum()); // in GeV
+  const dd4hep::rec::Vector3D simHitDirection_local =
+      VTXdigi_tools::TrafoVec_global_local(simHitMomentum.unit(), trafoMatrix);
+
   const dd4hep::rec::Vector3D simHitMomentumInitial =
       VTXdigi_tools::ConvertVector(simHit.hitPtr()->getParticle().getMomentum()); // in GeV
 
@@ -1545,6 +1568,19 @@ void VTXdigi_Modular::FillHistograms_perSimHit(const VTXdigi_tools::SimHitWrappe
     ++(*m_hist1d.at(layer).at(hist1d_simHit_z_causedBySecondary))[simHitPos_global.z()];
 
     ++(*m_hist2d.at(layer).at(hist2d_hitMap_simHits_causedBySecondary))[{pixI[0], pixI[1]}];
+  }
+
+  const float incidenceAngle = std::acos(std::abs(simHitDirection_local.z())) * dd4hep::rad / dd4hep::deg;
+  const float incidenceAngle_u =
+      std::atan2(std::abs(simHitDirection_local.x()), std::abs(simHitDirection_local.z())) * dd4hep::rad / dd4hep::deg;
+  const float incidenceAngle_v =
+      std::atan2(std::abs(simHitDirection_local.y()), std::abs(simHitDirection_local.z())) * dd4hep::rad / dd4hep::deg;
+
+  if (mcParticleLevel == VTXdigi_tools::MCParticleLevel::Primary ||
+      mcParticleLevel == VTXdigi_tools::MCParticleLevel::Secondary) {
+    ++(*m_hist1d.at(layer).at(hist1d_simHit_incidenceAngle))[incidenceAngle];
+    ++(*m_hist1d.at(layer).at(hist1d_simHit_incidenceAngle_u))[incidenceAngle_u];
+    ++(*m_hist1d.at(layer).at(hist1d_simHit_incidenceAngle_v))[incidenceAngle_v];
   }
 }
 
