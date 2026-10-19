@@ -73,10 +73,10 @@ def GetMatrix(i_u, i_v, i_w, matrix_size, normalisation, printMatrix=False):
 
 
 def WriteHeader(file, pixel_dimensions, n_voxels, normalisation):
-    file.write(f"this is just a header that will be filled\n")
+    file.write("this is just a header that will be filled\n")
     file.write(f"internal {normalisation}\n")
-    file.write(f"##TURN## ##TILT## 1.0\n")
-    file.write(f"0.0 0.0 0.0\n")
+    file.write("##TURN## ##TILT## 1.0\n")
+    file.write("0.0 0.0 0.0\n")
     file.write(
         f"{pixel_dimensions[0]} {pixel_dimensions[1]} {pixel_dimensions[2]} 0.0 0.0 0.0 0.0 {n_voxels[0]:n} {n_voxels[1]:n} {n_voxels[2]:n} 0.0\n"
     )

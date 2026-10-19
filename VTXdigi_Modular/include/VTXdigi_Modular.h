@@ -202,7 +202,7 @@ private:
                                                 "ChargeCollectionMethod is set to \"ChargeCollectionMap\"."};
   Gaudi::Property<bool> m_CCMap_ignorePitch{
       this, "ChargeCollectionMap_IgnorePitch", false,
-      "Ignore the sensor thickness and pixel pitch values stored in the CCMap file. Useful for slightly "
+      "Ignore the sensor pixel pitch values stored in the CCMap file. Useful for slightly "
       "stretching/shrinking the CCMap to fit curved sensors where the sensor length is not an integer multiple of the "
       "pixel pitch. Defaults to false."};
   Gaudi::Property<bool> m_CCMap_shiftCollectionDepthToCenter{

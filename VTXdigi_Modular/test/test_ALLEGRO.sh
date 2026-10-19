@@ -49,91 +49,15 @@ check_file() {
     fi
 }
 
-echo "========================================================================"
-echo "  VTXDigi_Modular execution test"
-echo "========================================================================"
-echo "  Events:    ${NEvts}"
-echo "  Particle:  ${Gun_Particle} @ ${Gun_Energy} GeV (particle gun uniform in cosTheta)"
-echo "  Detector geometry: ALLEGRO o1_v03, inner VTX"
-echo "========================================================================"
+check_output_file() {
+    local file_path="$1"
+    if [ ! -f "${file_path}" ]; then
+        echo "ERROR: Output file not created."
+        exit 1
+    fi
 
-echo "  Checking input files"
-
-check_file "${File_SimSteering}"
-check_file "${File_Detector}"
-check_file "${File_DigiSteering}"
-
-rm -f "${File_SimOutput}"
-rm -f "${File_DigiOutput}"
-
-
-echo "  [1/3] Running simulation with ddsim..."
-
-ddsim --steeringFile "${File_SimSteering}" \
-    --compactFile "${File_Detector}" \
-    --enableGun \
-    --gun.distribution uniform \
-    --gun.energy "${Gun_Energy}*GeV" \
-    --gun.particle "${Gun_Particle}" \
-    --numberOfEvents "${NEvts}" \
-    --outputFile "${File_SimOutput}"
-
-if [ $? -ne 0 ]; then
-    echo "ERROR: Simulation failed."
-    exit 1
-fi
-
-echo "  ✓ Simulation completed: ${File_SimOutput}"
-echo ""
-
-
-
-echo "  [2/3] Running digitization with VTXdigi_Modular using a charge collection map..."
-
-python "${File_CCMap_creation_script}" \
-    --fileName "${File_CCMap}" \
-    --pitch "${Sensor_Pitch}" \
-    --thickness "${Sensor_Thickness}" || {
-    echo "ERROR: Failed to create dummy charge collection map."
-    exit 1
-}
-check_file "${File_CCMap}"
-
-k4run "${File_DigiSteering}" \
-    -n "${NEvts}" \
-    --IOSvc.Input "${File_SimOutput}" \
-    --IOSvc.Output "${File_DigiOutput}" \
-    --GeoSvc.detectors "${File_Detector}" \
-    --VTXBdigi_inner.ChargeCollectionMap "${File_CCMap}"
-
-if [ $? -ne 0 ]; then
-    echo "ERROR: Digitization failed."
-    exit 1
-fi
-
-echo "  ✓ Digitization completed: ${File_DigiOutput}"
-
-
-
-echo ""
-echo "  [3/3] Verifying output..."
-if [ ! -f "${File_DigiOutput}" ]; then
-    echo "ERROR: Output file not created."
-    exit 1
-fi
-
-## this check only verifies that the collections exists, but still passes on empty collections
-# dump=$(podio-dump "${File_DigiOutput}") || {
-#     echo "ERROR: podio-dump failed"
-#     exit 1
-# }
-# echo "$dump" | grep -E "VTXBDigis|VTXBSimDigiLinks" || {
-#     echo "ERROR: digitizer output collections missing."
-#     exit 1
-# }
-
-## this checks for non-0 entry counts in the collections
-python3 - "${File_DigiOutput}" <<'EOF' || exit 1
+    ## this checks for non-0 entry counts in the collections
+    python3 - "${file_path}" <<'EOF' || exit 1
 import sys
 from podio.reading import get_reader
 
@@ -154,12 +78,76 @@ if n_sim == 0:
 if n_dig == 0 or n_lnk == 0:
     sys.exit("ERROR: sim hits present but digitizer produced no output")
 EOF
+}
+
+echo "========================================================================"
+echo "  VTXDigi_Modular execution test"
+echo "========================================================================"
+echo "  Events:    ${NEvts}"
+echo "  Particle:  ${Gun_Particle} @ ${Gun_Energy} GeV (particle gun uniform in cosTheta)"
+echo "  Detector geometry: ALLEGRO o1_v03, inner VTX"
+echo "========================================================================"
+
+echo "  Checking input files"
+
+check_file "${File_SimSteering}"
+check_file "${File_Detector}"
+check_file "${File_DigiSteering}"
+
+rm -f "${File_SimOutput}"
+rm -f "${File_DigiOutput}"
 
 
+echo "  [1/2] Running simulation with ddsim..."
+
+ddsim --steeringFile "${File_SimSteering}" \
+    --compactFile "${File_Detector}" \
+    --enableGun \
+    --gun.distribution uniform \
+    --gun.energy "${Gun_Energy}*GeV" \
+    --gun.particle "${Gun_Particle}" \
+    --numberOfEvents "${NEvts}" \
+    --outputFile "${File_SimOutput}"
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Simulation failed."
+    exit 1
+fi
+
+echo "  ✓ Simulation completed: ${File_SimOutput}"
+echo ""
+
+
+
+echo "  [2/2] Running digitization with VTXdigi_Modular & verifying output"
+
+python "${File_CCMap_creation_script}" \
+    --fileName "${File_CCMap}" \
+    --pitch "${Sensor_Pitch}" \
+    --thickness "${Sensor_Thickness}" || {
+    echo "ERROR: Failed to create dummy charge collection map."
+    exit 1
+}
+check_file "${File_CCMap}"
+
+
+k4run "${File_DigiSteering}" \
+    -n "${NEvts}" \
+    --IOSvc.Input "${File_SimOutput}" \
+    --IOSvc.Output "${File_DigiOutput}" \
+    --GeoSvc.detectors "${File_Detector}" \
+    --VTXBdigi_inner.ChargeCollectionMap "${File_CCMap}"
+
+if [ $? -ne 0 ]; then
+    echo "ERROR: Digitization failed."
+    exit 1
+fi
+check_output_file "${File_DigiOutput}"
+echo "  ✓ Digitization successful"
 
 echo ""
-echo "  Cleaning up temporary files..."
-rm -rf "${File_SimOutput}" "$File_CCMap}" __pycache__
+echo "  Cleaning up temporary files"
+rm -rf "${File_SimOutput}" "${File_CCMap}" __pycache__
 
 echo ""
 echo "========================================================================"

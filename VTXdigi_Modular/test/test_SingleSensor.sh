@@ -38,6 +38,7 @@ File_Detector="${Dir_TestSrc}/resources/geometry_SingleSensor_v2.xml"
 File_SimOutput="simHits.root"
 
 File_DigiSteering="${Dir_TestSrc}/test_SingleSensor/steering_digi.py"
+File_DigiSteering_Overrides="${Dir_TestSrc}/test_SingleSensor/steering_digi_overrides.py"
 File_CCMap_creation_script="${Dir_TestSrc}/tools/generate-dummy-CCMap.py"
 File_CCMap="ccmap.init"
 File_DigiOutput="output.root"
@@ -51,6 +52,37 @@ check_file() {
         echo "ERROR: Required test input file not found: $file_path"
         exit 1
     fi
+}
+
+check_output_file() {
+    local file_path="$1"
+    if [ ! -f "${file_path}" ]; then
+        echo "ERROR: Output file not created."
+        exit 1
+    fi
+
+    ## this checks for non-0 entry counts in the collections
+    python3 - "${file_path}" <<'EOF' || exit 1
+import sys
+from podio.reading import get_reader
+
+reader = get_reader(sys.argv[1])
+n_events = n_sim = n_dig = n_lnk = 0
+for frame in reader.get("events"):
+    n_events += 1
+    n_sim += len(frame.get("VertexBarrelCollection"))
+    n_dig += len(frame.get("VTXBDigis"))
+    n_lnk += len(frame.get("VTXBSimDigiLinks"))
+
+print(f"  ✓ Found {n_events} events, {n_sim} simHits, {n_dig} digiHits, {n_lnk} links")
+
+if n_events == 0:
+    sys.exit("ERROR: no events in output file")
+if n_sim == 0:
+    sys.exit("ERROR: no sim hits in VertexBarrelCollection - simulation/geometry problem, not the digitizer")
+if n_dig == 0 or n_lnk == 0:
+    sys.exit("ERROR: sim hits present but digitizer produced no output")
+EOF
 }
 
 echo "========================================================================"
@@ -71,7 +103,7 @@ rm -f "${File_SimOutput}"
 rm -f "${File_DigiOutput}"
 
 
-echo "  [1/3] Running simulation with ddsim..."
+echo "  [1/2] Running simulation with ddsim..."
 
 ddsim --steeringFile "${File_SimSteering}" \
     --compactFile "${File_Detector}" \
@@ -96,7 +128,7 @@ echo ""
 
 
 
-echo "  [2/3] Running digitization with VTXdigi_Modular using a charge collection map..."
+echo "  [2/2] Running digitization with VTXdigi_Modular & verifying output"
 
 python "${File_CCMap_creation_script}" \
     --fileName "${File_CCMap}" \
@@ -107,6 +139,8 @@ python "${File_CCMap_creation_script}" \
 }
 check_file "${File_CCMap}"
 
+
+## run 1
 k4run "${File_DigiSteering}" \
     -n "${NEvts}" \
     --IOSvc.Input "${File_SimOutput}" \
@@ -115,59 +149,30 @@ k4run "${File_DigiSteering}" \
     --VTXBdigi_inner.ChargeCollectionMap "${File_CCMap}"
 
 if [ $? -ne 0 ]; then
-    echo "ERROR: Digitization failed."
+    echo "ERROR: Digitization 1/2 failed."
     exit 1
 fi
+check_output_file "${File_DigiOutput}"
+echo "  ✓ Digitization 1/2 successful"
 
-echo "  ✓ Digitization completed: ${File_DigiOutput}"
+## run 2 - check different settings
+k4run "${File_DigiSteering}" "${File_DigiSteering_Overrides}" \
+    -n "${NEvts}" \
+    --IOSvc.Input "${File_SimOutput}" \
+    --IOSvc.Output "${File_DigiOutput}" \
+    --GeoSvc.detectors "${File_Detector}" \
+    --VTXBdigi_inner.ChargeCollectionMap "${File_CCMap}"
 
-
-
-echo ""
-echo "  [3/3] Verifying output..."
-if [ ! -f "${File_DigiOutput}" ]; then
-    echo "ERROR: Output file not created."
+if [ $? -ne 0 ]; then
+    echo "ERROR: Digitization 2/2 failed."
     exit 1
 fi
-
-## this check only verifies that the collections exists, but still passes on empty collections
-# dump=$(podio-dump "${File_DigiOutput}") || {
-#     echo "ERROR: podio-dump failed"
-#     exit 1
-# }
-# echo "$dump" | grep -E "VTXBDigis|VTXBSimDigiLinks" || {
-#     echo "ERROR: digitizer output collections missing."
-#     exit 1
-# }
-
-## this checks for non-0 entry counts in the collections
-python3 - "${File_DigiOutput}" <<'EOF' || exit 1
-import sys
-from podio.reading import get_reader
-
-reader = get_reader(sys.argv[1])
-n_events = n_sim = n_dig = n_lnk = 0
-for frame in reader.get("events"):
-    n_events += 1
-    n_sim += len(frame.get("VertexBarrelCollection"))
-    n_dig += len(frame.get("VTXBDigis"))
-    n_lnk += len(frame.get("VTXBSimDigiLinks"))
-
-print(f"  ✓ Found {n_events} events, {n_sim} simHits, {n_dig} digiHits, {n_lnk} links")
-
-if n_events == 0:
-    sys.exit("ERROR: no events in output file")
-if n_sim == 0:
-    sys.exit("ERROR: no sim hits in VertexBarrelCollection - simulation/geometry problem, not the digitizer")
-if n_dig == 0 or n_lnk == 0:
-    sys.exit("ERROR: sim hits present but digitizer produced no output")
-EOF
-
-
+check_output_file "${File_DigiOutput}"
+echo "  ✓ Digitization 2/2 successful"
 
 echo ""
-echo "  Cleaning up temporary files..."
-rm -rf "${File_SimOutput}" "$File_CCMap}" __pycache__
+echo "  Cleaning up temporary files"
+rm -rf "${File_SimOutput}" "${File_CCMap}" __pycache__
 
 echo ""
 echo "========================================================================"

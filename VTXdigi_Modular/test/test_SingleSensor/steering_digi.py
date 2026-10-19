@@ -22,7 +22,6 @@ vtxb_digitizer = VTXdigi_Modular(
     Clusterize=True,
     ChargeCollectionMethod="ChargeCollectionMap",
     ChargeCollectionMap="SET_FROM_COMMAND_LINE",
-    ShiftTruthPosition=True,
     ClusterPositionUncertainty=[],
     Threshold=100,
     ThresholdDispersion=5,

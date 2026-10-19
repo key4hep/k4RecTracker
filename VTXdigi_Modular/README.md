@@ -9,8 +9,7 @@ The exact modelling method is user-definable. For now the only realistic method 
 
 - The digitizer has the option to cluster the pixel hits and reconstruct cluster positions. This is expected to be superseded by a stand-alone clustering algorithm in the future.
 - The algorithm produces accurate cluster sizes for MIPs, but slightly overestimates the cluster size at lower momenta.
-- The local z-position of digiHits (wrt. the sensor center) is set to the charge collection depth of the sensor, computed in the charge collector. Otherwise, sensors where most charge is collected from close to the surface (eg. MAPS in TPSCo 65nm CIS) would introduce a strong bias for shallow tracks.
-  - For compatibility, the local digiHit z-position can be forced to the sensor's center plane (w = 0) by using `ForceClusterPositionToSensitiveSurface = True`, but this drastically decreases the accuracy of cluster positions for shallow tracks. As of now, conformal tracking requires all digiHits to lie on the sensitive surface of the sensor (ie. local z = 0), otherwise reconstruction performance suffers massively. This dependency will hopefully be removed in the future.
+- The local z-position of digiHits is always set to the center of the sensor (local w=0), to be on the sensor's sensitive surface. This is required by Conformal Tracking.
 
 ### Content
 
@@ -52,12 +51,11 @@ The exact modelling method is user-definable. For now the only realistic method 
 (used by charge collectors that model the particle path through the sensor, currently `ChargeCollectionMap`)
 
 - `MeanDepositionsPerUm` - Mean number of discrete charge depositions per um of path length in the sensor. Defaults to 2.65, optimised to match the Allpix Squared simulation.
-- `ShiftTruthPosition` - Internally shift the simHit truth position along its path to the charge-collection depth of the charge collector. If set to `False`, angled particle trajectories will bias the residual plots for charge collection maps with asymmetric charge collection across the sensor thickness (eg. TPSCo 65nm CIS). Defaults to `False`.
-  - **Only affects the debug histograms (residuals)**, collections remain unchanged.
 
 **Charge collection map** (only used with `ChargeCollectionMethod = "ChargeCollectionMap"`)
 - `ChargeCollectionMap` - Charge collection map file (format of Allpix Squared's [[PropagationMapWriter]](https://gitlab.cern.ch/allpix-squared/allpix-squared/-/tree/master/src/modules/PropagationMapWriter)). Required for the `ChargeCollectionMap` charge collector.
-- `ChargeCollectionMap_IgnorePitch` - Ignore the sensor thickness and pixel pitch values stored in the charge collection map file. Useful for slightly stretching/shrinking the map to fit curved sensors where the sensor length is not an integer multiple of the pixel pitch. Defaults to `False`, where an error is thrown if the values from the detector geometry do not match the map file. If set to `True`, only a warning is printed in case of a mismatch.
+- `ChargeCollectionMap_IgnorePitch` - Ignore the sensor pixel pitch values stored in the charge collection map file. Useful for slightly stretching/shrinking the map to fit curved sensors where the sensor length is not an integer multiple of the pixel pitch. Defaults to `False`, where an error is thrown if the values from the detector geometry do not match the map file. If set to `True`, only a warning is printed in case of a mismatch.
+- `ChargeCollectionMap_ShiftCollectionDepthToCenter` - Shift the CCMap vertically so that its charge-weighted mean collection depth lies at w = 0. Since digiHits are placed at w = 0, this removes the horizontal position bias for angled tracks. Deposited charge is only collected where the shifted CCMap overlaps with the sensor volume, so the total collected charge is reduced. Prints a warning if more than 0.5% of collected charge is lost due to the shift. Defaults to `True`. If `False`, a warning is printed, and angled tracks will have a bias in their digiHit positions.
 
 **Clustering & digiHit creation**
 
@@ -65,7 +63,6 @@ The exact modelling method is user-definable. For now the only realistic method 
   - `True` - Pixel hits are clusterized. Creates one EDM4hep `TrackerHitPlane` per cluster.
   - `False` - Create an EDM4hep `TrackerHitPlane` for each pixel hit, without clustering.
 - `ClusterizeEndPixelsOnly` - If `True`, only the end pixels of clusters longer than 2 pixels are used to compute the cluster position. This reduces the uncertainty due to deposition fluctuations along the shallow path. Only used if `Clusterize` is `True`. Defaults to `False`.
-- `ForceClusterPositionToSensitiveSurface` - If `True`, the cluster position is forced onto the sensitive surface of the sensor (`w = 0`) rather than using the depth from where charges are really being collected. Enabling this might be needed for compatibility, but drastically decreases the accuracy of cluster positions for shallow tracks. Defaults to `False`.
 - `ClusterPositionUncertainty` - Each digiHit has an estimate of its spatial resolution uncertainty (`du`, `dv`, in mm). The simplest approximation is the sensor's spatial resolution in `u` and `v`. The spatial resolution changes drastically with incidence angle (ie. cluster length) and charge spread across the cluster. Tracking algorithms rely on good per-hit uncertainty estimates to weight the contribution of each hit in the fit. Three options are implemented (defaults to `[]`):
     - Setting `[]` assigns `pitch/sqrt(12)` in `u` and `v` to every digiHit (the binary resolution). Bad for tracking.
     - Setting `[sigma_u, sigma_v]` simply applies the same spatial resolution to every digiHit. Just as bad for tracking.
@@ -209,10 +206,9 @@ SimHits are processed sensor by sensor. For each sensor in the relevant layers, 
   - Delta: MCParticle created in Geant4, inside this sensor's volume
 - No cuts on energy deposition or momentum are applied.
 - Hits more than 10 um outside the sensors active volume are skipped with a warning. All other hits are clamped to the sensors volume
-- **Charge collection:** the ChargeCollector is called with the truth-hit information, produces a pixel hit map for this sensor. The exact process depends on which collector was chosen.
+- **Charge collection:** the ChargeCollector is called with the truth-hit information, this produces a pixel hit map for this sensor. The exact process depends on which collector was chosen.
   - The collector might skip hits it can't handle
   - Some charge might be lost (eg. if it falls outside the sensor)
-  - The simHit truth position saved in `SimHitWrapper` might be moved. This only affects histograms, not the collections. (see `ShiftTruthPosition` Gaudi property)
 - **Charge smearing:** The charge on each pixel is smeared to model electronic noise in the pixel frontends. Only pixels that received any charge from simHits are smeared.
 - **Threshold:** For each pixel, the threshold `Threshold` is smeared by sampling from a Gaussian with sigma `ThresholdDispersion`. If the pixel's charge is below the smeared threshold, it is dropped.
 
@@ -256,12 +252,12 @@ The algorithm allows a choice of different charge collectors, defined by the `Ch
 
 Each charge collector implements a method to distribute a simHit's deposited charge to the pixels around that simHit. A common class to calculate a linear approximation of the simHit's path through the sensor is provided, parametrising it as `p(t) = p0 + v*t` with `t` in `[0,1]`. The exact position of each charge deposited in the sensor is not written to disk, this is a limitation of the Key4hep framework (because of the prohibitively high storage cost and minimal performance gain of doing so). See [Charge deposition simulation](#charge-deposition-simulation).
 
-Some charge collectors might bias the collection to a specific depth in the sensor (eg. `ChargeCollectionMap` with CCMaps for TPSCo 65nm CIS sensors). To get realistic residual histograms, the simHit truth position used in the histograms can be shifted to that depth along the simHit's path via the `ShiftTruthPosition` Gaudi property. The simHits in the collection are not affected by the shift.
+Charge must collect charge symmetrically around the sensor's sensitive surface (local w=0). This is because the digiHits are placed at w=0, and any asymmetry in the charge collection will bias the digiHit position for angled tracks drastically. See [Vertically shifting the CCMap](#vertically-shifting-the-ccmap).
 
 #### `ChargeCollectionMap`
 Shares charge among a hits surrounding pixels according to charge collection map (CCMap). The pixel is binned into a 3d voxel grid. For each of the voxels, the map stores the probability for a charge deposited in this voxel to be collected in each of the surrounding pixels. These maps are generated from detailed simulations performed in sensor R&D (eg. TCAD -> Allpix Squared), but could also be generated from experimental data.
 
-<img src="LookupTableSchematic.svg" width="700" alt="Schematic of distributing a hit's charge to the surrounding pixels according to a charge collection map (charge transport map).">
+<img src="doc/LookupTableSchematic.svg" width="700" alt="Schematic of distributing a hit's charge to the surrounding pixels according to a charge collection map (charge transport map).">
 
 The algorithm has been tested thoroughly to reproduce Allpix Squared's results. The same detector geometry and transport map were used with the OCTOPUS Project's models. Preliminary results are shown in the talks below. A reference paper will be published in the future (the preprint will likely become available 2027).
 
@@ -270,15 +266,38 @@ The algorithm has been tested thoroughly to reproduce Allpix Squared's results. 
 
 CCMaps from the OCTOPUS Project modelling MAPS in TPSCo 65nm CIS will be made publicly available in the future (hopefully early 2027). A tool to generate dummy CCMaps can be found in the `test/tools` folder.
 
-**Notes about the implementation**
+**Notes about `ChargeCollectionMap`**
 
 - **Requires** Gaudi property `ChargeCollectionMap`.
-- The CCMap file uses the Allpix Squared [[PropagationMapWriter]](https://gitlab.cern.ch/allpix-squared/allpix-squared/-/tree/master/src/modules/PropagationMapWriter) format: 5 header lines, the 5th containing the sensor thickness and pixel pitch (u, v) and the voxel counts (u, v, w). Then follows one line per voxel: `j_u j_v j_w w_1 ... w_NxN` (voxel indices 1-indexed, matrix size N odd). At initialisation, thickness and pitch are checked against the detector geometry (see `ChargeCollectionMap_IgnorePitch`) and each matrix must sum to a value in [0, 1]. Entries below 1e-5 are set to zero for performance.
-- The charge-collection depth (the charge-weighted mean `w` of the CCMap) is computed from the CCMap and printed at initialisation.
+- The CCMap file uses the Allpix Squared [[PropagationMapWriter]](https://gitlab.cern.ch/allpix-squared/allpix-squared/-/tree/master/src/modules/PropagationMapWriter) format: 5 header lines, the 5th containing the sensor thickness and pixel pitch (u, v) and the voxel counts (u, v, w). Then follows one line per voxel: `j_u j_v j_w w_1 ... w_NxN` (voxel indices 1-indexed, matrix size N odd). At initialisation, the parsed map is verified: Each matrix must sum to a value in [0, 1], the thickness is required to match and a pitch mismatch is only accepted with `ChargeCollectionMap_IgnorePitch=True`. Entries below 1e-5 are set to zero for performance.
 - A validation of this algorithm on test beam data is in progress.
 - Further information:
-    - The talk in the DRD3 WG4 (Simulation) Meeting contains more information on the implementation and preliminary results: [@talk 2026-03](https://indico.cern.ch/event/1658032/contributions/6968509/attachments/3239139/5776904/2026-03-16_DRD3-WG4.pdf)
-    - Even more preliminary results were presented in the FCC Full Sim Working Meeting: [@talk 2025-12](https://indico.cern.ch/event/1613709/contributions/6814309/attachments/3190168/5677333/2025-12-10_FCC-FullSym-WorkingMeeting-3.pdf)
+  - The latest preliminary results were presented at the VERTEX Detector R&D Workshop 2026: [@talk 2026-06](https://indico.cern.ch/event/1618157/contributions/7195663/)
+  - The talk in the DRD3 WG4 (Simulation) Meeting contains more information on the implementation and preliminary results: [@talk 2026-03](https://indico.cern.ch/event/1658032/contributions/6968509/attachments/3239139/5776904/2026-03-16_DRD3-WG4.pdf)
+  - Even more preliminary results were presented in the FCC Full Sim Working Meeting: [@talk 2025-12](https://indico.cern.ch/event/1613709/contributions/6814309/attachments/3190168/5677333/2025-12-10_FCC-FullSym-WorkingMeeting-3.pdf)
+
+**Vertically shifting the CCMap**
+
+In general, the charge collection in a CCMap are not required to be symmetric around the sensor's sensitive surface (local w=0). However, this would mean that the sensor "measures" particles in a plane that is offset from the sensor's sensitive surface. For tracks with normal incidence this is not a problem, but for angled tracks this means any reconstructed hit is horizontally offset.
+
+<img src="doc/ResidualOffset-1.svg" width="600" alt="Schematic explaining the horizontal offset in charge collection">
+
+If digiHits are placed at `w = 0`, they are not on the path of the particle, making correct reconstruction impossible. Placing digiHits at `w = charge collection center` would produce hits on the particle path. This would create digiHits that are not on the sensor's sensitive surface, which is not compatible with the Conformal Tracking algorithm.
+
+<img src="doc/ResidualOffset-2.svg" width="600" alt="Schematic explaining the two naive approaches to placing digiHits">
+
+To solve the problem at the root, the CCMap is shifted vertically with respect to the sensor's active volume, such that the charge-weighted mean collection depth lies at `w = 0`. This ensures digiHits of angled tracks do not have a horizontal bias. The two tradeoffs are
+
+- necessarily, part of the CCMap is shifted outside the sensor volume, so part of the sensor volume is not covered by the CCMap. This is not a problem for CCMaps where the charge collection is concentrated at a specific depth, where a region with low charge collection probability is shifted outside the sensor volume. This is the case for the TPSCo 65nm CIS process, where charge is collected from the upper 15um of the sensor.
+- The charge is now collected from a different depth inside the sensor, effectively moving the sensors towards the interaction point. This also means that shielding from low-energy particles by inactive silicon in the first VTX layer is reduced by about 20um.
+
+To reduce the effect of both of these tradeoffs, the sensor's thickness in the detector geometry should only be slightly larger than the charge collection depth of the CCMap, but never smaller (for most users, this is hard to change though). A script to draw a CCMap's charge collection profile and mean collection depth is provided in `test/tools/plot_charge_collection_profile.py`.
+
+<img src="doc/ResidualOffset-3.svg" width="600" alt="Schematic showing the vertical shifting of the CCMap">
+
+The code prints an info message with the mean collection depth (which the CCMap is shifted by), and the amount of charge that is lost in the shift. If more than 0.5% of deposited charge is lost, a warning is printed. This is to ensure that the CCMap is not shifted too far outside the sensor volume. The shift can be disabled by setting the `ChargeCollectionMap_ShiftCollectionDepthToCenter` Gaudi property to `False`, but this will produce a bias in the digiHit positions for angled tracks.
+
+In the implementation, instead of shifting the CCMap, the particle's deposition path is shifted by the same amount in the opposite direction, dropping any part that is shifted outside the sensor volume. This is mathematically equivalent, but avoids having to modify the CCMap (where the discrete binning along w makes shifting difficult).
 
 #### `SinglePixel`
 Simply fills the total charge deposited by a simHit into the pixel that the simHit position lies in. This will always produce a cluster size of 1 pix/clst and the binary sensor resolution expectation of pitch/sqrt(12) (at vertical incidence angles).
@@ -293,7 +312,7 @@ This is intended to be used to test the correct `u`/`v` orientation of the pixel
 ### Charge deposition simulation
 If the ChargeCollector requires positions of individual deposited charges (like `ChargeCollectionMap`), the digitizer simulates the deposition of charge along the path of a simHit through the sensor.
 
-For each simHit, the path through the sensor is approximated as a straight line (intrinsic limitation of Key4hep). =
+For each simHit, the path through the sensor is approximated as a straight line (intrinsic limitation of Key4hep)
 
 - The **direction** of the path is defined by the simHit's momentum direction
 - The **position** of the path is defined by the simHit's position
@@ -301,6 +320,7 @@ For each simHit, the path through the sensor is approximated as a straight line 
   - the edges of the sensor volume
   - if the path is significantly longer than the simHit's Geant4PathLength, the path is trimmed, while keeping it as central as possible around the simHit's position.
 - SimHits with 0 momentum or whose path does not intersect the sensor volume are skipped.
+- The path gets a vertical offset to account for the CCMap's mean collection depth (see [Vertically shifting the CCMap](#vertically-shifting-the-ccmap)).
 
 Then, the charge deposition and collection are modelled as follows:
 
@@ -317,7 +337,7 @@ Then, the charge deposition and collection are modelled as follows:
 ## Maintainers notes
 
 *note that this diagram predates the latest refactoring. The general structure still applies.*
-<img src="UML.svg" width="700" alt="Universal Modelling Language (UML) diagram of the VTXdigi_Modular code structure.">
+<img src="doc/UML.svg" width="700" alt="Universal Modelling Language (UML) diagram of the VTXdigi_Modular code structure.">
 
 ### Conventions
 - **Reference frames**
@@ -353,13 +373,18 @@ If needed, more dummy charge collection maps can be generated with `test/tools/g
 - takes ~20 s.
 - single flat sensor (`test/resources/geometry_SingleSensor_v2.xml`)
 - 100 muons
-- Steering details
+- Steering details (runs two instances with different settings)
   ```python
   ...
   ChargeCollectionMethod="ChargeCollectionMap",
   Clusterize = True,
-  ClusterPositionUncertainty=[],
   DebugHistograms=True,
+  # run 1
+  ClusterPositionUncertainty=[],
+  ChargeCollectionMap_ShiftCollectionDepthToCenter=True,
+  # run 2
+  ClusterPositionUncertainty=[0.0031, 0.0015, 0.0081, 0.0222, 0.0337, 0.0033, 0.0018, 0.0042, 0.0082, 0.0109],
+  ChargeCollectionMap_ShiftCollectionDepthToCenter=False
   ```
 
 `test_VTXdigi_Modular_ALLEGRO`
@@ -373,7 +398,7 @@ If needed, more dummy charge collection maps can be generated with `test/tools/g
   ...
   ChargeCollectionMethod="ChargeCollectionMap",
   Clusterize = True,
-  ClusterPositionUncertainty=[0.003, 0.0035, 0.005, 0.01, 0.02, 0.004, 0.0045, 0.006, 0.015, 0.025],
+  ClusterPositionUncertainty=[],
   ```
 
 ### Further improvements

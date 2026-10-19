@@ -1,15 +1,16 @@
-from pathlib import Path
+import argparse
 
 import numpy as np
-import pandas as pd
 import ROOT
 
 ROOT.gROOT.SetBatch(True)  # no canvases pop up during fitting
 
-RootFile = f"/home/jona/phd/key4hep/data/digi/2026-09-24/histograms_NOpt_A_1_B_1_1p2V_0T_singlePlane_20um_hepevt_e-_5.0GeV_cosTheta_8-172deg_G4-EMZ-sDep0-ECut0keV-rCut0.003mm.root"
-RootDir = f"VTXBdigi_inner/Layer0/digiHit_residuals"
+parser = argparse.ArgumentParser(description="Extract cluster uncertainties from ROOT files.")
+parser.add_argument("--input", "-i", help="Input ROOT file", required=True)
+parser.add_argument("--output", "-o", help="Output ROOT file", required=False, default=None)
+args = parser.parse_args()
 
-OutRootFile = Path(__file__).resolve().parent / "cluster_uncertainty_fits.root"
+RootDir = "VTXBdigi_inner/Layer0/digiHit_residuals"
 
 
 def FetchRootObj(FilePath, Dir, ObjName):
@@ -105,12 +106,12 @@ for i_ClusterLength, ClusterLength in enumerate(ClusterLengths):
     for i_Axis, Axis in enumerate(Axes):
         RootObj = f"residual_{Axis}_toPrimariesSecondaries_length{ClusterLength}"
 
-        TH1 = FetchRootObj(RootFile, RootDir, RootObj)
+        TH1 = FetchRootObj(args.input, RootDir, RootObj)
 
         Resolution = TH1.GetStdDev()
         # Resolution = CalcStdDevTruncated(TH1, 2.0)
         # Resolution = CalcGausFitSigma(TH1, 2.0)
-        Resolution = CalcStdDevCentralFraction(TH1, 0.95)
+        Resolution = CalcStdDevCentralFraction(TH1, 0.996)
 
         # Uncertainties[i_Axis * len(ClusterLengths) + i_ClusterLength] = TH1.GetStdDev()
         # Uncertainties[i_Axis * len(ClusterLengths) + i_ClusterLength] = (
@@ -134,9 +135,10 @@ for i in range(len(Uncertainties) - 1):
     print(f"{Uncertainties[i]:.4f}, ", end="")
 print(f"{Uncertainties[-1]:.4f}]")
 
-OutFile = ROOT.TFile(str(OutRootFile), "RECREATE")
-OutFile.cd()
-for Hist in FittedHists:
-    Hist.Write()
-OutFile.Close()
-print(f"Wrote {len(FittedHists)} fitted histograms to {OutRootFile}")
+if args.output is not None:
+    OutFile = ROOT.TFile(args.output, "RECREATE")
+    OutFile.cd()
+    for Hist in FittedHists:
+        Hist.Write()
+    OutFile.Close()
+    print(f"Wrote {len(FittedHists)} fitted histograms to {args.output}")
