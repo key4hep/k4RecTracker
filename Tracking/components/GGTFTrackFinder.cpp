@@ -192,8 +192,8 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
     const std::size_t recreateEvery = m_sessionRecreateEvents.value();
     if (recreateEvery > 0 && eventNumber > 0 && eventNumber % recreateEvery == 0) {
       std::lock_guard<std::mutex> sessionLock(m_sessionMutex);
-      info() << "Recreating the ONNX session at event " << eventNumber << " (every " << recreateEvery
-             << " events)." << endmsg;
+      info() << "Recreating the ONNX session at event " << eventNumber << " (every " << recreateEvery << " events)."
+             << endmsg;
       m_session = std::make_shared<Ort::Session>(*m_environment, m_modelPath.value().c_str(), m_sessionOptions);
     }
     std::shared_ptr<Ort::Session> session;
@@ -237,8 +237,8 @@ private:
    * event loop performs no further heap allocations in the feature-extraction and clustering stages.
    */
   struct Workspace {
-    std::vector<float> features;        // Seven float features per hit.
-    std::vector<HitRef> hitRefs;        // Source-hit bookkeeping, one entry per feature row.
+    std::vector<float> features;           // Seven float features per hit.
+    std::vector<HitRef> hitRefs;           // Source-hit bookkeeping, one entry per feature row.
     std::vector<std::int32_t> clusterIds;  // One cluster identifier per hit; 0 means noise.
     std::vector<std::uint32_t> candidates; // Cluster-core candidates in decreasing beta order.
     std::vector<std::uint32_t> unassigned; // Hits not yet absorbed by any cluster.
@@ -464,7 +464,8 @@ private:
       }
     }
     std::stable_sort(candidates.begin(), candidates.end(), [output, stride, embDims](std::uint32_t a, std::uint32_t b) {
-      return output[static_cast<std::size_t>(a) * stride + embDims] > output[static_cast<std::size_t>(b) * stride + embDims];
+      return output[static_cast<std::size_t>(a) * stride + embDims] >
+             output[static_cast<std::size_t>(b) * stride + embDims];
     });
 
     workspace.assigned.assign(inference.nHits, std::uint8_t{0});
@@ -596,15 +597,15 @@ private:
   }
 
   static constexpr std::size_t kFeatureCount = 7;
-  mutable std::atomic<std::uint64_t> m_eventCounter{0};     // Thread-safe processed-event counter.
+  mutable std::atomic<std::uint64_t> m_eventCounter{0}; // Thread-safe processed-event counter.
 
-  std::unique_ptr<Ort::Env> m_environment;       // ONNX Runtime environment.
+  std::unique_ptr<Ort::Env> m_environment;         // ONNX Runtime environment.
   mutable std::shared_ptr<Ort::Session> m_session; // ONNX inference session (swapped on recreation).
-  mutable std::mutex m_sessionMutex;             // Serializes session swaps and snapshots.
-  Ort::SessionOptions m_sessionOptions;          // ONNX session configuration.
-  std::unique_ptr<Ort::MemoryInfo> m_memoryInfo; // CPU tensor-memory descriptor.
-  std::string m_inputName;                       // Owned ONNX input name.
-  std::string m_outputName;                      // Owned ONNX output name.
+  mutable std::mutex m_sessionMutex;               // Serializes session swaps and snapshots.
+  Ort::SessionOptions m_sessionOptions;            // ONNX session configuration.
+  std::unique_ptr<Ort::MemoryInfo> m_memoryInfo;   // CPU tensor-memory descriptor.
+  std::string m_inputName;                         // Owned ONNX input name.
+  std::string m_outputName;                        // Owned ONNX output name.
 
   Gaudi::Property<std::string> m_modelPath{this, "ModelPath", "", "Path to the ONNX model file"};
   Gaudi::Property<std::size_t> m_embeddingCoordinates{

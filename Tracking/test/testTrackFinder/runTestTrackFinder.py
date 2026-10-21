@@ -16,8 +16,15 @@ parser.add_argument("--outputFile", help="OutputFile")
 parser.add_argument("--modelPath", default="", help="model path for the track finder")
 parser.add_argument("--tbeta", default=0.7, help="tbeta clustering parameter")
 parser.add_argument("--td", default=0.1, help="td clustering parameter")
-parser.add_argument("--inferenceThreads", default=4, type=int, help="ONNX Runtime intra-operation threads")
-parser.add_argument("--sessionRecreateEvents", default=10, type=int, help="Recreate the ONNX session every N events (0 disables)")
+parser.add_argument(
+    "--inferenceThreads", default=4, type=int, help="ONNX Runtime intra-operation threads"
+)
+parser.add_argument(
+    "--sessionRecreateEvents",
+    default=10,
+    type=int,
+    help="Recreate the ONNX session every N events (0 disables)",
+)
 args = parser.parse_args()
 
 # ################## InputOutput
@@ -49,9 +56,9 @@ siWrapperResolution_t = 0.040  # [ns], assume 40 ps timing resolution for a sing
 # Define arguments for digitizers
 vxd_barrel_digi_args = {
     "IsStrip": False,
-    "ResolutionU": [innerVertexResolution_x]*3 + [outerVertexResolution_x]*2,
-    "ResolutionV": [innerVertexResolution_y]*3 + [outerVertexResolution_y]*2,
-    "ResolutionT": [innerVertexResolution_t]*3 + [outerVertexResolution_t]*2,
+    "ResolutionU": [innerVertexResolution_x] * 3 + [outerVertexResolution_x] * 2,
+    "ResolutionV": [innerVertexResolution_y] * 3 + [outerVertexResolution_y] * 2,
+    "ResolutionT": [innerVertexResolution_t] * 3 + [outerVertexResolution_t] * 2,
     "SimTrackHitCollectionName": ["VertexBarrelCollection"],
     "SimTrkHitRelCollection": ["VTXBSimDigiLinks"],
     # IDEA_o1_v04 exposes both barrel and disks below the single top-level
@@ -65,9 +72,9 @@ vxd_barrel_digi_args = {
 
 vxd_endcap_digi_args = {
     "IsStrip": False,
-    "ResolutionU": [outerVertexResolution_x]*3,
-    "ResolutionV": [outerVertexResolution_y]*3,
-    "ResolutionT": [outerVertexResolution_t]*3,
+    "ResolutionU": [outerVertexResolution_x] * 3,
+    "ResolutionV": [outerVertexResolution_y] * 3,
+    "ResolutionT": [outerVertexResolution_t] * 3,
     "SimTrackHitCollectionName": ["VertexEndcapCollection"],
     "SimTrkHitRelCollection": ["VTXDSimDigiLinks"],
     "SubDetectorName": "Vertex",
@@ -78,9 +85,9 @@ vxd_endcap_digi_args = {
 
 siWr_barrel_digi_args = {
     "IsStrip": False,
-    "ResolutionU": [siWrapperResolution_x]*4,
-    "ResolutionV": [siWrapperResolution_y]*4,
-    "ResolutionT": [siWrapperResolution_t]*4,
+    "ResolutionU": [siWrapperResolution_x] * 4,
+    "ResolutionV": [siWrapperResolution_y] * 4,
+    "ResolutionT": [siWrapperResolution_t] * 4,
     "SimTrackHitCollectionName": ["SiWrBCollection"],
     "SimTrkHitRelCollection": ["SiWrBSimDigiLinks"],
     "SubDetectorName": "SiWrB",
@@ -91,9 +98,9 @@ siWr_barrel_digi_args = {
 
 siWr_endcap_digi_args = {
     "IsStrip": False,
-    "ResolutionU": [siWrapperResolution_x]*4,
-    "ResolutionV": [siWrapperResolution_y]*4,
-    "ResolutionT": [siWrapperResolution_t]*4,
+    "ResolutionU": [siWrapperResolution_x] * 4,
+    "ResolutionV": [siWrapperResolution_y] * 4,
+    "ResolutionT": [siWrapperResolution_t] * 4,
     "SimTrackHitCollectionName": ["SiWrDCollection"],
     "SimTrkHitRelCollection": ["SiWrDSimDigiLinks"],
     "SubDetectorName": "SiWrD",
@@ -105,45 +112,30 @@ siWr_endcap_digi_args = {
 # digitize vertex hits through "native" DDPlanarDigi
 from Configurables import DDPlanarDigi
 
-vtxb_digitizer = DDPlanarDigi(
-    "VXDBarrelDigitizer",
-    **vxd_barrel_digi_args,
-    OutputLevel=INFO
-)
+vtxb_digitizer = DDPlanarDigi("VXDBarrelDigitizer", **vxd_barrel_digi_args, OutputLevel=INFO)
 
-vtxd_digitizer = DDPlanarDigi(
-    "VXDEndcapDigitizer",
-    **vxd_endcap_digi_args,
-    OutputLevel=INFO
-)
+vtxd_digitizer = DDPlanarDigi("VXDEndcapDigitizer", **vxd_endcap_digi_args, OutputLevel=INFO)
 
-siwrb_digitizer = DDPlanarDigi(
-    "SiWrBarrelDigitizer",
-    **siWr_barrel_digi_args,
-    OutputLevel=INFO
-)
+siwrb_digitizer = DDPlanarDigi("SiWrBarrelDigitizer", **siWr_barrel_digi_args, OutputLevel=INFO)
 
-siwrd_digitizer = DDPlanarDigi(
-    "SiWrEndcapDigitizer",
-    **siWr_endcap_digi_args,
-    OutputLevel=INFO
-)
+siwrd_digitizer = DDPlanarDigi("SiWrEndcapDigitizer", **siWr_endcap_digi_args, OutputLevel=INFO)
 
 from Configurables import DCHdigi_v02
+
 dch_digitizer = DCHdigi_v02(
     "DCHdigi2",
     InputSimHitCollection=["DCHCollection"],
-    OutputDigihitCollection = ["DCH_DigiCollection"],
-    OutputLinkCollection = ["DCH_DigiSimAssociationCollection"],
+    OutputDigihitCollection=["DCH_DigiCollection"],
+    OutputLinkCollection=["DCH_DigiSimAssociationCollection"],
     DCH_name="DCH_v2",
-    zResolution_mm = 30.,               # in mm
-    xyResolution_mm = 0.1,              # in mm
-    Deadtime_ns = 400.0,                # in ns
-    GasType=0,                          # 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
-    ReadoutWindowStartTime_ns=1.0,      # in ns (taking into account time of flight, drift, and signal travel)
-    ReadoutWindowDuration_ns=450.0,     # in ns
-    DriftVelocity_um_per_ns=-1.0,       # in um/ns, if negative, automatically chosen based on GasType
-    SignalVelocity_mm_per_ns=200.0,     # in mm/ns (Default: 2/3 of the speed of light)
+    zResolution_mm=30.0,  # in mm
+    xyResolution_mm=0.1,  # in mm
+    Deadtime_ns=400.0,  # in ns
+    GasType=0,  # 0: He(90%)-Isobutane(10%), 1: pure He, 2: Ar(50%)-Ethane(50%), 3: pure Ar
+    ReadoutWindowStartTime_ns=1.0,  # in ns (taking into account time of flight, drift, and signal travel)
+    ReadoutWindowDuration_ns=450.0,  # in ns
+    DriftVelocity_um_per_ns=-1.0,  # in um/ns, if negative, automatically chosen based on GasType
+    SignalVelocity_mm_per_ns=200.0,  # in mm/ns (Default: 2/3 of the speed of light)
     OutputLevel=INFO,
 )
 
