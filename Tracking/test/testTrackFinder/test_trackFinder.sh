@@ -8,8 +8,8 @@ MODEL_PATH=$1
 
 XML_FILE=$K4GEO/FCCee/IDEA/compact/IDEA_o1_v03/IDEA_o1_v03.xml
 STEERING_FILE=Tracking/test/testTrackFinder/SteeringFile_IDEA_o1_v03.py
-TBETA=0.6
-TD=0.3
+TBETA=0.7
+TD=0.1
 
 curl -o $STEERING_FILE https://raw.githubusercontent.com/key4hep/k4geo/master/example/SteeringFile_IDEA_o1_v03.py
 

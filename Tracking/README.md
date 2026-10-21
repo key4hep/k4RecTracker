@@ -43,6 +43,17 @@ Its workflow can be summarized as follows:
    - The identified clusters are converted into tracks.
    - The final results are stored in the collection `OutputTracksGGTF`.
 
+### Performance tuning
+
+Per-event time is dominated almost entirely by the ONNX inference; feature extraction and clustering take less than a millisecond. The inference session can be tuned with two properties:
+
+* `InferenceThreads` (default: 4): intra-operation threads. Inference plateaus beyond about 4-8 threads for the current GATr model.
+* `SessionRecreateEvents` (default: 0, disabled): recreate the ONNX session every N events. The ORT memory arena is disabled by design (the held heap then stays at tens of MB instead of GBs), but this ORT build retains per-input-shape allocation plans for each distinct hit count — without the arena the held heap grows by a few MB per event while events keep presenting new shapes. Recreating the session flushes that state and makes the held heap flat (measured 38→39 MB over 20 events with N=5); a few hundred events per interval costs ~0.1% of throughput in model reloads.
+
+The event loop allocates no heap memory per event outside ONNX Runtime: the feature buffer, the clustering scratch space, and the hit-grouping tables are reused across events and never grow after the largest event has been processed.
+
+For production memory management: the ONNX memory arena is disabled (held heap stays at tens of MB per event). Set `SessionRecreateEvents` to a few hundred to cap the residual per-shape retention — the periodic session swap resets it, giving a bounded, flat footprint at ~0.1% reload overhead.
+
 ### Dependencies
 
 * ROOT
