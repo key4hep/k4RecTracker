@@ -36,7 +36,7 @@ Its workflow can be summarized as follows:
    - This step is implemented with an [`Ort::Session`](https://onnx.ai/) initialized with a `.onnx` model.
 
 3. **Clustering Step**
-   - The 4D embedded points are clustered into sub-collections.
+   - The embedded points are clustered into sub-collections.
    - Each cluster corresponds **one-to-one** to a reconstructed track.
 
 4. **Track Creation**
