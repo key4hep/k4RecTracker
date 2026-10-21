@@ -1386,12 +1386,12 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
 
   // Called for each cluster on a sensor, so volumeID and direction vectors are same among these clusters
   const dd4hep::rec::Vector3D direction_u_3d =
-      VTXdigi_tools::Trafo_local_global(dd4hep::rec::Vector3D(1, 0, 0), trafoMatrix);
+      VTXdigi_tools::TrafoVec_local_global(dd4hep::rec::Vector3D(1, 0, 0), trafoMatrix);
   const edm4hep::Vector2f direction_u = edm4hep::Vector2f(
       direction_u_3d.theta(), direction_u_3d.phi()); // edm4hep expects direction in to given as (theta, phi)
 
   const dd4hep::rec::Vector3D direction_v_3d =
-      VTXdigi_tools::Trafo_local_global(dd4hep::rec::Vector3D(0, 1, 0), trafoMatrix);
+      VTXdigi_tools::TrafoVec_local_global(dd4hep::rec::Vector3D(0, 1, 0), trafoMatrix);
   const edm4hep::Vector2f direction_v = edm4hep::Vector2f(
       direction_v_3d.theta(), direction_v_3d.phi()); // edm4hep expects direction in to given as (theta, phi)
 
