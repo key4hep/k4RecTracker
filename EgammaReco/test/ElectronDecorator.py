@@ -20,8 +20,6 @@ geoservice.OutputLevel = INFO
 alg = ElectronDecorator(
     "ElectronDecorator",
     InputRecoParticles="PandoraPFOs",
-    InputClusters="PandoraClusters",
-    InputTracks="SiTracks_Refitted",
     OutputRecoParticles="RecoveredPFOs",
     dEtaMargin = 0.005,
     dPhiMargin = 0.05
@@ -32,5 +30,5 @@ ApplicationMgr(
     ExtSvc=[io],
     EvtSel="NONE",
     EvtMax=1000,
-    OutputLevel=INFO,
+    OutputLevel=DEBUG,
 )
