@@ -29,9 +29,7 @@ struct bremRecoveredClusterTrackMap {
 ElectronDecorator::ElectronDecorator( const std::string& name,ISvcLocator* svc)
 
     : Transformer(name,svc,{
-              KeyValue{"InputRecoParticles", "PandoraPFOs"},
-              KeyValue{"InputClusters", "PandoraClusters"},
-              KeyValue{"InputTracks", "SiTracks_Refitted"}
+              KeyValue{"InputRecoParticles", "PandoraPFOs"}
           },
 
           {
@@ -43,26 +41,24 @@ std::cout << "pandoraReading constructor called" << std::endl;
 }
 
 edm4hep::ReconstructedParticleCollection 
-ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& input,
-                           const edm4hep::ClusterCollection& clusters,
-                           const edm4hep::TrackCollection& tracks) const {
+ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& input) const {
 
     auto detector = m_geoSvc->getDetector();
     
     double eCalBarrelInnerR = detector->constantAsDouble("ECalBarrel_inner_radius")/dd4hep::mm;
-     //std::cout << "eCalBarrelInnerR: " << eCalBarrelInnerR << std::endl;
+    debug() << "eCalBarrelInnerR: " << eCalBarrelInnerR << endmsg;
 
     double eCalBarrelMaxZ = detector->constantAsDouble("ECalBarrel_half_length")/dd4hep::mm;
-     //std::cout << "eCalBarrelMaxZ: " << eCalBarrelMaxZ << std::endl;
+    debug() << "eCalBarrelMaxZ: " << eCalBarrelMaxZ << endmsg;
 
     double eCalEndCapInnerR = detector->constantAsDouble("ECalEndcap_inner_radius")/dd4hep::mm;
-     //std::cout << "eCalEndCapInnerR: " << eCalEndCapInnerR << std::endl;
+    debug() << "eCalEndCapInnerR: " << eCalEndCapInnerR << endmsg;
 
     double eCalEndCapOuterR = detector->constantAsDouble("ECalEndcap_outer_radius")/dd4hep::mm;
-     //std::cout << "eCalEndCapOuterR: " << eCalEndCapOuterR << std::endl;
+    debug() << "eCalEndCapOuterR: " << eCalEndCapOuterR << endmsg;
 
     double eCalEndCapInnerZ =detector->constantAsDouble("ECalEndcap_min_z")/dd4hep::mm;
-     //std::cout << "eCalEndCapInnerZ: " <<eCalEndCapInnerZ << std::endl; 
+    debug() << "eCalEndCapInnerZ: " <<eCalEndCapInnerZ << endmsg; 
 
     double m_Bz = getFieldFromCompact();
 
@@ -71,9 +67,15 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
 
     std::vector<edm4hep::Cluster> tempClusters;
 
+   //////////////////////////////////////////////////////////////////////////////////
+   /////////////////Step1:loop through input PFOs ///////////////////////////////////
+   /////////////////Step2:Unpack the PFOs to extract clusters and tracks ////////////
+   /////////////////Step3:Make a map clusters: tracks ///////////////////////////////
+   //////////////////////////////////////////////////////////////////////////////////
+
     for (const auto& pfo : input) {  //PFO loop starts
 
-        info()
+        debug()
             << "PFO Energy = "
             << pfo.getEnergy()
             << " Tracks = "
@@ -102,10 +104,6 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
     
                   }
 
-                  const auto momVec = getMomentum(state, m_Bz);
-
-                  float p = std::sqrt(momVec.x*momVec.x + momVec.y*momVec.y + momVec.z*momVec.z);
-
                   entry.tracks.push_back(track);
               }
            }  //  PFO track loop ends
@@ -114,6 +112,17 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
         }  //  PFO cluster loop starts ends
 
      } // PFO  loop ends
+
+   //////////////////////////////////////////////////////////////////////////////////
+   /////////////////Step 1:complete /////////////////////////////////////////////////
+   /////////////////Step 2:complete /////////////////////////////////////////////////
+   /////////////////Step 3:complete /////////////////////////////////////////////////
+   //////////////////////////////////////////////////////////////////////////////////
+
+   //////////////////////////////////////////////////////////////////////////////////
+   /////////////////Step 4:Sort Cluster:Tracks map wrt cluster Energy ///////////////
+   /////////////////Step 5:Sort Temporary Cluster Collection wrt cluster Energy /////
+   //////////////////////////////////////////////////////////////////////////////////
 
      // sorting the cluster track map
      std::sort(clusterTrackMaps.begin(), clusterTrackMaps.end(),
@@ -125,6 +134,16 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
        [](const edm4hep::Cluster& a, const edm4hep::Cluster& b){
             return a.getEnergy() > b.getEnergy();
        });
+
+   //////////////////////////////////////////////////////////////////////////////////
+   /////////////////Step 4:complete /////////////////////////////////////////////////
+   /////////////////Step 5:complete /////////////////////////////////////////////////
+   //////////////////////////////////////////////////////////////////////////////////
+
+   //////////////////////////////////////////////////////////////////////////////////
+   /////////////////Step 6:Extrapolate all tracks to clusters with utils function////
+   /////////////////Step 7:Arrange the track wrt closest cluster to track distance //
+   //////////////////////////////////////////////////////////////////////////////////
 
       for (auto& entry : clusterTrackMaps) {  //  Looping over clusterTrackMaps starts
 
@@ -153,27 +172,36 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
            });
         }  //Looping over clusterTrackMaps ends
 
-        std::vector<int> clusterIndex;
+   //////////////////////////////////////////////////////////////////////////////////
+   /////////////////Step 6:complete /////////////////////////////////////////////////
+   /////////////////Step 7:complete /////////////////////////////////////////////////
+   //////////////////////////////////////////////////////////////////////////////////
+
+
+   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+   ///////Step 8: Application of brem interaction finding method (interaction of tangent from track curve to cluster)////
+   ////////////8:a) Look for brem interaction point in EndCap Region  ///////////////////////////////////////////////////
+   ////////////8:b) check brem interaction point in EndCap Region has x-y radius>barrel radius///////////////////////////
+   ////////////8:c) if x-y radius>barrel radius look for brem interaction in barrel region //////////////////////////////
+   ///////Step 9: Identify brem clusters from brem interaction point and its eta-phi margin /////////////////////////////
+   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        std::map<int, std::vector<int>> clusterIndexMap;
+        std::unordered_set<int> consumedClusters;
         std::vector<bremRecoveredClusterTrackMap> bremRecoveredClusterTrackMaps;
+ 
 
         for (const auto& entry : clusterTrackMaps) {  //  Looping over clusterTrackMaps starts for brem recovery
 
             const auto& cluster = entry.cluster;
 
-            //std::cout << "Cluster energy = " << cluster.getEnergy() << std::endl;
-
             if (entry.tracks.empty()) {
-             //std::cout << "  No associated tracks." << std::endl;
-             continue;
+               continue;
             }
-
-            if (!entry.tracks[0].isAvailable())
-                continue;
 
             bool aStatus = false;
             const auto& track1st = entry.tracks[0];
             edm4hep::TrackState  trackState1st;
-            //const auto& trackState1st = track1st.getTrackStates(edm4hep::TrackState::AtIP);
             auto state1st = track1st.getTrackState(edm4hep::TrackState::AtIP);
 
             if (state1st.has_value()) {
@@ -184,6 +212,8 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
             double zPlane = eCalEndCapInnerZ;
             double radius = eCalBarrelInnerR;
             ThreeVector intersectZ;
+
+            //!!! find brem iteraction in Endacap  region !!!//
             aStatus = GetPointInZ(zPlane,refPt,momVec,intersectZ);
 
             if (!aStatus) {
@@ -195,8 +225,13 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
             if (radius <= 0.) { // this should never happen
               throw std::invalid_argument("BremRecoveryAlgorithm: ECAL barrel inner radius < 0!");
             } 
+
+            //!!! if brem iteraction in Endacap  region has an x-y coordinate leading a radius greater  !!!//
+            //!!! than barrel radius then look for brem interaction in barrel region !!!//
             
             if (intersectZ.magXY() > radius){ // the tangent intersects the barrel before reaching the endcap - recalculate it
+              
+              //!!! handled situation where beam interaction point at x(0),y(0),z(0) !!!//
               if(std::abs(refPt.x) < std::numeric_limits<float>::epsilon() &&
                  std::abs(refPt.y) < std::numeric_limits<float>::epsilon() &&
                  std::abs(refPt.z) < std::numeric_limits<float>::epsilon()){
@@ -222,18 +257,20 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
                                             clusterPos1st.z);
            const double eta1st = vecClus1.eta();
            const double phi1st = vecClus1.phi();
+
+           //!!! calculation of eta-phi margin for recoverd cluster with input parameters m_dEtaMargin and m_dPhiMargin !!!//
            const double maxEta = eta1st + dEtaMargin;
            const double minEta = eta1st - dEtaMargin;
            const double bremBandPhi = deltaPhi(finalIntersectPt.phi(),phi1st);
            const double maxDPhi = bremBandPhi > 0. ? bremBandPhi + dPhiMargin : dPhiMargin;
            const double minDPhi = bremBandPhi > 0. ? -dPhiMargin : bremBandPhi - dPhiMargin;
 
-           std::vector<edm4hep::Cluster> bremCands;
+           //!!! looping over temporary clusters to check brem counter part of current cluster !!!//
            for (const auto& cluster2nd:tempClusters) { //  Looping over temporary clusters
               
-             if (cluster2nd.getObjectID().index == cluster.getObjectID().index){  // start if 
+             if (cluster2nd.getObjectID().index == cluster.getObjectID().index)  
                continue;
-             }      // end if 
+            
              if (!cluster2nd.isAvailable())
                 continue;
              
@@ -245,92 +282,98 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
              const double phi2nd = vecClus2.phi();
              const double finalDeltaPhi = deltaPhi(phi2nd,phi1st);
 
-             if (minEta < eta2nd && eta2nd < maxEta && minDPhi < finalDeltaPhi && finalDeltaPhi < maxDPhi) {  //start if
-                std::cout<<"===========found a brem candidate============"<<std::endl;
+             if (minEta < eta2nd && eta2nd < maxEta && minDPhi < finalDeltaPhi && finalDeltaPhi < maxDPhi) {  //start of eta-phi margin inspection 
+                debug()<<"===========found a brem candidate============"<<endmsg;
       
-                if (std::find(clusterIndex.begin(), clusterIndex.end(), cluster2nd.getObjectID().index) == clusterIndex.end()){ //start if
-                    bremCands.push_back(cluster2nd);
-                    clusterIndex.push_back(cluster2nd.getObjectID().index);
-                }//end if
+                int c1_idx = cluster.getObjectID().index;
+                int c2_idx = cluster2nd.getObjectID().index;
+
+                // Do not match if the secondary cluster has already been consumed as a key or value
+                if (consumedClusters.find(c2_idx) == consumedClusters.end() && consumedClusters.find(c1_idx) == consumedClusters.end()) { //start if
+          
+                    clusterIndexMap[c1_idx].push_back(c2_idx);
         
-                if (std::find(clusterIndex.begin(), clusterIndex.end(), cluster.getObjectID().index) == clusterIndex.end()){ //start if
-                    bremCands.push_back(cluster);
-                    clusterIndex.push_back(cluster.getObjectID().index);
-        
+                     // Mark the secondary cluster as consumed so it cannot be an entry elsewhere
+                    consumedClusters.insert(c2_idx);
                 }//end if
-             }//end if
+             }//end  of eta-phi margin inspection 
            } //  end Looping over temporary clusters
+           int current_c1 = cluster.getObjectID().index;
+           if (clusterIndexMap.find(current_c1) == clusterIndexMap.end() && consumedClusters.find(current_c1) == consumedClusters.end()) {
+             clusterIndexMap[current_c1] = std::vector<int>(); // Empty value list
+           }
+
         }  //  Looping over clusterTrackMaps ends for brem recovery
 
-        // for all selected and recovered clusters
+       //////////////////////////////////////////////////////////////////////////////////
+       /////////////////Step 8:complete /////////////////////////////////////////////////
+       /////////////////Step 9:complete /////////////////////////////////////////////////
+       //////////////////////////////////////////////////////////////////////////////////
 
-        bremRecoveredClusterTrackMap recoveredMap;
+       //!!! Step 8 and 9 created a clusterIndexMap  of clusterID; key:electronClusterID and value: matched brem clusterID  !!!//
+       //!!! using clusterIndexMap actual clusters and associated tracks are found from clusterTrackMaps in following steps !!!//
 
-        // Keep track IDs here so that tracks are not duplicated
-        std::unordered_set<int> recoveredTrackIndices;
+       /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+       //////////Step 10: Put brem recovered clusters associated tracks and remaining stuff in bremRecoveredClusterTrackMaps//////// 
+       /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+        if(clusterIndexMap.size()>0){
+            std::set<int> recoveredTrackIndices;
+            for (const auto& [primaryKey, matchedSecondaries] : clusterIndexMap) {
+               
+               bremRecoveredClusterTrackMap recoveredMap;
+               recoveredTrackIndices.clear();
+               
+               for (const auto& ctm : clusterTrackMaps) {
+         
+                 int clusterID = ctm.cluster.getObjectID().index;
+                 bool isPrimary = (clusterID == primaryKey);
+                 bool isSecondary = (std::find(matchedSecondaries.begin(), matchedSecondaries.end(), clusterID) != matchedSecondaries.end()); 
+                 if (isPrimary || isSecondary) {
+                    recoveredMap.clusters.push_back(ctm.cluster);
+                    for (const auto& track : ctm.tracks) {
+                      int trackIndex = track.getObjectID().index;
+                      if (recoveredTrackIndices.insert(trackIndex).second) {
+                          recoveredMap.tracks.push_back(track);
+                      }
+                    }
+                 }
+               }
+               bremRecoveredClusterTrackMaps.push_back(recoveredMap);
+            }
+        }
         for (const auto& ctm : clusterTrackMaps) {
            
+            bremRecoveredClusterTrackMap remainingMap;
+            bool isNotKey=true;
+            bool isNotValue=true;
             int clusterID = ctm.cluster.getObjectID().index;
+             
+            if(clusterIndexMap.size()>0){
+             
+               isNotKey = (clusterIndexMap.find(clusterID) == clusterIndexMap.end());
+               for (const auto& [key, matches] : clusterIndexMap) {
+                   if (std::find(matches.begin(), matches.end(), clusterID) != matches.end()) {
+                      isNotValue = false; 
+                       break; // Found it as a value, so stop searching
+                   }
+               }
+            }
+            
+            if (isNotKey && isNotValue) {
+               remainingMap.clusters.push_back(ctm.cluster);
+               for (const auto& track : ctm.tracks) {
+                   remainingMap.tracks.push_back(track);
 
-           // Is this cluster one of the selected clusters?
-            if (std::find(clusterIndex.begin(), clusterIndex.end(), clusterID)!= clusterIndex.end()){
-
-             // Store the cluster
-              recoveredMap.clusters.push_back(ctm.cluster);
-
-             // Store associated tracks, but only once
-              for (const auto& track : ctm.tracks) {
-                //std::cout << "=========== Inside CTM tracks brem ============ " << std::endl;
-                int trackIndex = track.getObjectID().index;
-                //std::cout << "ctm.tracks = " << trackIndex << std::endl;
-
-                if (recoveredTrackIndices.insert(trackIndex).second) {
-                   recoveredMap.tracks.push_back(track);
-                }
-              }
-           }
+               }
+               bremRecoveredClusterTrackMaps.push_back(std::move(remainingMap));
+            }
         }
 
-        // --------------------------------------------------
-       //  Add the recovered/selected group
-       // --------------------------------------------------
+      ////////////////////////////////////////
+      //////////Step 10: complete///////////// 
+      ////////////////////////////////////////
 
-       if (!recoveredMap.clusters.empty()) {
-        bremRecoveredClusterTrackMaps.push_back(
-        std::move(recoveredMap)
-        );
-       }
-
-      // --------------------------------------------------
-      //       Store every remaining cluster separately
-      // --------------------------------------------------
-
-       for (const auto& ctm : clusterTrackMaps) {
-
-         int clusterID = ctm.cluster.getObjectID().index;
-
-         // Skip clusters already included in recoveredMap
-         if (std::find(clusterIndex.begin(), clusterIndex.end(), clusterID)!= clusterIndex.end()) {
-           continue;
-         }
-
-         bremRecoveredClusterTrackMap remainingMap;
-
-         // One cluster
-         remainingMap.clusters.push_back(ctm.cluster);
-
-         // Its associated tracks
-         for (const auto& track : ctm.tracks) {
-          //std::cout << "=========== Inside CTM tracks============ " << std::endl;
-          //std::cout <<"track.getObjectID().index:::"<<track.getObjectID().index<<std::endl;
-          remainingMap.tracks.push_back(track);
-         }
-
-         bremRecoveredClusterTrackMaps.push_back(
-          std::move(remainingMap)
-        );
-      }
 
       // building the output
       edm4hep::ReconstructedParticleCollection output;
@@ -340,7 +383,6 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
         auto particle = output.create();
       
          float clusterEnergy = 0.0;
-         float pfoEnergy = 0.0;
 
          // Add all associated tracks
          for (const auto& track : bremMap.tracks) { // for track starts 
@@ -357,3 +399,4 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
        }// for bremMap ends
        return output;
 }
+

@@ -73,14 +73,13 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
                    // last hit
                    pandora::CartesianVector pos(ref.x, ref.y, ref.z);
                    pandora::CartesianVector mom(px,py,pz);
-                   int charge = (omega > 0.f) ? 1 : -1;
                    const pandora::Helix helix(pos, mom, charge, Bz);
                    const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
                    const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
               
                    // First project to endcap
                    pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
-                   bool hasEndCapProjection(false);
+                   //bool hasEndCapProjection(false);
                    if (eCalEndCapInnerR > 0) {                     // start of 1st eCalEndCapInnerR if
                             
                        float genericTime(std::numeric_limits<float>::max());
@@ -93,14 +92,14 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
                                    (r >= eCalEndCapInnerR) && (r <= eCalEndCapOuterR)) {  // start of eCalEndCapInnerR if
                                 
                             minGenericTime = genericTime;
-                             bestECalProjection = endCapProjection;
-                            hasEndCapProjection = true;
+                            bestECalProjection = endCapProjection;
+                            //hasEndCapProjection = true;
                        }      // end of eCalEndCapInnerR if
                     }   // end of 1st eCalEndCapInnerR if
                     // Then project to barrel surface(s), and keep projection
                     // if extrapolation is within the z acceptance of the detector
                     pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
-                    bool hasBarrelProjection = false;
+                    //bool hasBarrelProjection = false;
                     if (eCalBarrelInnerR > 0) {              // start of eCalBarrelInnerR if
                             
                         float genericTime(std::numeric_limits<float>::max());
@@ -109,7 +108,7 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
                         if ((pandora::STATUS_CODE_SUCCESS == statusCode) &&
                             (std::fabs(barrelProjection.GetZ()) <= eCalBarrelMaxZ)) {  // start of barrel projection if
                                 
-                             hasBarrelProjection = true;
+                             //hasBarrelProjection = true;
                              if (genericTime < minGenericTime) {   //start of generic time if
                                    
                                  minGenericTime = genericTime;

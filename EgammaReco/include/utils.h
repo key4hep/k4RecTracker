@@ -58,6 +58,8 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
                                                                 double eCalEndCapInnerZ, double Bz);
 
 
+
+/* Three vector structure for convenience of calculation*/
 struct ThreeVector {
     double x, y, z;
     
@@ -71,24 +73,30 @@ struct ThreeVector {
     double eta() const { return -std::log(std::tan(theta()/2.)); }
   };
 
+
+/* Calculation of phi differences */
 double deltaPhi(const double p1, const double p2);
 
+/* Computing solenoid magnetic field based on location */
 double getFieldFromCompact();
 
+/* Computing momentum from the track parameters */
 ThreeVector getMomentum(const edm4hep::TrackState& state, double Bz);
 
 
+/* Computing brem photon interaction point at Endcap region */
 bool GetPointInZ(const double zPlane,        // z plane (endcap) coordinate
                    const ThreeVector& refPt,   // reference point
                    const ThreeVector& momVec,  // momentum
                    ThreeVector& intersectPt);
 
+/* Computing brem photon interaction point at barrel region */
 bool GetPointOnCircle(const double radius,        // (barrel) radius
                         const ThreeVector& refPt,   // reference point
                         const ThreeVector& momVec,  // momentum
                         ThreeVector& intersectPt);
 
-/* if track reference at the origin */
+/* Computing brem photon interaction point at barrel region if interaction point is at origin */
 bool GetPointOnCircleForRefAtOrigin(const double radius,        // (barrel) radius
                         const ThreeVector& refPt,   // reference point
                         const ThreeVector& momVec,  // momentum

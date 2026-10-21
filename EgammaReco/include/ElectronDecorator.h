@@ -1,4 +1,5 @@
-#pragma once
+#ifndef ELECTRON_DECORATOR_H
+#define ELECTRON_DECORATOR_H
 
 #include <k4FWCore/Transformer.h>
 
@@ -23,9 +24,7 @@
 class ElectronDecorator:
     public k4FWCore::Transformer<
         edm4hep::ReconstructedParticleCollection(
-            const edm4hep::ReconstructedParticleCollection&,
-            const edm4hep::ClusterCollection&,
-            const edm4hep::TrackCollection& )> {
+            const edm4hep::ReconstructedParticleCollection&)> {
 
 public:
 
@@ -33,9 +32,7 @@ public:
                     ISvcLocator* svc);
 
     edm4hep::ReconstructedParticleCollection operator()(
-        const edm4hep::ReconstructedParticleCollection&,
-        const edm4hep::ClusterCollection&,
-        const edm4hep::TrackCollection&) const override;
+        const edm4hep::ReconstructedParticleCollection&) const override;
 
 private:
      ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Geometry service"};
@@ -43,3 +40,5 @@ private:
      Gaudi::Property<double> m_dEtaMargin{this, "dEtaMargin", 0.05, "Eta matching margin"};
      Gaudi::Property<double> m_dPhiMargin{this, "dPhiMargin", 0.005, "Phi matching margin"};
 };
+
+#endif // ELECTRON_DECORATOR_H
