@@ -189,6 +189,10 @@ private:
                                           "multithreading, might lead to crashes. Default is false."};
   Gaudi::Property<int> m_infoPrintInterval{this, "InfoPrintInterval", 100,
                                            "Interval for printing information during processing."};
+  Gaudi::Property<bool> m_clusterSizeInDigiHitType{
+      this, "ClusterSizeInDigiHitType", true,
+      "Write the cluster size to the digiHit's type field, as "
+      "type = cluster_length_u + 100 * cluster_length_v. Defaults to true."};
 
   /* Path computation */
   Gaudi::Property<float> m_path_meanDepositionsPerUm{

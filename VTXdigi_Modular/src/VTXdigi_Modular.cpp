@@ -1411,6 +1411,9 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
      * (ie. sensor) that the hit is in) */
     digiHit.setCellID(volumeID);
     digiHit.setEDep(cluster.charge / VTXdigi_tools::kChargePerkeV);
+    if (m_clusterSizeInDigiHitType.value()) {
+      digiHit.setType(cluster.GetSize(0) + 100 * cluster.GetSize(1)); // cluster length in u and v
+    }
 
     // position
     VTXdigi_tools::PixelCoords clusterPos_pixC = cluster.ComputeCoG(m_clusterizeEndPixelsOnly.value());
