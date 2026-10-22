@@ -38,14 +38,14 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
 
 edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBarrelInnerR, double eCalBarrelMaxZ,  double eCalEndCapInnerR, double eCalEndCapOuterR,
                                             double eCalEndCapInnerZ, double Bz){
-                   
+
    std::cout<<"=======Inside helixAtLastTrack======== "<<std::endl;
    edm4hep::TrackState trackState_AtCalorimeter;
    for (const auto& state : track.getTrackStates()) {    //start of state loop
-             
+
    /* track needs to be extrapolated from its last hit */
           if (state.location == edm4hep::TrackState::AtLastHit) {  // start of state.location if
-                    
+
                double phi       = state.phi;
                double omega     = state.omega;
                double tanLambda = state.tanLambda;
@@ -56,14 +56,14 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
                double pz = pt * tanLambda;
                auto ref = state.referencePoint;
                double posAtLastHit[] = {ref.x, ref.y, ref.z};
-               double momAtLastHit[] = {px,py,pz};                    
+               double momAtLastHit[] = {px,py,pz};
                int charge = (omega > 0.f) ? 1 : -1;
                // produce new helix at last hit position
                auto helixAtLastHit = HelixClass_double();
                helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit,charge, Bz);
                // TrackState at Calorimeter
                if (eCalBarrelInnerR > 0. || eCalEndCapInnerR > 0.) {   // start of eCalBarrel||eCalEndCap if
-                       
+
                    pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
                    pandora::CartesianVector secondBestECalProjection(0.f, 0.f, 0.f);
                    float minGenericTime(std::numeric_limits<float>::max());
@@ -76,12 +76,12 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
                    const pandora::Helix helix(pos, mom, charge, Bz);
                    const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
                    const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
-              
+
                    // First project to endcap
                    pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
                    //bool hasEndCapProjection(false);
                    if (eCalEndCapInnerR > 0) {                     // start of 1st eCalEndCapInnerR if
-                            
+
                        float genericTime(std::numeric_limits<float>::max());
                        const pandora::StatusCode statusCode(helix.GetPointInZ(static_cast<float>(signPz) * eCalEndCapInnerZ,
                                                                    referencePoint, endCapProjection, genericTime));
@@ -90,7 +90,7 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
                        float r = std::sqrt(x * x + y * y);
                        if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (genericTime < minGenericTime) &&
                                    (r >= eCalEndCapInnerR) && (r <= eCalEndCapOuterR)) {  // start of eCalEndCapInnerR if
-                                
+
                             minGenericTime = genericTime;
                             bestECalProjection = endCapProjection;
                             //hasEndCapProjection = true;
@@ -101,35 +101,35 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
                     pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
                     //bool hasBarrelProjection = false;
                     if (eCalBarrelInnerR > 0) {              // start of eCalBarrelInnerR if
-                            
+
                         float genericTime(std::numeric_limits<float>::max());
                         const pandora::StatusCode statusCode(
                         helix.GetPointOnCircle(eCalBarrelInnerR, referencePoint, barrelProjection, genericTime));
                         if ((pandora::STATUS_CODE_SUCCESS == statusCode) &&
                             (std::fabs(barrelProjection.GetZ()) <= eCalBarrelMaxZ)) {  // start of barrel projection if
-                                
+
                              //hasBarrelProjection = true;
                              if (genericTime < minGenericTime) {   //start of generic time if
-                                   
+
                                  minGenericTime = genericTime;
                                  secondBestECalProjection = bestECalProjection;
                                  bestECalProjection = barrelProjection;
                               }                                      //end of generic time if
                               else {   // start of else
-                                   
+
                                  secondBestECalProjection = barrelProjection;
                               }        // end of else
                           }     // end of barrel projection if
 
                        }        // end of eCalBarrelInnerR if
-                        
+
                        trackState_AtCalorimeter = getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit, Bz);
                        auto ref_Calo = trackState_AtCalorimeter.referencePoint;
                        std::cout << "Track intersection1: ("
                                    << ref_Calo.x << ", "
                                    << ref_Calo.y << ", "
                                    << ref_Calo.z << ")\n";
-                         
+
                     } // end of eCalBarrel||eCalEndCap if
                   break;
                  }  // end of state.location if
@@ -257,10 +257,10 @@ bool GetPointOnCircle(const double radius,        // (barrel) radius
 
 }
 
-/* if track reference at the origin */                                           
+/* if track reference at the origin */
 bool GetPointOnCircleForRefAtOrigin(const double radius,        // (barrel) radius
                         const ThreeVector& refPt,   // reference point
-                        const ThreeVector& momVec,  // momentum                  
+                        const ThreeVector& momVec,  // momentum
                         ThreeVector& intersectPt){
 
     double refPtXY = refPt.magXY();

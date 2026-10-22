@@ -53,7 +53,7 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
                                                   const HelixClass_double& helixAtLastHit, double Bz);
 
 /* track extrapolation to calorimeter cluster from the last track state */
-edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBarrelInnerR, double eCalBarrelMaxZ,  
+edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBarrelInnerR, double eCalBarrelMaxZ,
                                                                 double eCalEndCapInnerR, double eCalEndCapOuterR,
                                                                 double eCalEndCapInnerZ, double Bz);
 
@@ -62,7 +62,7 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
 /* Three vector structure for convenience of calculation*/
 struct ThreeVector {
     double x, y, z;
-    
+
     ThreeVector() : x(0), y(0), z(0) {}
     ThreeVector(double x0, double y0, double z0) : x(x0), y(y0), z(z0) {}
 
