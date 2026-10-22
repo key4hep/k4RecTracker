@@ -22,7 +22,7 @@ file(GLOB headers
 
 gaudi_add_module(${PackageName}
                  SOURCES ${sources}
-                 LINK 
+                 LINK
                  Gaudi::GaudiKernel
                  k4FWCore::k4FWCore
                  EDM4HEP::edm4hep
@@ -32,14 +32,14 @@ gaudi_add_module(${PackageName}
                  DD4hep::DDRec
                  DD4hep::DDCore
                  ${MarlinUtil_LIBRARIES}
-                 ${PandoraSDK_LIBRARIES}                      
+                 ${PandoraSDK_LIBRARIES}
                  )
 
 target_include_directories(${PackageName} PUBLIC
                    ${MarlinUtil_INCLUDE_DIRS}
                    ${PandoraSDK_INCLUDE_DIRS}
                    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                   $<INSTALL_INTERFACE:include> 
+                   $<INSTALL_INTERFACE:include>
                    )
 
 set_target_properties(${PackageName} PROPERTIES PUBLIC_HEADER "${headers}")
