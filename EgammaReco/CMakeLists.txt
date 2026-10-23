@@ -59,6 +59,11 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 
+#SET(test_name "test_ElectronDecorator")
+#ADD_TEST(NAME ${test_name} COMMAND k4run test/ElectronDecorator.py)
+#set_test_env(${test_name})
+
 SET(test_name "test_ElectronDecorator")
-ADD_TEST(NAME ${test_name} COMMAND k4run test/ElectronDecorator.py)
+ADD_TEST(NAME ${test_name} COMMAND sh +x test_ElectronDecorator.sh)
 set_test_env(${test_name})
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/EgammaReco/test")

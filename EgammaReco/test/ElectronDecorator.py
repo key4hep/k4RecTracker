@@ -6,8 +6,8 @@ from Configurables import UniqueIDGenSvc
 import os
 
 io = IOSvc(
-    Input=["output_pandora_electron_1000.root"],
-    Output="output_pandora.root",
+    Input=["./CLDConfig/CLDConfig/output_pandora.root"],
+    Output="output_pandora_bremRecovered.root",
     CollectionNames=["PandoraPFOs", "PandoraClusters", "SiTracks_Refitted"],
 )
 
@@ -27,6 +27,6 @@ ApplicationMgr(
     TopAlg=[alg],
     ExtSvc=[io],
     EvtSel="NONE",
-    EvtMax=1000,
+    EvtMax=10,
     OutputLevel=DEBUG,
 )
