@@ -14,10 +14,10 @@
 #include "DD4hep/Volumes.h"
 #include <DDRec/DetectorData.h>
 
+#include "edm4hep/ClusterCollection.h"
 #include "edm4hep/MutableTrack.h"
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackState.h"
-#include "edm4hep/ClusterCollection.h"
 
 #include <Objects/Helix.h>
 #include <TDecompChol.h>
@@ -54,25 +54,22 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
 
 /* track extrapolation to calorimeter cluster from the last track state */
 edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBarrelInnerR, double eCalBarrelMaxZ,
-                                                                double eCalEndCapInnerR, double eCalEndCapOuterR,
-                                                                double eCalEndCapInnerZ, double Bz);
-
-
+                                     double eCalEndCapInnerR, double eCalEndCapOuterR, double eCalEndCapInnerZ,
+                                     double Bz);
 
 /* Three vector structure for convenience of calculation*/
 struct ThreeVector {
-    double x, y, z;
+  double x, y, z;
 
-    ThreeVector() : x(0), y(0), z(0) {}
-    ThreeVector(double x0, double y0, double z0) : x(x0), y(y0), z(z0) {}
+  ThreeVector() : x(0), y(0), z(0) {}
+  ThreeVector(double x0, double y0, double z0) : x(x0), y(y0), z(z0) {}
 
-    double mag() const { return std::sqrt(x*x + y*y + z*z); }
-    double magXY() const { return std::sqrt(x*x + y*y); }
-    double phi() const { return std::atan2(y,x); } // -pi to pi
-    double theta() const { return std::acos(z / mag()); } // 0 to pi
-    double eta() const { return -std::log(std::tan(theta()/2.)); }
-  };
-
+  double mag() const { return std::sqrt(x * x + y * y + z * z); }
+  double magXY() const { return std::sqrt(x * x + y * y); }
+  double phi() const { return std::atan2(y, x); }       // -pi to pi
+  double theta() const { return std::acos(z / mag()); } // 0 to pi
+  double eta() const { return -std::log(std::tan(theta() / 2.)); }
+};
 
 /* Calculation of phi differences */
 double deltaPhi(const double p1, const double p2);
@@ -83,24 +80,22 @@ double getFieldFromCompact();
 /* Computing momentum from the track parameters */
 ThreeVector getMomentum(const edm4hep::TrackState& state, double Bz);
 
-
 /* Computing brem photon interaction point at Endcap region */
-bool GetPointInZ(const double zPlane,        // z plane (endcap) coordinate
-                   const ThreeVector& refPt,   // reference point
-                   const ThreeVector& momVec,  // momentum
-                   ThreeVector& intersectPt);
+bool GetPointInZ(const double zPlane,       // z plane (endcap) coordinate
+                 const ThreeVector& refPt,  // reference point
+                 const ThreeVector& momVec, // momentum
+                 ThreeVector& intersectPt);
 
 /* Computing brem photon interaction point at barrel region */
-bool GetPointOnCircle(const double radius,        // (barrel) radius
-                        const ThreeVector& refPt,   // reference point
-                        const ThreeVector& momVec,  // momentum
-                        ThreeVector& intersectPt);
+bool GetPointOnCircle(const double radius,       // (barrel) radius
+                      const ThreeVector& refPt,  // reference point
+                      const ThreeVector& momVec, // momentum
+                      ThreeVector& intersectPt);
 
 /* Computing brem photon interaction point at barrel region if interaction point is at origin */
-bool GetPointOnCircleForRefAtOrigin(const double radius,        // (barrel) radius
-                        const ThreeVector& refPt,   // reference point
-                        const ThreeVector& momVec,  // momentum
-                        ThreeVector& intersectPt);
-
+bool GetPointOnCircleForRefAtOrigin(const double radius,       // (barrel) radius
+                                    const ThreeVector& refPt,  // reference point
+                                    const ThreeVector& momVec, // momentum
+                                    ThreeVector& intersectPt);
 
 #endif // EGAMMARECO_UTILS_HPP
