@@ -30,8 +30,8 @@ Its workflow can be summarized as follows:
      - **[4–6]**: vector components pointing from the left to the right positions along the circles that identify the drift chamber hits (set to `0` for silicon hits).
 
 2. **Machine Learning Step**
-   - The 7-dimensional inputs are mapped into a collection of 4-dimensional points in an embedding space.
-   - Each 4D point consists of **3 geometric coordinates** and **1 charge-like component**.
+   - The 7-dimensional inputs are mapped into a collection of points in an embedding space whose number of coordinates is set by the `EmbeddingCoordinates` property (default: 3).
+   - Each point consists of the embedding coordinates plus **1 trailing charge-like component** (beta).
    - Intuitively, this charge can be seen as a potential that **attracts hits of the same cluster** and **repels unrelated ones**.
    - This step is implemented with an [`Ort::Session`](https://onnx.ai/) initialized with a `.onnx` model.
 

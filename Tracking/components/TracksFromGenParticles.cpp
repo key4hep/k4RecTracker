@@ -67,18 +67,10 @@ struct TracksFromGenParticles final
             {KeyValues("OutputTracks", {"TracksFromGenParticles"}),
              KeyValues("OutputMCRecoTrackParticleAssociation", {"TracksFromGenParticlesAssociation"})}) {}
 
-  double getFieldFromCompact() {
-    dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
-    const double position[3] = {0, 0, 0};      // position to calculate magnetic field at (the origin in this case)
-    double magneticFieldVector[3] = {0, 0, 0}; // initialise object to hold magnetic field
-    mainDetector.field().magneticField(position, magneticFieldVector); // get the magnetic field vector from DD4hep
-    return magneticFieldVector[2] / dd4hep::tesla;                     // z component at (0,0,0)
-  }
-
   StatusCode initialize() override {
 
     // retrieve B field
-    m_Bz = getFieldFromCompact();
+    m_Bz = getBzAtOrigin(dd4hep::Detector::getInstance());
     debug() << "B field (T) is : " << m_Bz << endmsg;
 
     // retrieve ecal dimensions:

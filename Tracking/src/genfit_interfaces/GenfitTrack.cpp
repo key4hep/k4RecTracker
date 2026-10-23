@@ -888,6 +888,15 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     Track_temp.getTrackStates(i) = edm4hep::TrackState();
   }
 
+  // The navigator is process-global. GeoNavigatorStateGuard saves a backup of the navigator and
+  // restores it when GeoNavigatorStateGuard is destroyed.
+  // This step initalizes the navigator with the fit seed (position and momentum).
+  GeoNavigatorStateGuard geoStateGuard;
+  TGeoNavigator* navigator = gGeoManager->GetCurrentNavigator();
+  navigator->ResetState();
+  navigator->CdTop();
+  navigator->FindNode(m_posInit.X(), m_posInit.Y(), m_posInit.Z()); // seed position, in cm
+
   // Initialize the genfit fitter
   std::unique_ptr<genfit::AbsKalmanFitter> genfitFitter = nullptr;
 
@@ -1079,6 +1088,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       m_edm4hepTrack.setNdf(-1);
       m_trackWithFit.setChi2(-1);
       m_trackWithFit.setNdf(-1);
+
       return false;
     }
 
@@ -1095,6 +1105,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
       m_edm4hepTrack.setNdf(-1);
       m_trackWithFit.setChi2(-1);
       m_trackWithFit.setNdf(-1);
+
       return false;
     }
 
@@ -1192,6 +1203,7 @@ bool GenfitTrack::Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::strin
     m_trackWithFit.setNdf(genfitTrack.getFitStatus()->getNdf());
 
     return true;
+
   } else {
     m_edm4hepTrack.setChi2(-1);
     m_edm4hepTrack.setNdf(-1);

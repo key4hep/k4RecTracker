@@ -17,15 +17,23 @@
  * limitations under the License.
  */
 
+#include "Gaudi/Accumulators.h"
 #include "edm4hep/Track.h"
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackState.h"
 #include "edm4hep/TrackerHit.h"
 #include "k4FWCore/Transformer.h"
+#include "k4Interface/IGeoSvc.h"
 
 #include "edm4hep/MCParticleCollection.h"
 
+#include "DD4hep/Detector.h"
+
+#include <cmath>
 #include <string>
+#include <utility>
+
+#include <utils.h>
 
 // Type aliases for improved readability
 using TrackColl = edm4hep::TrackCollection;
@@ -44,24 +52,66 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
 
   Gaudi::Property<bool> m_greedy{this, "Greedy", true, "If true, each track is used only once."};
 
-  // Per-parameter matching tolerances. A negative value disables that parameter for matching,
-  // i.e. it is not considered when deciding whether two tracks belong together.
-  // Defaults reproduce the original matching criterion: only D0 and Z0 are considered.
+  Gaudi::Property<bool> m_useSignificance{
+      this, "UseSignificance", true,
+      "If true (default), match on the *Significance cuts, i.e. |diff| / sqrt(var(inner) + var(outer)) using the "
+      "track states' covariance matrices. If false, match on the *Tolerance cuts (absolute differences)."};
+
+  // Per-parameter matching cuts. Only the set selected by UseSignificance is used. A negative value disables that
+  // parameter for matching, i.e. it is not considered when deciding whether two tracks belong together.
+  // Absolute cuts (UseSignificance = false):
   Gaudi::Property<float> m_d0Tolerance{
       this, "D0Tolerance", 0.5f,
-      "Maximum allowed |D0(inner) - D0(outer)| for a match. Negative disables this criterion."};
+      "Absolute mode: maximum allowed |D0(inner) - D0(outer)| [mm] for a match. Negative disables this criterion."};
   Gaudi::Property<float> m_z0Tolerance{
       this, "Z0Tolerance", 2.5f,
-      "Maximum allowed |Z0(inner) - Z0(outer)| for a match. Negative disables this criterion."};
-  Gaudi::Property<float> m_phiTolerance{
-      this, "PhiTolerance", -1.f,
-      "Maximum allowed |phi(inner) - phi(outer)| for a match. Negative disables this criterion."};
-  Gaudi::Property<float> m_omegaTolerance{
-      this, "OmegaTolerance", -1.f,
-      "Maximum allowed |omega(inner) - omega(outer)| for a match. Negative disables this criterion."};
-  Gaudi::Property<float> m_tanLambdaTolerance{
-      this, "TanLambdaTolerance", -1.f,
-      "Maximum allowed |tanLambda(inner) - tanLambda(outer)| for a match. Negative disables this criterion."};
+      "Absolute mode: maximum allowed |Z0(inner) - Z0(outer)| [mm] for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_phiTolerance{this, "PhiTolerance", -1.f,
+                                        "Absolute mode: maximum allowed |phi(inner) - phi(outer)| [rad], wrapped into "
+                                        "[-pi, pi], for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_omegaTolerance{this, "OmegaTolerance", -1.f,
+                                          "Absolute mode: maximum allowed |omega(inner) - omega(outer)| [1/mm] for a "
+                                          "match. Negative disables this criterion."};
+  Gaudi::Property<float> m_tanLambdaTolerance{this, "TanLambdaTolerance", -1.f,
+                                              "Absolute mode: maximum allowed |tanLambda(inner) - tanLambda(outer)| "
+                                              "for a match. Negative disables this criterion."};
+  // Significance cuts (UseSignificance = true):
+  Gaudi::Property<float> m_d0Significance{
+      this, "D0Significance", 3.f,
+      "Significance mode: maximum allowed D0 significance for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_z0Significance{
+      this, "Z0Significance", 3.f,
+      "Significance mode: maximum allowed Z0 significance for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_phiSignificance{this, "PhiSignificance", 3.f,
+                                           "Significance mode: maximum allowed phi significance (difference wrapped "
+                                           "into [-pi, pi]) for a match. Negative disables this criterion."};
+  Gaudi::Property<float> m_ptSignificance{
+      this, "PtSignificance", 2.f,
+      "Significance mode: maximum allowed significance of the signed pT (charge sign times pT, derived from omega "
+      "and the magnetic field) for a match. Requires a geometry with a field. Negative disables this criterion."};
+  Gaudi::Property<float> m_tanLambdaSignificance{
+      this, "TanLambdaSignificance", 3.f,
+      "Significance mode: maximum allowed tanLambda significance for a match. Negative disables this criterion."};
+
+  StatusCode initialize() override {
+    // The magnetic field is only needed to convert omega to pT for the pT significance.
+    if (!m_useSignificance || m_ptSignificance < 0.f) {
+      return StatusCode::SUCCESS;
+    }
+    if (!m_geoSvc.retrieve()) {
+      error() << "Unable to retrieve the GeoSvc, which is needed for the magnetic field" << endmsg;
+      return StatusCode::FAILURE;
+    }
+    m_Bz = getBzAtOrigin(*m_geoSvc->getDetector());
+    if (m_Bz == 0.f) {
+      error() << "Magnetic field is zero, so pT cannot be derived from omega. Load a geometry with a field, or "
+                 "disable the pT criterion (PtSignificance < 0 or UseSignificance = false)"
+              << endmsg;
+      return StatusCode::FAILURE;
+    }
+    debug() << "B field (T) is : " << m_Bz << endmsg;
+    return StatusCode::SUCCESS;
+  }
 
   TrackColl operator()(const TrackColl& inputInnerTracks, const TrackColl& inputOuterTracks) const override {
     auto outTracks = TrackColl();
@@ -147,29 +197,93 @@ private:
       return false;
     }
 
-    // Define matching criteria based on differences of the individual track parameters.
+    // Define matching criteria based on differences of the individual track parameters, either as absolute
+    // differences or as significances (i.e. normalised by the combined uncertainty of the two states).
     // Parameters whose tolerance is negative are not considered (always pass).
-    const float d0_diff = std::abs(ts1->D0 - ts2->D0);
-    const float z0_diff = std::abs(ts1->Z0 - ts2->Z0);
-    const float phi_diff = std::abs(ts1->phi - ts2->phi);
-    const float omega_diff = std::abs(ts1->omega - ts2->omega);
-    const float tanLambda_diff = std::abs(ts1->tanLambda - ts2->tanLambda);
+    float d0_value, z0_value, phi_value, omega_value, tanLambda_value;
+    const float d0Cut = m_useSignificance ? m_d0Significance : m_d0Tolerance;
+    const float z0Cut = m_useSignificance ? m_z0Significance : m_z0Tolerance;
+    const float phiCut = m_useSignificance ? m_phiSignificance : m_phiTolerance;
+    const float omegaCut = m_useSignificance ? m_ptSignificance : m_omegaTolerance;
+    const float tanLambdaCut = m_useSignificance ? m_tanLambdaSignificance : m_tanLambdaTolerance;
+    if (m_useSignificance) {
+      // Only check parameters whose criterion is enabled. The warning is rate-limited by the counter, which also
+      // reports the total number of occurrences at finalize.
+      for (const auto& [param, tolerance] :
+           {std::pair{TP::d0, d0Cut}, std::pair{TP::z0, z0Cut}, std::pair{TP::phi, phiCut},
+            std::pair{TP::omega, omegaCut}, std::pair{TP::tanLambda, tanLambdaCut}}) {
+        // Negated on purpose: NaN compares false, so `<= 0.f` would not catch it
+        if (tolerance >= 0.f && !(ts1->getCovMatrix(param, param) + ts2->getCovMatrix(param, param) > 0.f)) {
+          ++m_zeroUncertaintyWarning;
+          debug() << "Combined uncertainty is zero for track state parameter " << static_cast<int>(param) << endmsg;
+        }
+      }
+      d0_value = significance(ts1->D0, ts2->D0, ts1->getCovMatrix(TP::d0, TP::d0), ts2->getCovMatrix(TP::d0, TP::d0));
+      z0_value = significance(ts1->Z0, ts2->Z0, ts1->getCovMatrix(TP::z0, TP::z0), ts2->getCovMatrix(TP::z0, TP::z0));
+      // Pass the wrapped difference against 0 so that states on either side of phi = +-pi are compared correctly.
+      phi_value = significance(deltaPhi(ts1->phi, ts2->phi), 0.f, ts1->getCovMatrix(TP::phi, TP::phi),
+                               ts2->getCovMatrix(TP::phi, TP::phi));
+      tanLambda_value = significance(ts1->tanLambda, ts2->tanLambda, ts1->getCovMatrix(TP::tanLambda, TP::tanLambda),
+                                     ts2->getCovMatrix(TP::tanLambda, TP::tanLambda));
+      omega_value = ptSignificance(*ts1, *ts2);
+    } else {
+      d0_value = std::abs(ts1->D0 - ts2->D0);
+      z0_value = std::abs(ts1->Z0 - ts2->Z0);
+      phi_value = std::abs(deltaPhi(ts1->phi, ts2->phi));
+      omega_value = std::abs(ts1->omega - ts2->omega);
+      tanLambda_value = std::abs(ts1->tanLambda - ts2->tanLambda);
+    }
 
-    const bool match = withinTolerance(d0_diff, m_d0Tolerance) && withinTolerance(z0_diff, m_z0Tolerance) &&
-                       withinTolerance(phi_diff, m_phiTolerance) && withinTolerance(omega_diff, m_omegaTolerance) &&
-                       withinTolerance(tanLambda_diff, m_tanLambdaTolerance);
+    const bool match = withinTolerance(d0_value, d0Cut) && withinTolerance(z0_value, z0Cut) &&
+                       withinTolerance(phi_value, phiCut) && withinTolerance(omega_value, omegaCut) &&
+                       withinTolerance(tanLambda_value, tanLambdaCut);
 
-    debug() << fmt::format("    Comparing Loc {} vs {}: d0_diff={:.4f}, z0_diff={:.4f}, phi_diff={:.4f}, "
-                           "omega_diff={:.4f}, tanLambda_diff={:.4f} -> Match: {}",
-                           static_cast<int>(loc1), static_cast<int>(loc2), d0_diff, z0_diff, phi_diff, omega_diff,
-                           tanLambda_diff, match)
+    debug() << fmt::format("Comparing Loc {} vs {} ({}): d0={:.4f}, z0={:.4f}, phi={:.4f}, omega={:.4f}, "
+                           "tanLambda={:.4f} -> Match: {}",
+                           static_cast<int>(loc1), static_cast<int>(loc2),
+                           m_useSignificance ? "significance" : "absolute", d0_value, z0_value, phi_value, omega_value,
+                           tanLambda_value, match)
             << endmsg;
 
     return match;
   }
 
+  // Difference phi1 - phi2 wrapped into [-pi, pi].
+  static float deltaPhi(float phi1, float phi2) { return std::remainder(phi1 - phi2, 2.f * static_cast<float>(M_PI)); }
+
   // A negative tolerance means the corresponding parameter is not considered for matching.
-  static bool withinTolerance(float diff, float tolerance) { return tolerance < 0.f || diff <= tolerance; }
+  static bool withinTolerance(float value, float tolerance) { return tolerance < 0.f || value <= tolerance; }
+
+  // Difference of two values normalised by the combined uncertainty. Falls back to the plain difference if the
+  // combined uncertainty vanishes; the caller warns about that case.
+  static float significance(float par1, float par2, float var1, float var2) {
+    const float diff = std::abs(par1 - par2);
+    const float sigma = std::sqrt(var1 + var2);
+    return sigma > 0.f ? diff / sigma : diff;
+  }
+
+  // Signed pt (charge sign times pt) derived from the signed curvature omega [1/mm] and the (constant) z-component of
+  // the magnetic field [T]. Keeping the sign makes segments with opposite charge incompatible.
+  float signedPtFromOmega(float omega) const { return static_cast<float>(ConversionUnits::a_lcio) * m_Bz / omega; }
+
+  float ptSignificance(const edm4hep::TrackState& ts1, const edm4hep::TrackState& ts2) const {
+    if (ts1.omega == 0.f || ts2.omega == 0.f) {
+      debug() << "Track state with omega == 0; using the omega significance instead of the pT significance" << endmsg;
+      return significance(ts1.omega, ts2.omega, ts1.getCovMatrix(TP::omega, TP::omega),
+                          ts2.getCovMatrix(TP::omega, TP::omega));
+    }
+    const float pt1 = signedPtFromOmega(ts1.omega);
+    const float pt2 = signedPtFromOmega(ts2.omega);
+    // Error propagation: var(pt) = (pt / omega)^2 * var(omega)
+    const float varPt1 = pt1 * pt1 * ts1.getCovMatrix(TP::omega, TP::omega) / (ts1.omega * ts1.omega);
+    const float varPt2 = pt2 * pt2 * ts2.getCovMatrix(TP::omega, TP::omega) / (ts2.omega * ts2.omega);
+    return significance(pt1, pt2, varPt1, varPt2);
+  }
+
+  mutable Gaudi::Accumulators::MsgCounter<MSG::WARNING> m_zeroUncertaintyWarning{
+      this, "Combined uncertainty of a track parameter is zero; using the absolute difference instead", 10};
+  ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
+  float m_Bz{0.f};
 };
 
 DECLARE_COMPONENT(TrackMerger)
