@@ -3,9 +3,9 @@
 # clean up previous output files
 rm -rf CLDConfig  k4GaudiPandora cdb.log  output_pandora_bremRecovered.root
 
-git clone git@github.com:key4hep/CLDConfig.git
+git clone https://github.com/key4hep/CLDConfig.git
 
-git clone git@github.com:key4hep/k4GaudiPandora.git
+git clone https://github.com/key4hep/k4GaudiPandora.git
 
 cd CLDConfig/CLDConfig
 
