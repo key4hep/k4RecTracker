@@ -1412,7 +1412,11 @@ void VTXdigi_Modular::CreateDigiHits(edm4hep::TrackerHitPlaneCollection& digiHit
     digiHit.setCellID(volumeID);
     digiHit.setEDep(cluster.charge / VTXdigi_tools::kChargePerkeV);
     if (m_clusterSizeInDigiHitType.value()) {
-      digiHit.setType(cluster.GetSize(0) + 100 * cluster.GetSize(1)); // cluster length in u and v
+      // bits 0-7: cluster length in u, bits 8-15: length in v, bits 16-23: total size. Each saturates at 255.
+      const int lengthU = std::min(cluster.GetSize(0), 0xFF);
+      const int lengthV = std::min(cluster.GetSize(1), 0xFF);
+      const int size = std::min(cluster.GetSize(), 0xFF);
+      digiHit.setType(lengthU | (lengthV << 8) | (size << 16));
     }
 
     // position

@@ -10,6 +10,7 @@ The exact modelling method is user-definable. For now the only realistic method 
 - The digitizer has the option to cluster the pixel hits and reconstruct cluster positions. This is expected to be superseded by a stand-alone clustering algorithm in the future.
 - The algorithm produces accurate cluster sizes for MIPs, but slightly overestimates the cluster size at lower momenta.
 - The local z-position of digiHits is always set to the center of the sensor (local w=0), to be on the sensor's sensitive surface. This is required by Conformal Tracking.
+- The digitizer writes the cluster size to the `TrackerHitPlane`'s `type` field, using 8 bits per value: bits 0-7 hold the cluster length in u, bits 8-15 the cluster length in v and bits 16-23 the total cluster size (number of pixels above threshold). Each value saturates at 255. Decode e.g. as `length_u = type & 0xFF`, `length_v = (type >> 8) & 0xFF`, `size = (type >> 16) & 0xFF`. Can be disabled with `ClusterSizeInDigiHitType=False`.
 
 ### Content
 

@@ -191,8 +191,8 @@ private:
                                            "Interval for printing information during processing."};
   Gaudi::Property<bool> m_clusterSizeInDigiHitType{
       this, "ClusterSizeInDigiHitType", true,
-      "Write the cluster size to the digiHit's type field, as "
-      "type = cluster_length_u + 100 * cluster_length_v. Defaults to true."};
+      "Write the cluster size to the digiHit's type field, 8 bits each: bits 0-7 = cluster length in u, "
+      "bits 8-15 = cluster length in v, bits 16-23 = total cluster size (each saturates at 255). Defaults to true."};
 
   /* Path computation */
   Gaudi::Property<float> m_path_meanDepositionsPerUm{
