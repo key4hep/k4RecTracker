@@ -171,60 +171,6 @@ void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track,
   }
 }
 
-torch::Tensor find_condpoints(const torch::Tensor& betas, const torch::Tensor& unassigned, float tbeta) {
-  torch::Tensor mask_unassigned = torch::zeros_like(betas, torch::dtype(torch::kBool));
-  mask_unassigned.index_put_({unassigned}, true);
-
-  torch::Tensor select_condpoints = (betas > tbeta) & mask_unassigned;
-  torch::Tensor indices_condpoints = torch::nonzero(select_condpoints).view({-1});
-
-  if (indices_condpoints.numel() == 0) {
-    return torch::empty({0}, torch::dtype(torch::kLong));
-  }
-
-  torch::Tensor betas_condpoints = betas.index_select(0, indices_condpoints);
-  torch::Tensor sorted_indices = std::get<1>(betas_condpoints.sort(/*dim=*/0, /*descending=*/true));
-
-  return indices_condpoints.index_select(0, sorted_indices);
-}
-
-torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbeta, float td,
-                             int64_t nEmbeddingCoordinates) {
-  torch::Tensor X = output_model_tensor.slice(1, 0, nEmbeddingCoordinates);   // embedding coordinates
-  torch::Tensor betas = output_model_tensor.select(1, nEmbeddingCoordinates); // cluster potential
-
-  int64_t n_points = betas.size(0);
-  torch::Tensor clustering = torch::zeros({n_points}, torch::dtype(torch::kLong));
-  torch::Tensor unassigned = torch::arange(n_points, torch::dtype(torch::kLong));
-
-  int64_t index_assignation = 1;
-  torch::Tensor indices_condpoints = find_condpoints(betas, unassigned, tbeta);
-
-  while (indices_condpoints.numel() > 0 && unassigned.numel() > 0) {
-    int64_t index_condpoint = indices_condpoints[0].item<int64_t>();
-    torch::Tensor coord_cond = X[index_condpoint];
-
-    torch::Tensor dists = torch::norm(X.index_select(0, unassigned) - coord_cond, 2, /*dim=*/1);
-    torch::Tensor mask_distance = dists < td;
-
-    if (mask_distance.sum().item<int64_t>() == 0) {
-      indices_condpoints = indices_condpoints.slice(0, 1); // remove first
-      continue;
-    }
-
-    torch::Tensor assigned_points = torch::masked_select(unassigned, mask_distance);
-    clustering.index_put_({assigned_points}, index_assignation);
-
-    torch::Tensor mask_keep = ~mask_distance;
-    unassigned = torch::masked_select(unassigned, mask_keep);
-
-    indices_condpoints = find_condpoints(betas, unassigned, tbeta);
-    index_assignation += 1;
-  }
-
-  return clustering;
-}
-
 GeoNavigatorStateGuard::GeoNavigatorStateGuard()
     : m_callerIndex(gGeoManager->GetListOfNavigators()->IndexOf(gGeoManager->GetCurrentNavigator())),
       m_fitNavigator(gGeoManager->AddNavigator()) {
