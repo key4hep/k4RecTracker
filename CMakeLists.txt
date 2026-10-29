@@ -17,7 +17,7 @@ set(${PackageName}_VERSION "${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}.${
 set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 # The Tracking subpackage targets FCCee and pulls in dependencies that are not
-# available everywhere (GenFit, MarlinUtil, PandoraSDK, ONNX Runtime, Torch).
+# available everywhere (GenFit, MarlinUtil, PandoraSDK, ONNX Runtime).
 # Turn this off to build only the digitizers, e.g. on the Muon Collider stack.
 option(K4RECTRACKER_TRACKING "Build the Tracking subpackage" ON)
 
@@ -38,7 +38,6 @@ if(K4RECTRACKER_TRACKING)
   find_package(PandoraSDK REQUIRED)
   find_package(Eigen3 REQUIRED)
   find_package(onnxruntime 1.16.0 REQUIRED)
-  find_package(Torch REQUIRED)
 endif()
 
 include(cmake/Key4hepConfig.cmake)

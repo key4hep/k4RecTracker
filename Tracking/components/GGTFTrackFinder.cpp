@@ -41,6 +41,9 @@
 // k4FWCore
 #include "k4FWCore/Transformer.h"
 
+// podio
+#include "podio/ObjectID.h"
+
 // EDM4HEP
 #include "edm4hep/SenseWireHitCollection.h"
 #include "edm4hep/TrackCollection.h"
@@ -178,11 +181,9 @@ struct GGTFTrackFinder final : k4FWCore::MultiTransformer<std::tuple<edm4hep::Tr
     workspace.hitRefs.clear();
     workspace.hitRefs.reserve(inputHitCount);
 
-    float* featureOut = workspace.features.data();
-    featureOut = appendPlanarHits(inputPlanarHitCollections, featureOut, workspace);
-    featureOut = appendWireHits(inputWireHitCollections, featureOut, workspace);
+    appendPlanarHits(inputPlanarHitCollections, workspace);
+    appendWireHits(inputWireHitCollections, workspace);
 
-    // Wire hits with non-finite geometry are skipped, so the buffer may be shorter than reserved.
     const std::size_t nHits = workspace.hitRefs.size();
     workspace.features.resize(nHits * kFeatureCount);
 
@@ -224,8 +225,7 @@ private:
    */
   struct HitRef {
     HitType type;
-    std::uint32_t collectionIndex; // Source collection index.
-    std::uint32_t hitIndex;        // Index within the source collection.
+    podio::ObjectID hitID; // Source hit: collectionID identifies the input collection, index the position in it.
   };
 
   /**
@@ -285,16 +285,16 @@ private:
   /**
    * @brief Append planar tracker hits to the flattened model input.
    *
-   * A planar hit is encoded as `(x, y, z, 1, 0, 0, 0)`.
+   * A planar hit is encoded as `(x, y, z, 1, 0, 0, 0)`. The write position inside the
+   * preallocated feature buffer is derived from the hits recorded in workspace.hitRefs (one
+   * entry per written feature row), so no write position has to be passed in or returned.
    *
    * @param collections Input planar hit collections.
-   * @param featureOut Write position inside the preallocated feature buffer.
-   * @param workspace Event workspace (only the source-hit bookkeeping).
-   * @return Advanced write position, one row past the last appended hit.
+   * @param workspace Event workspace receiving the features and the source-hit bookkeeping.
    */
-  static float* appendPlanarHits(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& collections,
-                                 float* featureOut, Workspace& workspace) {
-    std::uint32_t collectionIndex = 0;
+  static void appendPlanarHits(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& collections,
+                               Workspace& workspace) {
+    float* featureOut = workspace.features.data() + workspace.hitRefs.size() * kFeatureCount;
     for (const auto* collection : collections) {
       for (std::size_t hitIndex = 0; hitIndex < collection->size(); ++hitIndex) {
         const auto hit = collection->at(hitIndex);
@@ -313,11 +313,9 @@ private:
         featureOut[6] = 0.0F;
         featureOut += kFeatureCount;
 
-        workspace.hitRefs.push_back({HitType::Planar, collectionIndex, static_cast<std::uint32_t>(hitIndex)});
+        workspace.hitRefs.push_back({HitType::Planar, hit.id()});
       }
-      ++collectionIndex;
     }
-    return featureOut;
   }
 
   /**
@@ -332,14 +330,16 @@ private:
    * distance to the wire. Only x' enters these expressions, so the features are
    * computed with scalar operations only.
    *
+   * The write position inside the preallocated feature buffer is derived from the hits recorded
+   * in workspace.hitRefs (one entry per written feature row), so no write position has to be
+   * passed in or returned.
+   *
    * @param collections Input wire-hit collections.
-   * @param featureOut Write position inside the preallocated feature buffer.
-   * @param workspace Event workspace (only the source-hit bookkeeping).
-   * @return Advanced write position, one row past the last appended hit.
+   * @param workspace Event workspace receiving the features and the source-hit bookkeeping.
    */
-  float* appendWireHits(const std::vector<const edm4hep::SenseWireHitCollection*>& collections, float* featureOut,
-                        Workspace& workspace) const {
-    std::uint32_t collectionIndex = 0;
+  void appendWireHits(const std::vector<const edm4hep::SenseWireHitCollection*>& collections,
+                      Workspace& workspace) const {
+    float* featureOut = workspace.features.data() + workspace.hitRefs.size() * kFeatureCount;
     for (const auto* collection : collections) {
       for (std::size_t hitIndex = 0; hitIndex < collection->size(); ++hitIndex) {
         const auto hit = collection->at(hitIndex);
@@ -369,11 +369,9 @@ private:
         featureOut[6] = static_cast<float>(2.0 * distanceToWire * xPrimeZ);
         featureOut += kFeatureCount;
 
-        workspace.hitRefs.push_back({HitType::Wire, collectionIndex, static_cast<std::uint32_t>(hitIndex)});
+        workspace.hitRefs.push_back({HitType::Wire, hit.id()});
       }
-      ++collectionIndex;
     }
-    return featureOut;
   }
 
   /**
@@ -593,9 +591,29 @@ private:
       for (std::uint32_t position = begin; position < end; ++position) {
         const HitRef& hitRef = workspace.hitRefs[order[position]];
         if (hitRef.type == HitType::Planar) {
-          outputTrack.addToTrackerHits(planarCollections[hitRef.collectionIndex]->at(hitRef.hitIndex));
+          const edm4hep::TrackerHitPlaneCollection* sourceCollection = nullptr;
+          for (const auto* collection : planarCollections) {
+            if (collection->getID() == hitRef.hitID.collectionID) {
+              sourceCollection = collection;
+              break;
+            }
+          }
+          if (sourceCollection == nullptr) {
+            throw std::runtime_error("Hit reference points to a collection that is not among the inputs");
+          }
+          outputTrack.addToTrackerHits(sourceCollection->at(hitRef.hitID.index));
         } else {
-          outputTrack.addToTrackerHits(wireCollections[hitRef.collectionIndex]->at(hitRef.hitIndex));
+          const edm4hep::SenseWireHitCollection* sourceCollection = nullptr;
+          for (const auto* collection : wireCollections) {
+            if (collection->getID() == hitRef.hitID.collectionID) {
+              sourceCollection = collection;
+              break;
+            }
+          }
+          if (sourceCollection == nullptr) {
+            throw std::runtime_error("Hit reference points to a collection that is not among the inputs");
+          }
+          outputTrack.addToTrackerHits(sourceCollection->at(hitRef.hitID.index));
         }
       }
     }
