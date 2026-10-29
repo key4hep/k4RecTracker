@@ -299,6 +299,10 @@ private:
       for (std::size_t hitIndex = 0; hitIndex < collection->size(); ++hitIndex) {
         const auto hit = collection->at(hitIndex);
         const auto position = hit.getPosition();
+        // Mirror the Python data pipeline: hits with non-finite positions are dropped before inference.
+        if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z)) {
+          continue;
+        }
 
         featureOut[0] = static_cast<float>(position.x);
         featureOut[1] = static_cast<float>(position.y);
@@ -432,8 +436,9 @@ private:
   /**
    * @brief Assign each hit to a cluster based on the model output.
    *
-   * Object-condensation style clustering: hits whose cluster potential (the value right after
-   * the embedding coordinates) exceeds Tbeta are cluster core candidates. In decreasing beta
+   * Object-condensation style clustering: the model emits a beta logit per hit (the value right
+   * after the embedding coordinates); the sigmoid of the logit is the cluster potential, and hits
+   * whose potential exceeds Tbeta are cluster core candidates. In decreasing beta
    * order, each unassigned candidate attracts all still-unassigned hits within distance Td in
    * the embedding space. Hits never absorbed keep cluster identifier 0 (noise).
    *
@@ -453,20 +458,20 @@ private:
     const float tbeta = static_cast<float>(m_tbeta.value());
     const float td2 = static_cast<float>(m_td.value()) * static_cast<float>(m_td.value());
 
-    // Cluster-core candidates in decreasing beta order. Sorting once is equivalent to the
-    // reference implementation, which re-sorts the candidates after every assignment: assigned
-    // hits can no longer be candidates, which the assigned-flags check below reproduces.
+    const auto betaAt = [output, stride, embDims](std::uint32_t hitIndex) -> float {
+      const float logit = output[static_cast<std::size_t>(hitIndex) * stride + embDims];
+      return 1.0F / (1.0F + std::exp(-logit));
+    };
+
     std::vector<std::uint32_t>& candidates = workspace.candidates;
     candidates.clear();
     for (std::uint32_t hitIndex = 0; hitIndex < inference.nHits; ++hitIndex) {
-      if (output[static_cast<std::size_t>(hitIndex) * stride + embDims] > tbeta) {
+      if (betaAt(hitIndex) > tbeta) {
         candidates.push_back(hitIndex);
       }
     }
-    std::stable_sort(candidates.begin(), candidates.end(), [output, stride, embDims](std::uint32_t a, std::uint32_t b) {
-      return output[static_cast<std::size_t>(a) * stride + embDims] >
-             output[static_cast<std::size_t>(b) * stride + embDims];
-    });
+    std::stable_sort(candidates.begin(), candidates.end(),
+                     [&betaAt](std::uint32_t a, std::uint32_t b) { return betaAt(a) > betaAt(b); });
 
     workspace.assigned.assign(inference.nHits, std::uint8_t{0});
     std::vector<std::uint8_t>& assigned = workspace.assigned;
@@ -611,7 +616,8 @@ private:
   Gaudi::Property<std::size_t> m_embeddingCoordinates{
       this, "EmbeddingCoordinates", 3,
       "Number of embedding-space coordinates per hit in the ONNX model output; the model must produce one "
-      "additional trailing value per hit, the cluster potential (beta)"};
+      "additional trailing value per hit, the beta logit (the sigmoid of the logit is the cluster potential "
+      "compared against Tbeta)"};
   Gaudi::Property<int> m_inferenceThreads{
       this, "InferenceThreads", 4,
       "Number of intra-operation threads used by the ONNX Runtime session; inference time plateaus beyond "
@@ -622,7 +628,8 @@ private:
       "Recreate the ONNX session every N events (0 disables); bounds the per-input-shape "
       "allocation state ONNX Runtime retains for ever-changing hit counts, at the price of one "
       "session reload per interval"};
-  Gaudi::Property<double> m_tbeta{this, "Tbeta", 0.6, "Threshold used to identify cluster core points"};
+  Gaudi::Property<double> m_tbeta{this, "Tbeta", 0.6,
+                                  "Threshold on sigmoid(beta logit) used to identify cluster core points"};
   Gaudi::Property<double> m_td{this, "Td", 0.3, "Radius used to assign nearby hits to a cluster core"};
 };
 
