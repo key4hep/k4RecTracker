@@ -1,8 +1,5 @@
 # v00.08.00
 
-* 2026-10-30 andread3vita
-  - GenfitTrackFitter: do not save placeholder tracks when the fit fails. Previously, an empty track with chi2 = ndf = -1 (no hits, no track states) was written to both output collections to keep them index-aligned with the input; tracks whose fit fails for all hypotheses are now skipped entirely.
-
 * 2026-10-16 Victor Schwan ([PR#113](https://github.com/Key4hep/k4RecTracker/pull/113))
   - Introduce significance as matching criterion for the `TrackMerger`
   - Update matching defaults to match defaults from `ClonesAndSplitTracksFinder` in `CLDConfig`
