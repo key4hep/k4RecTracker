@@ -1,14 +1,31 @@
+/*
+ * Copyright (c) 2020-2026 Key4hep-Project.
+ *
+ * This file is part of Key4hep.
+ * See https://key4hep.github.io/key4hep-doc/ for further info.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 #include "ElectronDecorator.h"
 
-#include "utils.h"
-
-#include <GaudiKernel/MsgStream.h>
+#include "BremRecoveryUtils.h"
 
 #include <algorithm>
-
-#include <tuple>
-
 #include <cmath>
+#include <map>
+#include <unordered_set>
+#include <vector>
 
 DECLARE_COMPONENT(ElectronDecorator)
 
@@ -16,48 +33,50 @@ DECLARE_COMPONENT(ElectronDecorator)
 struct ClusterTrackMap {
   edm4hep::Cluster cluster;
   std::vector<edm4hep::Track> tracks;
-};
-
-// struct for storing brem Recovered cluster and assocated track for target PFO
-struct bremRecoveredClusterTrackMap {
-  std::vector<edm4hep::Cluster> clusters;
-  std::vector<edm4hep::Track> tracks;
+  int pdg;              // of the PFO the cluster belongs to
+  std::size_t pfoIndex; // index of that PFO in the input collection
 };
 
 ElectronDecorator::ElectronDecorator(const std::string& name, ISvcLocator* svc)
-
     : Transformer(name, svc, {KeyValue{"InputRecoParticles", "PandoraPFOs"}},
+                  {KeyValue{"OutputRecoParticles", "RecoveredPFOs"}}) {}
 
-                  {KeyValue{"OutputRecoParticles", "RecoveredPFOs"}}) {
-  std::cout << "pandoraReading constructor called" << std::endl;
+StatusCode ElectronDecorator::initialize() {
+  StatusCode sc = Transformer::initialize();
+  if (sc.isFailure())
+    return sc;
+
+  auto* detector = m_geoSvc->getDetector();
+  const auto readConstant = [&](const Gaudi::Property<std::string>& name, double& value) {
+    try {
+      value = detector->constantAsDouble(name.value()) / dd4hep::mm;
+    } catch (const std::exception&) {
+      error() << "Constant '" << name.value() << "' not found in the geometry: set the property " << name.name()
+              << endmsg;
+      return false;
+    }
+    debug() << name.value() << " = " << value << " mm" << endmsg;
+    return true;
+  };
+  if (!(readConstant(m_eCalBarrelInnerRName, m_eCalBarrelInnerR) &&
+        readConstant(m_eCalBarrelMaxZName, m_eCalBarrelMaxZ) &&
+        readConstant(m_eCalEndCapInnerRName, m_eCalEndCapInnerR) &&
+        readConstant(m_eCalEndCapOuterRName, m_eCalEndCapOuterR) &&
+        readConstant(m_eCalEndCapInnerZName, m_eCalEndCapInnerZ)))
+    return StatusCode::FAILURE;
+
+  m_Bz = getFieldFromCompact();
+  return StatusCode::SUCCESS;
 }
 
 edm4hep::ReconstructedParticleCollection
 ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& input) const {
 
-  auto detector = m_geoSvc->getDetector();
-
-  double eCalBarrelInnerR = detector->constantAsDouble("ECalBarrel_inner_radius") / dd4hep::mm;
-  debug() << "eCalBarrelInnerR: " << eCalBarrelInnerR << endmsg;
-
-  double eCalBarrelMaxZ = detector->constantAsDouble("ECalBarrel_half_length") / dd4hep::mm;
-  debug() << "eCalBarrelMaxZ: " << eCalBarrelMaxZ << endmsg;
-
-  double eCalEndCapInnerR = detector->constantAsDouble("ECalEndcap_inner_radius") / dd4hep::mm;
-  debug() << "eCalEndCapInnerR: " << eCalEndCapInnerR << endmsg;
-
-  double eCalEndCapOuterR = detector->constantAsDouble("ECalEndcap_outer_radius") / dd4hep::mm;
-  debug() << "eCalEndCapOuterR: " << eCalEndCapOuterR << endmsg;
-
-  double eCalEndCapInnerZ = detector->constantAsDouble("ECalEndcap_min_z") / dd4hep::mm;
-  debug() << "eCalEndCapInnerZ: " << eCalEndCapInnerZ << endmsg;
-
-  double m_Bz = getFieldFromCompact();
-
   // Forming the cluster->track map
   std::vector<ClusterTrackMap> clusterTrackMaps;
 
-  std::vector<edm4hep::Cluster> tempClusters;
+  // brem candidates: clusters of neutral (track-less) PFOs, as the whole PFO is absorbed by the electron
+  std::vector<ClusterTrackMap> tempClusters;
 
   //////////////////////////////////////////////////////////////////////////////////
   /////////////////Step1:loop through input PFOs ///////////////////////////////////
@@ -65,7 +84,8 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
   /////////////////Step3:Make a map clusters: tracks ///////////////////////////////
   //////////////////////////////////////////////////////////////////////////////////
 
-  for (const auto& pfo : input) { // PFO loop starts
+  for (std::size_t pfoIndex = 0; pfoIndex < input.size(); ++pfoIndex) { // PFO loop starts
+    const auto& pfo = input[pfoIndex];
 
     debug() << "PFO Energy = " << pfo.getEnergy() << " Tracks = " << pfo.getTracks().size()
             << " Clusters = " << pfo.getClusters().size() << endmsg;
@@ -74,25 +94,19 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
       if (!cluster.isAvailable())
         continue;
 
-      tempClusters.push_back(cluster);
-
       ClusterTrackMap entry;
       entry.cluster = cluster;
+      entry.pdg = pfo.getPDG();
+      entry.pfoIndex = pfoIndex;
 
       for (const auto& track : pfo.getTracks()) { // PFO track loop starts
         if (track.isAvailable()) {
-          // auto state = track.getTrackStates(edm4hep::TrackState::AtIP);
-          edm4hep::TrackState state;
-          auto stateHolder = track.getTrackState(edm4hep::TrackState::AtIP);
-
-          if (stateHolder.has_value()) {
-            state = stateHolder.value();
-          }
-
           entry.tracks.push_back(track);
         }
       } //  PFO track loop ends
 
+      if (entry.tracks.empty())
+        tempClusters.push_back(entry);
       clusterTrackMaps.push_back(std::move(entry));
     } //  PFO cluster loop starts ends
 
@@ -114,8 +128,9 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
     return a.cluster.getEnergy() > b.cluster.getEnergy();
   });
 
-  std::sort(tempClusters.begin(), tempClusters.end(),
-            [](const edm4hep::Cluster& a, const edm4hep::Cluster& b) { return a.getEnergy() > b.getEnergy(); });
+  std::sort(tempClusters.begin(), tempClusters.end(), [](const ClusterTrackMap& a, const ClusterTrackMap& b) {
+    return a.cluster.getEnergy() > b.cluster.getEnergy();
+  });
 
   //////////////////////////////////////////////////////////////////////////////////
   /////////////////Step 4:complete /////////////////////////////////////////////////
@@ -136,8 +151,8 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
 
     std::sort(entry.tracks.begin(), entry.tracks.end(), [&](const edm4hep::Track& a, const edm4hep::Track& b) {
       auto getDistance = [&](const edm4hep::Track& track) {
-        edm4hep::TrackState state = helixAtLastTrack(track, eCalBarrelInnerR, eCalBarrelMaxZ, eCalEndCapInnerR,
-                                                     eCalEndCapOuterR, eCalEndCapInnerZ, m_Bz);
+        edm4hep::TrackState state = helixAtLastTrack(track, m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR,
+                                                     m_eCalEndCapOuterR, m_eCalEndCapInnerZ, m_Bz);
 
         auto ref = state.referencePoint;
         float dx = clusterPos.x - ref.x;
@@ -164,15 +179,15 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
   ///////Step 9: Identify brem clusters from brem interaction point and its eta-phi margin /////////////////////////////
   //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  std::map<int, std::vector<int>> clusterIndexMap;
-  std::unordered_set<int> consumedClusters;
-  std::vector<bremRecoveredClusterTrackMap> bremRecoveredClusterTrackMaps;
+  std::map<std::size_t, std::vector<std::size_t>> bremPfos; // electron PFO index -> absorbed neutral PFO indices
+  std::unordered_set<std::size_t> consumedPfos;
 
   for (const auto& entry : clusterTrackMaps) { //  Looping over clusterTrackMaps starts for brem recovery
 
     const auto& cluster = entry.cluster;
 
-    if (entry.tracks.empty()) {
+    // only an electron (cluster with a track) seeds the brem recovery
+    if (entry.tracks.empty() || std::abs(entry.pdg) != 11) {
       continue;
     }
 
@@ -187,8 +202,8 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
     const auto refPt =
         ThreeVector(trackState1st.referencePoint.x, trackState1st.referencePoint.y, trackState1st.referencePoint.z);
     const auto momVec = getMomentum(trackState1st, m_Bz);
-    double zPlane = eCalEndCapInnerZ;
-    double radius = eCalBarrelInnerR;
+    double zPlane = m_eCalEndCapInnerZ;
+    double radius = m_eCalBarrelInnerR;
     ThreeVector intersectZ;
 
     //!!! find brem iteraction in Endacap  region !!!//
@@ -241,13 +256,8 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
     const double minDPhi = bremBandPhi > 0. ? -dPhiMargin : bremBandPhi - dPhiMargin;
 
     //!!! looping over temporary clusters to check brem counter part of current cluster !!!//
-    for (const auto& cluster2nd : tempClusters) { //  Looping over temporary clusters
-
-      if (cluster2nd.getObjectID().index == cluster.getObjectID().index)
-        continue;
-
-      if (!cluster2nd.isAvailable())
-        continue;
+    for (const auto& candidate : tempClusters) { //  Looping over temporary clusters
+      const auto& cluster2nd = candidate.cluster;
 
       const auto& clusterPos2nd = cluster2nd.getPosition();
       const auto vecClus2 = ThreeVector(clusterPos2nd.x, clusterPos2nd.y, clusterPos2nd.z);
@@ -259,25 +269,12 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
           finalDeltaPhi < maxDPhi) { // start of eta-phi margin inspection
         debug() << "===========found a brem candidate============" << endmsg;
 
-        int c1_idx = cluster.getObjectID().index;
-        int c2_idx = cluster2nd.getObjectID().index;
-
-        // Do not match if the secondary cluster has already been consumed as a key or value
-        if (consumedClusters.find(c2_idx) == consumedClusters.end() &&
-            consumedClusters.find(c1_idx) == consumedClusters.end()) { // start if
-
-          clusterIndexMap[c1_idx].push_back(c2_idx);
-
-          // Mark the secondary cluster as consumed so it cannot be an entry elsewhere
-          consumedClusters.insert(c2_idx);
-        } // end if
+        // a neutral PFO is absorbed by at most one electron (the most energetic one, which comes first)
+        if (consumedPfos.insert(candidate.pfoIndex).second) {
+          bremPfos[entry.pfoIndex].push_back(candidate.pfoIndex);
+        }
       } // end  of eta-phi margin inspection
     } //  end Looping over temporary clusters
-    int current_c1 = cluster.getObjectID().index;
-    if (clusterIndexMap.find(current_c1) == clusterIndexMap.end() &&
-        consumedClusters.find(current_c1) == consumedClusters.end()) {
-      clusterIndexMap[current_c1] = std::vector<int>(); // Empty value list
-    }
 
   } //  Looping over clusterTrackMaps ends for brem recovery
 
@@ -286,94 +283,35 @@ ElectronDecorator::operator()(const edm4hep::ReconstructedParticleCollection& in
   /////////////////Step 9:complete /////////////////////////////////////////////////
   //////////////////////////////////////////////////////////////////////////////////
 
-  //!!! Step 8 and 9 created a clusterIndexMap  of clusterID; key:electronClusterID and value: matched brem clusterID
-  //!!!!//
-  //!!! using clusterIndexMap actual clusters and associated tracks are found from clusterTrackMaps in following steps
-  //!!!!//
+  ////////////////////////////////////////////////////////////////////////////////////
+  /////Step 10: output = input PFOs, with the brem clusters added to their electron ////
+  /////         and without the absorbed neutral PFOs (no double counting).       ////
+  /////         The electron gains their energy but keeps its momentum, charge    ////
+  /////         and PDG: brem recovery adds clusters, not tracks.                 ////
+  ////////////////////////////////////////////////////////////////////////////////////
 
-  /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  //////////Step 10: Put brem recovered clusters associated tracks and remaining stuff in
-  /// bremRecoveredClusterTrackMaps////////
-  /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-  if (clusterIndexMap.size() > 0) {
-    std::set<int> recoveredTrackIndices;
-    for (const auto& [primaryKey, matchedSecondaries] : clusterIndexMap) {
-
-      bremRecoveredClusterTrackMap recoveredMap;
-      recoveredTrackIndices.clear();
-
-      for (const auto& ctm : clusterTrackMaps) {
-
-        int clusterID = ctm.cluster.getObjectID().index;
-        bool isPrimary = (clusterID == primaryKey);
-        bool isSecondary =
-            (std::find(matchedSecondaries.begin(), matchedSecondaries.end(), clusterID) != matchedSecondaries.end());
-        if (isPrimary || isSecondary) {
-          recoveredMap.clusters.push_back(ctm.cluster);
-          for (const auto& track : ctm.tracks) {
-            int trackIndex = track.getObjectID().index;
-            if (recoveredTrackIndices.insert(trackIndex).second) {
-              recoveredMap.tracks.push_back(track);
-            }
-          }
-        }
-      }
-      bremRecoveredClusterTrackMaps.push_back(recoveredMap);
-    }
-  }
-  for (const auto& ctm : clusterTrackMaps) {
-
-    bremRecoveredClusterTrackMap remainingMap;
-    bool isNotKey = true;
-    bool isNotValue = true;
-    int clusterID = ctm.cluster.getObjectID().index;
-
-    if (clusterIndexMap.size() > 0) {
-
-      isNotKey = (clusterIndexMap.find(clusterID) == clusterIndexMap.end());
-      for (const auto& [key, matches] : clusterIndexMap) {
-        if (std::find(matches.begin(), matches.end(), clusterID) != matches.end()) {
-          isNotValue = false;
-          break; // Found it as a value, so stop searching
-        }
-      }
-    }
-
-    if (isNotKey && isNotValue) {
-      remainingMap.clusters.push_back(ctm.cluster);
-      for (const auto& track : ctm.tracks) {
-        remainingMap.tracks.push_back(track);
-      }
-      bremRecoveredClusterTrackMaps.push_back(std::move(remainingMap));
-    }
-  }
-
-  ////////////////////////////////////////
-  //////////Step 10: complete/////////////
-  ////////////////////////////////////////
-
-  // building the output
   edm4hep::ReconstructedParticleCollection output;
-  for (const auto& bremMap : bremRecoveredClusterTrackMaps) { // for bremMap starts
+  for (std::size_t pfoIndex = 0; pfoIndex < input.size(); ++pfoIndex) {
+    // a neutral PFO identified as brem is now part of its electron: storing it too would double count
+    if (consumedPfos.count(pfoIndex))
+      continue;
 
-    // Create one ReconstructedParticle
-    auto particle = output.create();
+    // every other PFO is copied as is: energy, momentum, charge, PDG, mass and its tracks and clusters
+    auto particle = input[pfoIndex].clone();
 
-    float clusterEnergy = 0.0;
-
-    // Add all associated tracks
-    for (const auto& track : bremMap.tracks) { // for track starts
-      particle.addToTracks(track);
-    } // for track ends
-
-    // Add all associated clusters
-    for (const auto& cluster : bremMap.clusters) { // for cluster starts
-      particle.addToClusters(cluster);
-      clusterEnergy += cluster.getEnergy();
-    } // for cluster ends
-    // std::cout << "clusterEnergy = " << clusterEnergy << std::endl;
-    particle.setEnergy(clusterEnergy);
-  } // for bremMap ends
+    // an electron that recovered brem
+    if (const auto it = bremPfos.find(pfoIndex); it != bremPfos.end()) {
+      for (const auto absorbed : it->second) {
+        // takes over the clusters of the absorbed neutral PFO
+        for (const auto& cluster : input[absorbed].getClusters()) {
+          particle.addToClusters(cluster);
+        }
+        // and its energy, so that the total energy of the event is unchanged. The momentum is not touched:
+        // it comes from the track, which measures the electron before it radiated
+        particle.setEnergy(particle.getEnergy() + input[absorbed].getEnergy());
+      }
+    }
+    output.push_back(particle);
+  }
   return output;
 }

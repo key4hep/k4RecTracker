@@ -26,7 +26,6 @@ gaudi_add_module(${PackageName}
                  Gaudi::GaudiKernel
                  k4FWCore::k4FWCore
                  EDM4HEP::edm4hep
-                 EDM4HEP::edm4hep
                  k4FWCore::k4Interface
                  k4geo::detectorCommon
                  DD4hep::DDRec
@@ -55,13 +54,9 @@ install(TARGETS ${PackageName}
   EXPORT ${CMAKE_PROJECT_NAME}Targets
   RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}" COMPONENT bin
   LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}" COMPONENT shlib
-  PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${CMAKE_PROJECT_NAME}"COMPONENT dev)
+  PUBLIC_HEADER DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/${CMAKE_PROJECT_NAME}" COMPONENT dev)
 
 install(FILES ${scripts} DESTINATION test)
-
-#SET(test_name "test_ElectronDecorator")
-#ADD_TEST(NAME ${test_name} COMMAND k4run test/ElectronDecorator.py)
-#set_test_env(${test_name})
 
 SET(test_name "test_ElectronDecorator")
 ADD_TEST(NAME ${test_name} COMMAND sh +x test_ElectronDecorator.sh)

@@ -2,7 +2,6 @@ from Configurables import ElectronDecorator
 from k4FWCore import ApplicationMgr, IOSvc
 from Gaudi.Configuration import DEBUG, INFO
 from Configurables import GeoSvc
-from Configurables import UniqueIDGenSvc
 import os
 
 io = IOSvc(
@@ -12,7 +11,9 @@ io = IOSvc(
 )
 
 geoservice = GeoSvc("GeoSvc")
-geoservice.detectors = [os.environ["K4GEO"] + "/FCCee/CLD/compact/CLD_o2_v08/CLD_o2_v08.xml"]
+geoservice.detectors = [
+    os.environ["K4GEO"] + "/FCCee/CLD/compact/CLD_o2_v07/CLD_o2_v07.xml"
+]  # same as the simulation and reconstruction in test_ElectronDecorator.sh
 geoservice.OutputLevel = INFO
 
 alg = ElectronDecorator(

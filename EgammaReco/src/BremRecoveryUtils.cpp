@@ -1,4 +1,29 @@
-#include "utils.h"
+/*
+ * Copyright (c) 2020-2026 Key4hep-Project.
+ *
+ * This file is part of Key4hep.
+ * See https://key4hep.github.io/key4hep-doc/ for further info.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+#include "BremRecoveryUtils.h"
+
+namespace {
+// pT [GeV] = gevPerTeslaMm * Bz [T] * R [mm] = gevPerTeslaMm * Bz [T] / |omega| [1/mm]
+// (same value as ConversionUnits::a_lcio in Tracking/include/utils.h)
+constexpr double gevPerTeslaMm = 2.998e-4;
+} // namespace
 
 edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector& ecalProjection,
                                                   const HelixClass_double& helixAtLastHit, double Bz) {
@@ -6,13 +31,6 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
   edm4hep::TrackState trackState_AtCalorimeter = edm4hep::TrackState{};
 
   double posAtCalorimeter[] = {ecalProjection.GetX(), ecalProjection.GetY(), ecalProjection.GetZ()};
-  int debug_lvl = 0;
-  if (debug_lvl > 0) {
-    std::cout << "Projection at calo: x, y, z, r = " << posAtCalorimeter[0] << " " << posAtCalorimeter[1] << " "
-              << posAtCalorimeter[2] << " "
-              << sqrt(posAtCalorimeter[0] * posAtCalorimeter[0] + posAtCalorimeter[1] * posAtCalorimeter[1])
-              << std::endl;
-  }
 
   // get extrapolated momentum from the helix with ref point at last hit
   double momAtCalorimeter[] = {0., 0., 0.};
@@ -38,7 +56,6 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
                                      double eCalEndCapInnerR, double eCalEndCapOuterR, double eCalEndCapInnerZ,
                                      double Bz) {
 
-  std::cout << "=======Inside helixAtLastTrack======== " << std::endl;
   edm4hep::TrackState trackState_AtCalorimeter;
   for (const auto& state : track.getTrackStates()) { // start of state loop
 
@@ -48,7 +65,7 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
       double phi = state.phi;
       double omega = state.omega;
       double tanLambda = state.tanLambda;
-      double pt = 0.2998 * Bz / std::abs(omega);
+      double pt = gevPerTeslaMm * Bz / std::abs(omega);
 
       double px = pt * std::cos(phi);
       double py = pt * std::sin(phi);
@@ -123,8 +140,6 @@ edm4hep::TrackState helixAtLastTrack(const edm4hep::Track& track, double eCalBar
         } // end of eCalBarrelInnerR if
 
         trackState_AtCalorimeter = getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit, Bz);
-        auto ref_Calo = trackState_AtCalorimeter.referencePoint;
-        std::cout << "Track intersection1: (" << ref_Calo.x << ", " << ref_Calo.y << ", " << ref_Calo.z << ")\n";
 
       } // end of eCalBarrel||eCalEndCap if
       break;
@@ -160,7 +175,7 @@ ThreeVector getMomentum(const edm4hep::TrackState& state, double Bz) {
   double omega = state.omega;
   double tanLambda = state.tanLambda;
 
-  double pt = (0.299792458 * Bz / std::abs(omega)) * dd4hep::MeV / dd4hep::GeV;
+  double pt = gevPerTeslaMm * Bz / std::abs(omega);
 
   double px = pt * std::cos(phi);
   double py = pt * std::sin(phi);
@@ -177,24 +192,15 @@ bool GetPointInZ(const double zPlane,       // z plane (endcap) coordinate
   // protect from zero division
   if (std::abs(momVec.z) < std::numeric_limits<float>::epsilon()) {
     throw std::invalid_argument("BremRecoveryUtility: invalid momentum.z (zero division)");
-
-    return false;
   }
 
   // check the assumption
   if (std::abs(refPt.z) > std::abs(zPlane)) {
     throw std::invalid_argument("BremRecoveryUtility: invalid refPoint.z (ref. point outside the endcap)");
-
-    return false;
   }
 
   intersectPt.z = momVec.z > 0. ? std::abs(zPlane) : -std::abs(zPlane);
-  // std::cout<<"intersectPt.z: "<<intersectPt.z<<std::endl;
-  // std::cout<<"momVec.z: "<<momVec.z<<std::endl;
   const double genericTime = (intersectPt.z - refPt.z) / momVec.z;
-  // std::cout<<"genericTime: "<<genericTime<<std::endl;
-  // std::cout<<"momVec.x: "<<momVec.x<<std::endl;
-  // std::cout<<"refPt.x: "<<refPt.x<<std::endl;
   intersectPt.x = refPt.x + momVec.x * genericTime;
   intersectPt.y = refPt.y + momVec.y * genericTime;
 
@@ -211,15 +217,11 @@ bool GetPointOnCircle(const double radius,       // (barrel) radius
   // protect from zero division
   if (std::abs(momVecXY) < std::numeric_limits<float>::epsilon()) {
     throw std::invalid_argument("BremRecoveryUtility: invalid pt (zero division)");
-
-    return false;
   }
 
   // check the assumption
   if (std::abs(refPtXY) > radius) {
     throw std::invalid_argument("BremRecoveryUtility: invalid refPoint (ref. point outside the barrel)");
-
-    return false;
   }
   // suppose a triangle OAP in the XY plane
   //      A        A is the reference point
@@ -259,15 +261,11 @@ bool GetPointOnCircleForRefAtOrigin(const double radius,       // (barrel) radiu
   // protect from zero division
   if (std::abs(momVecXY) < std::numeric_limits<float>::epsilon()) {
     throw std::invalid_argument("BremRecoveryUtility: invalid pt (zero division)");
-
-    return false;
   }
 
   // check the assumption
   if (std::abs(refPtXY) > radius) {
     throw std::invalid_argument("BremRecoveryUtility: invalid refPoint (ref. point outside the barrel)");
-
-    return false;
   }
   double genericTime = radius / momVecXY; // this is what we wanted
 
