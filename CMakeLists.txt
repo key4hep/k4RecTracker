@@ -63,8 +63,9 @@ add_subdirectory(VTXdigi)
 add_subdirectory(VTXdigiDetailed)
 if(K4RECTRACKER_TRACKING)
   add_subdirectory(Tracking)
+  add_subdirectory(EgammaReco)  # needs PandoraSDK, found only with K4RECTRACKER_TRACKING
 else()
-  message(STATUS "K4RECTRACKER_TRACKING is OFF: not building the Tracking subpackage")
+  message(STATUS "K4RECTRACKER_TRACKING is OFF: not building the Tracking and EgammaReco subpackages")
 endif()
 
 include(cmake/CreateProjectConfig.cmake)
