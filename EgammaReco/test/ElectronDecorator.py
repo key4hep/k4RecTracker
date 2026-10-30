@@ -5,7 +5,7 @@ from Configurables import GeoSvc
 import os
 
 io = IOSvc(
-    Input=["./CLDConfig/CLDConfig/output_pandora.root"],
+    Input=["./CLDConfig/CLDConfig/CLD_SIM.edm4hep.Output_REC.edm4hep.root"],
     Output="output_pandora_bremRecovered.root",
     CollectionNames=["PandoraPFOs", "PandoraClusters", "SiTracks_Refitted"],
 )
