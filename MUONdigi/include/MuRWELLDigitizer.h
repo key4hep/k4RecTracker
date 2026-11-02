@@ -1,13 +1,13 @@
 #pragma once
 
 // GAUDI
-#include "Gaudi/Algorithm.h"
 #include "Gaudi/Property.h"
 #include "GaudiKernel/IRndmGenSvc.h"
 #include "GaudiKernel/RndmGenerators.h"
+#include "GaudiKernel/SmartIF.h"
 
 // K4FWCORE & podio
-#include "k4FWCore/DataHandle.h"
+#include "k4FWCore/Transformer.h"
 #include "k4Interface/IGeoSvc.h"
 #include "podio/UserDataCollection.h"
 
@@ -29,6 +29,8 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <string>
+#include <tuple>
 #include <vector>
 
 /** @class MuRWELLDigitizer
@@ -49,33 +51,38 @@
  *    3. Emit one digi hit at the energy-weighted centroid plus optional
  *       Gaussian smearing, apply per-cluster efficiency, and repeat.
  *
+ *  Inputs:  inputSimHits (SimTrackerHitCollection)
+ *  Outputs: outputDigiHits, outputSimDigiLink, and five validation collections
+ *           (simDigiDifferenceX/Y/Z, clusterSizeY/Z), all returned by operator().
+ *
  *  @author Mahmoud Althakeel
  *  @date   2026-06
  */
 
-class MuRWELLDigitizer : public Gaudi::Algorithm {
-public:
-  explicit MuRWELLDigitizer(const std::string&, ISvcLocator*);
-  virtual ~MuRWELLDigitizer();
+// All collections produced per event, in the order they are declared in the constructor.
+using MuRWELLDigitizerOutputs = std::tuple<edm4hep::TrackerHitPlaneCollection,             // outputDigiHits
+                                           edm4hep::TrackerHitSimTrackerHitLinkCollection, // outputSimDigiLink
+                                           podio::UserDataCollection<double>,              // simDigiDifferenceX
+                                           podio::UserDataCollection<double>,              // simDigiDifferenceY
+                                           podio::UserDataCollection<double>,              // simDigiDifferenceZ
+                                           podio::UserDataCollection<int>,                 // clusterSizeY
+                                           podio::UserDataCollection<int>>;                // clusterSizeZ
 
-  virtual StatusCode initialize() final;
-  virtual StatusCode execute(const EventContext&) const final;
-  virtual StatusCode finalize() final;
+class MuRWELLDigitizer final
+    : public k4FWCore::MultiTransformer<MuRWELLDigitizerOutputs(const edm4hep::SimTrackerHitCollection&)> {
+public:
+  explicit MuRWELLDigitizer(const std::string& name, ISvcLocator* svcLoc);
+
+  StatusCode initialize() override;
+  MuRWELLDigitizerOutputs operator()(const edm4hep::SimTrackerHitCollection& simHits) const override;
 
 private:
-  // ---- Input / output collections --------------------------------------
-  mutable k4FWCore::DataHandle<edm4hep::SimTrackerHitCollection> m_input_sim_hits{"inputSimHits",
-                                                                                  Gaudi::DataHandle::Reader, this};
-  mutable k4FWCore::DataHandle<edm4hep::TrackerHitPlaneCollection> m_output_digi_hits{"outputDigiHits",
-                                                                                      Gaudi::DataHandle::Writer, this};
-  mutable k4FWCore::DataHandle<edm4hep::TrackerHitSimTrackerHitLinkCollection> m_output_sim_digi_link{
-      "outputSimDigiLink", Gaudi::DataHandle::Writer, this};
-
   // ---- Geometry --------------------------------------------------------
   Gaudi::Property<std::string> m_detectorName{this, "detectorName", "Muon-System", "DD4hep detector name"};
   Gaudi::Property<std::string> m_readoutName{this, "readoutName", "MuonSystemCollection",
                                              "Name of the detector readout"};
-  ServiceHandle<IGeoSvc> m_geoSvc;
+  Gaudi::Property<std::string> m_geoSvcName{this, "GeoSvcName", "GeoSvc", "The name of the GeoSvc instance"};
+  SmartIF<IGeoSvc> m_geoSvc;
   dd4hep::DDSegmentation::BitFieldCoder* m_decoder = nullptr;
   dd4hep::VolumeManager m_volman;
   const dd4hep::rec::SurfaceMap* m_surfMap = nullptr; // populated only when forceHitsOntoSurface is true
@@ -101,22 +108,10 @@ private:
   Gaudi::Property<unsigned int> m_printFrequency{
       this, "printFrequency", 100, "Print one INFO line every N events with the in/out hit count (0 = never)"};
 
-  // ---- Validation outputs ----------------------------------------------
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceX{"simDigiDifferenceX",
-                                                                                       Gaudi::DataHandle::Writer, this};
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceY{"simDigiDifferenceY",
-                                                                                       Gaudi::DataHandle::Writer, this};
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<double>> m_simDigiDifferenceZ{"simDigiDifferenceZ",
-                                                                                       Gaudi::DataHandle::Writer, this};
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<int>> m_clusterSizeY{"clusterSizeY", Gaudi::DataHandle::Writer,
-                                                                              this};
-  mutable k4FWCore::DataHandle<podio::UserDataCollection<int>> m_clusterSizeZ{"clusterSizeZ", Gaudi::DataHandle::Writer,
-                                                                              this};
-
   // ---- Random services -------------------------------------------------
   SmartIF<IRndmGenSvc> m_randSvc;
-  mutable Rndm::Numbers m_gauss_u; // smear along surface u (local y)
-  mutable Rndm::Numbers m_gauss_v; // smear along surface v (local z)
-  mutable Rndm::Numbers m_gauss_t; // smear time if tResolution > 0
-  mutable Rndm::Numbers m_flat;
+  Rndm::Numbers m_gauss_u; // smear along surface u (local y)
+  Rndm::Numbers m_gauss_v; // smear along surface v (local z)
+  Rndm::Numbers m_gauss_t; // smear time if tResolution > 0
+  Rndm::Numbers m_flat;
 };

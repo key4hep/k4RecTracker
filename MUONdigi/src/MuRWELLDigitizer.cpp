@@ -1,5 +1,7 @@
 #include "MuRWELLDigitizer.h"
 
+#include "GaudiKernel/ThreadLocalContext.h"
+
 DECLARE_COMPONENT(MuRWELLDigitizer)
 
 namespace {
@@ -20,17 +22,21 @@ bool areAdjacent(const FiredCell& a, const FiredCell& b) {
 }
 } // namespace
 
-MuRWELLDigitizer::MuRWELLDigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
-    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "MuRWELLDigitizer") {
-  declareProperty("inputSimHits", m_input_sim_hits, "Input SimTrackerHit collection");
-  declareProperty("outputDigiHits", m_output_digi_hits, "Output digitised hit collection");
-  declareProperty("outputSimDigiLink", m_output_sim_digi_link,
-                  "Link between digi cluster and each contributing SimHit");
-}
-
-MuRWELLDigitizer::~MuRWELLDigitizer() = default;
+MuRWELLDigitizer::MuRWELLDigitizer(const std::string& name, ISvcLocator* svcLoc)
+    : MultiTransformer(
+          name, svcLoc, {KeyValue("inputSimHits", "MuonSystemCollection")},
+          {KeyValue("outputDigiHits", "MuRWELLDigiHits"), KeyValue("outputSimDigiLink", "MuRWELLDigiSimLinks"),
+           KeyValue("simDigiDifferenceX", "simDigiDifferenceX"), KeyValue("simDigiDifferenceY", "simDigiDifferenceY"),
+           KeyValue("simDigiDifferenceZ", "simDigiDifferenceZ"), KeyValue("clusterSizeY", "clusterSizeY"),
+           KeyValue("clusterSizeZ", "clusterSizeZ")}) {}
 
 StatusCode MuRWELLDigitizer::initialize() {
+  m_geoSvc = serviceLocator()->service(m_geoSvcName);
+  if (!m_geoSvc) {
+    error() << "Unable to locate GeoSvc with name: " << m_geoSvcName << endmsg;
+    return StatusCode::FAILURE;
+  }
+
   m_randSvc = service("RndmGenSvc", false);
   if (!m_randSvc) {
     error() << "Couldn't get RndmGenSvc!" << endmsg;
@@ -94,19 +100,18 @@ StatusCode MuRWELLDigitizer::initialize() {
   return StatusCode::SUCCESS;
 }
 
-StatusCode MuRWELLDigitizer::finalize() { return StatusCode::SUCCESS; }
+MuRWELLDigitizerOutputs MuRWELLDigitizer::operator()(const edm4hep::SimTrackerHitCollection& simHits) const {
+  const auto eventNumber = Gaudi::Hive::currentContext().evt();
 
-StatusCode MuRWELLDigitizer::execute(const EventContext& ctx) const {
-  const auto* sim_hits = m_input_sim_hits.get();
-  auto* digi_hits = m_output_digi_hits.createAndPut();
-  auto* links = m_output_sim_digi_link.createAndPut();
-  auto* diffX = m_simDigiDifferenceX.createAndPut();
-  auto* diffY = m_simDigiDifferenceY.createAndPut();
-  auto* diffZ = m_simDigiDifferenceZ.createAndPut();
-  auto* clusterSizesY = m_clusterSizeY.createAndPut();
-  auto* clusterSizesZ = m_clusterSizeZ.createAndPut();
+  auto digiHits = edm4hep::TrackerHitPlaneCollection();
+  auto links = edm4hep::TrackerHitSimTrackerHitLinkCollection();
+  auto diffX = podio::UserDataCollection<double>();
+  auto diffY = podio::UserDataCollection<double>();
+  auto diffZ = podio::UserDataCollection<double>();
+  auto clusterSizesY = podio::UserDataCollection<int>();
+  auto clusterSizesZ = podio::UserDataCollection<int>();
 
-  debug() << "Event " << ctx.evt() << ": " << sim_hits->size() << " input SimHits" << endmsg;
+  debug() << "Event " << eventNumber << ": " << simHits.size() << " input SimHits" << endmsg;
 
   // -------------------------------------------------------------------------
   // Step 1. Group SimHits by cellWindow = (chamberID, timeWindow).
@@ -117,7 +122,7 @@ StatusCode MuRWELLDigitizer::execute(const EventContext& ctx) const {
   using CellWindow = std::pair<std::uint64_t, std::int64_t>;
   std::map<CellWindow, std::vector<FiredCell>> cellWindows;
 
-  for (const auto& sim : *sim_hits) {
+  for (const auto& sim : simHits) {
     const auto cellID = sim.getCellID();
     const int yIdx = m_decoder->get(cellID, "y");
     const int zIdx = m_decoder->get(cellID, "z");
@@ -241,10 +246,10 @@ StatusCode MuRWELLDigitizer::execute(const EventContext& ctx) const {
 
       // ---- Gaussian smear in the local frame of the seed cell -----------
       const auto& seedCellID = cells[seedIdx].cellID;
-      // World transform of the sensitive gas slice (one DetElement per slice in
-      // muonSystemMuRWELL_o1_v01). PlacedVolume::matrix() would only give the
-      // placement relative to the mother chamber, which silently drops global x.
-      const TGeoHMatrix& xform = m_volman.lookupDetElement(seedCellID).nominal().worldTransformation();
+      // World transform of the sensitive gas slice. The Alignment handle is kept in a named
+      // variable so the matrix reference below does not point into a temporary.
+      const dd4hep::Alignment slice_alignment = m_volman.lookupDetElement(seedCellID).nominal();
+      const TGeoHMatrix& xform = slice_alignment.worldTransformation();
 
       double simGlobalPos_cm[3] = {centroidGlobalX * dd4hep::mm, centroidGlobalY * dd4hep::mm,
                                    centroidGlobalZ * dd4hep::mm};
@@ -304,12 +309,12 @@ StatusCode MuRWELLDigitizer::execute(const EventContext& ctx) const {
       // The cellID stored on the digi must identify the chamber, not the strip:
       // the DDRec SurfaceMap is keyed by chamber-level cellIDs (y, z strip
       // fields zeroed). Store seedCellID with y, z cleared so downstream
-      // surface lookups (e.g. DisplacedTracking) match the SurfaceMap entries.
+      // surface lookups match the SurfaceMap entries.
       dd4hep::DDSegmentation::CellID chamberCellID = seedCellID;
       m_decoder->set(chamberCellID, "y", 0);
       m_decoder->set(chamberCellID, "z", 0);
 
-      auto digi = digi_hits->create();
+      auto digi = digiHits.create();
       digi.setPosition(
           {digiGlobalPos_cm[0] / dd4hep::mm, digiGlobalPos_cm[1] / dd4hep::mm, digiGlobalPos_cm[2] / dd4hep::mm});
       digi.setCellID(chamberCellID);
@@ -324,7 +329,7 @@ StatusCode MuRWELLDigitizer::execute(const EventContext& ctx) const {
       std::size_t nSimHits = 0;
       for (std::size_t idx : cluster) {
         for (const auto& simHit : cells[idx].simHits) {
-          auto link = links->create();
+          auto link = links.create();
           link.setFrom(digi);
           link.setTo(simHit);
           ++nSimHits;
@@ -343,21 +348,23 @@ StatusCode MuRWELLDigitizer::execute(const EventContext& ctx) const {
       const double residualX = (digiGlobalPos_cm[0] - simGlobalPos_cm[0]) / dd4hep::mm;
       const double residualY = (digiGlobalPos_cm[1] - simGlobalPos_cm[1]) / dd4hep::mm;
       const double residualZ = (digiGlobalPos_cm[2] - simGlobalPos_cm[2]) / dd4hep::mm;
-      diffX->push_back(residualX);
-      diffY->push_back(residualY);
-      diffZ->push_back(residualZ);
-      clusterSizesY->push_back(static_cast<int>(yUsed.size()));
-      clusterSizesZ->push_back(static_cast<int>(zUsed.size()));
+      diffX.push_back(residualX);
+      diffY.push_back(residualY);
+      diffZ.push_back(residualZ);
+      clusterSizesY.push_back(static_cast<int>(yUsed.size()));
+      clusterSizesZ.push_back(static_cast<int>(zUsed.size()));
     }
   }
 
-  debug() << "Event " << ctx.evt() << ": " << digi_hits->size() << " output digi clusters" << endmsg;
+  debug() << "Event " << eventNumber << ": " << digiHits.size() << " output digi clusters" << endmsg;
 
   // Per-event heartbeat (INFO). Emit every printFrequency events; 0 disables.
-  if (m_printFrequency > 0 && (ctx.evt() % m_printFrequency == 0)) {
-    info() << "Event " << ctx.evt() << ": " << sim_hits->size() << " SimHits -> " << digi_hits->size()
-           << " digi clusters" << endmsg;
+  if (m_printFrequency > 0 && (eventNumber % m_printFrequency == 0)) {
+    info() << "Event " << eventNumber << ": " << simHits.size() << " SimHits -> " << digiHits.size() << " digi clusters"
+           << endmsg;
   }
 
-  return StatusCode::SUCCESS;
+  // Hand all output collections to the framework (same order as MuRWELLDigitizerOutputs).
+  return std::make_tuple(std::move(digiHits), std::move(links), std::move(diffX), std::move(diffY), std::move(diffZ),
+                         std::move(clusterSizesY), std::move(clusterSizesZ));
 }
