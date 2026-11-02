@@ -11,8 +11,8 @@ from k4FWCore.parseArgs import parser
 
 
 ################## Parser
-parser.add_argument("--inputFile", default="ddsim_output_edm4hep.root", help="InputFile")
-parser.add_argument("--outputFile", default="output_digi.root", help="OutputFile")
+parser.add_argument("--inputFile", help="InputFile")
+parser.add_argument("--outputFile", help="OutputFile")
 parser.add_argument("--modelPath", default="", help="model path for the track finder")
 parser.add_argument("--tbeta", default=0.6, help="tbeta clustering parameter")
 parser.add_argument("--td", default=0.3, help="td clustering parameter")
@@ -150,17 +150,13 @@ GGTF = GGTFTrackFinder(
     InputWireHitCollections=["DCH_DigiCollection"],
     OutputTracksGGTF=["GGTFTracks"],
     ModelPath=args.modelPath,
+    EmbeddingCoordinates=3,
     Tbeta=args.tbeta,
     Td=args.td,
     OutputLevel=INFO,
 )
 
 ############### Application Manager
-import subprocess
-
-ifilename = "https://fccsw.web.cern.ch/fccsw/filesForSimDigiReco/IDEA/DataAlgFORGEANT.root"
-subprocess.run(["wget", "--no-clobber", ifilename])
-
 mgr = ApplicationMgr(
     TopAlg=[dch_digitizer, vtxb_digitizer, vtxd_digitizer, siwrb_digitizer, siwrd_digitizer, GGTF],
     EvtSel="NONE",

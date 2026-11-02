@@ -42,10 +42,14 @@
 #include <RKTrackRep.h>
 #include <Track.h>
 
+#include <TGeoNavigator.h>
+
 #include "DD4hep/Detector.h"
 #include "DD4hep/Fields.h"
 #include "DDRec/Vector3D.h"
 #include "DDSegmentation/BitFieldCoder.h"
+
+#include "detectorCommon/WireTracker_info.h"
 
 #include "edm4hep/MutableTrack.h"
 #include "edm4hep/TrackCollection.h"
@@ -69,7 +73,7 @@
  *    - execute the GENFIT fitting procedure
  *
  *  The class maintains access to both the EDM4hep and GENFIT representations of the track, and stores
- *  relevant geometry information such as the drift chamber (DCH) description and segmentation decoder.
+ *  relevant geometry information such as the wire tracker info description and segmentation decoder.
  *
  *
  *  Author: Andrea De Vita
@@ -82,7 +86,7 @@ namespace GenfitInterface {
 class GenfitTrack {
 public:
   GenfitTrack(const edm4hep::Track& track, const bool skipTrackOrdering = false,
-              const dd4hep::rec::DCH_info* dch_info = nullptr,
+              const dd4hep::rec::WireTracker_info_struct* wire_info = nullptr,
               const dd4hep::DDSegmentation::BitFieldCoder* decoder = nullptr,
               const GenfitInterface::GenfitField* fieldMap = nullptr);
 
@@ -96,16 +100,25 @@ public:
                        std::optional<double> sigma_z0, std::optional<double> sigma_tanLambda);
 
   void CreateGenFitTrack(int particle_hypotesis, int debug_lvl);
-  bool Fit(std::string FitterType, int debug_lvl, std::optional<double> Beta_init, std::optional<double> Beta_final,
-           std::optional<int> Beta_steps, std::optional<bool> FilterHits);
+  bool Fit(edm4hep::TrackerHitPlaneCollection& fittedHits, std::string FitterType, int debug_lvl,
+           std::optional<double> Beta_init, std::optional<double> Beta_final, std::optional<int> Beta_steps,
+           std::optional<bool> FilterHits);
 
-  genfit::Track* GetTrack_genfit() { return m_genfitTrack; }
-  genfit::AbsTrackRep* GetRep_genfit() { return m_genfitTrackRep; }
   edm4hep::MutableTrack& GetTrack_edm4hep() { return m_edm4hepTrack; }
   edm4hep::MutableTrack& GetTrackWithFit_edm4hep() { return m_trackWithFit; }
-  edm4hep::TrackerHitPlaneCollection& GetFittedHits() { return m_fittedHits; }
 
-  int GetCharge() { return m_charge_hypothesis; }
+  int GetCharge() { return m_chargeHypothesis; }
+
+  void SetVPPosition(TVector3 referencePoint) { m_vpReferencePoint = referencePoint; }
+
+  static TMatrixDSym InitialCovarianceMatrixHelixToCartesian(const TMatrixDSym& helixCovariance,
+                                                             const TVector3& positionCm, const TVector3& momentumGeV,
+                                                             const TVector3& referencePointCm, int charge,
+                                                             double magneticFieldTesla);
+
+  TMatrixDSym CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6,
+                                               TVector3 Position_cm, TVector3 Momentum_gev, TVector3 RefPoint_cm,
+                                               int Charge, double Bz);
 
   void PrintTrack_init() {
 
@@ -125,28 +138,16 @@ public:
 
   HelperInitialization GetInitialization() {
 
-    return {m_posInit, m_momInit, m_covInit, m_charge_hypothesis,
+    return {m_posInit, m_momInit, m_covInit, m_chargeHypothesis,
             static_cast<int>(m_edm4hepTrack.getTrackerHits().size())};
   }
 
 private:
   edm4hep::Track m_originalTrack;
 
-  struct PCAInfoHelper {
-    TVector3 PCA;
-    double Phi0;
-  };
-
   void CheckInitialization();
   void OrderHits(const edm4hep::Track& track, bool skipTrackOrdering);
   void LimitNumberHits(double epsilon, int smoothWindow);
-
-  TMatrixDSym CovarianceMatrixHelixToCartesian(const TMatrixDSym& C_helix, TVector3 Position_cm, TVector3 Momentum_gev,
-                                               TVector3 RefPoint_cm, int charge, double Bz);
-
-  TMatrixDSym CovarianceMatrixCartesianToHelix(const TMatrixDSym& C_cartesian, // 6x6,
-                                               TVector3 Position_cm, TVector3 Momentum_gev, TVector3 RefPoint_cm,
-                                               int Charge, double Bz);
 
   TMatrixDSym ComputeInitialCovarianceMatrix(double Bz, int Charge, std::optional<double> sigma_d0,
                                              std::optional<double> sigma_phi, std::optional<double> sigma_omega,
@@ -154,28 +155,27 @@ private:
 
   HelperInitialization ComputeInitialParameters(double Bz);
 
-  edm4hep::TrackState UpdateTrackState(genfit::MeasuredStateOnPlane MeasuredState, int location);
+  edm4hep::TrackState UpdateTrackState(genfit::MeasuredStateOnPlane measuredState, TVector3 referencePointCm,
+                                       int location);
 
-  PCAInfoHelper PCAInfo(TVector3 position, TVector3 momentum, int charge, TVector3 refPoint, double Bz);
-
-  int m_signed_particle_hypothesis = 211;
-  int m_charge_hypothesis = 1;
+  int m_signedParticleHypothesis = 211;
+  int m_chargeHypothesis = 1;
 
   TVector3 m_posInit = TVector3(0., 0., 0.);
   TVector3 m_momInit = TVector3(0., 0., 0.);
   TMatrixDSym m_covInit;
 
-  genfit::AbsTrackRep* m_genfitTrackRep = nullptr;
-  genfit::Track* m_genfitTrack = nullptr;
+  std::unique_ptr<genfit::Track> m_genfitTrack;
 
   edm4hep::MutableTrack m_edm4hepTrack;
   edm4hep::MutableTrack m_trackWithFit;
-  edm4hep::TrackerHitPlaneCollection m_fittedHits;
 
-  TVector3 m_VP_referencePoint{0., 0., 0.};
+  TVector3 m_vpReferencePoint{0., 0., 0.};
+  TVector3 m_firstHitReferencePoint{0., 0., 0.};
+  TVector3 m_lastHitReferencePoint{0., 0., 0.};
 
-  const dd4hep::rec::DCH_info* m_dch_info;
-  const dd4hep::DDSegmentation::BitFieldCoder* m_dc_decoder;
+  const dd4hep::rec::WireTracker_info_struct* m_wireInfo;
+  const dd4hep::DDSegmentation::BitFieldCoder* m_dcDecoder;
   const GenfitInterface::GenfitField* m_fieldMap;
 };
 

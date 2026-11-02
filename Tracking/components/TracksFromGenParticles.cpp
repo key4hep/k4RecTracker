@@ -6,6 +6,8 @@
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackMCParticleLinkCollection.h"
 
+#include "podio/ObjectID.h"
+
 // marlin
 #include <marlinutil/HelixClass_double.h>
 
@@ -21,10 +23,19 @@
 #include "DD4hep/Detector.h"
 #include "DD4hep/DetectorSelector.h"
 #include "DD4hep/Readout.h"
+#include "DDSegmentation/BitFieldCoder.h"
 #include <DDRec/DetectorData.h>
 
 // C++
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <cstdint>
+#include <exception>
+#include <limits>
 #include <string>
+#include <unordered_map>
+#include <vector>
 
 #include <utils.h>
 
@@ -59,97 +70,85 @@ struct TracksFromGenParticles final
             {KeyValues("OutputTracks", {"TracksFromGenParticles"}),
              KeyValues("OutputMCRecoTrackParticleAssociation", {"TracksFromGenParticlesAssociation"})}) {}
 
-  double getFieldFromCompact() {
-    dd4hep::Detector& mainDetector = dd4hep::Detector::getInstance();
-    const double position[3] = {0, 0, 0};      // position to calculate magnetic field at (the origin in this case)
-    double magneticFieldVector[3] = {0, 0, 0}; // initialise object to hold magnetic field
-    mainDetector.field().magneticField(position, magneticFieldVector); // get the magnetic field vector from DD4hep
-    return magneticFieldVector[2] / dd4hep::tesla;                     // z component at (0,0,0)
-  }
-
   StatusCode initialize() override {
 
     // retrieve B field
-    m_Bz = getFieldFromCompact();
+    m_Bz = getBzAtOrigin(dd4hep::Detector::getInstance());
     debug() << "B field (T) is : " << m_Bz << endmsg;
 
     // retrieve ecal dimensions:
     // - barrel: inner R, zmax
     // - endcap: inner R, zmin, zmax
     if (m_extrapolateToECal) {
-      bool retrieved = false;
-
-      dd4hep::rec::LayeredCalorimeterData* caloExtension =
-          getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL | dd4hep::DetType::ENDCAP),
-                       (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
-
-      if (caloExtension) { // special case handling for DRC o1
-        debug() << "DRC extension found, using it..." << endmsg;
-
-        m_eCalBarrelInnerR = caloExtension->extent[0] / dd4hep::mm;
-        m_eCalBarrelMaxZ = caloExtension->extent[2] / dd4hep::mm;
-        debug() << "DRC barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
-        debug() << "DRC barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
-        m_eCalEndCapInnerR = caloExtension->extent[4] / dd4hep::mm;
-        m_eCalEndCapOuterR = caloExtension->extent[5] / dd4hep::mm;
-        m_eCalEndCapInnerZ = caloExtension->extent[2] / dd4hep::mm;
-        m_eCalEndCapOuterZ = caloExtension->extent[3] / dd4hep::mm;
-        debug() << "DRC endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
-        debug() << "DRC endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
-        debug() << "DRC endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
-        debug() << "DRC endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
-        retrieved = true;
-      }
-
-      if (!retrieved) { // typical cases
-        // set "special" parameters to 0, will use it later to avoid projecting to the empty detector
-        m_eCalBarrelInnerR = 0.;
-        m_eCalEndCapInnerR = 0.;
-
-        // try barrel first
-        caloExtension =
-            getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
+      try {
+        const dd4hep::rec::LayeredCalorimeterData* drcExtension =
+            getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::BARREL | dd4hep::DetType::ENDCAP),
                          (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
 
-        if (caloExtension) {
-          m_eCalBarrelInnerR = caloExtension->extent[0] / dd4hep::mm;
-          m_eCalBarrelMaxZ = caloExtension->extent[3] / dd4hep::mm;
-          debug() << "ECAL barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
-          debug() << "ECAL barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
-        }
+        if (drcExtension) { // special case handling for DRC o1
+          debug() << "DRC extension found, using it..." << endmsg;
 
-        // then try endcap
-        caloExtension =
-            getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
-                         (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
+          m_eCalBarrelInnerR = drcExtension->extent[0] / dd4hep::mm;
+          m_eCalBarrelMaxZ = drcExtension->extent[2] / dd4hep::mm;
+          debug() << "DRC barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
+          debug() << "DRC barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
+          m_eCalEndCapInnerR = drcExtension->extent[4] / dd4hep::mm;
+          m_eCalEndCapOuterR = drcExtension->extent[5] / dd4hep::mm;
+          m_eCalEndCapInnerZ = drcExtension->extent[2] / dd4hep::mm;
+          m_eCalEndCapOuterZ = drcExtension->extent[3] / dd4hep::mm;
+          debug() << "DRC endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
+          debug() << "DRC endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
+          debug() << "DRC endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
+          debug() << "DRC endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
+        } else { // typical cases
+          info() << "No DR calo has been found. Searching for the separated barrel and endcap ECAL..." << endmsg;
 
-        if (caloExtension) {
-          m_eCalEndCapInnerR = caloExtension->extent[0] / dd4hep::mm;
-          m_eCalEndCapOuterR = caloExtension->extent[1] / dd4hep::mm;
-          m_eCalEndCapInnerZ = caloExtension->extent[2] / dd4hep::mm;
-          m_eCalEndCapOuterZ = caloExtension->extent[3] / dd4hep::mm;
-          debug() << "ECAL endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
-          debug() << "ECAL endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
-          debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
-          debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
-        }
+          // "special" parameters stay at 0 if a detector is not found, will use it later to avoid projecting to the
+          // empty detector
+          const dd4hep::rec::LayeredCalorimeterData* barrelExtension =
+              getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::BARREL),
+                           (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
 
-        if (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.) {
-          retrieved = true;
+          if (barrelExtension) {
+            m_eCalBarrelInnerR = barrelExtension->extent[0] / dd4hep::mm;
+            m_eCalBarrelMaxZ = barrelExtension->extent[3] / dd4hep::mm;
+            debug() << "ECAL barrel extent: Rmin [mm] = " << m_eCalBarrelInnerR << endmsg;
+            debug() << "ECAL barrel extent: Zmax [mm] = " << m_eCalBarrelMaxZ << endmsg;
+          }
+
+          const dd4hep::rec::LayeredCalorimeterData* endcapExtension =
+              getExtension((dd4hep::DetType::CALORIMETER | dd4hep::DetType::ELECTROMAGNETIC | dd4hep::DetType::ENDCAP),
+                           (dd4hep::DetType::AUXILIARY | dd4hep::DetType::FORWARD));
+
+          if (endcapExtension) {
+            m_eCalEndCapInnerR = endcapExtension->extent[0] / dd4hep::mm;
+            m_eCalEndCapOuterR = endcapExtension->extent[1] / dd4hep::mm;
+            m_eCalEndCapInnerZ = endcapExtension->extent[2] / dd4hep::mm;
+            m_eCalEndCapOuterZ = endcapExtension->extent[3] / dd4hep::mm;
+            debug() << "ECAL endcap extent: Rmin [mm] = " << m_eCalEndCapInnerR << endmsg;
+            debug() << "ECAL endcap extent: Rmax [mm] = " << m_eCalEndCapOuterR << endmsg;
+            debug() << "ECAL endcap extent: Zmin [mm] = " << m_eCalEndCapInnerZ << endmsg;
+            debug() << "ECAL endcap extent: Zmax [mm] = " << m_eCalEndCapOuterZ << endmsg;
+          }
         }
+      } catch (const std::exception& e) {
+        error() << "Failed to retrieve calorimeter dimensions from detector description: " << e.what() << endmsg;
+        return StatusCode::FAILURE;
       }
 
-      if (!retrieved) {
+      if (m_eCalBarrelInnerR <= 0. && m_eCalEndCapInnerR <= 0.) {
         error() << "Could not retrieve calorimeter dimensions from detector description, cannot perform extrapolation "
                    "to calorimeter."
                 << endmsg;
         return StatusCode::FAILURE;
       }
+
+      info() << "Found ECAL extension successfully" << endmsg;
     }
 
     // setup system decoder
-    m_systemEncoder = new dd4hep::DDSegmentation::BitFieldCoder(m_systemEncoding);
-    m_indexSystem = m_systemEncoder->index("system");
+    m_systemEncoder = dd4hep::DDSegmentation::BitFieldCoder(m_systemEncoding);
+    m_indexSystem = m_systemEncoder.index("system");
 
     return StatusCode::SUCCESS;
   }
@@ -161,6 +160,37 @@ struct TracksFromGenParticles final
     // Create the output track collection and track gen<->reco links collection
     auto outputTrackCollection = edm4hep::TrackCollection();
     auto MCRecoTrackParticleAssociationCollection = edm4hep::TrackMCParticleLinkCollection();
+
+    // Build index: MCParticle ObjectID → {hits, subdetector hit counts}
+    // This avoids O(N_particles × N_hits) by scanning hits once up front.
+    struct HitData {
+      explicit HitData(size_t nTrackers) : subdetCounts(nTrackers, 0) {}
+      std::vector<std::array<double, 7>> hits;
+      std::vector<int> subdetCounts;
+    };
+    std::unordered_map<podio::ObjectID, HitData> particleHitIndex;
+    for (const auto coll : simTrackerHitCollVec) {
+      for (const auto& hit : *coll) {
+        // skip hits that are produced by secondary particles:
+        // they are pointing to the parent particles if the secondary one
+        // is not kept in the MCParticle collection
+        if (hit.isProducedBySecondary())
+          continue;
+        auto& entry = particleHitIndex.try_emplace(hit.getParticle().getObjectID(), m_trackerIDs.size()).first->second;
+        // store hit position, track momentum at hit and hit time
+        entry.hits.push_back({hit.x(), hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1],
+                              hit.getMomentum()[2], hit.getTime()});
+        // find systemID of hit and increase hit counter for corresponding subdetector
+        const std::uint64_t cellID = hit.getCellID();
+        int systemID = m_systemEncoder.get(cellID, m_indexSystem);
+        for (size_t idxTracker = 0; idxTracker < m_trackerIDs.size(); idxTracker++) {
+          if (systemID == m_trackerIDs[idxTracker]) {
+            entry.subdetCounts[idxTracker]++;
+            break;
+          }
+        }
+      }
+    }
 
     // loop over the gen particles, find charged ones, and create the corresponding reco particles
     int iparticle = 0;
@@ -191,9 +221,28 @@ struct TracksFromGenParticles final
       if (genParticle.getCharge() == 0)
         continue;
 
+      // Build tracks only for charged particles that reach the calorimeter face
+      // if m_onlyCaloReachingParticles is set to True
+      if (m_onlyCaloReachingParticles && genParticle.isDecayedInTracker())
+        continue;
+
       // skip low momentum particles that cannot be reconstructed in tracker
       if (pmag < m_minParticleMomentum)
         continue;
+
+      // A charged particle with exactly zero transverse momentum travels along the beam axis;
+      // its helix is singular (omega = qB/pt, tanLambda = pz/pt, Z0 all diverge to non-finite).  Skip it.
+      if (p.x * p.x + p.y * p.y < std::numeric_limits<double>::epsilon())
+        continue;
+
+      // look up SimTrackerHits associated to genParticle from the pre-built index;
+      // tracks are only built for particles with at least one SimTrackerHit
+      auto hitIt = particleHitIndex.find(genParticle.getObjectID());
+      if (hitIt == particleHitIndex.end())
+        continue;
+      auto& trackHits = hitIt->second.hits;
+      const auto& v = hitIt->second.subdetCounts;
+      debug() << "Number of SimTrackerHits: " << trackHits.size() << endmsg;
 
       // build an helix out of MCParticle properties and B field
       auto helixFromGenParticle = HelixClass_double();
@@ -222,183 +271,141 @@ struct TracksFromGenParticles final
           edm4hep::Vector3f(genParticleVertex[0], genParticleVertex[1], genParticleVertex[2]);
       trackFromGen.addToTrackStates(trackState_IP);
 
-      // find SimTrackerHits associated to genParticle (and not produced by secondaries)
-      // store hit position, momentum and time
-      // and calculate number of hits in each subdetector
-      std::vector<std::array<double, 7>> trackHits;
-      std::vector<int> v(m_trackerIDs.size());
-      for (size_t ih = 0; ih < simTrackerHitCollVec.size(); ih++) {
-        const edm4hep::SimTrackerHitCollection* coll = simTrackerHitCollVec[ih];
-        for (const auto& hit : *coll) {
-          // skip hits that are produced by secondary particles:
-          // they are pointing to the parent particles if the secondary one
-          // is not kept in the MCParticle collection
-          if (hit.isProducedBySecondary())
-            continue;
+      // sort the hits according to their time
+      std::sort(trackHits.begin(), trackHits.end(),
+                [](const std::array<double, 7>& a, const std::array<double, 7>& b) { return a[6] < b[6]; });
 
-          // check that the ID of the particle that created the it is the same as the MCParticle being considered
-          const edm4hep::MCParticle particle = hit.getParticle();
-          if (particle.getObjectID() == genParticle.getObjectID()) {
+      // TrackState at First Hit
+      auto trackState_AtFirstHit = edm4hep::TrackState{};
+      auto firstHit = trackHits.front();
+      double posAtFirstHit[] = {firstHit[0], firstHit[1], firstHit[2]};
+      double momAtFirstHit[] = {firstHit[3], firstHit[4], firstHit[5]};
+      double rAtFirstHit = sqrt(firstHit[0] * firstHit[0] + firstHit[1] * firstHit[1]);
+      debug() << "First hit: x, y, z, r = " << firstHit[0] << " " << firstHit[1] << " " << firstHit[2] << " "
+              << rAtFirstHit << endmsg;
+      debug() << "First hit: px, py, pz = " << firstHit[3] << " " << firstHit[4] << " " << firstHit[5] << endmsg;
 
-            // store hit position, track momentum at hit and hit time in trackHits
-            std::array<double, 7> ahit{
-                hit.x(),      hit.y(), hit.z(), hit.getMomentum()[0], hit.getMomentum()[1], hit.getMomentum()[2],
-                hit.getTime()};
-            trackHits.push_back(ahit);
+      // produce new helix at first hit position
+      auto helixAtFirstHit = HelixClass_double();
+      helixAtFirstHit.Initialize_VP(posAtFirstHit, momAtFirstHit, genParticle.getCharge(), m_Bz);
+      // fill the TrackState parameters
+      trackState_AtFirstHit.location = edm4hep::TrackState::AtFirstHit;
+      trackState_AtFirstHit.D0 = helixAtFirstHit.getD0();
+      trackState_AtFirstHit.phi = std::atan2(momAtFirstHit[1], momAtFirstHit[0]);
+      trackState_AtFirstHit.omega = helixAtFirstHit.getOmega();
+      trackState_AtFirstHit.Z0 = helixAtFirstHit.getZ0();
+      trackState_AtFirstHit.tanLambda = helixAtFirstHit.getTanLambda();
+      trackState_AtFirstHit.referencePoint = edm4hep::Vector3f(posAtFirstHit[0], posAtFirstHit[1], posAtFirstHit[2]);
+      trackFromGen.addToTrackStates(trackState_AtFirstHit);
 
-            // find systemID of hit and increase hit counter for corresponding subdetector
-            uint cellID = hit.getCellID();
-            int systemID = m_systemEncoder->get(cellID, m_indexSystem);
-            for (size_t idxTracker = 0; idxTracker < m_trackerIDs.size(); idxTracker++) {
-              if (systemID == m_trackerIDs[idxTracker]) {
-                v[idxTracker]++;
-                break;
-              }
-            }
+      // TrackState at Last Hit
+      auto trackState_AtLastHit = edm4hep::TrackState{};
+      auto lastHit = trackHits.back();
+      double posAtLastHit[] = {lastHit[0], lastHit[1], lastHit[2]};
+      double momAtLastHit[] = {lastHit[3], lastHit[4], lastHit[5]};
+      debug() << "Last hit: x, y, z, r = " << lastHit[0] << " " << lastHit[1] << " " << lastHit[2] << " "
+              << sqrt(lastHit[0] * lastHit[0] + lastHit[1] * lastHit[1]) << endmsg;
+      debug() << "Last hit: px, py, pz = " << lastHit[3] << " " << lastHit[4] << " " << lastHit[5] << endmsg;
+
+      // produce new helix at last hit position
+      auto helixAtLastHit = HelixClass_double();
+      helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit, genParticle.getCharge(), m_Bz);
+      // fill the TrackState parameters
+      trackState_AtLastHit.location = edm4hep::TrackState::AtLastHit;
+      trackState_AtLastHit.D0 = helixAtLastHit.getD0();
+      trackState_AtLastHit.phi = std::atan2(momAtLastHit[1], momAtLastHit[0]);
+      trackState_AtLastHit.omega = helixAtLastHit.getOmega();
+      trackState_AtLastHit.Z0 = helixAtLastHit.getZ0();
+      trackState_AtLastHit.tanLambda = helixAtLastHit.getTanLambda();
+      trackState_AtLastHit.referencePoint = edm4hep::Vector3f(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
+      // attach the TrackState to the track
+      trackFromGen.addToTrackStates(trackState_AtLastHit);
+
+      // TrackState at Calorimeter
+      if (m_extrapolateToECal && (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.)) {
+        pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
+        pandora::CartesianVector secondBestECalProjection(0.f, 0.f, 0.f);
+        float minGenericTime(std::numeric_limits<float>::max());
+
+        // create helix to project
+        // rather than using parameters at production, better to use those from
+        // last hit
+        pandora::CartesianVector pos(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
+        pandora::CartesianVector mom(momAtLastHit[0], momAtLastHit[1], momAtLastHit[2]);
+        const pandora::Helix helix(pos, mom, genParticle.getCharge(), m_Bz);
+        const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
+        const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
+
+        // First project to endcap
+        pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
+        bool hasEndCapProjection(false);
+        if (m_eCalEndCapInnerR > 0) {
+          float genericTime(std::numeric_limits<float>::max());
+          const pandora::StatusCode statusCode(helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ,
+                                                                 referencePoint, endCapProjection, genericTime));
+          float x = endCapProjection.GetX();
+          float y = endCapProjection.GetY();
+          float r = std::sqrt(x * x + y * y);
+          if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (genericTime < minGenericTime) &&
+              (r >= m_eCalEndCapInnerR) && (r <= m_eCalEndCapOuterR)) {
+            minGenericTime = genericTime;
+            bestECalProjection = endCapProjection;
+            hasEndCapProjection = true;
           }
         }
-      }
 
-      if (!trackHits.empty()) {
-        // particles with at least one SimTrackerHit
-        debug() << "Number of SimTrackerHits: " << trackHits.size() << endmsg;
-
-        // sort the hits according to their time
-        std::sort(trackHits.begin(), trackHits.end(),
-                  [](const std::array<double, 7> a, const std::array<double, 7> b) { return a[6] < b[6]; });
-
-        // TrackState at First Hit
-        auto trackState_AtFirstHit = edm4hep::TrackState{};
-        auto firstHit = trackHits.front();
-        double posAtFirstHit[] = {firstHit[0], firstHit[1], firstHit[2]};
-        double momAtFirstHit[] = {firstHit[3], firstHit[4], firstHit[5]};
-        double rAtFirstHit = sqrt(firstHit[0] * firstHit[0] + firstHit[1] * firstHit[1]);
-        debug() << "First hit: x, y, z, r = " << firstHit[0] << " " << firstHit[1] << " " << firstHit[2] << " "
-                << rAtFirstHit << endmsg;
-        debug() << "First hit: px, py, pz = " << firstHit[3] << " " << firstHit[4] << " " << firstHit[5] << endmsg;
-
-        // produce new helix at first hit position
-        auto helixAtFirstHit = HelixClass_double();
-        helixAtFirstHit.Initialize_VP(posAtFirstHit, momAtFirstHit, genParticle.getCharge(), m_Bz);
-        // fill the TrackState parameters
-        trackState_AtFirstHit.location = edm4hep::TrackState::AtFirstHit;
-        trackState_AtFirstHit.D0 = helixAtFirstHit.getD0();
-        trackState_AtFirstHit.phi = std::atan2(momAtFirstHit[1], momAtFirstHit[0]);
-        trackState_AtFirstHit.omega = helixAtFirstHit.getOmega();
-        trackState_AtFirstHit.Z0 = helixAtFirstHit.getZ0();
-        trackState_AtFirstHit.tanLambda = helixAtFirstHit.getTanLambda();
-        trackState_AtFirstHit.referencePoint = edm4hep::Vector3f(posAtFirstHit[0], posAtFirstHit[1], posAtFirstHit[2]);
-        trackFromGen.addToTrackStates(trackState_AtFirstHit);
-
-        // TrackState at Last Hit
-        auto trackState_AtLastHit = edm4hep::TrackState{};
-        auto lastHit = trackHits.back();
-        double posAtLastHit[] = {lastHit[0], lastHit[1], lastHit[2]};
-        double momAtLastHit[] = {lastHit[3], lastHit[4], lastHit[5]};
-        debug() << "Last hit: x, y, z, r = " << lastHit[0] << " " << lastHit[1] << " " << lastHit[2] << " "
-                << sqrt(lastHit[0] * lastHit[0] + lastHit[1] * lastHit[1]) << endmsg;
-        debug() << "Last hit: px, py, pz = " << lastHit[3] << " " << lastHit[4] << " " << lastHit[5] << endmsg;
-
-        // produce new helix at last hit position
-        auto helixAtLastHit = HelixClass_double();
-        helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit, genParticle.getCharge(), m_Bz);
-        // fill the TrackState parameters
-        trackState_AtLastHit.location = edm4hep::TrackState::AtLastHit;
-        trackState_AtLastHit.D0 = helixAtLastHit.getD0();
-        trackState_AtLastHit.phi = std::atan2(momAtLastHit[1], momAtLastHit[0]);
-        trackState_AtLastHit.omega = helixAtLastHit.getOmega();
-        trackState_AtLastHit.Z0 = helixAtLastHit.getZ0();
-        trackState_AtLastHit.tanLambda = helixAtLastHit.getTanLambda();
-        trackState_AtLastHit.referencePoint = edm4hep::Vector3f(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
-        // attach the TrackState to the track
-        trackFromGen.addToTrackStates(trackState_AtLastHit);
-
-        // TrackState at Calorimeter
-        if (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.) {
-          pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
-          pandora::CartesianVector secondBestECalProjection(0.f, 0.f, 0.f);
-          float minGenericTime(std::numeric_limits<float>::max());
-
-          // create helix to project
-          // rather than using parameters at production, better to use those from
-          // last hit
-          pandora::CartesianVector pos(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
-          pandora::CartesianVector mom(momAtLastHit[0], momAtLastHit[1], momAtLastHit[2]);
-          const pandora::Helix helix(pos, mom, genParticle.getCharge(), m_Bz);
-          const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
-          const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
-
-          // First project to endcap
-          pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
-          bool hasEndCapProjection(false);
-          if (m_eCalEndCapInnerR > 0) {
-            float genericTime(std::numeric_limits<float>::max());
-            const pandora::StatusCode statusCode(helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ,
-                                                                   referencePoint, endCapProjection, genericTime));
-            float x = endCapProjection.GetX();
-            float y = endCapProjection.GetY();
-            float r = std::sqrt(x * x + y * y);
-            if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (genericTime < minGenericTime) &&
-                (r >= m_eCalEndCapInnerR) && (r <= m_eCalEndCapOuterR)) {
+        // Then project to barrel surface(s), and keep projection
+        // if extrapolation is within the z acceptance of the detector
+        pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
+        bool hasBarrelProjection = false;
+        if (m_eCalBarrelInnerR > 0) {
+          float genericTime(std::numeric_limits<float>::max());
+          const pandora::StatusCode statusCode(
+              helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint, barrelProjection, genericTime));
+          if ((pandora::STATUS_CODE_SUCCESS == statusCode) &&
+              (std::fabs(barrelProjection.GetZ()) <= m_eCalBarrelMaxZ)) {
+            hasBarrelProjection = true;
+            if (genericTime < minGenericTime) {
               minGenericTime = genericTime;
-              bestECalProjection = endCapProjection;
-              hasEndCapProjection = true;
+              secondBestECalProjection = bestECalProjection;
+              bestECalProjection = barrelProjection;
+            } else {
+              secondBestECalProjection = barrelProjection;
             }
-          }
-
-          // Then project to barrel surface(s), and keep projection
-          // if extrapolation is within the z acceptance of the detector
-          pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
-          bool hasBarrelProjection = false;
-          if (m_eCalBarrelInnerR > 0) {
-            float genericTime(std::numeric_limits<float>::max());
-            const pandora::StatusCode statusCode(
-                helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint, barrelProjection, genericTime));
-            if ((pandora::STATUS_CODE_SUCCESS == statusCode) &&
-                (std::fabs(barrelProjection.GetZ()) <= m_eCalBarrelMaxZ)) {
-              hasBarrelProjection = true;
-              if (genericTime < minGenericTime) {
-                minGenericTime = genericTime;
-                secondBestECalProjection = bestECalProjection;
-                bestECalProjection = barrelProjection;
-              } else {
-                secondBestECalProjection = barrelProjection;
-              }
-            }
-          }
-
-          // store extrapolation to calo
-          // by default, store extrapolation with lower arrival time
-          // get extrapolated position
-          edm4hep::TrackState trackState_AtCalorimeter =
-              getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit, m_Bz);
-
-          // attach the TrackState to the track
-          trackFromGen.addToTrackStates(trackState_AtCalorimeter);
-
-          // attach second extrapolation if desired
-          if (!m_keepOnlyBestExtrapolation and hasBarrelProjection and hasEndCapProjection) {
-            edm4hep::TrackState trackState_AtCalorimeter_2 =
-                getExtrapolationAtCalorimeter(secondBestECalProjection, helixAtLastHit, m_Bz);
-            trackState_AtCalorimeter_2.location = edm4hep::TrackState::AtOther;
-            trackFromGen.addToTrackStates(trackState_AtCalorimeter_2);
           }
         }
 
-        // fill information about number of hits in the various subdetectors
-        for (auto nhits : v) {
-          trackFromGen.addToSubdetectorHitNumbers(nhits);
+        // store extrapolation to calo
+        // by default, store extrapolation with lower arrival time
+        // get extrapolated position
+        edm4hep::TrackState trackState_AtCalorimeter =
+            getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit, m_Bz);
+
+        // attach the TrackState to the track
+        trackFromGen.addToTrackStates(trackState_AtCalorimeter);
+
+        // attach second extrapolation if desired
+        if (!m_keepOnlyBestExtrapolation and hasBarrelProjection and hasEndCapProjection) {
+          edm4hep::TrackState trackState_AtCalorimeter_2 =
+              getExtrapolationAtCalorimeter(secondBestECalProjection, helixAtLastHit, m_Bz);
+          trackState_AtCalorimeter_2.location = edm4hep::TrackState::AtOther;
+          trackFromGen.addToTrackStates(trackState_AtCalorimeter_2);
         }
-
-        // add track to output collection
-        outputTrackCollection.push_back(trackFromGen);
-
-        // build the association between tracks and genParticles
-        auto MCRecoTrackParticleAssociation = edm4hep::MutableTrackMCParticleLink();
-        MCRecoTrackParticleAssociation.setFrom(trackFromGen);
-        MCRecoTrackParticleAssociation.setTo(genParticle);
-        MCRecoTrackParticleAssociationCollection.push_back(MCRecoTrackParticleAssociation);
       }
+
+      // fill information about number of hits in the various subdetectors
+      for (auto nhits : v) {
+        trackFromGen.addToSubdetectorHitNumbers(nhits);
+      }
+
+      // add track to output collection
+      outputTrackCollection.push_back(trackFromGen);
+
+      // build the association between tracks and genParticles
+      auto MCRecoTrackParticleAssociation = edm4hep::MutableTrackMCParticleLink();
+      MCRecoTrackParticleAssociation.setFrom(trackFromGen);
+      MCRecoTrackParticleAssociation.setTo(genParticle);
+      MCRecoTrackParticleAssociationCollection.push_back(MCRecoTrackParticleAssociation);
     }
     // push the output collections to event store
     return std::make_tuple(std::move(outputTrackCollection), std::move(MCRecoTrackParticleAssociationCollection));
@@ -406,15 +413,15 @@ struct TracksFromGenParticles final
 
 private:
   /// Solenoid magnetic field, to be retrieved from detector
-  float m_Bz;
+  float m_Bz = 0.f;
 
   /// ECAL barrel and endcap extent, to be retrieved from detector
-  float m_eCalBarrelInnerR;
-  float m_eCalBarrelMaxZ;
-  float m_eCalEndCapInnerR;
-  float m_eCalEndCapOuterR;
-  float m_eCalEndCapInnerZ;
-  float m_eCalEndCapOuterZ;
+  float m_eCalBarrelInnerR = 0.f;
+  float m_eCalBarrelMaxZ = 0.f;
+  float m_eCalEndCapInnerR = 0.f;
+  float m_eCalEndCapOuterR = 0.f;
+  float m_eCalEndCapInnerZ = 0.f;
+  float m_eCalEndCapOuterZ = 0.f;
 
   /// Configurable property to decide whether to calculate track state at ECAL or not
   Gaudi::Property<bool> m_extrapolateToECal{this, "ExtrapolateToECal", false,
@@ -432,6 +439,14 @@ private:
       this, "MinimumParticleMomentum", 0.010,
       "Keep only particles with momentum (in GeV) greater than MinimumParticleMomentum"};
 
+  /// Build tracks only for charged particles reaching the calorimeter, i.e. NOT
+  /// isDecayedInTracker() (rejects in-flight-decay parents, unstable baryons and
+  /// low-pT curlers whose helix extrapolation to the calo is a ghost).  When
+  /// false a track is built for every charged particle with a matched SimTrackerHit.
+  Gaudi::Property<bool> m_onlyCaloReachingParticles{this, "OnlyCaloReachingParticles", true,
+                                                    "Build tracks only for charged particles reaching the calorimeter "
+                                                    "(not isDecayedInTracker)"};
+
   /// Configurable property listing the systemIDs of the variuos tracker subdetectors
   Gaudi::Property<std::vector<int>> m_trackerIDs{this, "TrackerIDs", {}, "System IDs of tracking subdetectors"};
 
@@ -439,7 +454,7 @@ private:
   /// system it belongs to. The tool will count number of hits in the different
   /// tracking subsystems based on the hit systemID, and on the list of systemIDs
   /// passed through TrackerIDs
-  dd4hep::DDSegmentation::BitFieldCoder* m_systemEncoder;
+  dd4hep::DDSegmentation::BitFieldCoder m_systemEncoder;
 
   /// Configurable property storing string and number of bits used
   /// to encode the systemID in the hits of the various tracking devices
@@ -447,7 +462,7 @@ private:
   Gaudi::Property<std::string> m_systemEncoding{this, "SystemEncoding", "system:5", "System encoding string"};
 
   /// Used to retrieve systemID by index rather than by string
-  int m_indexSystem;
+  int m_indexSystem = 0;
 };
 
 DECLARE_COMPONENT(TracksFromGenParticles)

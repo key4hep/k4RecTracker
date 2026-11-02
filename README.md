@@ -7,23 +7,20 @@ This repository hosts Gaudi components related to vertex and tracker reconstruct
 * ROOT
 * PODIO
 * EDM4HEP
+* DD4HEP
 * Gaudi
 * k4FWCore
-* DD4HEP
+* k4geo
+* Delphes
+
+Extra dependendis for tracking:
+* PandoraSDK
+* Eigen3
+* onnxruntime
+* Torch
 
 ## Installation
 ```
-#go somewhere public (to help support team helping you to debug your code)
-source /cvmfs/sw-nightlies.hsf.org/key4hep/setup.sh
-git clone https://github.com/HEP-FCC/FCCDetectors
-cd FCCDetectors
-mkdir build install
-cd build
-cmake .. -DCMAKE_INSTALL_PREFIX=../install
-make install -j 8
-cd ../../
-export FCCDETECTORS=$PWD/FCCDetectors/;PATH=$PWD/FCCDetectors/install/bin/:$PATH;CMAKE_PREFIX_PATH=$PWD/FCCDetectors/install/:$CMAKE_PREFIX_PATH;LD_LIBRARY_PATH=$PWD/FCCDetectors/install/lib:$LD_LIBRARY_PATH;export PYTHONPATH=$PWD/FCCDetectors/install/python:$PYTHONPATH;LD_LIBRARY_PATH=$PWD/FCCDetectors/install/lib64:$LD_LIBRARY_PATH
-
 git clone git@github.com:key4hep/k4RecTracker.git
 cd k4RecTracker
 mkdir build install
@@ -34,15 +31,12 @@ cd ../../
 export K4RECTRACKER=$PWD/k4RecTracker/install/share/k4RecTracker; PATH=$PWD/k4RecTracker/install/bin/:$PATH; CMAKE_PREFIX_PATH=$PWD/k4RecTracker/install/:$CMAKE_PREFIX_PATH; LD_LIBRARY_PATH=$PWD/k4RecTracker/install/lib:$PWD/k4RecTracker/install/lib64:$LD_LIBRARY_PATH; export PYTHONPATH=$PWD/k4RecTracker/install/python:$PYTHONPATH
 ```
 
-The following should be called in the folder hosting both `k4RecTracker` and `FCCDetectors` each time you start a new session (even you do not need to re-build):
+The following should be called in the folder hosting `k4RecTracker` each time you start a new session (even you do not need to re-build):
 ```
-export FCCDETECTORS=$PWD/FCCDetectors/;PATH=$PWD/FCCDetectors/install/bin/:$PATH;CMAKE_PREFIX_PATH=$PWD/FCCDetectors/install/:$CMAKE_PREFIX_PATH;LD_LIBRARY_PATH=$PWD/FCCDetectors/install/lib:$LD_LIBRARY_PATH;export PYTHONPATH=$PWD/FCCDetectors/install/python:$PYTHONPATH;LD_LIBRARY_PATH=$PWD/FCCDetectors/install/lib64:$LD_LIBRARY_PATH
 export K4RECTRACKER=$PWD/k4RecTracker/install/share/k4RecTracker; PATH=$PWD/k4RecTracker/install/bin/:$PATH; CMAKE_PREFIX_PATH=$PWD/k4RecTracker/install/:$CMAKE_PREFIX_PATH; LD_LIBRARY_PATH=$PWD/k4RecTracker/install/lib:$PWD/k4RecTracker/install/lib64:$LD_LIBRARY_PATH; export PYTHONPATH=$PWD/k4RecTracker/install/python:$PYTHONPATH
 ```
 
 ## Installation with makefile
-(first copy locally FCCDetectors as above and export the relevant variables)
-
 Cloning:
 
 ```bash
@@ -70,7 +64,7 @@ make get_data
 
 ## Repository content
 
-* `DCHdigi`: drift chamber digitization (for now, this step produces 'reco' collection)
+* `WireTracker`: drift chamber and straw tube digitization (DCHdigi_v02 is still aviable as an alias of WireTrackerDigi_v01)
 * `ARCdigi`: ARC digitization (for now, this step produces 'reco' collection)
 * `VTXdigi`: vertex detector digitization (for now, this step produces 'reco' collection)
 * `VTXdigiDetailed`: vertex detector and silicon sensors tracker detector digitization with detailed charge readout (for now, this step produces 'reco' collection)
@@ -79,7 +73,7 @@ make get_data
 ## Execute Examples
 
 ```bash
-k4run DCHdigi/test/runDCHsimpleDigitizer.py
+k4run WireTrackerDigi/test/runDCHsimpleDigitizer.py
 ```
 
 ```bash

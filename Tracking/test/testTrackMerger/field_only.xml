@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Minimal DD4hep geometry for the TrackMerger test: an empty world with a constant 2 T solenoid field.
+  It only provides the magnetic field needed to convert omega to pT in significance mode.
+-->
+<lccdd>
+  <info name="TrackMergerTestField" title="Empty world with a constant solenoid field" author="k4RecTracker"
+        url="https://github.com/key4hep/k4RecTracker" status="test" version="1">
+    <comment>Field-only geometry for the TrackMerger test</comment>
+  </info>
+
+  <define>
+    <constant name="world_size" value="10*m"/>
+    <constant name="world_x" value="world_size"/>
+    <constant name="world_y" value="world_size"/>
+    <constant name="world_z" value="world_size"/>
+  </define>
+
+  <!-- Placeholders: DD4hep requires Air and Vacuum for the world and tracking volumes -->
+  <materials>
+    <element Z="1" formula="H" name="H">
+      <atom type="A" unit="g/mol" value="1.00794"/>
+    </element>
+    <material name="Vacuum">
+      <D type="density" unit="g/cm3" value="1e-25"/>
+      <fraction n="1" ref="H"/>
+    </material>
+    <material name="Air">
+      <D type="density" unit="g/cm3" value="0.0012"/>
+      <fraction n="1" ref="H"/>
+    </material>
+  </materials>
+
+  <fields>
+    <field type="solenoid" name="GlobalSolenoid" inner_field="2.0*tesla" outer_field="0*tesla"
+           zmax="5*m" outer_radius="5*m"/>
+  </fields>
+</lccdd>

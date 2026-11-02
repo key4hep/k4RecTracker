@@ -246,6 +246,11 @@ test/k4FWCoreTest/**/*.root
 ## k4MarlinWrapper
 test/inputFiles
 test/gaudi_opts/testConverterConstants.py
+## k4RecTracker
+DCHdigi/test/test_DCHdigi/*.root
+Tracking/test/**/*.root
+Tracking/test/testTrackFinder/SteeringFile_IDEA_o1_v03.py
+DataAlgFORGEANT.root
 
 # AI tools
 .claude/

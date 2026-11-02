@@ -1,6 +1,5 @@
 from k4FWCore import ApplicationMgr
 from Gaudi.Configuration import INFO, DEBUG
-import os
 
 # Loading the output of the SIM step
 from k4FWCore import IOSvc

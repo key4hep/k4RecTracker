@@ -37,6 +37,7 @@ gaudi_add_module(${PackageName}
   EDM4HEP::edm4hep
   k4FWCore::k4FWCore
   k4FWCore::k4Interface
+  k4geo::detectorCommon
   extensionDict
   onnxruntime::onnxruntime
   torch
@@ -46,6 +47,10 @@ gaudi_add_module(${PackageName}
   Eigen3::Eigen
   ${DELPHES_LIBRARIES}
 )
+
+if(TARGET PandoraPFA::PandoraSDK)
+  target_link_libraries(${PackageName} PRIVATE PandoraPFA::PandoraSDK)
+endif()
 
 target_include_directories(${PackageName} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -91,4 +96,37 @@ set_test_env(${test_name})
 set_tests_properties(${test_name} PROPERTIES DEPENDS test_TrackFinder)
 set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackFitter")
 
+SET(test_dir "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
+
+# Run the setup -> k4run -> check chain once per matching mode
+foreach(mode absolute significance)
+  SET(test_name "test_TrackMerger_${mode}")
+  SET(input_file "input_${mode}.root")
+  SET(output_file "output_${mode}.root")
+
+  ADD_TEST(NAME ${test_name}_setup
+    COMMAND python3 test_track_merger.py setup --mode ${mode} --input ${input_file})
+  set_test_env(${test_name}_setup)
+  set_tests_properties(${test_name}_setup PROPERTIES
+    WORKING_DIRECTORY "${test_dir}"
+    FIXTURES_SETUP ${test_name}_input_fixture
+  )
+
+  ADD_TEST(NAME ${test_name}_run
+    COMMAND k4run test_track_merger_steer.py --mode ${mode} --input ${input_file} --output ${output_file})
+  set_test_env(${test_name}_run)
+  set_tests_properties(${test_name}_run PROPERTIES
+    WORKING_DIRECTORY "${test_dir}"
+    FIXTURES_REQUIRED ${test_name}_input_fixture
+    FIXTURES_SETUP ${test_name}_output_fixture
+  )
+
+  ADD_TEST(NAME ${test_name}_check
+    COMMAND python3 test_track_merger.py check --mode ${mode} --output ${output_file})
+  set_test_env(${test_name}_check)
+  set_tests_properties(${test_name}_check PROPERTIES
+    WORKING_DIRECTORY "${test_dir}"
+    FIXTURES_REQUIRED ${test_name}_output_fixture
+  )
+endforeach()
 #endif()

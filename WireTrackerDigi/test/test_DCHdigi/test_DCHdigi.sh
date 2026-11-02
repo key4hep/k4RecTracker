@@ -4,6 +4,9 @@
 # to run: sh + test_DCHdigi.sh
 # goal: run sim-digitizer of the DCH v2, and return code printed by check_DCHdigi_output.py
 
+# clean up previous output files
+rm -f dch_proton_10GeV.root
+
 # run simulation with the drift chamber alone
 ddsim --steeringFile sim_steering.py --outputFile 'dch_proton_10GeV.root' -N 10 --runType batch --random.seed 42
 

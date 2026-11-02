@@ -8,6 +8,7 @@ from Gaudi.Configuration import INFO, DEBUG
 from Configurables import EventDataSvc, UniqueIDGenSvc
 from k4FWCore import ApplicationMgr, IOSvc
 
+
 svc = IOSvc("IOSvc")
 svc.Input = ["dch_proton_10GeV.root"]
 svc.Output = "dch_proton_10GeV_digi.root"

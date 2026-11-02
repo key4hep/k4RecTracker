@@ -7,6 +7,7 @@
 #include "TH2D.h"
 #include <memory> // for std::unique_ptr
 #include <optional>
+#include <set>
 
 // GAUDI
 #include "Gaudi/Property.h"
@@ -111,11 +112,12 @@ private:
   Gaudi::Property<float> m_ThresholdSmearing{this, "ThresholdSmearing", 0.0,
                                              "Sigma of Threshold Gaussian Smearing in e (default: 0.0)"};
 
-  // List of sensor thickness per layer in millimeter
-  std::vector<float> m_sensorThickness;
   // Normal Vector direction in sensor local frame (normal to sensor surface) (initialised during the first hit in
   // primary_ionization -> should be the same in the full sub-detector)
   mutable std::string m_LocalNormalVectorDir = "";
+  // System IDs for which the normal vector direction has been checked (detectorName can be a compound of several
+  // sub-detectors writing to the same collection, e.g. inner and outer vertex barrels)
+  mutable std::set<int> m_checkedSystemIDs;
   // Define 50microns in mm
   float m_Dist50 = 0.050;
   // Define the area of integration of the charge in number of sigma around the central position
@@ -200,10 +202,12 @@ private:
 private:
   // Additional member functions
   // Private methods
-  template <typename T>
-  void getSensorThickness();
+  std::string GetNormalVectorLocal(const edm4hep::SimTrackerHit& input_sim_hit) const;
 
-  void GetNormalVectorLocal(const edm4hep::SimTrackerHit& input_sim_hit) const;
+  void CheckNormalVectorLocal(const edm4hep::SimTrackerHit& input_sim_hit) const;
+
+  void getSensorDimensions(const dd4hep::DDSegmentation::CellID& cellID, double& dimX, double& dimY,
+                           double& dimZ) const;
 
   std::vector<ChargeDepositUnit> primary_ionization(const edm4hep::SimTrackerHit& hit) const;
 
