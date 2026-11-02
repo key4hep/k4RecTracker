@@ -1,4 +1,4 @@
-import os, math
+import os, subprocess
 
 from Gaudi.Configuration import *
 
@@ -7,15 +7,14 @@ from k4FWCore import ApplicationMgr, IOSvc
 
 podioevent = EventDataSvc("EventDataSvc")
 
-from GaudiKernel.SystemOfUnits import MeV, GeV, tesla
-
 ################## Particle gun setup
 momentum = 5  # in GeV
-thetaMin = 0  # degrees
-thetaMax = 180  # degrees
-pdgCode = 13  # 13 = mu+/-
-magneticField = True
-_pi = 3.14159
+thetaMin = 10  # degrees
+thetaMax = 170  # degrees
+particle = "mu-"
+pdgCode = 13  # 13 = mu+/- (only used in the output file name)
+magneticField = True  # ddsim uses the field defined in the detector compact
+numberOfEvents = 10
 
 ################## Muon-system digi parameters (cluster-based, uRWELL)
 detectorName = "Muon-System"
@@ -30,32 +29,7 @@ forceHitsOntoSurface = (
 )
 printFrequency = 1  # INFO line every N events (set 0 to silence, 100 for production)
 
-from Configurables import GenAlg
-
-genAlg = GenAlg()
-from Configurables import MomentumRangeParticleGun
-
-pgun = MomentumRangeParticleGun("ParticleGun_Muon")
-pgun.PdgCodes = [pdgCode]
-pgun.MomentumMin = momentum * GeV
-pgun.MomentumMax = momentum * GeV
-pgun.PhiMin = 0
-pgun.PhiMax = 2 * _pi
-pgun.ThetaMin = thetaMin * _pi / 180.0
-pgun.ThetaMax = thetaMax * _pi / 180.0
-genAlg.SignalProvider = pgun
-genAlg.hepmc.Path = "hepmc"
-
-from Configurables import HepMCToEDMConverter
-
-hepmc_converter = HepMCToEDMConverter()
-hepmc_converter.hepmc.Path = "hepmc"
-genParticlesOutputName = "genParticles"
-hepmc_converter.GenParticles.Path = genParticlesOutputName
-hepmc_converter.hepmcStatusList = []
-
-################## Simulation setup
-# Detector geometry
+################## Detector geometry
 from Configurables import GeoSvc
 
 geoservice = GeoSvc("GeoSvc")
@@ -66,61 +40,52 @@ detectors_to_use = [
 ]
 geoservice.detectors = [os.path.join(path_to_detector, _det) for _det in detectors_to_use]
 geoservice.OutputLevel = INFO
+geoservice.EnableGeant4Geo = False  # Geant4 runs in ddsim below, not inside this job
 
-# Geant4
-from Configurables import (
-    SimG4FullSimActions,
-    SimG4Alg,
-    SimG4PrimariesFromEdmTool,
-    SimG4SaveParticleHistory,
+################## Simulation setup
+# The muon-system SimHits are simulated with ddsim (DD4hep/DDG4). The k4SimGeant4 tracker
+# sensitive detector read by SimG4SaveTrackerHits (SimpleTrackerSD) is no longer part of the
+# Key4hep stack, so a SimG4Alg-based simulation here would produce no muon-system hits.
+simFile = "MuonSystemSim_pdgId_" + str(pdgCode) + ".root"
+subprocess.run(
+    [
+        "ddsim",
+        "--compactFile",
+        geoservice.detectors[0],
+        "--enableGun",
+        "--gun.particle",
+        particle,
+        "--gun.momentumMin",
+        str(momentum) + "*GeV",
+        "--gun.momentumMax",
+        str(momentum) + "*GeV",
+        "--gun.distribution",
+        "uniform",
+        "--gun.thetaMin",
+        str(thetaMin) + "*deg",
+        "--gun.thetaMax",
+        str(thetaMax) + "*deg",
+        "--numberOfEvents",
+        str(numberOfEvents),
+        "--random.seed",
+        "4242",
+        "--outputFile",
+        simFile,
+    ],
+    check=True,  # stop the test if the simulation fails
 )
 
-actions = SimG4FullSimActions()
+# Random numbers for the digitizer smearing and efficiency
+from Configurables import RndmGenSvc
 
-# Magnetic field
-from Configurables import SimG4ConstantMagneticFieldTool
-
-field = SimG4ConstantMagneticFieldTool(
-    "SimG4ConstantMagneticFieldTool",
-    FieldComponentZ=-2 * tesla,
-    FieldOn=magneticField,
-    IntegratorStepper="ClassicalRK4",
-)
-
-from Configurables import SimG4Svc
-
-geantservice = SimG4Svc(
-    "SimG4Svc",
-    detector="SimG4DD4hepDetector",
-    physicslist="SimG4FtfpBert",
-    magneticField=field,
-)
-geantservice.randomNumbersFromGaudi = False
-geantservice.seedValue = 4242
-geantservice.g4PreInitCommands += ["/run/setCut 0.1 mm"]
-
-# Geant4 algorithm
-particle_converter = SimG4PrimariesFromEdmTool("EdmConverter")
-particle_converter.GenParticles.Path = genParticlesOutputName
-
-from Configurables import SimG4SaveTrackerHits
-
-SimG4SaveMuonHits = SimG4SaveTrackerHits("SimG4SaveMuonHits", readoutName="MuonSystemCollection")
-SimG4SaveMuonHits.SimTrackHits.Path = "MuonSystemCollection"
-
-geantsim = SimG4Alg(
-    "SimG4Alg",
-    outputs=[SimG4SaveMuonHits],
-    eventProvider=particle_converter,
-    OutputLevel=INFO,
-)
+randomService = RndmGenSvc("RndmGenSvc")
 
 # Digitize muon-system hits — cluster-based
 from Configurables import MuRWELLDigitizer
 
 muon_digitizer = MuRWELLDigitizer(
     "MuRWELLDigitizer",
-    inputSimHits=SimG4SaveMuonHits.SimTrackHits.Path,
+    inputSimHits="MuonSystemCollection",
     outputDigiHits="MSTrackerHits",
     outputSimDigiLink="MSTrackerHitRelations",
     detectorName=detectorName,
@@ -136,8 +101,9 @@ muon_digitizer = MuRWELLDigitizer(
     OutputLevel=INFO,
 )
 
-################ Output
+################ Input / Output
 iosvc = IOSvc()
+iosvc.Input = simFile
 iosvc.Output = (
     "output_MuonSystemDigi"
     + "_B"
@@ -161,20 +127,14 @@ from Configurables import AuditorSvc, ChronoAuditor
 chra = ChronoAuditor()
 audsvc = AuditorSvc()
 audsvc.Auditors = [chra]
-genAlg.AuditExecute = True
-hepmc_converter.AuditExecute = True
-geantsim.AuditExecute = True
 muon_digitizer.AuditExecute = True
 
 ApplicationMgr(
     TopAlg=[
-        genAlg,
-        hepmc_converter,
-        geantsim,
         muon_digitizer,
     ],
     EvtSel="NONE",
-    EvtMax=10,
-    ExtSvc=[geoservice, podioevent, geantservice, audsvc],
+    EvtMax=-1,
+    ExtSvc=[geoservice, podioevent, randomService, audsvc],
     StopOnSignal=True,
 )
