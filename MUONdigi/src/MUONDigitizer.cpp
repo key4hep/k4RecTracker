@@ -241,8 +241,10 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
 
       // ---- Gaussian smear in the local frame of the seed cell -----------
       const auto& seedCellID = cells[seedIdx].cellID;
-      const auto placement = m_volman.lookupVolumePlacement(seedCellID);
-      const auto& xform = placement.matrix();
+      // World transform of the sensitive gas slice (one DetElement per slice in
+      // muonSystemMuRWELL_o1_v01). PlacedVolume::matrix() would only give the
+      // placement relative to the mother chamber, which silently drops global x.
+      const TGeoHMatrix& xform = m_volman.lookupDetElement(seedCellID).nominal().worldTransformation();
 
       double simGlobalPos_cm[3] = {centroidGlobalX * dd4hep::mm, centroidGlobalY * dd4hep::mm,
                                    centroidGlobalZ * dd4hep::mm};
@@ -299,10 +301,18 @@ StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
       }
 
       // ---- Emit digi hit ------------------------------------------------
+      // The cellID stored on the digi must identify the chamber, not the strip:
+      // the DDRec SurfaceMap is keyed by chamber-level cellIDs (y, z strip
+      // fields zeroed). Store seedCellID with y, z cleared so downstream
+      // surface lookups (e.g. DisplacedTracking) match the SurfaceMap entries.
+      dd4hep::DDSegmentation::CellID chamberCellID = seedCellID;
+      m_decoder->set(chamberCellID, "y", 0);
+      m_decoder->set(chamberCellID, "z", 0);
+
       auto digi = digi_hits->create();
       digi.setPosition(
           {digiGlobalPos_cm[0] / dd4hep::mm, digiGlobalPos_cm[1] / dd4hep::mm, digiGlobalPos_cm[2] / dd4hep::mm});
-      digi.setCellID(seedCellID);
+      digi.setCellID(chamberCellID);
       digi.setTime(hitTime);
       digi.setEDep(totalEnergy);
       digi.setU(uDir);
