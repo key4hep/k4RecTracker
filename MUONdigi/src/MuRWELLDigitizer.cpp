@@ -1,6 +1,6 @@
-#include "MUONDigitizer.h"
+#include "MuRWELLDigitizer.h"
 
-DECLARE_COMPONENT(MUONDigitizer)
+DECLARE_COMPONENT(MuRWELLDigitizer)
 
 namespace {
 // One readout cell that received at least one SimHit, plus the list of
@@ -20,17 +20,17 @@ bool areAdjacent(const FiredCell& a, const FiredCell& b) {
 }
 } // namespace
 
-MUONDigitizer::MUONDigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
-    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "MUONDigitizer") {
+MuRWELLDigitizer::MuRWELLDigitizer(const std::string& aName, ISvcLocator* aSvcLoc)
+    : Gaudi::Algorithm(aName, aSvcLoc), m_geoSvc("GeoSvc", "MuRWELLDigitizer") {
   declareProperty("inputSimHits", m_input_sim_hits, "Input SimTrackerHit collection");
   declareProperty("outputDigiHits", m_output_digi_hits, "Output digitised hit collection");
   declareProperty("outputSimDigiLink", m_output_sim_digi_link,
                   "Link between digi cluster and each contributing SimHit");
 }
 
-MUONDigitizer::~MUONDigitizer() = default;
+MuRWELLDigitizer::~MuRWELLDigitizer() = default;
 
-StatusCode MUONDigitizer::initialize() {
+StatusCode MuRWELLDigitizer::initialize() {
   m_randSvc = service("RndmGenSvc", false);
   if (!m_randSvc) {
     error() << "Couldn't get RndmGenSvc!" << endmsg;
@@ -85,7 +85,7 @@ StatusCode MUONDigitizer::initialize() {
     return StatusCode::FAILURE;
   }
 
-  info() << "MUONDigitizer initialised:"
+  info() << "MuRWELLDigitizer initialised:"
          << " timeWindow=" << m_timeWindow << " ns,"
          << " maxClusterSize=" << m_maxClusterSize << " strips/view (8-neighbour),"
          << " efficiency=" << m_efficiency
@@ -94,9 +94,9 @@ StatusCode MUONDigitizer::initialize() {
   return StatusCode::SUCCESS;
 }
 
-StatusCode MUONDigitizer::finalize() { return StatusCode::SUCCESS; }
+StatusCode MuRWELLDigitizer::finalize() { return StatusCode::SUCCESS; }
 
-StatusCode MUONDigitizer::execute(const EventContext& ctx) const {
+StatusCode MuRWELLDigitizer::execute(const EventContext& ctx) const {
   const auto* sim_hits = m_input_sim_hits.get();
   auto* digi_hits = m_output_digi_hits.createAndPut();
   auto* links = m_output_sim_digi_link.createAndPut();

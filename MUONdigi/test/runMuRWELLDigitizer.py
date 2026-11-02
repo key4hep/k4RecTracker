@@ -116,10 +116,10 @@ geantsim = SimG4Alg(
 )
 
 # Digitize muon-system hits — cluster-based
-from Configurables import MUONDigitizer
+from Configurables import MuRWELLDigitizer
 
-muon_digitizer = MUONDigitizer(
-    "MUONDigitizer",
+muon_digitizer = MuRWELLDigitizer(
+    "MuRWELLDigitizer",
     inputSimHits=SimG4SaveMuonHits.SimTrackHits.Path,
     outputDigiHits="MSTrackerHits",
     outputSimDigiLink="MSTrackerHitRelations",

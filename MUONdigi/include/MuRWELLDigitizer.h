@@ -31,7 +31,7 @@
 #include <set>
 #include <vector>
 
-/** @class MUONDigitizer
+/** @class MuRWELLDigitizer
  *
  *  Cluster-based digitizer for the IDEA muon system (uRWELL chambers).
  *
@@ -53,10 +53,10 @@
  *  @date   2026-06
  */
 
-class MUONDigitizer : public Gaudi::Algorithm {
+class MuRWELLDigitizer : public Gaudi::Algorithm {
 public:
-  explicit MUONDigitizer(const std::string&, ISvcLocator*);
-  virtual ~MUONDigitizer();
+  explicit MuRWELLDigitizer(const std::string&, ISvcLocator*);
+  virtual ~MuRWELLDigitizer();
 
   virtual StatusCode initialize() final;
   virtual StatusCode execute(const EventContext&) const final;

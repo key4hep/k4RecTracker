@@ -42,5 +42,5 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 
-SET(test_name "test_MUONDigitizer")
-ADD_TEST(NAME t_${test_name} COMMAND k4run test/runMUONDigitizer.py)
+SET(test_name "test_MuRWELLDigitizer")
+ADD_TEST(NAME t_${test_name} COMMAND k4run test/runMuRWELLDigitizer.py)
