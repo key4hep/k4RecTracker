@@ -61,16 +61,11 @@ add_subdirectory(WireTrackerDigi)
 add_subdirectory(ARCdigi)
 add_subdirectory(VTXdigi)
 add_subdirectory(VTXdigiDetailed)
-<<<<<<< HEAD
 add_subdirectory(MUONdigi)
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake ${CMAKE_MODULE_PATH})
-add_subdirectory(Tracking)
-=======
 if(K4RECTRACKER_TRACKING)
   add_subdirectory(Tracking)
 else()
   message(STATUS "K4RECTRACKER_TRACKING is OFF: not building the Tracking subpackage")
 endif()
->>>>>>> upstream/main
 
 include(cmake/CreateProjectConfig.cmake)
