@@ -236,12 +236,16 @@ struct TracksFromGenParticles final
         continue;
 
       // look up SimTrackerHits associated to genParticle from the pre-built index;
-      // tracks are only built for particles with at least one SimTrackerHit
+      // if SimTrackerHit collections are given as input, tracks are only built for particles with at least one
+      // SimTrackerHit; without any SimTrackerHit input (e.g. calorimeter-only geometries), tracks are built for
+      // all selected charged particles from their properties at production
       auto hitIt = particleHitIndex.find(genParticle.getObjectID());
-      if (hitIt == particleHitIndex.end())
+      if (!simTrackerHitCollVec.empty() && hitIt == particleHitIndex.end())
         continue;
-      auto& trackHits = hitIt->second.hits;
-      const auto& v = hitIt->second.subdetCounts;
+      HitData noHits(m_trackerIDs.size());
+      HitData& hitData = (hitIt != particleHitIndex.end()) ? hitIt->second : noHits;
+      auto& trackHits = hitData.hits;
+      const auto& v = hitData.subdetCounts;
       debug() << "Number of SimTrackerHits: " << trackHits.size() << endmsg;
 
       // build an helix out of MCParticle properties and B field
@@ -271,55 +275,73 @@ struct TracksFromGenParticles final
           edm4hep::Vector3f(genParticleVertex[0], genParticleVertex[1], genParticleVertex[2]);
       trackFromGen.addToTrackStates(trackState_IP);
 
-      // sort the hits according to their time
-      std::sort(trackHits.begin(), trackHits.end(),
-                [](const std::array<double, 7>& a, const std::array<double, 7>& b) { return a[6] < b[6]; });
-
-      // TrackState at First Hit
-      auto trackState_AtFirstHit = edm4hep::TrackState{};
-      auto firstHit = trackHits.front();
-      double posAtFirstHit[] = {firstHit[0], firstHit[1], firstHit[2]};
-      double momAtFirstHit[] = {firstHit[3], firstHit[4], firstHit[5]};
-      double rAtFirstHit = sqrt(firstHit[0] * firstHit[0] + firstHit[1] * firstHit[1]);
-      debug() << "First hit: x, y, z, r = " << firstHit[0] << " " << firstHit[1] << " " << firstHit[2] << " "
-              << rAtFirstHit << endmsg;
-      debug() << "First hit: px, py, pz = " << firstHit[3] << " " << firstHit[4] << " " << firstHit[5] << endmsg;
-
-      // produce new helix at first hit position
-      auto helixAtFirstHit = HelixClass_double();
-      helixAtFirstHit.Initialize_VP(posAtFirstHit, momAtFirstHit, genParticle.getCharge(), m_Bz);
-      // fill the TrackState parameters
-      trackState_AtFirstHit.location = edm4hep::TrackState::AtFirstHit;
-      trackState_AtFirstHit.D0 = helixAtFirstHit.getD0();
-      trackState_AtFirstHit.phi = std::atan2(momAtFirstHit[1], momAtFirstHit[0]);
-      trackState_AtFirstHit.omega = helixAtFirstHit.getOmega();
-      trackState_AtFirstHit.Z0 = helixAtFirstHit.getZ0();
-      trackState_AtFirstHit.tanLambda = helixAtFirstHit.getTanLambda();
-      trackState_AtFirstHit.referencePoint = edm4hep::Vector3f(posAtFirstHit[0], posAtFirstHit[1], posAtFirstHit[2]);
-      trackFromGen.addToTrackStates(trackState_AtFirstHit);
-
-      // TrackState at Last Hit
-      auto trackState_AtLastHit = edm4hep::TrackState{};
-      auto lastHit = trackHits.back();
-      double posAtLastHit[] = {lastHit[0], lastHit[1], lastHit[2]};
-      double momAtLastHit[] = {lastHit[3], lastHit[4], lastHit[5]};
-      debug() << "Last hit: x, y, z, r = " << lastHit[0] << " " << lastHit[1] << " " << lastHit[2] << " "
-              << sqrt(lastHit[0] * lastHit[0] + lastHit[1] * lastHit[1]) << endmsg;
-      debug() << "Last hit: px, py, pz = " << lastHit[3] << " " << lastHit[4] << " " << lastHit[5] << endmsg;
-
-      // produce new helix at last hit position
+      // position and momentum used for the TrackState at last hit and for the calorimeter extrapolation:
+      // those at the last hit when available, otherwise those at production
+      double posAtLastHit[] = {genParticleVertex[0], genParticleVertex[1], genParticleVertex[2]};
+      double momAtLastHit[] = {genParticleMomentum[0], genParticleMomentum[1], genParticleMomentum[2]};
       auto helixAtLastHit = HelixClass_double();
-      helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit, genParticle.getCharge(), m_Bz);
-      // fill the TrackState parameters
-      trackState_AtLastHit.location = edm4hep::TrackState::AtLastHit;
-      trackState_AtLastHit.D0 = helixAtLastHit.getD0();
-      trackState_AtLastHit.phi = std::atan2(momAtLastHit[1], momAtLastHit[0]);
-      trackState_AtLastHit.omega = helixAtLastHit.getOmega();
-      trackState_AtLastHit.Z0 = helixAtLastHit.getZ0();
-      trackState_AtLastHit.tanLambda = helixAtLastHit.getTanLambda();
-      trackState_AtLastHit.referencePoint = edm4hep::Vector3f(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
-      // attach the TrackState to the track
-      trackFromGen.addToTrackStates(trackState_AtLastHit);
+
+      if (!trackHits.empty()) {
+        // sort the hits according to their time
+        std::sort(trackHits.begin(), trackHits.end(),
+                  [](const std::array<double, 7>& a, const std::array<double, 7>& b) { return a[6] < b[6]; });
+
+        // TrackState at First Hit
+        auto trackState_AtFirstHit = edm4hep::TrackState{};
+        auto firstHit = trackHits.front();
+        double posAtFirstHit[] = {firstHit[0], firstHit[1], firstHit[2]};
+        double momAtFirstHit[] = {firstHit[3], firstHit[4], firstHit[5]};
+        double rAtFirstHit = sqrt(firstHit[0] * firstHit[0] + firstHit[1] * firstHit[1]);
+        debug() << "First hit: x, y, z, r = " << firstHit[0] << " " << firstHit[1] << " " << firstHit[2] << " "
+                << rAtFirstHit << endmsg;
+        debug() << "First hit: px, py, pz = " << firstHit[3] << " " << firstHit[4] << " " << firstHit[5] << endmsg;
+
+        // produce new helix at first hit position
+        auto helixAtFirstHit = HelixClass_double();
+        helixAtFirstHit.Initialize_VP(posAtFirstHit, momAtFirstHit, genParticle.getCharge(), m_Bz);
+        // fill the TrackState parameters
+        trackState_AtFirstHit.location = edm4hep::TrackState::AtFirstHit;
+        trackState_AtFirstHit.D0 = helixAtFirstHit.getD0();
+        trackState_AtFirstHit.phi = std::atan2(momAtFirstHit[1], momAtFirstHit[0]);
+        trackState_AtFirstHit.omega = helixAtFirstHit.getOmega();
+        trackState_AtFirstHit.Z0 = helixAtFirstHit.getZ0();
+        trackState_AtFirstHit.tanLambda = helixAtFirstHit.getTanLambda();
+        trackState_AtFirstHit.referencePoint = edm4hep::Vector3f(posAtFirstHit[0], posAtFirstHit[1], posAtFirstHit[2]);
+        trackFromGen.addToTrackStates(trackState_AtFirstHit);
+
+        // TrackState at Last Hit
+        auto trackState_AtLastHit = edm4hep::TrackState{};
+        auto lastHit = trackHits.back();
+        std::copy_n(lastHit.begin(), 3, posAtLastHit);
+        std::copy_n(lastHit.begin() + 3, 3, momAtLastHit);
+        debug() << "Last hit: x, y, z, r = " << lastHit[0] << " " << lastHit[1] << " " << lastHit[2] << " "
+                << sqrt(lastHit[0] * lastHit[0] + lastHit[1] * lastHit[1]) << endmsg;
+        debug() << "Last hit: px, py, pz = " << lastHit[3] << " " << lastHit[4] << " " << lastHit[5] << endmsg;
+
+        // produce new helix at last hit position
+        helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit, genParticle.getCharge(), m_Bz);
+        // fill the TrackState parameters
+        trackState_AtLastHit.location = edm4hep::TrackState::AtLastHit;
+        trackState_AtLastHit.D0 = helixAtLastHit.getD0();
+        trackState_AtLastHit.phi = std::atan2(momAtLastHit[1], momAtLastHit[0]);
+        trackState_AtLastHit.omega = helixAtLastHit.getOmega();
+        trackState_AtLastHit.Z0 = helixAtLastHit.getZ0();
+        trackState_AtLastHit.tanLambda = helixAtLastHit.getTanLambda();
+        trackState_AtLastHit.referencePoint = edm4hep::Vector3f(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
+        // attach the TrackState to the track
+        trackFromGen.addToTrackStates(trackState_AtLastHit);
+      } else {
+        // no SimTrackerHit: TrackStates at first and last hit are those at production
+        helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit, genParticle.getCharge(), m_Bz);
+
+        auto trackState_AtFirstHit = trackState_IP;
+        trackState_AtFirstHit.location = edm4hep::TrackState::AtFirstHit;
+        trackFromGen.addToTrackStates(trackState_AtFirstHit);
+
+        auto trackState_AtLastHit = trackState_IP;
+        trackState_AtLastHit.location = edm4hep::TrackState::AtLastHit;
+        trackFromGen.addToTrackStates(trackState_AtLastHit);
+      }
 
       // TrackState at Calorimeter
       if (m_extrapolateToECal && (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.)) {
@@ -329,7 +351,7 @@ struct TracksFromGenParticles final
 
         // create helix to project
         // rather than using parameters at production, better to use those from
-        // last hit
+        // last hit (parameters at production are used if there is no hit)
         pandora::CartesianVector pos(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
         pandora::CartesianVector mom(momAtLastHit[0], momAtLastHit[1], momAtLastHit[2]);
         const pandora::Helix helix(pos, mom, genParticle.getCharge(), m_Bz);
