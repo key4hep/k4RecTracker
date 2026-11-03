@@ -43,21 +43,21 @@ geoservice.OutputLevel = INFO
 geoservice.EnableGeant4Geo = False  # Geant4 runs in ddsim below, not inside this job
 
 ################## Simulation setup
-# The muon-system SimHits are simulated with ddsim (DD4hep/DDG4). The k4SimGeant4 tracker
-# sensitive detector read by SimG4SaveTrackerHits (SimpleTrackerSD) is no longer part of the
-# Key4hep stack, so a SimG4Alg-based simulation here would produce no muon-system hits.
+ideaSteeringFile = os.path.join(
+    os.environ.get("FCCCONFIG", ""), "FullSim/IDEA/IDEA_o1_v03/SteeringFile_IDEA_o1_v03.py"
+)
 simFile = "MuonSystemSim_pdgId_" + str(pdgCode) + ".root"
 subprocess.run(
     [
         "ddsim",
+        "--steeringFile",
+        ideaSteeringFile,
         "--compactFile",
         geoservice.detectors[0],
         "--enableGun",
         "--gun.particle",
         particle,
-        "--gun.momentumMin",
-        str(momentum) + "*GeV",
-        "--gun.momentumMax",
+        "--gun.energy",
         str(momentum) + "*GeV",
         "--gun.distribution",
         "uniform",
