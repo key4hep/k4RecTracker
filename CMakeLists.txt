@@ -41,9 +41,10 @@ if(K4RECTRACKER_TRACKING)
   find_package(Torch REQUIRED)
 endif()
 
+include(GNUInstallDirs)
+
 include(cmake/Key4hepConfig.cmake)
 
-include(GNUInstallDirs)
 include(CTest)
 
 function(set_test_env _testname)
