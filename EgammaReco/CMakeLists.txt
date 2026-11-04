@@ -2,16 +2,6 @@ set(PackageName EgammaReco)
 
 project(${PackageName})
 
-find_package(MarlinUtil REQUIRED)
-list(APPEND CMAKE_MODULE_PATH $ENV{PANDORAPFA}/cmakemodules)
-FOREACH( pkg  MarlinUtil PandoraSDK )
-  IF( ${pkg}_FOUND )
-    INCLUDE_DIRECTORIES( ${${pkg}_INCLUDE_DIRS} )
-    LINK_LIBRARIES( ${${pkg}_LIBRARIES} )
-    ADD_DEFINITIONS ( ${${pkg}_DEFINITIONS} )
-  ENDIF()
-ENDFOREACH()
-
 file(GLOB sources
     ${PROJECT_SOURCE_DIR}/src/*.cpp
 )
@@ -30,13 +20,9 @@ gaudi_add_module(${PackageName}
                  k4geo::detectorCommon
                  DD4hep::DDRec
                  DD4hep::DDCore
-                 ${MarlinUtil_LIBRARIES}
-                 ${PandoraSDK_LIBRARIES}
                  )
 
 target_include_directories(${PackageName} PUBLIC
-                   ${MarlinUtil_INCLUDE_DIRS}
-                   ${PandoraSDK_INCLUDE_DIRS}
                    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
                    $<INSTALL_INTERFACE:include>
                    )
@@ -58,7 +44,7 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 
-SET(test_name "test_ElectronDecorator")
-ADD_TEST(NAME ${test_name} COMMAND sh +x test_ElectronDecorator.sh)
+SET(test_name "test_ElectronBremsRecovery")
+ADD_TEST(NAME ${test_name} COMMAND sh +x test_ElectronBremsRecovery.sh)
 set_test_env(${test_name})
 set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/EgammaReco/test")
