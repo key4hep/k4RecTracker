@@ -40,9 +40,10 @@ if(K4RECTRACKER_TRACKING)
   find_package(onnxruntime 1.16.0 REQUIRED)
 endif()
 
+include(GNUInstallDirs)
+
 include(cmake/Key4hepConfig.cmake)
 
-include(GNUInstallDirs)
 include(CTest)
 
 function(set_test_env _testname)
