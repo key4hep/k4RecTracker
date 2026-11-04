@@ -17,7 +17,6 @@ Extra dependendis for tracking:
 * PandoraSDK
 * Eigen3
 * onnxruntime
-* Torch
 
 ## Installation
 ```
