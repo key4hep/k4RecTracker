@@ -1,5 +1,14 @@
 #include "utils.h"
 
+#include "DD4hep/DD4hepUnits.h"
+
+double getBzAtOrigin(const dd4hep::Detector& detector) {
+  const double position[3] = {0, 0, 0};
+  double magneticFieldVector[3] = {0, 0, 0};
+  detector.field().magneticField(position, magneticFieldVector);
+  return magneticFieldVector[2] / dd4hep::tesla;
+}
+
 dd4hep::rec::LayeredCalorimeterData* getExtension(unsigned int includeFlag, unsigned int excludeFlag) {
 
   dd4hep::rec::LayeredCalorimeterData* theExtension = 0;
@@ -179,9 +188,10 @@ torch::Tensor find_condpoints(const torch::Tensor& betas, const torch::Tensor& u
   return indices_condpoints.index_select(0, sorted_indices);
 }
 
-torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbeta, float td) {
-  torch::Tensor X = output_model_tensor.slice(1, 0, 3);   // columns 0,1,2
-  torch::Tensor betas = output_model_tensor.select(1, 3); // column 3
+torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbeta, float td,
+                             int64_t nEmbeddingCoordinates) {
+  torch::Tensor X = output_model_tensor.slice(1, 0, nEmbeddingCoordinates);   // embedding coordinates
+  torch::Tensor betas = output_model_tensor.select(1, nEmbeddingCoordinates); // cluster potential
 
   int64_t n_points = betas.size(0);
   torch::Tensor clustering = torch::zeros({n_points}, torch::dtype(torch::kLong));
@@ -215,13 +225,13 @@ torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbe
   return clustering;
 }
 
-bool isPositiveSemiDefinite(const TMatrixDSym& M, double tol) {
-  TMatrixDSymEigen eig(M);
-  TVectorD eigenValues = eig.GetEigenValues();
+GeoNavigatorStateGuard::GeoNavigatorStateGuard()
+    : m_callerIndex(gGeoManager->GetListOfNavigators()->IndexOf(gGeoManager->GetCurrentNavigator())),
+      m_fitNavigator(gGeoManager->AddNavigator()) {
+  gGeoManager->SetCurrentNavigator(gGeoManager->GetListOfNavigators()->IndexOf(m_fitNavigator));
+}
 
-  for (int i = 0; i < eigenValues.GetNrows(); ++i) {
-    if (eigenValues[i] < -tol)
-      return false;
-  }
-  return true;
+GeoNavigatorStateGuard::~GeoNavigatorStateGuard() {
+  gGeoManager->SetCurrentNavigator(m_callerIndex);
+  gGeoManager->RemoveNavigator(m_fitNavigator);
 }

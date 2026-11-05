@@ -42,6 +42,8 @@
 #include <RKTrackRep.h>
 #include <Track.h>
 
+#include <TGeoNavigator.h>
+
 #include "DD4hep/Detector.h"
 #include "DD4hep/Fields.h"
 #include "DDRec/Vector3D.h"

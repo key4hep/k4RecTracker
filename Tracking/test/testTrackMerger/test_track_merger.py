@@ -3,21 +3,32 @@ Minimalistic test for the TrackMerger Gaudi processor.
 
 What it does
 ------------
-1. (setup step) Creates a small EDM4hep input file containing:
-   - InnerTracks : 2 tracks
-   - OuterTracks : 2 tracks
+The test runs in one of two modes, selected with --mode:
 
-   Track pair 0 is set up to MATCH  (|d0_diff| <= 0.5, |z0_diff| <= 2.5).
-   Track pair 1 is set up to NOT match (large d0/z0 offsets).
+absolute (default)
+   - Pair 0 is set up to MATCH  (|d0_diff| <= 0.5, |z0_diff| <= 2.5).
+   - Pair 1 is set up to NOT match (large d0/z0 offsets).
+
+significance
+   All track states carry covariances, and TrackMerger gets the magnetic
+   field from field_only.xml (constant 2 T), so the pT significance is used.
+   - Pair A: identical parameters                          -> MATCH
+   - Pair B: d0 differs by 0.1 mm with sigma(d0) = 0.01 mm  -> NO match
+     (would pass the absolute 0.5 mm cut, so this proves significances are used)
+   - Pair C: same |omega| but opposite sign (charge)       -> NO match
+   - Pair D: phi = +3.13 vs -3.13 (across +-pi)            -> MATCH
+   The pairs are well separated in d0/z0 so that they cannot cross-match.
+
+1. (setup step) Creates a small EDM4hep input file with InnerTracks and
+   OuterTracks for the selected mode.
 
    TrackMerger itself is run separately by CTest via
-   `k4run test_track_merger_steer.py`, which sets all 5 per-parameter
-   tolerances (D0Tolerance, Z0Tolerance, PhiTolerance, OmegaTolerance,
-   TanLambdaTolerance) to exercise their configurability.
+   `k4run test_track_merger_steer.py --mode <mode>`, which sets all 5
+   per-parameter cuts of that mode to exercise their configurability.
 
-2. (check step) Reads the output file and asserts that exactly 1 merged track
-   was produced, that it carries hits from both parent tracks, and that it
-   links back to both parent tracks.
+2. (check step) Reads the output file and asserts that exactly the expected
+   pairs were merged, that each merged track carries hits from both parent
+   tracks, and that it links back to both parent tracks.
 
 The setup and check steps are split into two subcommands so that CMake can
 run them (and the k4run step in between) as separate tests chained via
@@ -25,9 +36,9 @@ fixtures, while sharing all collection names defined once in this file.
 
 Usage
 -----
-    python3 test_track_merger.py setup   --input input.root
-    k4run test_track_merger_steer.py     --input input.root --output output.root
-    python3 test_track_merger.py check   --output output.root
+    python3 test_track_merger.py setup --mode <mode> --input input.root
+    k4run test_track_merger_steer.py   --mode <mode> --input input.root --output output.root
+    python3 test_track_merger.py check --mode <mode> --output output.root
 
 Requirements
 ------------
@@ -48,37 +59,106 @@ OUTER_COLL = "OuterTracks"
 OUT_COLL = "MyCandidateMergedTracks"
 
 
+# Default variances used in significance mode (sigma = 0.1 mm, 0.01 rad, ...).
+DEFAULT_VARIANCES = {
+    edm4hep.TrackParams.d0: 1e-2,
+    edm4hep.TrackParams.z0: 1e-2,
+    edm4hep.TrackParams.phi: 1e-4,
+    edm4hep.TrackParams.omega: 1e-10,
+    edm4hep.TrackParams.tanLambda: 1e-4,
+}
+
+
 # ---------------------------------------------------------------------------
 # Helper: build one TrackState with the minimum required fields
 # ---------------------------------------------------------------------------
-def make_track_state(location: int, d0: float, z0: float) -> edm4hep.TrackState:
+def make_track_state(
+    location: int,
+    d0: float,
+    z0: float,
+    phi: float = 0.0,
+    omega: float = 1e-4,
+    variances: dict | None = None,
+) -> edm4hep.TrackState:
     ts = edm4hep.TrackState()
     ts.location = location
     ts.D0 = d0
     ts.Z0 = z0
-    ts.phi = 0.0
-    ts.omega = 1e-4  # small curvature, arbitrary
+    ts.phi = phi
+    ts.omega = omega
     ts.tanLambda = 0.5
+    for param, var in (variances or {}).items():
+        ts.covMatrix.setValue(var, param, param)
     return ts
 
 
 # ---------------------------------------------------------------------------
 # Helper: add a track with one TrackState and one dummy TrackerHit
 # ---------------------------------------------------------------------------
-def add_track(collection, hit_collection, location: int, d0: float, z0: float):
+def add_track(collection, hit_collection, location: int, d0: float, z0: float, **state_kwargs):
     hit = hit_collection.create()
     hit.setPosition(edm4hep.Vector3d(0.0, 0.0, 0.0))
 
     trk = collection.create()
     trk.addToTrackerHits(hit)
-    trk.addToTrackStates(make_track_state(location, d0, z0))
+    trk.addToTrackStates(make_track_state(location, d0, z0, **state_kwargs))
     return trk
+
+
+def add_pair(inner_tracks, inner_hits, outer_tracks, outer_hits, inner_kwargs, outer_kwargs):
+    # Inner track needs AtLastHit; Outer track needs AtFirstHit
+    add_track(inner_tracks, inner_hits, edm4hep.TrackState.AtLastHit, **inner_kwargs)
+    add_track(outer_tracks, outer_hits, edm4hep.TrackState.AtFirstHit, **outer_kwargs)
+
+
+def fill_absolute(inner_tracks, inner_hits, outer_tracks, outer_hits):
+    tracks = (inner_tracks, inner_hits, outer_tracks, outer_hits)
+    # --- Pair 0: should MATCH ---
+    # Using identical d0/z0 -> diff = 0, well within tolerance
+    add_pair(*tracks, dict(d0=1.0, z0=5.0), dict(d0=1.0, z0=5.0))
+    # --- Pair 1: should NOT match ---
+    # Offsets deliberately exceed both thresholds
+    add_pair(*tracks, dict(d0=10.0, z0=100.0), dict(d0=50.0, z0=500.0))
+
+
+def fill_significance(inner_tracks, inner_hits, outer_tracks, outer_hits):
+    tracks = (inner_tracks, inner_hits, outer_tracks, outer_hits)
+    common = dict(omega=1e-3, variances=DEFAULT_VARIANCES)
+    # --- Pair A: identical -> MATCH ---
+    add_pair(*tracks, dict(d0=1.0, z0=0.0, **common), dict(d0=1.0, z0=0.0, **common))
+    # --- Pair B: 0.1 mm in d0 with sigma(d0) = 0.01 mm -> ~7 sigma -> NO match ---
+    precise_d0 = dict(DEFAULT_VARIANCES)
+    precise_d0[edm4hep.TrackParams.d0] = 1e-4
+    add_pair(
+        *tracks,
+        dict(d0=20.0, z0=100.0, omega=1e-3, variances=precise_d0),
+        dict(d0=20.1, z0=100.0, omega=1e-3, variances=precise_d0),
+    )
+    # --- Pair C: opposite charge, same curvature -> NO match ---
+    add_pair(
+        *tracks,
+        dict(d0=40.0, z0=200.0, omega=1e-3, variances=DEFAULT_VARIANCES),
+        dict(d0=40.0, z0=200.0, omega=-1e-3, variances=DEFAULT_VARIANCES),
+    )
+    # --- Pair D: across phi = +-pi, wrapped diff ~0.023 rad -> ~1.6 sigma -> MATCH ---
+    add_pair(
+        *tracks,
+        dict(d0=60.0, z0=300.0, phi=3.13, **common),
+        dict(d0=60.0, z0=300.0, phi=-3.13, **common),
+    )
+
+
+# d0 of the inner tracks of the pairs that are expected to merge, per mode
+EXPECTED_MERGED_D0 = {
+    "absolute": [1.0],
+    "significance": [1.0, 60.0],
+}
 
 
 # ---------------------------------------------------------------------------
 # Step 1 - write the input file
 # ---------------------------------------------------------------------------
-def write_input_file(path: str) -> None:
+def write_input_file(path: str, mode: str) -> None:
     writer = podio.root_io.Writer(path)
 
     frame = podio.Frame()
@@ -89,17 +169,8 @@ def write_input_file(path: str) -> None:
     inner_hits = edm4hep.TrackerHit3DCollection()
     outer_hits = edm4hep.TrackerHit3DCollection()
 
-    # --- Pair 0: should MATCH ---
-    # Inner track needs AtLastHit; Outer track needs AtFirstHit
-    # Using identical d0/z0 -> diff = 0, well within tolerance
-    d0_match, z0_match = 1.0, 5.0
-    add_track(inner_tracks, inner_hits, edm4hep.TrackState.AtLastHit, d0_match, z0_match)
-    add_track(outer_tracks, outer_hits, edm4hep.TrackState.AtFirstHit, d0_match, z0_match)
-
-    # --- Pair 1: should NOT match ---
-    # Offsets deliberately exceed both thresholds
-    add_track(inner_tracks, inner_hits, edm4hep.TrackState.AtLastHit, 10.0, 100.0)
-    add_track(outer_tracks, outer_hits, edm4hep.TrackState.AtFirstHit, 50.0, 500.0)
+    fill = fill_absolute if mode == "absolute" else fill_significance
+    fill(inner_tracks, inner_hits, outer_tracks, outer_hits)
 
     frame.put(inner_tracks, INNER_COLL)
     frame.put(outer_tracks, OUTER_COLL)
@@ -114,7 +185,7 @@ def write_input_file(path: str) -> None:
 # ---------------------------------------------------------------------------
 # Step 2 - read back & assert
 # ---------------------------------------------------------------------------
-def check_output(output_file: str) -> None:
+def check_output(output_file: str, mode: str) -> None:
     reader = podio.root_io.Reader(output_file)
 
     frames = list(reader.get("events"))
@@ -128,31 +199,38 @@ def check_output(output_file: str) -> None:
 
     merged = frame.get(OUT_COLL)
 
-    # --- core assertion: exactly one pair should have merged ---
-    assert len(merged) == 1, (
-        f"Expected 1 merged track (pair 0 matches, pair 1 does not), got {len(merged)}"
+    # --- core assertion: exactly the expected pairs should have merged ---
+    expected_d0 = EXPECTED_MERGED_D0[mode]
+    assert len(merged) == len(expected_d0), (
+        f"[{mode}] Expected {len(expected_d0)} merged track(s), got {len(merged)}"
     )
 
-    merged_track = merged[0]
+    merged_d0 = []
+    for merged_track in merged:
+        # --- the merged track must link back to both parent tracks ---
+        parent_tracks = list(merged_track.getTracks())
+        assert len(parent_tracks) == 2, (
+            f"Merged track should carry 2 sub-tracks (inner + outer), got {len(parent_tracks)}"
+        )
 
-    # --- the merged track must link back to both parent tracks ---
-    parent_tracks = list(merged_track.getTracks())
-    assert len(parent_tracks) == 2, (
-        f"Merged track should carry 2 sub-tracks (inner + outer), got {len(parent_tracks)}"
+        # --- it must aggregate hits from both parents ---
+        total_parent_hits = sum(len(list(p.getTrackerHits())) for p in parent_tracks)
+        merged_hits = len(list(merged_track.getTrackerHits()))
+        assert merged_hits == total_parent_hits, (
+            f"Merged track should have {total_parent_hits} hits (1 from inner + 1 from outer), "
+            f"got {merged_hits}"
+        )
+
+        merged_d0.append(round(parent_tracks[0].getTrackStates(0).D0, 3))
+
+    # --- the right pairs must have merged ---
+    assert sorted(merged_d0) == sorted(expected_d0), (
+        f"[{mode}] Expected merged pairs with d0 {sorted(expected_d0)}, got {sorted(merged_d0)}"
     )
 
-    # --- it must aggregate hits from both parents ---
-    total_parent_hits = sum(len(list(p.getTrackerHits())) for p in parent_tracks)
-    merged_hits = len(list(merged_track.getTrackerHits()))
-    assert merged_hits == total_parent_hits, (
-        f"Merged track should have {total_parent_hits} hits (1 from inner + 1 from outer), "
-        f"got {merged_hits}"
-    )
-
-    print("[check] All assertions passed.")
+    print(f"[check] All assertions passed ({mode} mode).")
     print(f"        merged tracks : {len(merged)}")
-    print(f"        parent links  : {len(parent_tracks)}")
-    print(f"        merged hits   : {merged_hits}")
+    print(f"        merged pairs  : d0 = {sorted(merged_d0)}")
 
 
 # ---------------------------------------------------------------------------
@@ -168,12 +246,15 @@ def main():
     check_parser = subparsers.add_parser("check", help="Check the TrackMerger output file")
     check_parser.add_argument("--output", default="output.root")
 
+    for sub in (setup_parser, check_parser):
+        sub.add_argument("--mode", choices=list(EXPECTED_MERGED_D0), default="absolute")
+
     args = parser.parse_args()
 
     if args.step == "setup":
-        write_input_file(args.input)
+        write_input_file(args.input, args.mode)
     elif args.step == "check":
-        check_output(args.output)
+        check_output(args.output, args.mode)
 
 
 if __name__ == "__main__":

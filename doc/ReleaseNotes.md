@@ -1,3 +1,131 @@
+# v00.08.00
+
+* 2026-10-16 Victor Schwan ([PR#113](https://github.com/Key4hep/k4RecTracker/pull/113))
+  - Introduce significance as matching criterion for the `TrackMerger`
+  - Update matching defaults to match defaults from `ClonesAndSplitTracksFinder` in `CLDConfig`
+  - Change default behavior to use the significance as matching criterion
+
+* 2026-10-15 Giovanni Marchiori ([PR#117](https://github.com/Key4hep/k4RecTracker/pull/117))
+  - Retrieve sensor thickness from volume rather than from ZPlanarData and ZPetalData extensions.
+
+* 2026-10-15 andread3vita ([PR#116](https://github.com/Key4hep/k4RecTracker/pull/116))
+  - Add EmbeddingCoordinates to the Gaudi properties of GGTFTrackFinder to support models trained with different embedding space dimensions.
+  - Support extra features in the output of the model. The extra features are dropped and not used by the clustering, but the inference does not crash.
+
+* 2026-10-14 andread3vita ([PR#112](https://github.com/Key4hep/k4RecTracker/pull/112))
+  - Reset the global TGeoManager navigator to a canonical state before each fit. The navigator state is process-global and is modified by material lookups during track extrapolation. Without this reset, the material assigned to points located on geometry boundaries may depend on the previously fitted track, potentially from an earlier event, making the fit results dependent on processing order.
+  - Remove isPositiveSemiDefinite from utils.
+
+* 2026-10-07 Juan Miguel Carceller ([PR#109](https://github.com/Key4hep/k4RecTracker/pull/109))
+  - TracksFromGenParticles: fix a bug where, with `ExtrapolateToECal=False`, the ECAL geometry members were left uninitialized but still read for every track, so tracks could randomly get calorimeter track states extrapolated with garbage geometry. All the members are now default-initialized and the extrapolation is only done when `ExtrapolateToECal` is set.
+  - TracksFromGenParticles: return `StatusCode::FAILURE` with an error message instead of throwing when the calorimeter geometry lookup fails, remove the redundant `retrieved` flag and use separate pointers for the DRC, barrel and endcap extensions.
+  - TracksFromGenParticles: store the system encoder as a member instead of a raw pointer, use a 64-bit type for the cellID (it was truncated to `uint`) and add missing includes.
+
+* 2026-10-06 Juan Miguel Carceller ([PR#110](https://github.com/Key4hep/k4RecTracker/pull/110))
+  - Fix uninitialized variable warnings in VTXdigitizerDetailed
+
+* 2026-10-06 andread3vita ([PR#102](https://github.com/Key4hep/k4RecTracker/pull/102))
+  - Refactored GGTFTrackFinder by splitting the reconstruction workflow into dedicated functions for input preparation, ONNX inference, and track building, improving readability and maintainability.
+  - Introduced a HitBatch structure to consistently store flattened model inputs together with the corresponding hit type, collection index, and hit index.
+  - Fixed the bookkeeping of wire-hit collection indices, which previously caused hits from multiple wire input collections to be associated with the wrong collection.
+  - Added filtering of noise/unclustered hits: cluster IDs less than or equal to zero no longer produce output tracks, and only successfully reconstructed tracks are written to the output collection.
+  - Removed the use of track type 1 when saving reconstructed tracks.
+  - The number of hits is now checked before reserving and filling the model input buffers, avoiding unnecessary memory allocation for events that will be rejected because numHits > kMaxHits.
+  - Improved memory management of ONNX input and output names by storing owned copies instead of releasing the memory returned by ONNX Runtime, fixing the previous memory leak.
+  - Reworked wire-hit geometry construction and input feature preparation with explicit bookkeeping of the original source collections and hit indices.
+  - Made the processed-event counter thread-safe by replacing the mutable integer counter with an atomic counter.
+  - Removed unused standard-library, Gaudi, k4Interface, EDM4HEP, ATen, and ONNX Runtime includes.
+  - Simplified ONNX Runtime resource ownership using RAII-managed environment, session, memory information, and owned input/output names.
+  - Added ONNX model and inference validation, including checks for a valid model path, exactly one input and one output, consistent input buffer and tensor dimensions, and valid output tensor size, with improved error handling during ONNX Runtime initialization and inference.
+
+* 2026-10-05 Jona Dilg ([PR#111](https://github.com/Key4hep/k4RecTracker/pull/111))
+  - Fix typo in CMakeLists of ARCdigi and VTXdigi that would install header files into `include/@{CMAKE_PROJECT_NAME}` instead of expanding `${CMAKE_PROJECT_NAME}`
+
+* 2026-10-01 Juan Miguel Carceller ([PR#106](https://github.com/Key4hep/k4RecTracker/pull/106))
+  - Fix deprecated getTrackState usage in TrackMerger component by using `getTrackState` where it is needed.
+
+* 2026-09-30 Juan Miguel Carceller ([PR#105](https://github.com/Key4hep/k4RecTracker/pull/105))
+  - Remove the DD4hep rpath and compiler flags setting from CMakeLists.txt. These are set by Key4hepConfig.cmake; the DD4hep setting is older than the inclusion of Key4hepConfig.cmake.
+   - Remove a duplicated `CMAKE_MODULE_PATH` setting.
+   - Require onnxruntime 1.16.0, the first version that installs a CMake config with the `onnxruntime::onnxruntime` target.
+
+* 2026-09-30 andread3vita ([PR#101](https://github.com/Key4hep/k4RecTracker/pull/101))
+  - Fix the helix-to-Cartesian conversion and track initialization:
+    - Correct the units used in the Jacobian to ensure consistency between GENFIT and EDM4hep.
+    - Correct the unit conversion of z0.
+    - Prevent a singular initial covariance in z0 when the track seed is close to the reference point.
+  - Improve the construction of EDM4hep track states:
+    - Use GENFIT native extrapolation methods to propagate fitted states to the point of closest approach to the requested reference point.
+    - Use the first and last digitized hits as reference points when constructing the AtFirstHit and AtLastHit track states.
+    - Make the AtIP extrapolation consistent for prompt tracks.
+    - Document that the AtIP track state is not meaningful for displaced tracks when the displaced-track configuration uses a non-IP reference point.
+  - Make SetVPPosition part of the public GenfitTrack API, allowing the vertex/reference position used for track-state construction to be configured.
+  - Fix hit-to-track associations affected by hit filtering and change the handling of FittedHits:
+    - Modify the provided FittedHits collection instead of creating it inside ProcessTrack.
+    - Store only successfully fitted/accepted hits; rejected-hit placeholders are no longer inserted, so FittedHits is no longer index-aligned with the input hits.
+    - Fill fitted hits only when the GENFIT fit and the required track-state propagation complete successfully.
+  - Improve failure handling after track fitting: failures while retrieving or propagating a fitted state are caught per track and no longer terminate processing of the full event.
+  - Manage m_genfitTrack with std::unique_ptr, ensuring automatic cleanup and removing manual lifetime management.
+
+* 2026-09-28 Federico Meloni ([PR#97](https://github.com/Key4hep/k4RecTracker/pull/97))
+  - Add K4RECTRACKER_TRACKING CMake flag (default=ON) gating the compilation of the FCCee tracking
+
+* 2026-09-23 Andreas Loeschcke Centeno ([PR#103](https://github.com/Key4hep/k4RecTracker/pull/103))
+  - Fixed the `DCHdigi_v02` alias for the `WireTrackerDigi_v01`
+
+* 2026-09-15 Andreas Loeschcke Centeno ([PR#92](https://github.com/Key4hep/k4RecTracker/pull/92))
+  - Adapted and changed logic of accepted $\beta\gamma$ range in `TrackdNdxDelphesBased`
+
+* 2026-09-06 Juan Miguel Carceller ([PR#99](https://github.com/Key4hep/k4RecTracker/pull/99))
+  - Remove goto statements from TrackdNdxDelphesBased.
+
+* 2026-09-03 Juan Miguel Carceller ([PR#98](https://github.com/Key4hep/k4RecTracker/pull/98))
+  - Adapt TrackdNdxDelphesBased to the new EDM4hep TrackState lookup API.
+
+* 2026-08-26 Juan Miguel Carceller ([PR#96](https://github.com/Key4hep/k4RecTracker/pull/96))
+  - Link Tracking against the imported Pandora SDK target when available for compatibility with Pandora v5
+
+* 2026-08-21 SanghyunKo ([PR#95](https://github.com/Key4hep/k4RecTracker/pull/95))
+  - Add a printout message when TracksFromGenParticles failed to find the DR calo geometry
+
+* 2026-08-07 David ([PR#93](https://github.com/Key4hep/k4RecTracker/pull/93))
+  - Change geometry returned by geosvc to be used as const in GenfitTrackFitter.cpp
+
+* 2026-08-03 Victor Schwan ([PR#87](https://github.com/Key4hep/k4RecTracker/pull/87))
+  - Adds a new `TrackMerger` Gaudi transformer that merges tracks from two input collections based on compatible track-state parameters at their adjoining hit
+  - While generic and applicable to merging any two track collections, it was designed to combine silicon-tracker tracks with TPC tracks reconstructed by `Clupatra` for ILD
+  - The exact matching criterion in track-parameter space is not yet optimized and may need tuning
+  - Includes self-contained CTest `test_TrackMerger*` that generates synthetic matching/non-matching track pairs and verifies correct merging behavior
+
+* 2026-07-30 Juan Miguel Carceller ([PR#89](https://github.com/Key4hep/k4RecTracker/pull/89))
+  - Add all the plugin build directories to `LD_LIBRARY_PATH` and `GAUDI_PLUGIN_PATH` when setting up the test environment, so that plugins are found in a clean build tree to avoid issues with the LCG stacks (where there is always a `k4RecTracker` from the stack.
+
+* 2026-07-27 SanghyunKo ([PR#86](https://github.com/Key4hep/k4RecTracker/pull/86))
+  - Fix TracksFromGenParticles - build tracks only for particles that reach the calorimeter
+
+* 2026-06-25 Stefano Franchellucci ([PR#83](https://github.com/Key4hep/k4RecTracker/pull/83))
+  - Update code to use WireTracker info instead of DCH, allowing for easier compatibility with other trackers
+
+* 2026-05-09 Juan Miguel Carceller ([PR#82](https://github.com/Key4hep/k4RecTracker/pull/82))
+  - Remove the deprecated k4DataSvc and PodioOutput, following https://github.com/key4hep/k4FWCore/pull/392
+
+* 2026-05-05 andread3vita ([PR#79](https://github.com/Key4hep/k4RecTracker/pull/79))
+  - Correct the data type of phi0 when saving it in PCAInfo
+  - Correct the sign of omega by properly determining the particle charge during initialization
+  - Add covariance matrix to fitted trackStates
+  - Fix how filtered tracks are saved in the output file: now for each fitted track there is the corresponding filtered track
+  - Expose EDM4Hep units to the user
+
+* 2026-04-24 andread3vita ([PR#77](https://github.com/Key4hep/k4RecTracker/pull/77))
+  - Rename the track finder functional to align with the current coding style
+  - Add GenFit interfaces to enable running the track fitter
+  - Implement the GenFit-based track fitter
+  - Implement PerfectTrackFinder
+  - Add test for the track fitter
+
+* 2026-02-24 Mateusz Jakub Fila ([PR#76](https://github.com/Key4hep/k4RecTracker/pull/76))
+  - Remove histogram interface compatibility with Gaudi versions older that v39
+
 # v00.07.00
 
 * 2025-11-11 Juan Miguel Carceller ([PR#73](https://github.com/key4hep/k4RecTracker/pull/73))

@@ -176,16 +176,9 @@ StatusCode VTXdigitizerDetailed::initialize() {
   // retrieve the volume manager
   m_volman = detector->volumeManager();
 
-  // Get the sensor thickness and 2D size per layer in mm
-  dd4hep::DetType type(detector->detector(m_detectorName).typeFlag()); // Get detector Type
-  if (type.is(dd4hep::DetType::BARREL)) {                              // if this is a barrel detector
-    getSensorThickness<dd4hep::rec::ZPlanarData>();
-  } else if (type.is(dd4hep::DetType::ENDCAP)) { // If this is an Endcap Detector
-    getSensorThickness<dd4hep::rec::ZDiskPetalsData>();
-  } else {
-    error() << m_detectorName << " : Detector type should be BARREL or ENDCAP " << endmsg;
-    return StatusCode::FAILURE;
-  }
+  // The sensor thickness and 2D size are retrieved hit by hit from the sensitive volume (see getSensorDimensions), so
+  // detectorName can also be a compound detector (e.g. "Vertex") containing several sub-detectors that write to the
+  // same collection
 
   debug() << "Initializing VTXdigitizerDetailed with the following parameters:" << endmsg;
   debug() << "Detector Name: " << m_detectorName << endmsg;
@@ -195,23 +188,6 @@ StatusCode VTXdigitizerDetailed::initialize() {
 
   return StatusCode::SUCCESS;
 }
-
-template <typename T>
-void VTXdigitizerDetailed::getSensorThickness() {
-  /** Retrieve the sensor thickness per layer in millimeter
-   */
-
-  auto detElement = m_geoSvc->getDetector()->detector(m_detectorName);
-  auto* theExtension = detElement.extension<T>();
-  const std::vector<typename T::LayerLayout>& layers = theExtension->layers;
-  m_sensorThickness.resize(layers.size());
-  int layerCount = 0;
-  for (auto const& layer : layers) {
-    m_sensorThickness[layerCount] = (float)(layer.thicknessSensitive / dd4hep::mm);
-    ++layerCount;
-  }
-  debug() << "Sensor thickness per layer (mm): " << m_sensorThickness[0] << endmsg;
-} // End getSensorThickness
 
 std::tuple<edm4hep::TrackerHitPlaneCollection, edm4hep::TrackerHitSimTrackerHitLinkCollection>
 VTXdigitizerDetailed::operator()(const edm4hep::SimTrackerHitCollection& inputSimHits) const {
@@ -234,13 +210,8 @@ VTXdigitizerDetailed::operator()(const edm4hep::SimTrackerHitCollection& inputSi
       continue;
     }
 
-    // Get the normal vector direction in local frame during the first hit digitization
-    if (m_LocalNormalVectorDir == "") {
-      debug() << "First hit digitization, retrieve the local normal vector direction" << endmsg;
-      GetNormalVectorLocal(input_sim_hit);
-    } else {
-      debug() << "Local normal vector direction already retrieved: " << m_LocalNormalVectorDir << endmsg;
-    }
+    // Get the normal vector direction in local frame during the first hit digitization of each sub-detector
+    CheckNormalVectorLocal(input_sim_hit);
 
     // Check if the hit is a secondary or an overlay
     if (input_sim_hit.isProducedBySecondary()) {
@@ -287,9 +258,9 @@ StatusCode VTXdigitizerDetailed::finalize() {
   return StatusCode::SUCCESS;
 }
 
-void VTXdigitizerDetailed::GetNormalVectorLocal(const edm4hep::SimTrackerHit& input_sim_hit) const {
+std::string VTXdigitizerDetailed::GetNormalVectorLocal(const edm4hep::SimTrackerHit& input_sim_hit) const {
   /** Retrieve the normal vector direction in local frame (normal to sensor surface)
-   *  This function is called during the first hit digitization to initialise the member m_LocalNormalVectorDir
+   *  This function is called during the first hit digitization of each sub-detector (see CheckNormalVectorLocal)
    */
 
   const dd4hep::DDSegmentation::CellID& cellID = input_sim_hit.getCellID();
@@ -311,23 +282,86 @@ void VTXdigitizerDetailed::GetNormalVectorLocal(const edm4hep::SimTrackerHit& in
   // Determine which axis is the normal vector direction in local frame
   double epsilon = 1.0e-6; // A reasonable tolerance for floating-point comparisons
 
+  std::string LocalNormalVectorDir = "";
   if (std::abs(std::abs(normal_local.z()) - 1.0) < epsilon && std::abs(normal_local.x()) < epsilon &&
       std::abs(normal_local.y()) < epsilon) {
-    m_LocalNormalVectorDir = "z";
+    LocalNormalVectorDir = "z";
   } else if (std::abs(std::abs(normal_local.y()) - 1.0) < epsilon && std::abs(normal_local.x()) < epsilon &&
              std::abs(normal_local.z()) < epsilon) {
-    m_LocalNormalVectorDir = "y";
+    LocalNormalVectorDir = "y";
   } else if (std::abs(std::abs(normal_local.x()) - 1.0) < epsilon && std::abs(normal_local.y()) < epsilon &&
              std::abs(normal_local.z()) < epsilon) {
-    m_LocalNormalVectorDir = "x";
+    LocalNormalVectorDir = "x";
   } else {
     error() << "Local normal vector is not aligned with local X, Y, or Z axis!" << endmsg;
   }
 
-  debug() << "Local normal vector direction is: " << m_LocalNormalVectorDir << endmsg;
+  debug() << "Local normal vector direction is: " << LocalNormalVectorDir << endmsg;
 
-  return;
+  return LocalNormalVectorDir;
 }
+
+void VTXdigitizerDetailed::CheckNormalVectorLocal(const edm4hep::SimTrackerHit& input_sim_hit) const {
+  /** Initialise the member m_LocalNormalVectorDir with the first digitized hit, and check that the first hit of each
+   *  other sub-detector (identified by its system ID) has the same normal vector direction in local frame
+   */
+
+  const int systemID = m_decoder->get(input_sim_hit.getCellID(), "system");
+  if (m_checkedSystemIDs.count(systemID)) {
+    return;
+  }
+
+  debug() << "First hit digitization for system " << systemID << ", retrieve the local normal vector direction"
+          << endmsg;
+  const std::string LocalNormalVectorDir = GetNormalVectorLocal(input_sim_hit);
+  if (m_LocalNormalVectorDir == "") {
+    m_LocalNormalVectorDir = LocalNormalVectorDir;
+  } else if (LocalNormalVectorDir != m_LocalNormalVectorDir) {
+    throw std::runtime_error(fmt::format("VTXdigitizerDetailed: local normal vector direction {} for system {} differs "
+                                         "from direction {} of the other sub-detectors of {}",
+                                         LocalNormalVectorDir, systemID, m_LocalNormalVectorDir,
+                                         m_detectorName.value()));
+  }
+  m_checkedSystemIDs.insert(systemID);
+}
+
+void VTXdigitizerDetailed::getSensorDimensions(const dd4hep::DDSegmentation::CellID& cellID, double& dimX, double& dimY,
+                                               double& dimZ) const {
+  /** Retrieve the dimensions (in dd4hep units) of the sensitive volume containing the hit, in the proper direct frame
+   *  (dimZ is the sensor thickness, orthogonal to the sensor surface)
+   */
+
+  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
+  const std::uint64_t reduced_cellID = cellID & m_mask;
+
+  const auto solid = m_volman.lookupDetElement(reduced_cellID).volume().solid();
+
+  dimX = 0.0, dimY = 0.0, dimZ = 0.0;
+  if (std::string(solid.type()) == "TGeoBBox") {
+    dd4hep::Box box(solid);
+    dimX = 2 * box.x(); // Get the dimensions in cm
+    dimY = 2 * box.y();
+    dimZ = 2 * box.z();
+    SetLocalPos_In_ProperDirectFrame(dimX, dimY, dimZ); // Set the local position in the proper direct frame
+    dimX = fabs(dimX);
+    dimY = fabs(dimY);
+    dimZ = fabs(dimZ); // Ensure positive dimensions
+  } else if (std::string(solid.type()) == "TGeoTrd2") {
+    // We consider only the largest width and length (trapezoid considered as largest rectangle)
+    dd4hep::Trapezoid trap(solid);
+    dimX = 2 * std::max(trap.dX1(), trap.dX2()); // Get the dimensions in cm
+    dimY = 2 * std::max(trap.dY1(), trap.dY2()); // Get the dimensions in cm
+    dimZ = 2 * trap.dZ();
+    SetLocalPos_In_ProperDirectFrame(dimX, dimY, dimZ); // Set the local position in the proper direct frame
+    dimX = fabs(dimX);
+    dimY = fabs(dimY);
+    dimZ = fabs(dimZ); // Ensure positive dimensions
+  } else {
+    error() << "Solid type not recognized: " << solid.type() << endmsg;
+  }
+  debug() << "Sensor dimensions: x=" << dimX / dd4hep::mm << " mm, y=" << dimY / dd4hep::mm
+          << " mm, z=" << dimZ / dd4hep::mm << " mm" << endmsg;
+} // End getSensorDimensions
 
 std::vector<VTXdigitizerDetailed::ChargeDepositUnit>
 VTXdigitizerDetailed::primary_ionization(const edm4hep::SimTrackerHit& hit) const {
@@ -444,10 +478,10 @@ VTXdigitizerDetailed::drift(const edm4hep::SimTrackerHit& hit,
   float cosLorentzAngleX = 1. / sqrt(1. + tanLorentzAngleX * tanLorentzAngleX); // Cosine
   float cosLorentzAngleY = 1. / sqrt(1. + tanLorentzAngleY * tanLorentzAngleY);
 
-  // Get the sensor thickness
-  const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();
-  int layerID = m_decoder->get(cellID, "layer");
-  double moduleThickness = m_sensorThickness[layerID]; // In mm
+  // Get the sensor thickness from the sensitive volume containing the hit
+  double dimX, dimY, dimZ;
+  getSensorDimensions(hit.getCellID(), dimX, dimY, dimZ);
+  double moduleThickness = dimZ / dd4hep::mm; // In mm
 
   float SigmaX = 1.; // Charge spread
   float SigmaY = 1.;
@@ -574,34 +608,8 @@ VTXdigitizerDetailed::get_charge_per_pixel(const edm4hep::SimTrackerHit& hit,
   const float PixSizeX = m_PixSizeX[ilayer]; // in mm
   const float PixSizeY = m_PixSizeY[ilayer]; // in mm
 
-  std::uint64_t m_mask = (static_cast<std::uint64_t>(1) << 32) - 1;
-  const std::uint64_t reduced_cellID = cellID & m_mask;
-
-  const auto solid = m_volman.lookupDetElement(reduced_cellID).volume().solid();
-
-  double dimX = 0.0, dimY = 0.0, dimZ = 0.0; // Dimensions of the solid in cm
-  if (std::string(solid.type()) == "TGeoBBox") {
-    dd4hep::Box box(solid);
-    dimX = 2 * box.x(); // Get the dimensions in cm
-    dimY = 2 * box.y();
-    dimZ = 2 * box.z();
-    SetLocalPos_In_ProperDirectFrame(dimX, dimY, dimZ); // Set the local position in the proper direct frame
-    dimX = fabs(dimX);
-    dimY = fabs(dimY);
-    dimZ = fabs(dimZ); // Ensure positive dimensions
-  } else if (std::string(solid.type()) == "TGeoTrd2") {
-    // We consider only the largest width and length (trapezoid considered as largest rectangle)
-    dd4hep::Trapezoid trap(solid);
-    dimX = 2 * std::max(trap.dX1(), trap.dX2()); // Get the dimensions in cm
-    dimY = 2 * std::max(trap.dY1(), trap.dY2()); // Get the dimensions in cm
-    dimZ = 2 * trap.dZ();
-    SetLocalPos_In_ProperDirectFrame(dimX, dimY, dimZ); // Set the local position in the proper direct frame
-    dimX = fabs(dimX);
-    dimY = fabs(dimY);
-    dimZ = fabs(dimZ); // Ensure positive dimensions
-  } else {
-    error() << "Solid type not recognized: " << solid.type() << endmsg;
-  }
+  double dimX, dimY, dimZ; // Dimensions of the solid in cm
+  getSensorDimensions(cellID, dimX, dimY, dimZ);
 
   float widthMin = -dimX / 2. / dd4hep::mm, widthMax = dimX / 2. / dd4hep::mm;
   float lengthMin = -dimY / 2. / dd4hep::mm, lengthMax = dimY / 2. / dd4hep::mm;
@@ -733,7 +741,6 @@ void VTXdigitizerDetailed::generate_output(const edm4hep::SimTrackerHit& hit,
    *  Return the position and uncertainty in global coordinates with recorded energy and time as a
    * TrackerhitplaneCollection For now, the position is taken from a weighted average, maybe try with a 2D Gaussian fit
    */
-
   // Get the pixel dimensions in mm along x and y in the (modified) local frame with z orthogonal
 
   const dd4hep::DDSegmentation::CellID& cellID = hit.getCellID();

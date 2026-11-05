@@ -77,8 +77,7 @@
  *  The fitting process minimizes the track chi2 while accounting for material effects, magnetic field, and detector
  * geometry.
  *
- *  If the fit fails for a given hypothesis, a fallback track is still generated with chi2 = -1 and ndf = -1 to preserve
- * collection integrity. Each fitted track also includes the extrapolated state at the calorimeter (barrel or endcap).
+ *  If the fit fails for all hypotheses, the track is not saved to the output collections.
  *
  *  input:
  *    - initial track collection : edm4hep::TrackCollection
@@ -302,6 +301,15 @@ struct GenfitTrackFitter final
     return StatusCode::SUCCESS;
   }
 
+  // GenFit and ROOT geometry navigation use process-global mutable state.
+  // Do not allow the scheduler to execute this algorithm concurrently for
+  // different events.
+  // If changing to multi-threaded be careful with side effects when
+  // resetting the TGeoManager, that will apply globally. In addition
+  // dereferencing gGeoManager->GetListOfNavigators() may crash
+  // for any thread that is not the one that initialized the geometry
+  bool isReEntrant() const override { return false; }
+
   std::tuple<edm4hep::TrackCollection, edm4hep::TrackCollection, edm4hep::TrackerHitPlaneCollection>
   operator()(const edm4hep::TrackCollection& tracks_input) const override {
 
@@ -370,14 +378,6 @@ struct GenfitTrackFitter final
             number_failures += 1;
             debug() << "Track " << num_tracks_event << ": fit failed for single evaluation hypothesis, skipping track."
                     << endmsg;
-            auto failedTrack = FittedTracks.create();
-            auto failedFittedTrack = FittedTracksWithFilteredHits.create();
-
-            failedTrack.setChi2(-1);
-            failedTrack.setNdf(-1);
-
-            failedFittedTrack.setChi2(-1);
-            failedFittedTrack.setNdf(-1);
 
             continue;
           }
@@ -390,14 +390,7 @@ struct GenfitTrackFitter final
 
             debug() << "Track " << num_tracks_event << ": fit failed for all hypotheses." << endmsg;
             number_failures += 1;
-            auto failedTrack = FittedTracks.create();
-            auto failedFittedTrack = FittedTracksWithFilteredHits.create();
 
-            failedTrack.setChi2(-1);
-            failedTrack.setNdf(-1);
-
-            failedFittedTrack.setChi2(-1);
-            failedFittedTrack.setNdf(-1);
             continue;
 
           } else {

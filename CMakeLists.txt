@@ -8,7 +8,7 @@ cmake_policy(SET CMP0167 NEW)
 
 # please keep this layout for version setting, used by the automatic tagging script
 set(${PackageName}_VERSION_MAJOR 0)
-set(${PackageName}_VERSION_MINOR 7)
+set(${PackageName}_VERSION_MINOR 8)
 set(${PackageName}_VERSION_PATCH 0)
 
 set(${PackageName}_VERSION "${PACKAGE_VERSION_MAJOR}.${PACKAGE_VERSION_MINOR}.${PACKAGE_VERSION_PATCH}")
@@ -41,9 +41,10 @@ if(K4RECTRACKER_TRACKING)
   find_package(Torch REQUIRED)
 endif()
 
+include(GNUInstallDirs)
+
 include(cmake/Key4hepConfig.cmake)
 
-include(GNUInstallDirs)
 include(CTest)
 
 function(set_test_env _testname)
