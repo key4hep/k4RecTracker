@@ -20,7 +20,6 @@
 #ifndef EGAMMARECO_BREMSRECOVERYUTILS_H
 #define EGAMMARECO_BREMSRECOVERYUTILS_H
 
-#include "edm4hep/TrackState.h"
 #include "edm4hep/Vector3f.h"
 
 /* p1 - p2, wrapped into [-pi, pi] */
@@ -29,19 +28,15 @@ double deltaPhi(const double p1, const double p2);
 /* Bz [T] at the origin, from the DD4hep geometry */
 double getFieldFromCompact();
 
-/* momentum [GeV] from the track parameters */
-edm4hep::Vector3f getMomentum(const edm4hep::TrackState& state, double Bz);
-
 /* where the line refPt + t * momVec (t > 0) crosses the endcap plane z = +-zPlane */
-void GetPointInZ(const double zPlane, const edm4hep::Vector3f& refPt, const edm4hep::Vector3f& momVec,
-                 edm4hep::Vector3f& intersectPt);
+edm4hep::Vector3f GetPointInZ(const double zPlane, const edm4hep::Vector3f& refPt, const edm4hep::Vector3f& momVec);
 
 /* where the line refPt + t * momVec (t > 0) crosses the barrel cylinder of the given radius */
-void GetPointOnCircle(const double radius, const edm4hep::Vector3f& refPt, const edm4hep::Vector3f& momVec,
-                      edm4hep::Vector3f& intersectPt);
+edm4hep::Vector3f GetPointOnCircle(const double radius, const edm4hep::Vector3f& refPt,
+                                   const edm4hep::Vector3f& momVec);
 
 /* same as GetPointOnCircle, for a reference point at the origin */
-void GetPointOnCircleForRefAtOrigin(const double radius, const edm4hep::Vector3f& refPt,
-                                    const edm4hep::Vector3f& momVec, edm4hep::Vector3f& intersectPt);
+edm4hep::Vector3f GetPointOnCircleForRefAtOrigin(const double radius, const edm4hep::Vector3f& refPt,
+                                                 const edm4hep::Vector3f& momVec);
 
 #endif // EGAMMARECO_BREMSRECOVERYUTILS_H

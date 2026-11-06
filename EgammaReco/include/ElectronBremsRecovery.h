@@ -60,18 +60,18 @@ private:
     std::unordered_set<std::size_t> absorbed;                   // all absorbed neutral PFO indices
   };
 
-  // fill one entry per cluster of the input PFOs, sorted by decreasing cluster energy
-  void collectClusters(const edm4hep::ReconstructedParticleCollection& pfos, std::vector<ClusterEntry>& clusters) const;
+  // one entry per cluster of the input PFOs, sorted by decreasing cluster energy
+  std::vector<ClusterEntry> collectClusters(const edm4hep::ReconstructedParticleCollection& pfos) const;
   // the track of the PFO whose state at the calorimeter is closest to the cluster
   const edm4hep::Track& closestTrack(const edm4hep::ReconstructedParticle& pfo, const edm4hep::Cluster& cluster) const;
   // where the tangent to the track at the IP reaches the ECAL front face (endcap plane or barrel cylinder)
-  void bremsTangentAtCalorimeter(const edm4hep::TrackState& stateAtIP, edm4hep::Vector3f& tangentPt) const;
+  edm4hep::Vector3f bremsTangentAtCalorimeter(const edm4hep::TrackState& stateAtIP) const;
   // match the clusters of neutral PFOs to electrons, inside the eta-phi brems window of each electron
-  void findBremsPfos(const edm4hep::ReconstructedParticleCollection& pfos, const std::vector<ClusterEntry>& clusters,
-                     BremsMatch& brems) const;
+  BremsMatch findBremsPfos(const edm4hep::ReconstructedParticleCollection& pfos,
+                           const std::vector<ClusterEntry>& clusters) const;
   // copy the input PFOs, adding the absorbed clusters and energy to their electron and dropping the absorbed PFOs
-  static void buildOutput(const edm4hep::ReconstructedParticleCollection& pfos, const BremsMatch& brems,
-                          edm4hep::ReconstructedParticleCollection& output);
+  static edm4hep::ReconstructedParticleCollection buildOutput(const edm4hep::ReconstructedParticleCollection& pfos,
+                                                              const BremsMatch& brems);
 
   ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Geometry service"};
 

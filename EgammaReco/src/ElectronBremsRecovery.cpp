@@ -33,6 +33,12 @@
 
 DECLARE_COMPONENT(ElectronBremsRecovery)
 
+namespace {
+// pT [GeV] = gevPerTeslaMm * Bz [T] * R [mm] = gevPerTeslaMm * Bz [T] / |omega| [1/mm]
+// (same value as ConversionUnits::a_lcio in Tracking/include/utils.h)
+constexpr double gevPerTeslaMm = 2.998e-4;
+} // namespace
+
 ElectronBremsRecovery::ElectronBremsRecovery(const std::string& name, ISvcLocator* svc)
     : Transformer(name, svc, {KeyValue{"InputRecoParticles", "PandoraPFOs"}},
                   {KeyValue{"OutputRecoParticles", "RecoveredPFOs"}}) {}
@@ -64,19 +70,14 @@ StatusCode ElectronBremsRecovery::initialize() {
 
 edm4hep::ReconstructedParticleCollection
 ElectronBremsRecovery::operator()(const edm4hep::ReconstructedParticleCollection& input) const {
-  std::vector<ClusterEntry> clusters;
-  collectClusters(input, clusters);
-
-  BremsMatch brems;
-  findBremsPfos(input, clusters, brems);
-
-  edm4hep::ReconstructedParticleCollection output;
-  buildOutput(input, brems, output);
-  return output;
+  const auto clusters = collectClusters(input);
+  const auto brems = findBremsPfos(input, clusters);
+  return buildOutput(input, brems);
 }
 
-void ElectronBremsRecovery::collectClusters(const edm4hep::ReconstructedParticleCollection& pfos,
-                                            std::vector<ClusterEntry>& clusters) const {
+std::vector<ElectronBremsRecovery::ClusterEntry>
+ElectronBremsRecovery::collectClusters(const edm4hep::ReconstructedParticleCollection& pfos) const {
+  std::vector<ClusterEntry> clusters;
   for (std::size_t pfoIndex = 0; pfoIndex < pfos.size(); ++pfoIndex) {
     const auto& pfo = pfos[pfoIndex];
     debug() << "PFO Energy = " << pfo.getEnergy() << " Tracks = " << pfo.getTracks().size()
@@ -89,6 +90,7 @@ void ElectronBremsRecovery::collectClusters(const edm4hep::ReconstructedParticle
   // the most energetic electrons are matched first
   std::ranges::sort(clusters, std::ranges::greater{},
                     [](const ClusterEntry& entry) { return entry.cluster.getEnergy(); });
+  return clusters;
 }
 
 const edm4hep::Track& ElectronBremsRecovery::closestTrack(const edm4hep::ReconstructedParticle& pfo,
@@ -106,28 +108,30 @@ const edm4hep::Track& ElectronBremsRecovery::closestTrack(const edm4hep::Reconst
   return *std::ranges::min_element(pfo.getTracks(), std::ranges::less{}, distance);
 }
 
-void ElectronBremsRecovery::bremsTangentAtCalorimeter(const edm4hep::TrackState& stateAtIP,
-                                                      edm4hep::Vector3f& tangentPt) const {
+edm4hep::Vector3f ElectronBremsRecovery::bremsTangentAtCalorimeter(const edm4hep::TrackState& stateAtIP) const {
   const auto& refPt = stateAtIP.referencePoint;
-  const auto momVec = getMomentum(stateAtIP, m_Bz);
+  // momentum [GeV] from the track parameters
+  const float pt = gevPerTeslaMm * m_Bz / std::abs(stateAtIP.omega);
+  const edm4hep::Vector3f momVec{pt * std::cos(stateAtIP.phi), pt * std::sin(stateAtIP.phi), pt * stateAtIP.tanLambda};
 
-  // first the endcap plane
-  GetPointInZ(m_eCalEndCapInnerZ, refPt, momVec, tangentPt);
-  // the tangent reaches the barrel before the endcap
-  if (edm4hep::utils::magnitudeTransverse(tangentPt) > m_eCalBarrelInnerR) {
-    const bool refAtOrigin = std::abs(refPt.x) < std::numeric_limits<float>::epsilon() &&
-                             std::abs(refPt.y) < std::numeric_limits<float>::epsilon() &&
-                             std::abs(refPt.z) < std::numeric_limits<float>::epsilon();
-    if (refAtOrigin) {
-      GetPointOnCircleForRefAtOrigin(m_eCalBarrelInnerR, refPt, momVec, tangentPt);
-    } else {
-      GetPointOnCircle(m_eCalBarrelInnerR, refPt, momVec, tangentPt);
-    }
+  // first the endcap plane, unless the tangent is parallel to it (pz = 0)
+  if (std::abs(momVec.z) > std::numeric_limits<float>::epsilon()) {
+    const auto endcapPt = GetPointInZ(m_eCalEndCapInnerZ, refPt, momVec);
+    if (edm4hep::utils::magnitudeTransverse(endcapPt) <= m_eCalBarrelInnerR)
+      return endcapPt;
   }
+  // the tangent reaches the barrel before the endcap
+  const bool refAtOrigin = std::abs(refPt.x) < std::numeric_limits<float>::epsilon() &&
+                           std::abs(refPt.y) < std::numeric_limits<float>::epsilon() &&
+                           std::abs(refPt.z) < std::numeric_limits<float>::epsilon();
+  return refAtOrigin ? GetPointOnCircleForRefAtOrigin(m_eCalBarrelInnerR, refPt, momVec)
+                     : GetPointOnCircle(m_eCalBarrelInnerR, refPt, momVec);
 }
 
-void ElectronBremsRecovery::findBremsPfos(const edm4hep::ReconstructedParticleCollection& pfos,
-                                          const std::vector<ClusterEntry>& clusters, BremsMatch& brems) const {
+ElectronBremsRecovery::BremsMatch
+ElectronBremsRecovery::findBremsPfos(const edm4hep::ReconstructedParticleCollection& pfos,
+                                     const std::vector<ClusterEntry>& clusters) const {
+  BremsMatch brems;
   const auto hasTrack = [](const edm4hep::ReconstructedParticle& pfo) {
     return std::ranges::any_of(pfo.getTracks(), [](const edm4hep::Track& track) { return track.isAvailable(); });
   };
@@ -143,8 +147,7 @@ void ElectronBremsRecovery::findBremsPfos(const edm4hep::ReconstructedParticleCo
         state.has_value()) {
       stateAtIP = state.value();
     }
-    edm4hep::Vector3f tangentPt;
-    bremsTangentAtCalorimeter(stateAtIP, tangentPt);
+    const auto tangentPt = bremsTangentAtCalorimeter(stateAtIP);
 
     // brems window: the seed eta (+- dEtaMargin) and the phi band between the seed and the tangent (+- dPhiMargin)
     const auto& seedPos = seed.cluster.getPosition();
@@ -171,10 +174,12 @@ void ElectronBremsRecovery::findBremsPfos(const edm4hep::ReconstructedParticleCo
       }
     }
   }
+  return brems;
 }
 
-void ElectronBremsRecovery::buildOutput(const edm4hep::ReconstructedParticleCollection& pfos, const BremsMatch& brems,
-                                        edm4hep::ReconstructedParticleCollection& output) {
+edm4hep::ReconstructedParticleCollection
+ElectronBremsRecovery::buildOutput(const edm4hep::ReconstructedParticleCollection& pfos, const BremsMatch& brems) {
+  edm4hep::ReconstructedParticleCollection output;
   for (std::size_t pfoIndex = 0; pfoIndex < pfos.size(); ++pfoIndex) {
     // a neutral PFO identified as brems is now part of its electron: storing it too would double count
     if (brems.absorbed.contains(pfoIndex))
@@ -197,4 +202,5 @@ void ElectronBremsRecovery::buildOutput(const edm4hep::ReconstructedParticleColl
     }
     output.push_back(particle);
   }
+  return output;
 }

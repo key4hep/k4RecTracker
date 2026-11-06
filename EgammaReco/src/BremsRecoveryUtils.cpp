@@ -27,12 +27,6 @@
 #include <limits>
 #include <stdexcept>
 
-namespace {
-// pT [GeV] = gevPerTeslaMm * Bz [T] * R [mm] = gevPerTeslaMm * Bz [T] / |omega| [1/mm]
-// (same value as ConversionUnits::a_lcio in Tracking/include/utils.h)
-constexpr double gevPerTeslaMm = 2.998e-4;
-} // namespace
-
 double deltaPhi(const double p1, const double p2) {
   double oo2pi = 1. / (2. * M_PI);
 
@@ -53,28 +47,18 @@ double getFieldFromCompact() {
   return magneticFieldVector[2] / dd4hep::tesla;                     // z component at (0,0,0)
 }
 
-edm4hep::Vector3f getMomentum(const edm4hep::TrackState& state, double Bz) {
-  const float pt = gevPerTeslaMm * Bz / std::abs(state.omega);
-  return {pt * std::cos(state.phi), pt * std::sin(state.phi), pt * state.tanLambda};
-}
-
-void GetPointInZ(const double zPlane, const edm4hep::Vector3f& refPt, const edm4hep::Vector3f& momVec,
-                 edm4hep::Vector3f& intersectPt) {
-  // protect from zero division
-  if (std::abs(momVec.z) < std::numeric_limits<float>::epsilon()) {
-    throw std::invalid_argument("BremsRecoveryUtils: invalid momentum.z (zero division)");
-  }
+edm4hep::Vector3f GetPointInZ(const double zPlane, const edm4hep::Vector3f& refPt, const edm4hep::Vector3f& momVec) {
   // check the assumption
   if (std::abs(refPt.z) > std::abs(zPlane)) {
     throw std::invalid_argument("BremsRecoveryUtils: invalid refPoint.z (ref. point outside the endcap)");
   }
 
   const double z = momVec.z > 0. ? std::abs(zPlane) : -std::abs(zPlane);
-  intersectPt = refPt + ((z - refPt.z) / momVec.z) * momVec;
+  return refPt + ((z - refPt.z) / momVec.z) * momVec;
 }
 
-void GetPointOnCircle(const double radius, const edm4hep::Vector3f& refPt, const edm4hep::Vector3f& momVec,
-                      edm4hep::Vector3f& intersectPt) {
+edm4hep::Vector3f GetPointOnCircle(const double radius, const edm4hep::Vector3f& refPt,
+                                   const edm4hep::Vector3f& momVec) {
   const double refPtXY = edm4hep::utils::magnitudeTransverse(refPt);
   const double momVecXY = edm4hep::utils::magnitudeTransverse(momVec);
   // protect from zero division
@@ -102,11 +86,11 @@ void GetPointOnCircle(const double radius, const edm4hep::Vector3f& refPt, const
   // sine rule again : lenAP/sin(O) = |refPt|/sin(P)
   const double lenAP = refPtXY * std::sin(angO) / sinP;
 
-  intersectPt = refPt + (lenAP / momVecXY) * momVec;
+  return refPt + (lenAP / momVecXY) * momVec;
 }
 
-void GetPointOnCircleForRefAtOrigin(const double radius, const edm4hep::Vector3f& refPt,
-                                    const edm4hep::Vector3f& momVec, edm4hep::Vector3f& intersectPt) {
+edm4hep::Vector3f GetPointOnCircleForRefAtOrigin(const double radius, const edm4hep::Vector3f& refPt,
+                                                 const edm4hep::Vector3f& momVec) {
   const double refPtXY = edm4hep::utils::magnitudeTransverse(refPt);
   const double momVecXY = edm4hep::utils::magnitudeTransverse(momVec);
   // protect from zero division
@@ -118,5 +102,5 @@ void GetPointOnCircleForRefAtOrigin(const double radius, const edm4hep::Vector3f
     throw std::invalid_argument("BremsRecoveryUtils: invalid refPoint (ref. point outside the barrel)");
   }
 
-  intersectPt = refPt + (radius / momVecXY) * momVec;
+  return refPt + (radius / momVecXY) * momVec;
 }
