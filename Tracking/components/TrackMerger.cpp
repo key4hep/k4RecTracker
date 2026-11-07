@@ -33,9 +33,6 @@
 #include "k4Reco/GaudiDDKalTestTrack.h"
 #include <DDSegmentation/BitFieldCoder.h>
 
-#include "IMPL/TrackImpl.h"
-#include "IMPL/TrackerHitImpl.h"
-
 #include <cmath>
 #include <string>
 #include <utility>
