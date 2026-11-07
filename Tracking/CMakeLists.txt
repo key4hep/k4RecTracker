@@ -9,8 +9,9 @@ list(APPEND ExternalData_URL_TEMPLATES
 
 find_package(GenFit REQUIRED)
 find_package(MarlinUtil REQUIRED)
+find_package(k4Reco REQUIRED)
 list(APPEND CMAKE_MODULE_PATH $ENV{PANDORAPFA}/cmakemodules)
-FOREACH( pkg  MarlinUtil PandoraSDK )
+FOREACH( pkg  MarlinUtil PandoraSDK k4Reco )
   IF( ${pkg}_FOUND )
     INCLUDE_DIRECTORIES( ${${pkg}_INCLUDE_DIRS} )
     LINK_LIBRARIES( ${${pkg}_LIBRARIES} )
@@ -46,6 +47,7 @@ gaudi_add_module(${PackageName}
   GenFit::genfit2
   Eigen3::Eigen
   ${DELPHES_LIBRARIES}
+  k4Reco::GaudiTrkUtils
 )
 
 if(TARGET PandoraPFA::PandoraSDK)
