@@ -1,6 +1,6 @@
 # CombinatorialTrackFinder on the CLD silicon tracker: vertex detector, inner and outer
 # trackers (barrel + disks), which share the GlobalTrackerReadoutID readout.
-# MergeTrackerHitPlanes first combines their hit and reco->sim link collections, so a track
+# k4FWCore's CollectionMerger first combines their hit and reco->sim link collections, so a track
 # crossing several subdetectors is found as one track. Settings: SeedAndExtend, with the
 # values of the inner-tracker studies (the kink chi2 cuts are the defaults, tuned on them).
 #
@@ -14,7 +14,7 @@ from Gaudi.Configuration import INFO
 from k4FWCore import ApplicationMgr, IOSvc
 from k4FWCore.parseArgs import parser
 from Configurables import EventDataSvc, GeoSvc
-from Configurables import CombinatorialTrackFinder, MergeTrackerHitPlanes
+from Configurables import CollectionMerger, CombinatorialTrackFinder
 
 parser.add_argument(
     "--inputFile", required=True, help="digitised (or, with --digitise, simulated) CLD events"
@@ -104,13 +104,14 @@ if args.digitise:
         algorithms.append(digitiser)
 
 # -- all tracker hits in one collection --
-merge = MergeTrackerHitPlanes("MergeInnerTrackerHits")
-merge.InputHitCollections = [d[5] for d in digitisers]
-merge.InputRecoSimLinkCollections = [d[4] for d in digitisers]
-merge.OutputHitCollection = ["InnerTrackerHits"]
-merge.OutputRecoSimLinkCollection = ["InnerTrackerHitSimLinks"]
-merge.OutputLevel = INFO
-algorithms.append(merge)
+merge_hits = CollectionMerger("MergeInnerTrackerHits")
+merge_hits.InputCollections = [d[5] for d in digitisers]
+merge_hits.OutputCollection = "InnerTrackerHits"
+algorithms.append(merge_hits)
+merge_links = CollectionMerger("MergeInnerTrackerHitSimLinks")
+merge_links.InputCollections = [d[4] for d in digitisers]
+merge_links.OutputCollection = "InnerTrackerHitSimLinks"
+algorithms.append(merge_links)
 
 t = CombinatorialTrackFinder("InnerTrackerTracking")
 t.OutputLevel = INFO

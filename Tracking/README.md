@@ -184,7 +184,8 @@ EDM4hep track states `AtFirstHit` and `AtLastHit`; an `AtIP` state is added with
 `IPStateMode = Helix` (uniform field, inner trackers) or `SolenoidCrossing` (tracks measured
 outside the solenoid). For a Kalman fit, run `GenfitTrackFitter` on the output tracks
 (see `runMuonSystemTracking.py --genfit`).
-`MergeTrackerHitPlanes` merges the hit collections of several subdetectors into one input.
+To use the hits of several subdetectors, merge their hit and link collections first with
+k4FWCore's `CollectionMerger` (see `runCombinatorialTrackFinder.py`).
 
 It is implemented in `components/CombinatorialTrackFinder.{h,cpp}`, with helpers in
 `include/combinatorial_track_finder/` and `src/combinatorial_track_finder/` (TrackingMath,

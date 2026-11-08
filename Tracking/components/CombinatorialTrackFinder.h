@@ -51,12 +51,6 @@ namespace rec {
 }
 } // namespace dd4hep
 
-// Define the 5-parameter vector and matrix types
-namespace Eigen {
-typedef Matrix<double, 5, 1> Vector5d;
-typedef Matrix<double, 5, 5> Matrix5d;
-} // namespace Eigen
-
 /** @class CombinatorialTrackFinder
  *
  *  Track finding on the planar hits of one tracking system (inner tracker, silicon
