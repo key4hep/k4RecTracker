@@ -1,6 +1,6 @@
 set(PackageName Tracking)
 
-project(${PackageName})
+project(${PackageName} LANGUAGES CXX)
 
 include(ExternalData)
 list(APPEND ExternalData_URL_TEMPLATES
