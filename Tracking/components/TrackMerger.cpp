@@ -17,7 +17,6 @@
  * limitations under the License.
  */
 
-
 #include "DD4hep/Detector.h"
 #include "DDSegmentation/BitFieldCoder.h"
 #include "edm4hep/MCParticleCollection.h"
@@ -125,7 +124,8 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
 
     std::string cellIDEncodingString = m_geoSvc->constantAsString(m_encodingStringVariable.value());
     m_encoder = dd4hep::DDSegmentation::BitFieldCoder(cellIDEncodingString);
-    debug() << "cellIDEncodingString for " << m_encodingStringVariable.value() << " read from GeoSvc: " << cellIDEncodingString << std::endl;
+    debug() << "cellIDEncodingString for " << m_encodingStringVariable.value()
+            << " read from GeoSvc: " << cellIDEncodingString << std::endl;
 
     m_ddkaltest.init();
     m_ddkaltest.setEncoder(m_encoder);
@@ -150,17 +150,17 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
     // note which tracks are still unmerged
     std::vector<Track> unmergedInnerTracks, unmergedOuterTracks;
     debug() << "Unmerged tracks before merging:" << endmsg;
-    for (const Track& innerTrack : inputInnerTracks){
+    for (const Track& innerTrack : inputInnerTracks) {
       unmergedInnerTracks.push_back(innerTrack);
       printTrack(innerTrack, TS::AtLastHit);
     }
-    for (const Track& outerTrack : inputOuterTracks){
+    for (const Track& outerTrack : inputOuterTracks) {
       unmergedOuterTracks.push_back(outerTrack);
       printTrack(outerTrack, TS::AtFirstHit);
     }
 
     // if only one collection is empty, the other is added to the output
-    if (checkForNoUnmergedTracks(unmergedInnerTracks, unmergedOuterTracks, outTracks)){
+    if (checkForNoUnmergedTracks(unmergedInnerTracks, unmergedOuterTracks, outTracks)) {
       debug() << "One input collection is empty. InnerTracks.size: " << inputInnerTracks.size()
               << ", OuterTracks.size: " << inputInnerTracks.size()
               << ". The non-empty collection is copied to the output collection." << endmsg;
@@ -414,7 +414,8 @@ private:
 
   // check if either or both of the remaining track vectors are empty
   // if one is empty, the other is be fully added to the output collection
-  bool checkForNoUnmergedTracks(const std::vector<Track>& tv1, const std::vector<Track>& tv2, TrackColl& outTracks) const {
+  bool checkForNoUnmergedTracks(const std::vector<Track>& tv1, const std::vector<Track>& tv2,
+                                TrackColl& outTracks) const {
     if (tv1.size() == 0 && tv2.size() == 0)
       return true;
     if (tv1.size() == 0) {
