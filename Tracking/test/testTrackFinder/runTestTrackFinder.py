@@ -16,6 +16,15 @@ parser.add_argument("--outputFile", help="OutputFile")
 parser.add_argument("--modelPath", default="", help="model path for the track finder")
 parser.add_argument("--tbeta", default=0.6, help="tbeta clustering parameter")
 parser.add_argument("--td", default=0.3, help="td clustering parameter")
+parser.add_argument(
+    "--inferenceThreads", default=1, type=int, help="ONNX Runtime intra-operation threads"
+)
+parser.add_argument(
+    "--sessionRecreateEvents",
+    default=0,
+    type=int,
+    help="Recreate the ONNX session every N events (0 disables)",
+)
 args = parser.parse_args()
 
 # ################## InputOutput
