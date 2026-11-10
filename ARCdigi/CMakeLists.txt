@@ -1,6 +1,6 @@
 set(PackageName ARCdigi)
 
-project(${PackageName})
+project(${PackageName} LANGUAGES CXX)
 
 file(GLOB sources
     ${PROJECT_SOURCE_DIR}/src/*.cpp

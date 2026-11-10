@@ -1,6 +1,6 @@
 set(PackageName WireTrackerDigi)
 
-project(${PackageName})
+project(${PackageName} LANGUAGES CXX)
 
 # Find Delphes for WireTrackerDigi_v01
 find_package(Delphes REQUIRED)
