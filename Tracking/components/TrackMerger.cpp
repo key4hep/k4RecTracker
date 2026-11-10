@@ -17,22 +17,23 @@
  * limitations under the License.
  */
 
-#include "Gaudi/Accumulators.h"
+#include "DD4hep/Detector.h"
+#include "DDSegmentation/BitFieldCoder.h"
+#include "edm4hep/MCParticleCollection.h"
 #include "edm4hep/Track.h"
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackState.h"
 #include "edm4hep/TrackerHit.h"
+
+#include "Gaudi/Accumulators.h"
 #include "k4FWCore/Transformer.h"
 #include "k4Interface/IGeoSvc.h"
-
-#include "edm4hep/MCParticleCollection.h"
-
-#include "DD4hep/Detector.h"
+#include "k4Reco/GaudiDDKalTest.h"
+#include "k4Reco/GaudiDDKalTestTrack.h"
 
 #include <cmath>
 #include <string>
 #include <utility>
-
 #include <utils.h>
 
 // Type aliases for improved readability
@@ -40,6 +41,7 @@ using TrackColl = edm4hep::TrackCollection;
 using Track = edm4hep::Track;
 using TP = edm4hep::TrackParams;
 using TS = edm4hep::TrackState;
+using TH = edm4hep::TrackerHit;
 
 struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, const TrackColl&)> {
   TrackMerger(const std::string& name, ISvcLocator* svcLoc)
@@ -49,8 +51,6 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
                         KeyValue("InputOuterTracks", {"OuterTracks"}),
                     },
                     {KeyValue("OutTracks", {"MyCandidateMergedTracks"})}) {}
-
-  Gaudi::Property<bool> m_greedy{this, "Greedy", true, "If true, each track is used only once."};
 
   Gaudi::Property<bool> m_useSignificance{
       this, "UseSignificance", true,
@@ -93,11 +93,22 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
       this, "TanLambdaSignificance", 3.f,
       "Significance mode: maximum allowed tanLambda significance for a match. Negative disables this criterion."};
 
+  Gaudi::Property<std::string> m_encodingStringVariable{
+      this, "EncodingStringParameterName", "GlobalTrackerReadoutID",
+      "The name of the DD4hep constant that contains the Encoding string for tracking detectors"};
+
+  Gaudi::Property<bool> m_fitOutwards{this, "fitOutwards", false, "If true fit inside out; if false fit outside in."};
+  Gaudi::Property<float> m_maxChi2PerHit{
+      this, "maxChi2PerHit", 100.0f,
+      "Maximum additional chi2 when a hit is added to the fit when testing a combined track."};
+
+  ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
+  float m_Bz{0.f};
+  GaudiDDKalTest m_ddkaltest{this};
+  dd4hep::DDSegmentation::BitFieldCoder m_encoder;
+
   StatusCode initialize() override {
-    // The magnetic field is only needed to convert omega to pT for the pT significance.
-    if (!m_useSignificance || m_ptSignificance < 0.f) {
-      return StatusCode::SUCCESS;
-    }
+
     if (!m_geoSvc.retrieve()) {
       error() << "Unable to retrieve the GeoSvc, which is needed for the magnetic field" << endmsg;
       return StatusCode::FAILURE;
@@ -110,6 +121,15 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
       return StatusCode::FAILURE;
     }
     debug() << "B field (T) is : " << m_Bz << endmsg;
+
+    std::string cellIDEncodingString = m_geoSvc->constantAsString(m_encodingStringVariable.value());
+    m_encoder = dd4hep::DDSegmentation::BitFieldCoder(cellIDEncodingString);
+    debug() << "cellIDEncodingString for " << m_encodingStringVariable.value()
+            << " read from GeoSvc: " << cellIDEncodingString << std::endl;
+
+    m_ddkaltest.init();
+    m_ddkaltest.setEncoder(m_encoder);
+
     return StatusCode::SUCCESS;
   }
 
@@ -119,81 +139,183 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
     debug() << "Received InnerTracks collection with " << inputInnerTracks.size() << " tracks" << endmsg;
     debug() << "Received OuterTracks collection with " << inputOuterTracks.size() << " tracks" << endmsg;
 
-    // 1. Check if both input collections have at least one entry
-    if (inputInnerTracks.empty() || inputOuterTracks.empty()) {
-      warning() << "One of the input collections is empty. InnerTracks: " << inputInnerTracks.size()
-                << ", OuterTracks: " << inputOuterTracks.size() << ". Skipping track merging for this event." << endmsg;
-      return outTracks; // Returns empty collection
+    // Check if both input collections are empty
+    if (inputInnerTracks.empty() && inputOuterTracks.empty()) {
+      warning()
+          << "Input collections are empty. Skipping track merging for this event and returning empty track collection."
+          << endmsg;
+      return outTracks;
     }
 
-    // Flag to ensure each outer track is only merged once
-    std::vector<bool> usedOuterTracks(inputOuterTracks.size(), false);
+    // note which tracks are still unmerged
+    std::vector<Track> unmergedInnerTracks, unmergedOuterTracks;
+    debug() << "Unmerged tracks before merging:" << endmsg;
+    for (const Track& innerTrack : inputInnerTracks) {
+      unmergedInnerTracks.push_back(innerTrack);
+      printTrack(innerTrack, TS::AtLastHit);
+    }
+    for (const Track& outerTrack : inputOuterTracks) {
+      unmergedOuterTracks.push_back(outerTrack);
+      printTrack(outerTrack, TS::AtFirstHit);
+    }
 
-    // Loop over inner tracks with index for debug output
-    for (size_t iInner = 0; iInner < inputInnerTracks.size(); iInner++) {
-      const auto trackInner = inputInnerTracks[iInner];
-      bool matched = false;
+    // if only one collection is empty, the other is added to the output
+    if (checkForNoUnmergedTracks(unmergedInnerTracks, unmergedOuterTracks, outTracks)) {
+      debug() << "One input collection is empty. InnerTracks.size: " << inputInnerTracks.size()
+              << ", OuterTracks.size: " << inputInnerTracks.size()
+              << ". The non-empty collection is copied to the output collection." << endmsg;
+      return outTracks;
+    }
 
-      // Explicit index loop for outer tracks to manage 'usedOuterTracks' and debug indexing
-      // LOGIC NOTE: This algorithm accepts the FIRST match found within tolerances.
-      // It does not perform a global chi2 minimization or search for the "best" match.
-      for (size_t iOuter = 0; iOuter < inputOuterTracks.size(); iOuter++) {
-        if (m_greedy && usedOuterTracks[iOuter])
-          continue;
+    // check combinations: if their parameters match save the combination and the combined fit chi2/ndf
+    // use a map for automatic sorting by chi2/ndf
+    std::map<float, std::pair<std::pair<Track, Track>, std::vector<TS>>> chi2OfCombination;
+    for (const Track& innerTrack : inputInnerTracks) {
+      for (const Track& outerTrack : inputOuterTracks) {
+        if (isMatch(innerTrack, TS::AtLastHit, outerTrack, TS::AtFirstHit)) {
 
-        const auto trackOuter = inputOuterTracks[iOuter];
+          auto kalTrack = GaudiDDKalTestTrack(this, const_cast<GaudiDDKalTest*>(&m_ddkaltest));
+          debug() << "GaudiDDKalTestTrack instance loaded" << endmsg;
 
-        // compare trackInner and trackOuter at their respective track states (Inner: last hit, Outer: first hit)
-        // to determine if they likely originate from the same particle
-        if (isMatch(trackInner, TS::AtLastHit, trackOuter, TS::AtFirstHit)) {
-          debug() << fmt::format("  [MATCH] Inner track {} matched with Outer track {}. Creating merged track.", iInner,
-                                 iOuter)
-                  << endmsg;
+          for (const TH& hit : innerTrack.getTrackerHits())
+            kalTrack.addHit(&hit);
+          for (const TH& hit : outerTrack.getTrackerHits())
+            kalTrack.addHit(&hit);
+          debug() << "hits added" << endmsg;
 
-          auto newTrack = outTracks.create();
-
-          // Combine hits from both tracks
-          for (const auto& hit : trackInner.getTrackerHits())
-            newTrack.addToTrackerHits(hit);
-          for (const auto& hit : trackOuter.getTrackerHits())
-            newTrack.addToTrackerHits(hit);
-
-          // Maintain navigation/provenance by linking parent tracks
-          newTrack.addToTracks(trackInner);
-          newTrack.addToTracks(trackOuter);
-
-          matched = true;
-          if (m_greedy) {
-            usedOuterTracks[iOuter] = true;
-            break; // Exit inner loop: current inner track is satisfied
+          // get track state to initialise MarlinTrk fitter and fit combined track
+          auto optState = outerTrack.getTrackState(TS::AtLastHit);
+          if (!optState) {
+            error() << "TrackState is not available" << endmsg;
+            continue;
           }
+          const auto outerState = *optState;
+          debug() << "track state received" << endmsg;
+
+          int ini_status = kalTrack.initialise(outerState, m_fitOutwards);
+          debug() << "ini status: " << ini_status << endmsg;
+          int fit_status = kalTrack.fit(m_maxChi2PerHit);
+          debug() << "fit status: " << fit_status << endmsg;
+
+          // get chi2 from the inner most used hit and store track combination with chi2/ndf
+          int ndf = 0;
+          double chi2 = -DBL_MAX;
+          TS tsAtFirstHit;
+          bool combined = false;
+
+          for (const TH& hit : innerTrack.getTrackerHits()) {
+
+            int state_status = kalTrack.getTrackState(&hit, tsAtFirstHit, chi2, ndf);
+            debug() << " track state returns status code " << state_status << "; NDF = " << ndf << "; chi2 = " << chi2
+                    << endmsg;
+
+            if (state_status == 0) {
+              // get track state at the IP
+              TS tsAtIP, tsAtLastHit;
+              const edm4hep::Vector3d ipv(0., 0., 0.);
+              kalTrack.propagate(ipv, &hit, tsAtIP, chi2, ndf);
+              tsAtIP.location = TS::AtIP;
+
+              // get track state at the last hit
+              for (const TH& ohit : outerTrack.getTrackerHits() | std::views::reverse) {
+                kalTrack.getTrackState(&ohit, tsAtLastHit, chi2, ndf);
+                if (state_status == 0)
+                  break;
+              }
+              tsAtFirstHit.location = TS::AtFirstHit;
+              tsAtLastHit.location = TS::AtLastHit;
+
+              std::vector<TS> trackStates{tsAtIP, tsAtFirstHit, tsAtLastHit};
+              chi2OfCombination[chi2 / ndf] = std::make_pair(std::make_pair(innerTrack, outerTrack), trackStates);
+              combined = true;
+              break;
+            }
+          }
+          if (!combined) {
+            warning() << "track combination rejected for all inner hits!" << endmsg;
+            printTrack(innerTrack, TS::AtLastHit);
+            printTrack(outerTrack, TS::AtFirstHit);
+          }
+        } // end isMatch
+      } // end for loops over tracks
+    }
+
+    // iterate over track combinations starting from lowest chi2/ndf
+    // if tracks are unmerged accept track combination and remove tracks from unmerged tracks vectors
+    for (const auto& [chi2, combination] : chi2OfCombination) {
+      const Track& innerTrack = combination.first.first;
+      const Track& outerTrack = combination.first.second;
+
+      auto innerIt = std::find(unmergedInnerTracks.begin(), unmergedInnerTracks.end(), innerTrack);
+      auto outerIt = std::find(unmergedOuterTracks.begin(), unmergedOuterTracks.end(), outerTrack);
+      if (innerIt != unmergedInnerTracks.end() && outerIt != unmergedOuterTracks.end()) {
+        auto& trackStates = combination.second;
+        addCombinedTrackToColl(innerTrack, outerTrack, trackStates, outTracks);
+        debug() << "track combination added. chi2: " << chi2 << endmsg;
+        printTrack(innerTrack, TS::AtLastHit);
+        printTrack(outerTrack, TS::AtFirstHit);
+        unmergedInnerTracks.erase(innerIt);
+        unmergedOuterTracks.erase(outerIt);
+      }
+    }
+
+    debug() << "Unmerged tracks after merging:" << endmsg;
+    for (Track& track : unmergedInnerTracks)
+      printTrack(track, TS::AtLastHit);
+    for (Track& track : unmergedOuterTracks)
+      printTrack(track, TS::AtFirstHit);
+
+    // if only one collection has unmerged tracks, add them to the output
+    if (checkForNoUnmergedTracks(unmergedInnerTracks, unmergedOuterTracks, outTracks))
+      return outTracks;
+
+    // if both collection have unmerged tracks, check if there are still matches
+    bool remainingMatches = false;
+    std::map<Track, bool> innerTrackHasMatch, outerTrackHasMatch;
+    for (const Track& outerTrack : unmergedOuterTracks)
+      outerTrackHasMatch[outerTrack] = false;
+    for (const Track& innerTrack : unmergedInnerTracks) {
+      innerTrackHasMatch[innerTrack] = false;
+      for (const Track& outerTrack : unmergedOuterTracks) {
+        if (isMatch(innerTrack, TS::AtLastHit, outerTrack, TS::AtFirstHit)) {
+          remainingMatches = true;
+          innerTrackHasMatch[innerTrack] = true;
+          outerTrackHasMatch[outerTrack] = true;
         }
       }
-
-      if (!matched) {
-        debug() << fmt::format("  [INFO] Inner track {} found no matching outer track within tolerances.", iInner)
-                << endmsg;
-      }
     }
 
-    debug() << fmt::format(
-                   "Event processing complete. Created {} merged tracks from {} InnerTracks and {} OuterTracks.",
-                   outTracks.size(), inputInnerTracks.size(), inputOuterTracks.size())
-            << endmsg;
+    // add unmerged tracks which have no match to the output
+    for (Track& trk : unmergedInnerTracks)
+      if (!innerTrackHasMatch[trk])
+        addTrackToColl(trk, outTracks);
+    for (Track& trk : unmergedOuterTracks)
+      if (!outerTrackHasMatch[trk])
+        addTrackToColl(trk, outTracks);
+
+    if (!remainingMatches)
+      return outTracks;
+
+    warning() << "There are " << unmergedInnerTracks.size() << " unmerged inner tracks and "
+              << unmergedOuterTracks.size() << " unmerged outer tracks with matches between them!" << endmsg;
+    for (Track& track : unmergedInnerTracks)
+      printTrack(track, TS::AtLastHit);
+    for (Track& track : unmergedOuterTracks)
+      printTrack(track, TS::AtFirstHit);
+
     return outTracks;
   }
 
 private:
-  bool isMatch(const edm4hep::Track& t1, edm4hep::TrackState::Location loc1, const edm4hep::Track& t2,
-               edm4hep::TrackState::Location loc2) const {
+  bool isMatch(const Track& t1, TS::Location loc1, const Track& t2, TS::Location loc2) const {
     auto ts1 = t1.getTrackState(loc1);
     auto ts2 = t2.getTrackState(loc2);
 
     if (!ts1.has_value() || !ts2.has_value()) {
-      // It's common for some tracks to lack specific states; verbose instead of debug to avoid spam
-      warning() << fmt::format("    [SKIP] Missing requested states (Loc1: {}, Loc2: {})", static_cast<int>(loc1),
-                               static_cast<int>(loc2))
-                << endmsg;
+      // It's common for some tracks to lack specific states
+      debug() << fmt::format("    [SKIP] Missing requested states (Loc1: {}, Loc2: {})", static_cast<int>(loc1),
+                             static_cast<int>(loc2))
+              << endmsg;
       return false;
     }
 
@@ -282,8 +404,58 @@ private:
 
   mutable Gaudi::Accumulators::MsgCounter<MSG::WARNING> m_zeroUncertaintyWarning{
       this, "Combined uncertainty of a track parameter is zero; using the absolute difference instead", 10};
-  ServiceHandle<IGeoSvc> m_geoSvc{this, "GeoSvc", "GeoSvc", "Detector geometry service"};
-  float m_Bz{0.f};
+
+  void printTrack(const Track& t1, TS::Location loc1) const {
+    auto ts1 = t1.getTrackState(loc1);
+    debug() << fmt::format("Track 1: d0={:.4f}, z0={:.4f}, phi={:.4f}, omega={:.4f}, tanLambda={:.4f}", ts1->D0,
+                           ts1->Z0, ts1->phi, ts1->omega, ts1->tanLambda)
+            << endmsg;
+  }
+
+  // check if either or both of the remaining track vectors are empty
+  // if one is empty, the other is be fully added to the output collection
+  bool checkForNoUnmergedTracks(const std::vector<Track>& tv1, const std::vector<Track>& tv2,
+                                TrackColl& outTracks) const {
+    if (tv1.size() == 0 && tv2.size() == 0)
+      return true;
+    if (tv1.size() == 0) {
+      for (Track trk : tv2)
+        addTrackToColl(trk, outTracks);
+      return true;
+    }
+    if (tv2.size() == 0) {
+      for (Track trk : tv1)
+        addTrackToColl(trk, outTracks);
+      return true;
+    }
+    return false;
+  }
+
+  // adds a single track with its hits and track states to the output collection
+  void addTrackToColl(const Track& aTrack, TrackColl& outTracks) const {
+    auto newTrack = outTracks.create();
+    for (const TH& hit : aTrack.getTrackerHits())
+      newTrack.addToTrackerHits(hit);
+    newTrack.addToTracks(aTrack);
+    for (TS ts : aTrack.getTrackStates())
+      newTrack.addToTrackStates(ts);
+  }
+
+  // adds two tracks and their hits, as well as separately provided track states to the output collection
+  void addCombinedTrackToColl(const Track& track1, const Track& track2, const std::vector<TS>& trackStates,
+                              TrackColl& outTracks) const {
+    auto newTrack = outTracks.create();
+    for (const TH& hit : track1.getTrackerHits())
+      newTrack.addToTrackerHits(hit);
+    newTrack.addToTracks(track1);
+    for (const TH& hit : track2.getTrackerHits())
+      newTrack.addToTrackerHits(hit);
+    newTrack.addToTracks(track2);
+    for (TS ts : trackStates)
+      newTrack.addToTrackStates(ts);
+    debug() << "Added merged track to output collection, track state AtFirstHit: " << endmsg;
+    printTrack(newTrack, TS::AtFirstHit);
+  }
 };
 
 DECLARE_COMPONENT(TrackMerger)

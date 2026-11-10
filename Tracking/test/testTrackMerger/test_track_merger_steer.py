@@ -83,7 +83,6 @@ merger = TrackMerger(
     InputInnerTracks=INNER_COLL,
     InputOuterTracks=OUTER_COLL,
     OutTracks=OUT_COLL,
-    Greedy=True,
     **cuts,
 )
 
