@@ -40,7 +40,6 @@ gaudi_add_module(${PackageName}
   k4geo::detectorCommon
   extensionDict
   onnxruntime::onnxruntime
-  torch
   DD4hep::DDRec
   DD4hep::DDCore
   GenFit::genfit2

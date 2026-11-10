@@ -36,12 +36,21 @@ Its workflow can be summarized as follows:
    - This step is implemented with an [`Ort::Session`](https://onnx.ai/) initialized with a `.onnx` model.
 
 3. **Clustering Step**
-   - The 4D embedded points are clustered into sub-collections.
+   - The embedded points are clustered into sub-collections.
    - Each cluster corresponds **one-to-one** to a reconstructed track.
 
 4. **Track Creation**
    - The identified clusters are converted into tracks.
    - The final results are stored in the collection `OutputTracksGGTF`.
+
+### Performance tuning
+
+Per-event time is dominated almost entirely by the ONNX inference; feature extraction and clustering take less than a millisecond. The inference session can be tuned with two properties:
+
+* `InferenceThreads` (default: 1): intra-operation threads.
+* `SessionRecreateEvents` (default: 0, disabled): recreate the ONNX session every N events. The ORT memory arena is disabled by design (the held heap then stays at tens of MB instead of GBs), but this ORT build retains per-input-shape allocation plans for each distinct hit count — without the arena the held heap grows by a few MB per event while events keep presenting new shapes. Recreating the session flushes that state and makes the held heap flat.
+
+The event loop allocates no heap memory per event outside ONNX Runtime: the feature buffer, the clustering scratch space, and the hit-grouping tables are reused across events and never grow after the largest event has been processed.
 
 ### Dependencies
 
