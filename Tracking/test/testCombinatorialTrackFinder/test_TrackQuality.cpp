@@ -74,7 +74,7 @@ std::vector<k4rt::KinkPoint> simulateTrack(const Eigen::Vector3d& startDirection
   for (double layerRadius : kLayerRadiiCm) {
     // 1. move to the next layer
     const k4rt::Helix helix = helixFromDirection(position, direction, pT, charge);
-    const k4rt::Crossing crossing = k4rt::crossCylinder(helix, layerRadius, 0.0, +1);
+    const k4rt::Crossing crossing = helix.crossCylinder(layerRadius, 0.0, +1);
     if (!crossing.ok) {
       break; // the muon curls up before this layer
     }
@@ -97,7 +97,7 @@ std::vector<k4rt::KinkPoint> simulateTrack(const Eigen::Vector3d& startDirection
     // 3. multiple scattering in the layer: a random kick in two planes perpendicular to the
     // direction; the material seen grows as 1 / cos(incidence angle)
     const double cosIncidence = std::abs(hit.normal.dot(direction));
-    const double scatteringAngle = k4rt::highlandTheta0(kLayerThicknessX0 / cosIncidence, momentum);
+    const double scatteringAngle = k4rt::KinkChi2Calculator::highlandTheta0(kLayerThicknessX0 / cosIncidence, momentum);
     const Eigen::Vector3d kickDirection1 = direction.cross(Eigen::Vector3d::UnitZ()).normalized();
     const Eigen::Vector3d kickDirection2 = direction.cross(kickDirection1).normalized();
     const double kick1 = scatteringAngle * random.gaussian(random.generator);
@@ -111,8 +111,7 @@ std::vector<k4rt::KinkPoint> simulateTrack(const Eigen::Vector3d& startDirection
 
 int main() {
   RandomNumbers random;
-  k4rt::KinkConfig kinkConfig;
-  kinkConfig.bField_T = kBFieldTesla;
+  const k4rt::KinkChi2Calculator kinkCalculator(kBFieldTesla);
   int numberOfFailures = 0;
 
   std::printf("  p [GeV]   tracks   <chi2>/(2(n-2))   expected 1.00 +- 0.05\n");
@@ -139,7 +138,7 @@ int main() {
       // the kink chi2 with the true circle (the one at the start, before any scattering)
       const double pT = momentum * std::sin(kPolarAngle);
       const k4rt::Helix trueHelix = helixFromDirection(Eigen::Vector3d(0, 0, 0), startDirection, pT, charge);
-      const k4rt::KinkResult result = k4rt::kinkChi2(hits, trueHelix.R, trueHelix.rot, kinkConfig);
+      const k4rt::KinkResult result = kinkCalculator.track(hits, trueHelix.R, trueHelix.rot);
       const double numberOfDegreesOfFreedom = 2.0 * (hits.size() - 2);
       sumOfNormalisedChi2 += result.chi2 / numberOfDegreesOfFreedom;
       numberOfTracks += 1;

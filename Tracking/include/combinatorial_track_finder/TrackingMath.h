@@ -3,6 +3,7 @@
 //   - wrapping an angle into a fixed range
 //   - converting between transverse momentum, circle radius and curvature in a field
 //   - the multiple-scattering angle (Highland) and the kink chi2 of SeedAndExtend
+//   - the settings shared by both search strategies (CommonSearchConfig)
 //
 // It needs only Eigen, so the standalone unit tests can use it too.
 //
@@ -82,8 +83,13 @@ inline double omegaFromPt(double bFieldT, double ptGeV) {
 
 // ---- kink chi2 (multiple scattering included) ----
 
-struct KinkConfig {
-  double bField_T = 0.0; ///< tesla, set by the caller from the field map
+/// Settings used by both search strategies (Exhaustive and SeedAndExtend), set once from the
+/// CombinatorialTrackFinder options so that the two searches cannot disagree.
+struct CommonSearchConfig {
+  int minTrackHits = 3;                ///< MinTrackHits: fewest hits of a track
+  double minPtGeV = 0.0;               ///< MinComboPT: minimum pT (GeV); <= 0 = off
+  double maxPairHitDistanceCm = 300.0; ///< MaxPairHitDistance: largest 3D distance between hits (cm)
+  double bFieldTesla = 0.0;            ///< Bz at the IP, from the field map
 };
 
 /// One hit as the kink chi2 sees it.
@@ -95,6 +101,7 @@ struct KinkPoint {
   Eigen::Vector3d normal = Eigen::Vector3d::UnitX(); ///< sensor normal, for the incidence angle
 };
 
+/// The kink chi2 of a track, its ndf, and the chi2 of every triplet.
 struct KinkResult {
   double chi2 = 0.0;
   int ndf = 0;
@@ -102,21 +109,31 @@ struct KinkResult {
   double chi2ndf() const { return ndf > 0 ? chi2 / ndf : 0.0; }
 };
 
-/// Highland multiple-scattering angle (plane), with the log term, for a particle with
-/// beta = 1: the track finder does not know the particle type. Above p ~ 1 GeV this is
-/// within 1% of the angle for a muon or a pion (6-10% smaller at 0.3 GeV).
-double highlandTheta0(double xOverX0, double p_GeV);
+/// Computes the kink chi2 described above, for a given field (the momentum, and so the
+/// expected scattering, follows from the radius and the field).
+class KinkChi2Calculator {
+public:
+  explicit KinkChi2Calculator(double bFieldTesla) : m_bFieldTesla(bFieldTesla) {}
 
-/// Kink chi2 (2 dof) of the triplet a-b-c for a helix of radius R_cm and rotation sense rot
-/// (+1 = anticlockwise seen from +z, the order of travel being a -> b -> c).
-/// sigmaR_cm: uncertainty of R, propagated to the expected turn. Pass it when R comes from hits
-/// other than a, b, c (e.g. testing a new hit against the current track's curvature); leave it
-/// 0 when R was fitted to these hits.
-double tripletKinkChi2(const KinkPoint& a, const KinkPoint& b, const KinkPoint& c, double R_cm, int rot,
-                       const KinkConfig& cfg, double sigmaR_cm = 0.0);
+  /// Highland multiple-scattering angle (in one plane), with the log term, for a particle with
+  /// beta = 1: the track finder does not know the particle type. Above p ~ 1 GeV this is
+  /// within 1% of the angle for a muon or a pion (6-10% smaller at 0.3 GeV).
+  static double highlandTheta0(double xOverX0, double p_GeV);
 
-/// Kink chi2 of hits ordered along the track.
-KinkResult kinkChi2(const std::vector<KinkPoint>& pts, double R_cm, int rot, const KinkConfig& cfg);
+  /// Kink chi2 (2 dof) of the triplet a-b-c for a helix of radius R_cm and rotation sense rot
+  /// (+1 = anticlockwise seen from +z, the order of travel being a -> b -> c).
+  /// sigmaR_cm: uncertainty of R, propagated to the expected turn. Pass it when R comes from
+  /// hits other than a, b, c (e.g. testing a new hit against the current track's curvature);
+  /// leave it 0 when R was fitted to these hits.
+  double triplet(const KinkPoint& a, const KinkPoint& b, const KinkPoint& c, double R_cm, int rot,
+                 double sigmaR_cm = 0.0) const;
+
+  /// Kink chi2 of hits ordered along the track: the sum over all triplets.
+  KinkResult track(const std::vector<KinkPoint>& pts, double R_cm, int rot) const;
+
+private:
+  double m_bFieldTesla = 0.0; ///< tesla, from the field map
+};
 
 } // namespace k4rt
 

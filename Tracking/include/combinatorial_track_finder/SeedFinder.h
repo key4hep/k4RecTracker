@@ -43,25 +43,24 @@
 namespace k4rt {
 
 struct SeedConfig {
+  /// shared with the exhaustive search: minimum hits; minimum pT (here required of tracks with
+  /// at most shortTrackMaxHits hits: a 3-hit track has one constraint, so random low-pT triplets
+  /// pass any kink cut); largest distance between consecutive seed hits; field
+  CommonSearchConfig common;
+
   // --- set from the CombinatorialTrackFinder options ---
   std::string policy = "innermost"; ///< innermost | outermost | consecutive (also sets the extension direction)
-  double maxHitDist_cm = 300.;      ///< MaxPairHitDistance: 3D distance between consecutive seed hits
   int maxCandPerLayer = 3;          ///< MaxCandidatesPerLayer: hits tried per crossed layer, nearest first
-  int minTrackHits = 3;             ///< MinTrackHits
   /// ShortTrackMaxHits: a track with at most this many hits must pass the hole check and the minimum pT
   int shortTrackMaxHits = 4;
   /// ShadowHitWindow: after a track is accepted, unclaimed hits on its trajectory within this
   /// distance (cm, on their own sensor plane) are claimed too (overlapping-sensor double hits,
   /// which would otherwise seed a parallel duplicate). 0 = off.
   double shadowHitWindow_cm = 0.1;
-  double bField_T = 0.0; ///< tesla, Bz at the IP from the field map (set by CombinatorialTrackFinder)
   // kink chi2 cuts (multiple scattering included, TrackingMath.h)
   double kinkMaxChi2Triplet = 40.0; ///< a hit is attached only if its triplet's kink chi2 (2 dof) is below this
   double seedKinkMaxChi2NDF = 9.0;  ///< seed acceptance (kink chi2/ndf)
   double trackKinkMaxChi2NDF = 5.0; ///< a finished track is kept (and claims its hits) below this
-  /// MinComboPT: tracks with at most shortTrackMaxHits hits must reach this pT (GeV); <= 0 = off.
-  /// A 3-hit track has one constraint, so random low-pT triplets pass any kink cut.
-  double shortTrackMinPt = 0.0;
 
   // --- fixed values (no option) ---
   std::vector<int> passes = {4, 3}; ///< seed sizes: 4-hit seeds first, then 3-hit seeds on the hits left
@@ -131,6 +130,9 @@ private:
   struct LayerHits { // the unclaimed hits of one layer (indices into the hit collection)
     std::vector<size_t> gIdx;
   };
+  /// The search in one event: holds the event's hits, the claimed hits and the accepted
+  /// candidates, and does the steps of run() as its methods (defined in SeedFinder.cpp).
+  class EventSearch;
 
   /// Seed layer sets of size n from the ray sweep (policy consecutive/innermost/outermost).
   std::vector<std::vector<int>> buildSets(int n, std::vector<std::string>& problems) const;

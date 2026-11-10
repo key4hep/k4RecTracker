@@ -22,7 +22,7 @@
 from Gaudi.Configuration import INFO
 from k4FWCore import ApplicationMgr, IOSvc
 from k4FWCore.parseArgs import parser
-from Configurables import EventDataSvc, GeoSvc
+from Configurables import EventDataSvc, GeoSvc, Gaudi__Monitoring__MessageSvcSink
 from Configurables import CombinatorialTrackFinder
 
 parser.add_argument("--inputFile", required=True, help="digitised file with MSTrackerHits")
@@ -113,6 +113,7 @@ ApplicationMgr(
     TopAlg=algorithms,
     EvtSel="NONE",
     EvtMax=args.numEvents,
-    ExtSvc=[EventDataSvc("EventDataSvc")],
+    # MessageSvcSink prints the run statistics (counters) of the algorithms at the end of the job
+    ExtSvc=[EventDataSvc("EventDataSvc"), Gaudi__Monitoring__MessageSvcSink()],
     OutputLevel=INFO,
 )

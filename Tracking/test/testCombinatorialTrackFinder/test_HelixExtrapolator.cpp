@@ -201,7 +201,7 @@ k4rt::Crossing checkCylinderCrossing(const k4rt::Helix& helix, const TestParticl
   const double largestRadius = std::hypot(helix.cx, helix.cy) + helix.R;
   const double cylinderRadius = startRadius + 0.5 * (largestRadius - startRadius);
 
-  const k4rt::Crossing crossing = k4rt::crossCylinder(helix, cylinderRadius, 0.0, +1);
+  const k4rt::Crossing crossing = helix.crossCylinder(cylinderRadius, 0.0, +1);
   double notFound = 1;
   if (crossing.ok) {
     notFound = 0;
@@ -230,7 +230,7 @@ void checkDiskCrossing(const k4rt::Helix& helix, const TestParticle& particle, c
     diskZ = particle.startPosition.z() + 20.0;
   }
 
-  const k4rt::Crossing crossing = k4rt::crossPlaneZ(helix, diskZ, 0.0, +1);
+  const k4rt::Crossing crossing = helix.crossPlaneZ(diskZ, 0.0, +1);
   double notFound = 1;
   if (crossing.ok) {
     notFound = 0;
@@ -256,7 +256,7 @@ void checkBackwardCrossing(const k4rt::Helix& helix, const TestParticle& particl
   }
   const double cylinderRadius = 0.5 * startRadius;
 
-  const k4rt::Crossing crossing = k4rt::crossCylinder(helix, cylinderRadius, 0.0, -1);
+  const k4rt::Crossing crossing = helix.crossCylinder(cylinderRadius, 0.0, -1);
   if (!crossing.ok) {
     std::printf("  (backward cylinder r=%.2f not reached - skipped)\n", cylinderRadius);
     return;
@@ -282,7 +282,7 @@ void checkHelixFromHits(const k4rt::Helix& helix) {
 
   k4rt::Helix fittedHelix;
   std::vector<double> arcLengths;
-  const bool fitWorked = k4rt::helixFromHits(helix.cx, helix.cy, helix.R, points, fittedHelix, &arcLengths);
+  const bool fitWorked = k4rt::Helix::fromHits(helix.cx, helix.cy, helix.R, points, fittedHelix, &arcLengths);
 
   double rotationDifference = 9; // shown when the fit failed
   if (fitWorked) {
@@ -313,7 +313,7 @@ void checkPlaneCrossing(const k4rt::Helix& helix, const TestParticle& particle, 
   const Eigen::Vector3d sideways(-planeNormal.y(), planeNormal.x(), 0);
   const Eigen::Vector3d planePoint = cylinderCrossing.pos + 0.3 * sideways;
 
-  const k4rt::Crossing crossing = k4rt::refineToPlane(helix, planePoint, planeNormal, cylinderCrossing.s);
+  const k4rt::Crossing crossing = helix.refineToPlane(planePoint, planeNormal, cylinderCrossing.s);
   double notFound = 1;
   if (crossing.ok) {
     notFound = 0;

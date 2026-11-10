@@ -13,7 +13,7 @@ import os
 from Gaudi.Configuration import INFO
 from k4FWCore import ApplicationMgr, IOSvc
 from k4FWCore.parseArgs import parser
-from Configurables import EventDataSvc, GeoSvc
+from Configurables import EventDataSvc, GeoSvc, Gaudi__Monitoring__MessageSvcSink
 from Configurables import CollectionMerger, CombinatorialTrackFinder
 
 parser.add_argument(
@@ -33,7 +33,8 @@ geoservice.OutputLevel = INFO
 geoservice.EnableGeant4Geo = False
 
 algorithms = []
-services = [EventDataSvc("EventDataSvc")]
+# MessageSvcSink prints the run statistics (counters) of the algorithms at the end of the job
+services = [EventDataSvc("EventDataSvc"), Gaudi__Monitoring__MessageSvcSink()]
 
 # -- optional digitisation: Gaussian smearing on the sensor planes (CLDConfig TrackingDigi.py) --
 # (subdetector, resolution u per layer, resolution v per layer (mm), simulated hits, links, digitised hits)
