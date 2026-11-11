@@ -76,6 +76,15 @@ struct TracksFromGenParticles final
     m_Bz = getBzAtOrigin(dd4hep::Detector::getInstance());
     debug() << "B field (T) is : " << m_Bz << endmsg;
 
+    // Check the input tracker hit collection. The hit input must match UseSimTrackerHits
+    const bool hasSimTrackerHitInput = !inputLocations("InputSimTrackerHits").empty();
+    if (m_useSimTrackerHits != hasSimTrackerHitInput) {
+      error() << (m_useSimTrackerHits ? "UseSimTrackerHits is true but InputSimTrackerHits is empty"
+                                      : "UseSimTrackerHits is false but InputSimTrackerHits is given")
+              << endmsg;
+      return StatusCode::FAILURE;
+    }
+
     // retrieve ecal dimensions:
     // - barrel: inner R, zmax
     // - endcap: inner R, zmin, zmax
@@ -236,10 +245,17 @@ struct TracksFromGenParticles final
         continue;
 
       // look up SimTrackerHits associated to genParticle from the pre-built index;
-      // tracks are only built for particles with at least one SimTrackerHit
+      // tracks are only built for particles with at least one SimTrackerHit.
+      // Without SimTrackerHits (UseSimTrackerHits = false, e.g. calorimeter-only geometries), the production point
+      // is used as the only hit: the TrackStates at first and last hit are then the one at IP
       auto hitIt = particleHitIndex.find(genParticle.getObjectID());
-      if (hitIt == particleHitIndex.end())
-        continue;
+      if (hitIt == particleHitIndex.end()) {
+        if (m_useSimTrackerHits)
+          continue;
+        const auto& vertex = genParticle.getVertex();
+        hitIt = particleHitIndex.try_emplace(genParticle.getObjectID(), m_trackerIDs.size()).first;
+        hitIt->second.hits.push_back({vertex.x, vertex.y, vertex.z, p.x, p.y, p.z, genParticle.getTime()});
+      }
       auto& trackHits = hitIt->second.hits;
       const auto& v = hitIt->second.subdetCounts;
       debug() << "Number of SimTrackerHits: " << trackHits.size() << endmsg;
@@ -422,6 +438,14 @@ private:
   float m_eCalEndCapOuterR = 0.f;
   float m_eCalEndCapInnerZ = 0.f;
   float m_eCalEndCapOuterZ = 0.f;
+
+  /// Configurable property to decide whether to use SimTrackerHits or not.
+  /// If true, the input SimTrackerHit collection must be given and tracks are built only for particles with at least
+  /// one hit. If false, the input SimTrackerHit collection must be empty and tracks are built for all charged
+  /// particles.
+  ///    -> This should be used ONLY for calorimeter-only geometries, where no tracker is present and no SimTrackerHits
+  ///    are produced.
+  Gaudi::Property<bool> m_useSimTrackerHits{this, "UseSimTrackerHits", true, "Use the SimTrackerHits or not"};
 
   /// Configurable property to decide whether to calculate track state at ECAL or not
   Gaudi::Property<bool> m_extrapolateToECal{this, "ExtrapolateToECal", false,
