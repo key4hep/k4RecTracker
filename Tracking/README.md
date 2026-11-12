@@ -6,6 +6,7 @@ This subfolder contains the implementation of several Tracking tools for FCC-ee 
 * PlotTrackHitResiduals
 * TrackdNdxDelphesBased
 * TracksFromGenParticles
+* CombinatorialTrackFinder
 
 ## Geometric Graph Track Finding
 
@@ -179,4 +180,23 @@ After the fit:
 3. Track states and covariance matrices are stored.
 4. The results are written to the output collection.
 
+## Combinatorial Track Finder
 
+**CombinatorialTrackFinder** finds tracks in the planar hits of one tracking system (an inner
+tracker, a silicon wrapper, a muon system, ...) without using any other detector, and never
+assumes that a track comes from the interaction point, so it also finds displaced tracks.
+
+Candidates are found either by trying all k-hit combinations over the layers
+(`Strategy = Exhaustive`, sparse events) or from seeds extended layer by layer along their
+helix (`Strategy = SeedAndExtend`, dense events). Each track stores its fitted helix as
+EDM4hep track states `AtFirstHit` and `AtLastHit`; an `AtIP` state is added with
+`IPStateMode = Helix` (uniform field, inner trackers) or `SolenoidCrossing` (tracks measured
+outside the solenoid). For a Kalman fit, run `GenfitTrackFitter` on the output tracks
+(see `runMuonSystemTracking.py --genfit`).
+To use the hits of several subdetectors, merge their hit and link collections first with
+k4FWCore's `CollectionMerger` (see `runCombinatorialTrackFinder.py`).
+
+It is implemented in `components/CombinatorialTrackFinder.{h,cpp}`, with helpers in
+`include/combinatorial_track_finder/` and `src/combinatorial_track_finder/` (TrackingMath,
+TrackCandidate, ExhaustiveSearch, LayerGeometry, HelixExtrapolator, SeedFinder). Steering examples are in
+[test/testCombinatorialTrackFinder/](test/testCombinatorialTrackFinder/).

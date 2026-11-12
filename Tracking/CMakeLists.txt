@@ -18,16 +18,19 @@ FOREACH( pkg  MarlinUtil PandoraSDK )
   ENDIF()
 ENDFOREACH()
 
-file(GLOB sources
+# CONFIGURE_DEPENDS: without it a newly added .cpp is invisible to an incremental build.
+file(GLOB sources CONFIGURE_DEPENDS
     ${PROJECT_SOURCE_DIR}/src/*.cpp
     ${PROJECT_SOURCE_DIR}/components/*.cpp
     ${PROJECT_SOURCE_DIR}/src/genfit_interfaces/*.cpp
+    ${PROJECT_SOURCE_DIR}/src/combinatorial_track_finder/*.cpp
 
 )
 
-file(GLOB headers
+file(GLOB headers CONFIGURE_DEPENDS
   ${PROJECT_SOURCE_DIR}/include/*.h
   ${PROJECT_SOURCE_DIR}/include/genfit_interfaces/*.h
+  ${PROJECT_SOURCE_DIR}/include/combinatorial_track_finder/*.h
 )
 
 gaudi_add_module(${PackageName}
@@ -54,6 +57,7 @@ endif()
 target_include_directories(${PackageName} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/genfit_interfaces>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/combinatorial_track_finder>
   $<INSTALL_INTERFACE:include>
   ${MarlinUtil_INCLUDE_DIRS}
   ${DELPHES_INCLUDE_DIRS}
@@ -75,6 +79,33 @@ install(TARGETS ${PackageName}
 )
 
 install(FILES ${scripts} DESTINATION test)
+
+# Standalone unit test of the helix extrapolation maths (no Gaudi, no input files):
+# analytic crossings vs an independent RK4 Lorentz-force integration.
+add_executable(test_HelixExtrapolator
+  ${PROJECT_SOURCE_DIR}/test/testCombinatorialTrackFinder/test_HelixExtrapolator.cpp
+  ${PROJECT_SOURCE_DIR}/src/combinatorial_track_finder/HelixExtrapolator.cpp)
+target_include_directories(test_HelixExtrapolator PRIVATE ${PROJECT_SOURCE_DIR}/include/combinatorial_track_finder)
+target_link_libraries(test_HelixExtrapolator PRIVATE Eigen3::Eigen)
+add_test(NAME test_HelixExtrapolator COMMAND test_HelixExtrapolator)
+
+# Toy calibration of the multiple-scattering-aware kink chi2 (no Gaudi, no input files).
+add_executable(test_TrackQuality
+  ${PROJECT_SOURCE_DIR}/test/testCombinatorialTrackFinder/test_TrackQuality.cpp
+  ${PROJECT_SOURCE_DIR}/src/combinatorial_track_finder/TrackingMath.cpp
+  ${PROJECT_SOURCE_DIR}/src/combinatorial_track_finder/HelixExtrapolator.cpp)
+target_include_directories(test_TrackQuality PRIVATE ${PROJECT_SOURCE_DIR}/include/combinatorial_track_finder)
+target_link_libraries(test_TrackQuality PRIVATE Eigen3::Eigen)
+add_test(NAME test_TrackQuality COMMAND test_TrackQuality)
+
+# End-to-end test of CombinatorialTrackFinder: simulated muons -> digitisation -> tracks,
+# then checks of the efficiency, the pT and the stored track states.
+# It runs in the build directory, so its output files stay out of the source tree.
+SET(test_name "test_CombinatorialTrackFinder")
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/testCombinatorialTrackFinder)
+ADD_TEST(NAME ${test_name} COMMAND sh +x ${PROJECT_SOURCE_DIR}/test/testCombinatorialTrackFinder/test_CombinatorialTrackFinder.sh)
+set_test_env(${test_name})
+set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/testCombinatorialTrackFinder")
 
 SET(test_name "test_TracksFromGenParticles")
 ADD_TEST(NAME ${test_name} COMMAND sh +x test_TracksFromGenParticles.sh)
