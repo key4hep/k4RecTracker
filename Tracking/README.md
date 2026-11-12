@@ -198,5 +198,5 @@ k4FWCore's `CollectionMerger` (see `runCombinatorialTrackFinder.py`).
 
 It is implemented in `components/CombinatorialTrackFinder.{h,cpp}`, with helpers in
 `include/combinatorial_track_finder/` and `src/combinatorial_track_finder/` (TrackingMath,
-ExhaustiveSearch, LayerGeometry, HelixExtrapolator, SeedFinder). Steering examples are in
+TrackCandidate, ExhaustiveSearch, LayerGeometry, HelixExtrapolator, SeedFinder). Steering examples are in
 [test/testCombinatorialTrackFinder/](test/testCombinatorialTrackFinder/).

@@ -16,188 +16,182 @@ namespace k4rt {
 
 namespace {
   constexpr double kTwoPi = 2.0 * M_PI;
-  // An angle brought into (0, 2pi]. Unlike wrapAngleZeroToTwoPi (TrackingMath.h), an angle of
-  // exactly 0 becomes a full turn: a crossing at the starting point itself is the next turn.
-  double wrapPositive(double a) {
-    a = std::fmod(a, kTwoPi);
-    if (a <= 0.0)
-      a += kTwoPi;
-    return a;
+  // angle in (0, 2pi]: unlike wrapAngleZeroToTwoPi, 0 becomes a full turn (a crossing at the
+  // starting point itself is the next turn)
+  double wrapPositive(double angle) {
+    angle = std::fmod(angle, kTwoPi);
+    if (angle <= 0.0)
+      angle += kTwoPi;
+    return angle;
   }
 } // namespace
 
-Eigen::Vector3d Helix::at(double s) const {
-  // a point on the circle at the angle reached after s, and the straight line in z
-  const double a = angleAt(s);
-  return {cx + R * std::cos(a), cy + R * std::sin(a), zRef + tanL * s};
+Eigen::Vector3d Helix::positionAt(double arcLength) const {
+  const double angle = angleAt(arcLength);
+  return {centreX + radius * std::cos(angle), centreY + radius * std::sin(angle), referenceZ + tanLambda * arcLength};
 }
 
-Eigen::Vector3d Helix::dirAt(double s) const {
-  // derivative of at(s): the transverse tangent of the circle (unit length, turned by rot) and
-  // dz/ds = tanL; normalised to a unit 3D vector
-  const double a = angleAt(s);
-  Eigen::Vector3d d(-rot * std::sin(a), rot * std::cos(a), tanL);
-  return d.normalized();
+Eigen::Vector3d Helix::directionAt(double arcLength) const {
+  // derivative of positionAt: the unit transverse tangent (turned by the rotation) and tanLambda
+  const double angle = angleAt(arcLength);
+  Eigen::Vector3d direction(-rotation * std::sin(angle), rotation * std::cos(angle), tanLambda);
+  return direction.normalized();
 }
 
-bool Helix::fromHits(double centreX, double centreY, double radius, const std::vector<Eigen::Vector3d>& hits,
-                     Helix& out, std::vector<double>* sOfHits) {
-  const int n = static_cast<int>(hits.size());
-  if (n < 2 || !(radius > 0.0))
+bool Helix::fromHits(double circleCentreX, double circleCentreY, double circleRadius,
+                     const std::vector<Eigen::Vector3d>& hits, Helix& out, std::vector<double>* arcLengthsOfHits) {
+  const int numberOfHits = static_cast<int>(hits.size());
+  if (numberOfHits < 2 || !(circleRadius > 0.0))
     return false;
-  out.cx = centreX;
-  out.cy = centreY;
-  out.R = radius;
+  out.centreX = circleCentreX;
+  out.centreY = circleCentreY;
+  out.radius = circleRadius;
 
-  // 1. angle of every hit about the centre, "unwrapped": each step is the smallest turn from the
-  //    previous hit, so the accumulated angle keeps growing (or shrinking) beyond +-pi
-  std::vector<double> ang(n);
-  ang[0] = std::atan2(hits[0].y() - centreY, hits[0].x() - centreX);
-  for (int i = 1; i < n; ++i) {
-    const double a = std::atan2(hits[i].y() - centreY, hits[i].x() - centreX);
-    ang[i] = ang[i - 1] + wrapAngle(a - ang[i - 1]);
+  // 1. angle of every hit about the centre, unwrapped (each step the smallest turn from the last)
+  std::vector<double> angles(numberOfHits);
+  angles[0] = std::atan2(hits[0].y() - circleCentreY, hits[0].x() - circleCentreX);
+  for (int i = 1; i < numberOfHits; ++i) {
+    const double angle = std::atan2(hits[i].y() - circleCentreY, hits[i].x() - circleCentreX);
+    angles[i] = angles[i - 1] + wrapAngle(angle - angles[i - 1]);
   }
-  // 2. the rotation sense: the sign of the total turn from the first to the last hit
-  out.rot = (ang[n - 1] - ang[0] >= 0.0) ? +1 : -1;
-  out.phiRef = ang[0];
+  // 2. rotation sense: the sign of the total turn
+  out.rotation = (angles[numberOfHits - 1] - angles[0] >= 0.0) ? +1 : -1;
+  out.referenceAngle = angles[0];
 
-  // 3. arc length of each hit, s_i = rot * R * (ang_i - ang_0) >= 0 along the track, and the
-  //    least-squares straight line z = zRef + tanL * s through the points (s_i, z_i):
-  //      tanL = (n * sum(s z) - sum(s) sum(z)) / det,  zRef = (sum(z) sum(s^2) - sum(s) sum(s z)) / det,
-  //      det = n * sum(s^2) - sum(s)^2
-  std::vector<double> s(n);
-  double sS = 0, sZ = 0, sSS = 0, sSZ = 0;
-  for (int i = 0; i < n; ++i) {
-    s[i] = out.rot * radius * (ang[i] - ang[0]);
-    sS += s[i];
-    sZ += hits[i].z();
-    sSS += s[i] * s[i];
-    sSZ += s[i] * hits[i].z();
+  // 3. arc lengths s_i = rotation * R * (angle_i - angle_0) and the least-squares line z = z0 + t s:
+  //    t = (n sum(sz) - sum(s) sum(z)) / det, z0 = (sum(z) sum(s^2) - sum(s) sum(sz)) / det,
+  //    det = n sum(s^2) - sum(s)^2
+  std::vector<double> arcLengths(numberOfHits);
+  double sumS = 0, sumZ = 0, sumSS = 0, sumSZ = 0;
+  for (int i = 0; i < numberOfHits; ++i) {
+    arcLengths[i] = out.rotation * circleRadius * (angles[i] - angles[0]);
+    sumS += arcLengths[i];
+    sumZ += hits[i].z();
+    sumSS += arcLengths[i] * arcLengths[i];
+    sumSZ += arcLengths[i] * hits[i].z();
   }
-  const double det = n * sSS - sS * sS;
-  if (std::abs(det) > 1e-12) {
-    out.zRef = (sZ * sSS - sS * sSZ) / det;
-    out.tanL = (n * sSZ - sS * sZ) / det;
+  const double determinant = numberOfHits * sumSS - sumS * sumS;
+  if (std::abs(determinant) > 1e-12) {
+    out.referenceZ = (sumZ * sumSS - sumS * sumSZ) / determinant;
+    out.tanLambda = (numberOfHits * sumSZ - sumS * sumZ) / determinant;
   } else {
-    // all hits at the same s (no lever arm): a flat line at the mean z
-    out.zRef = sZ / n;
-    out.tanL = 0.0;
+    out.referenceZ = sumZ / numberOfHits; // no lever arm: flat line at the mean z
+    out.tanLambda = 0.0;
   }
-  if (sOfHits)
-    *sOfHits = s;
+  if (arcLengthsOfHits)
+    *arcLengthsOfHits = arcLengths;
   return true;
 }
 
-double Helix::arcLengthNear(const Eigen::Vector3d& p, double sGuess) const {
-  // angle of p about the centre, compared with the angle at the guess; the smallest angular move
-  // (wrapped to (-pi, pi]) is converted back to an arc length (angle * R, with the rotation sense)
-  const double a = std::atan2(p.y() - cy, p.x() - cx);
-  const double a0 = angleAt(sGuess);
-  return sGuess + rot * R * wrapAngle(a - a0);
+double Helix::arcLengthNear(const Eigen::Vector3d& point, double guessArcLength) const {
+  // the smallest angular move from the guess (wrapped to (-pi, pi]), turned into an arc length
+  const double angle = std::atan2(point.y() - centreY, point.x() - centreX);
+  const double angleAtGuess = angleAt(guessArcLength);
+  return guessArcLength + rotation * radius * wrapAngle(angle - angleAtGuess);
 }
 
-Crossing Helix::crossCylinder(double rCylinder, double sFrom, int dir, double sEps, double sMax) const {
+Crossing Helix::crossCylinder(double cylinderRadius, double fromArcLength, int direction, double minArcLength,
+                              double maxArcLength) const {
   Crossing best;
-  // Intersection of two circles in the transverse plane: the track circle (centre c, radius R)
-  // and the cylinder (centre at the origin, radius Rc). With d = |c|:
-  //   - no crossing if d > R + Rc (too far) or d < |R - Rc| (one circle inside the other);
-  //   - otherwise the two crossing points lie on the line through the origin along c at the
-  //     distance a = (Rc^2 - R^2 + d^2) / (2 d) from the origin, and +-hh perpendicular to it,
-  //     with hh = sqrt(Rc^2 - a^2) (Pythagoras in the triangle origin - crossing - foot point).
-  const double d = std::hypot(cx, cy);
-  if (d < 1e-12)
-    return best; // circle centred on the axis: its radius never changes
-  if (d > R + rCylinder || d < std::abs(R - rCylinder))
-    return best; // never reaches the radius rCylinder
-  const double a = (rCylinder * rCylinder - R * R + d * d) / (2.0 * d);
-  const double h2 = rCylinder * rCylinder - a * a;
-  const double hh = std::sqrt(std::max(0.0, h2));
-  const double ux = cx / d, uy = cy / d; // unit vector from the origin towards the centre
+  // Two circles (track: centre c, radius R; cylinder: radius Rc at the origin), d = |c|: they
+  // cross unless d > R + Rc or d < |R - Rc|; the crossings lie on the line along c at
+  // a = (Rc^2 - R^2 + d^2) / (2 d) from the origin, +-h = sqrt(Rc^2 - a^2) sideways.
+  const double centreDistance = std::hypot(centreX, centreY);
+  if (centreDistance < 1e-12)
+    return best; // centred on the axis: the radius never changes
+  if (centreDistance > radius + cylinderRadius || centreDistance < std::abs(radius - cylinderRadius))
+    return best; // never reaches the cylinder
+  const double footDistance =
+      (cylinderRadius * cylinderRadius - radius * radius + centreDistance * centreDistance) / (2.0 * centreDistance);
+  const double halfChordSquared = cylinderRadius * cylinderRadius - footDistance * footDistance;
+  const double halfChord = std::sqrt(std::max(0.0, halfChordSquared));
+  const double unitX = centreX / centreDistance; // unit vector from the origin to the centre
+  const double unitY = centreY / centreDistance;
 
-  // of the two crossing points, the one reached first when moving from sFrom in the direction dir
-  const double a0 = angleAt(sFrom);
-  double bestDs = std::numeric_limits<double>::infinity();
-  for (int sgn = -1; sgn <= 1; sgn += 2) {
-    const double px = a * ux - sgn * hh * uy;
-    const double py = a * uy + sgn * hh * ux;
-    const double ap = std::atan2(py - cy, px - cx);
-    // moving by ds along dir turns the angle about the centre by rot * dir * ds / R; the turn
-    // still needed to reach the crossing, in (0, 2pi], gives the arc length ds = R * turn
-    const double dAng = wrapPositive(rot * dir * (ap - a0));
-    const double ds = R * dAng;
-    if (ds < sEps || ds > sMax)
+  // the crossing reached first from fromArcLength in the direction: moving by ds turns the angle
+  // by rotation * direction * ds / R, so the turn still needed (in (0, 2pi]) gives ds = R * turn
+  const double angleFrom = angleAt(fromArcLength);
+  double bestDistance = std::numeric_limits<double>::infinity();
+  for (int side = -1; side <= 1; side += 2) {
+    const double crossingX = footDistance * unitX - side * halfChord * unitY;
+    const double crossingY = footDistance * unitY + side * halfChord * unitX;
+    const double crossingAngle = std::atan2(crossingY - centreY, crossingX - centreX);
+    const double turn = wrapPositive(rotation * direction * (crossingAngle - angleFrom));
+    const double distance = radius * turn;
+    if (distance < minArcLength || distance > maxArcLength)
       continue;
-    if (ds < bestDs)
-      bestDs = ds;
+    if (distance < bestDistance)
+      bestDistance = distance;
   }
-  if (!std::isfinite(bestDs))
+  if (!std::isfinite(bestDistance))
     return best;
   best.ok = true;
-  best.s = sFrom + dir * bestDs;
-  best.pos = at(best.s);
+  best.arcLength = fromArcLength + direction * bestDistance;
+  best.position = positionAt(best.arcLength);
   return best;
 }
 
-Crossing Helix::crossPlaneZ(double zPlane, double sFrom, int dir, double sEps, double sMax) const {
-  Crossing c;
-  // z = zRef + tanL * s, solved for s; impossible for a track flying parallel to the plane
-  if (std::abs(tanL) < 1e-12)
-    return c;
-  const double s = (zPlane - zRef) / tanL;
-  const double ds = dir * (s - sFrom); // distance travelled in the direction dir
-  if (ds < sEps || ds > sMax)
-    return c;
-  c.ok = true;
-  c.s = s;
-  c.pos = at(s);
-  return c;
+Crossing Helix::crossPlaneZ(double planeZ, double fromArcLength, int direction, double minArcLength,
+                            double maxArcLength) const {
+  Crossing crossing;
+  if (std::abs(tanLambda) < 1e-12)
+    return crossing; // parallel to the plane
+  const double arcLength = (planeZ - referenceZ) / tanLambda;
+  const double distance = direction * (arcLength - fromArcLength); // travelled in the direction
+  if (distance < minArcLength || distance > maxArcLength)
+    return crossing;
+  crossing.ok = true;
+  crossing.arcLength = arcLength;
+  crossing.position = positionAt(arcLength);
+  return crossing;
 }
 
-Crossing Helix::crossLayer(const LayerDescriptor& layer, double sFrom, int dir, double tol, double sMax) const {
-  Crossing c;
-  if (layer.nSurfaces == 0)
-    return c;
+Crossing Helix::crossLayer(const LayerDescriptor& layer, double fromArcLength, int direction, double tolerance,
+                           double maxArcLength) const {
+  Crossing crossing;
+  if (layer.numberOfSurfaces == 0)
+    return crossing;
   if (layer.isBarrel()) {
-    // barrel layer: the cylinder at its mean radius, accepted inside its z extent (+- tol)
-    c = crossCylinder(layer.rMean_cm, sFrom, dir, 1e-6, sMax);
-    if (c.ok && (c.pos.z() < layer.zMin_cm - tol || c.pos.z() > layer.zMax_cm + tol))
-      c.ok = false;
+    // the cylinder at the mean radius, inside the z extent (+- tolerance)
+    crossing = crossCylinder(layer.rMean_cm, fromArcLength, direction, 1e-6, maxArcLength);
+    const double z = crossing.position.z();
+    if (crossing.ok && (z < layer.zMin_cm - tolerance || z > layer.zMax_cm + tolerance))
+      crossing.ok = false;
   } else {
-    // disk: the plane at its mean z, accepted inside its radial extent (+- tol)
-    c = crossPlaneZ(layer.zMean_cm, sFrom, dir, 1e-6, sMax);
-    if (c.ok) {
-      const double r = std::hypot(c.pos.x(), c.pos.y());
-      if (r < layer.rMin_cm - tol || r > layer.rMax_cm + tol)
-        c.ok = false;
+    // the plane at the mean z, inside the radial extent (+- tolerance)
+    crossing = crossPlaneZ(layer.zMean_cm, fromArcLength, direction, 1e-6, maxArcLength);
+    if (crossing.ok) {
+      const double transverseRadius = std::hypot(crossing.position.x(), crossing.position.y());
+      if (transverseRadius < layer.rMin_cm - tolerance || transverseRadius > layer.rMax_cm + tolerance)
+        crossing.ok = false;
     }
   }
-  return c;
+  return crossing;
 }
 
-Crossing Helix::refineToPlane(const Eigen::Vector3d& o, const Eigen::Vector3d& n, double sStart, int maxIter,
-                              double tol) const {
-  Crossing c;
-  // Newton's method on f(s) = n . (at(s) - o), the signed distance of the helix point from the
-  // plane: s <- s - f(s) / f'(s), with f'(s) = n . d(at)/ds.
-  double s = sStart;
-  for (int it = 0; it < maxIter; ++it) {
-    const Eigen::Vector3d p = at(s);
-    const double f = n.dot(p - o);
-    if (std::abs(f) < tol) {
-      c.ok = true;
-      c.s = s;
-      c.pos = p;
-      return c;
+Crossing Helix::refineToPlane(const Eigen::Vector3d& planeOrigin, const Eigen::Vector3d& planeNormal,
+                              double startArcLength, int maxIterations, double tolerance) const {
+  Crossing crossing;
+  // Newton on f(s) = n . (positionAt(s) - o): s <- s - f / f', f' = n . d(position)/ds
+  double arcLength = startArcLength;
+  for (int iteration = 0; iteration < maxIterations; ++iteration) {
+    const Eigen::Vector3d point = positionAt(arcLength);
+    const double distance = planeNormal.dot(point - planeOrigin);
+    if (std::abs(distance) < tolerance) {
+      crossing.ok = true;
+      crossing.arcLength = arcLength;
+      crossing.position = point;
+      return crossing;
     }
-    // d/ds of the position, NOT normalised: (dx/ds, dy/ds) has unit length, dz/ds = tanL
-    const double a = angleAt(s);
-    const Eigen::Vector3d dp(-rot * std::sin(a), rot * std::cos(a), tanL);
-    const double fp = n.dot(dp);
-    if (std::abs(fp) < 1e-12)
-      return c; // travelling parallel to the plane
-    s -= f / fp;
+    // d(position)/ds, NOT normalised: unit transverse part, dz/ds = tanLambda
+    const double angle = angleAt(arcLength);
+    const Eigen::Vector3d derivative(-rotation * std::sin(angle), rotation * std::cos(angle), tanLambda);
+    const double slope = planeNormal.dot(derivative);
+    if (std::abs(slope) < 1e-12)
+      return crossing; // parallel to the plane
+    arcLength -= distance / slope;
   }
-  return c;
+  return crossing;
 }
 
 } // namespace k4rt

@@ -1,12 +1,7 @@
-// LayerGeometry - where each composite layer actually is.
-//
-// The DD4hep surfaces of each composite layer are combined into a bounding cylinder (barrel)
-// or annulus (endcap disk), so that a seed can be extrapolated to "the next layer".
-//
-// Barrel vs endcap is decided from the surface normals; the answer of the compositeID encoding
-// (below) is kept to show disagreements.
-//
-// Units: cm (DD4hep internal), like every other geometric quantity in the component.
+// LayerGeometry - where each tracking layer is: the DD4hep surfaces of one layer key combined
+// into a bounding cylinder (barrel) or annulus (disk), so a seed can be extrapolated to "the
+// next layer". Barrel or disk comes from the surface normals (the key's answer is kept for
+// cross-checks). Units: cm (DD4hep).
 #ifndef TRACKING_LAYERGEOMETRY_H
 #define TRACKING_LAYERGEOMETRY_H
 
@@ -24,22 +19,20 @@ namespace rec {
 
 namespace k4rt {
 
-// Layer key ("compositeID") of a hit, made by CombinatorialTrackFinder::getCompositeID:
-//   barrel     100 * system + layer
-//   +endcap    10000 + 100 * system + layer
-//   -endcap  -(10000 + 100 * system + layer)
-// The system term is there only when several subdetectors share one readout (system < 32,
-// layer < 100), so a key never collides with the key of another region.
+// Layer key of a hit (CombinatorialTrackFinder::layerKeyOf):
+//   barrel 100 * system + layer, +endcap 10000 + 100 * system + layer, -endcap -(10000 + ...).
+// The system term only when several subdetectors share one readout (system < 32, layer < 100),
+// so keys of different regions never collide.
 constexpr int kEndcapKeyOffset = 10000;
 /// The key without its barrel/endcap part: 100 * system + layer.
-inline int keyWithoutRegion(int compositeID) { return std::abs(compositeID) % kEndcapKeyOffset; }
+inline int keyWithoutRegion(int layerKey) { return std::abs(layerKey) % kEndcapKeyOffset; }
 /// The layer number inside its subdetector.
-inline int layerOfKey(int compositeID) { return keyWithoutRegion(compositeID) % 100; }
+inline int layerNumberOfKey(int layerKey) { return keyWithoutRegion(layerKey) % 100; }
 /// The region from the key alone: 0 barrel, +1 +endcap, -1 -endcap.
-inline int regionOfKey(int compositeID) {
-  if (compositeID >= kEndcapKeyOffset)
+inline int regionFromKey(int layerKey) {
+  if (layerKey >= kEndcapKeyOffset)
     return 1;
-  if (compositeID <= -kEndcapKeyOffset)
+  if (layerKey <= -kEndcapKeyOffset)
     return -1;
   return 0;
 }
@@ -47,59 +40,56 @@ inline int regionOfKey(int compositeID) {
 struct LayerDescriptor {
   enum class Kind { Barrel, EndcapPos, EndcapNeg };
 
-  int compositeID = 0;
+  int layerKey = 0;
   Kind kind = Kind::Barrel;
-  Kind kindFromCid = Kind::Barrel; ///< what the compositeID encoding says, for cross-checks
+  Kind kindFromKey = Kind::Barrel; ///< what the layer-key encoding says, for cross-checks
   double rMin_cm = 0, rMax_cm = 0, rMean_cm = 0;
   double zMin_cm = 0, zMax_cm = 0, zMean_cm = 0;
-  /// Closest approach of the layer's bounding region to the origin. A single scalar that
-  /// orders barrel layers and disks together from the inside out.
-  double dMin_cm = 0;
-  int nSurfaces = 0;     ///< sensitive surfaces only
-  double xOverX0 = 0;    ///< material at normal incidence around the sensors (0 = not measured)
-  int nNonSensitive = 0; ///< helper/support surfaces that were ignored
+  double closestApproachCm = 0; ///< of the bounding region to the origin: orders all layers inside-out
+  int numberOfSurfaces = 0;     ///< sensitive surfaces only
+  double xOverX0 = 0;           ///< material at normal incidence around the sensors (0 = not measured)
+  int numberOfNonSensitive = 0; ///< helper/support surfaces that were ignored
 
   bool isBarrel() const { return kind == Kind::Barrel; }
+  /// extent along the measured direction (cm): radial for a barrel layer, along z for a disk
+  double depthCm() const { return isBarrel() ? (rMax_cm - rMin_cm) : (zMax_cm - zMin_cm); }
 };
 
 class LayerGeometry {
 public:
-  /// Aggregate surfaces into one descriptor per composite layer.
+  /// One descriptor per layer key.
   void build(const std::map<int, std::vector<const dd4hep::rec::Surface*>>& surfacesByLayer);
 
-  /// All layers, sorted inside-out by dMin_cm.
+  /// All layers, inside-out by closestApproachCm.
   const std::vector<LayerDescriptor>& layers() const { return m_layers; }
 
-  /// Descriptor for a compositeID, or nullptr.
-  const LayerDescriptor* find(int compositeID) const;
+  /// Descriptor of a layer key, or nullptr.
+  const LayerDescriptor* find(int layerKey) const;
 
-  /// Layers a straight ray from the origin at polar angle theta (rad) would cross, sorted
-  /// by path length. Layers are treated as azimuthally complete (phi is ignored), which is
-  /// right for the seeding question "which layers come first in this direction".
+  /// Layers a straight ray from the origin at polar angle theta (rad) crosses, by path length
+  /// (layers taken as complete in phi: "which layers come first in this direction").
   std::vector<int> layersCrossedByRay(double theta) const;
 
-  /// Human-readable problems: skipped (non-sensitive) composite IDs, normal-vs-cid
-  /// disagreement, barrel radii not increasing with layer number within a system.
-  /// Empty means the table looks sane.
+  /// Problems found (empty = sane): skipped layer keys, normal-vs-key disagreement, barrel radii
+  /// not growing with the layer number within a system.
   std::vector<std::string> validate() const;
 
-  /// Measure each layer's material (x/X0 at normal incidence) from the DD4hep geometry: along
-  /// the normal of up to nSamples of its sensors, from halfway to its inner neighbour to
-  /// halfway to its outer neighbour (each side capped at maxHalfDepth_cm), so the material
-  /// between layers is shared between them and nothing is counted twice.
-  void measureMaterial(dd4hep::Detector& det,
+  /// x/X0 of each layer (normal incidence) from the DD4hep geometry, along the normal of up to
+  /// numberOfSamples sensors, from halfway to its inner to halfway to its outer neighbour (each
+  /// side at most maxHalfDepthCm), so material between layers is shared, not counted twice.
+  void measureMaterial(dd4hep::Detector& detector,
                        const std::map<int, std::vector<const dd4hep::rec::Surface*>>& surfacesByLayer,
-                       int nSamples = 24, double maxHalfDepth_cm = 1.0);
+                       int numberOfSamples = 24, double maxHalfDepthCm = 1.0);
 
   bool empty() const { return m_layers.empty(); }
 
 private:
   std::vector<LayerDescriptor> m_layers;
-  std::vector<LayerDescriptor> m_skipped; ///< composite IDs with no sensitive surface
-  std::map<int, size_t> m_index;          ///< compositeID -> position in m_layers
+  std::vector<LayerDescriptor> m_skipped; ///< layer keys with no sensitive surface
+  std::map<int, size_t> m_index;          ///< layer key -> position in m_layers
 };
 
-const char* kindName(LayerDescriptor::Kind k);
+const char* kindName(LayerDescriptor::Kind kind);
 
 } // namespace k4rt
 

@@ -6,89 +6,94 @@
 
 namespace k4rt {
 
-double KinkChi2Calculator::highlandTheta0(double x, double p) {
-  if (!(x > 0.0) || !(p > 0.0))
-    return 0.0;
-  // Highland formula: theta0 = 13.6 MeV / (beta c p) * sqrt(x/X0) * (1 + 0.038 ln(x/X0)),
-  // x = material thickness in radiation lengths, p in GeV, beta = 1. The log factor is kept
-  // above 0.1 so that very thin layers still give a small positive angle.
-  const double logTerm = 1.0 + 0.038 * std::log(x);
-  return 0.0136 / p * std::sqrt(x) * std::max(logTerm, 0.1);
-}
-
-double KinkChi2Calculator::triplet(const KinkPoint& a, const KinkPoint& b, const KinkPoint& c, double R, int rot,
-                                   double sigmaR) const {
-  // the two chords a->b and b->c in the transverse plane, and their lengths
-  const Eigen::Vector2d u1(b.pos.x() - a.pos.x(), b.pos.y() - a.pos.y());
-  const Eigen::Vector2d u2(c.pos.x() - b.pos.x(), c.pos.y() - b.pos.y());
-  const double l1 = u1.norm(), l2 = u2.norm();
-  if (l1 < 1e-6 || l2 < 1e-6 || !(R > 0.0))
-    return 0.0;
-
-  // 1. kink in the bending plane: the measured turn between the two chords (signed angle from
-  //    the cross and dot products) minus the turn the helix itself makes. A chord of length l on
-  //    a circle of radius R makes the angle asin(l / 2R) with the tangent at each end, so the
-  //    helix turns by h1 + h2 between the chords.
-  const double turn = std::atan2(u1.x() * u2.y() - u1.y() * u2.x(), u1.dot(u2));
-  const double h1 = std::asin(std::min(1.0, l1 / (2.0 * R))), h2 = std::asin(std::min(1.0, l2 / (2.0 * R)));
-  const double dphi = wrapAngle(turn - rot * (h1 + h2));
-
-  // 2. kink in the dip: change of the slope dz/ds between the two segments, with s the arc
-  //    length on the circle (2 R h for a chord), not the chord length
-  const double s1 = 2.0 * R * h1, s2 = 2.0 * R * h2;
-  const double dz1 = b.pos.z() - a.pos.z(), dz2 = c.pos.z() - b.pos.z();
-  const double dlam = std::atan2(dz2, s2) - std::atan2(dz1, s1);
-
-  // 3. expected multiple scattering at b: momentum from the radius (pT) and the mean dip
-  //    (p = pT / cos(lambda)); the material seen grows as 1 / cos(incidence angle) on the sensor
-  //    (limited to 1 / 0.05 for grazing tracks)
-  const double tanl = (dz1 + dz2) / (s1 + s2);
-  const double cosl = 1.0 / std::sqrt(1.0 + tanl * tanl);
-  const double pT = ptFromRadius(m_bFieldTesla, R); // GeV, R in cm
-  const double p = pT / cosl;
-  const Eigen::Vector3d dir = (c.pos - a.pos).normalized();
-  const double cosInc = std::max(0.05, std::abs(b.normal.normalized().dot(dir)));
-  const double th0 = highlandTheta0(b.xOverX0 / cosInc, p);
-
-  // 4. expected spread of the bending-plane kink, the sum of:
-  //    - the uncertainty of the helix turn from sigmaR: d/dR asin(l/2R) = -l / (2 R^2 sqrt(1 - (l/2R)^2)),
-  //    - the scattering angle, projected on the transverse plane (theta0 / cos(lambda)),
-  //    - the measurement errors: a transverse shift sigma of a hit turns a chord of length l by
-  //      sigma / l; the middle hit b moves both chords (1/l1 + 1/l2)
-  const double e1 = 1.0 / l1, e2 = 1.0 / l2;
-  const auto dh = [R](double l) {
-    const double x = std::min(0.999999, l / (2.0 * R));
-    return -l / (2.0 * R * R * std::sqrt(1.0 - x * x));
-  };
-  const double sTurnR = (dh(l1) + dh(l2)) * sigmaR;
-  const double sPhi2 = sTurnR * sTurnR + (th0 / cosl) * (th0 / cosl) + a.sigT_cm * a.sigT_cm * e1 * e1 +
-                       b.sigT_cm * b.sigT_cm * (e1 + e2) * (e1 + e2) + c.sigT_cm * c.sigT_cm * e2 * e2;
-  // 5. expected spread of the dip kink: the scattering angle, plus the z measurement errors
-  //    turned into slope errors (sigma_z / s, the middle hit in both segments); d(lambda) =
-  //    cos^2(lambda) d(tan lambda), hence the cos^4 on the variance
-  const double f1 = 1.0 / s1, f2 = 1.0 / s2, c4 = cosl * cosl * cosl * cosl;
-  const double sLam2 =
-      th0 * th0 + c4 * (a.sigZ_cm * a.sigZ_cm * f1 * f1 + b.sigZ_cm * b.sigZ_cm * (f1 + f2) * (f1 + f2) +
-                        c.sigZ_cm * c.sigZ_cm * f2 * f2);
-  // 6. chi2 of the two kinks, each divided by its expected variance (2 dof)
-  return dphi * dphi / sPhi2 + dlam * dlam / sLam2;
-}
-
-KinkResult KinkChi2Calculator::track(const std::vector<KinkPoint>& pts, double R, int rot) const {
-  KinkResult r;
-  const int n = static_cast<int>(pts.size());
-  r.perTriplet.assign(std::max(n, 0), 0.0);
-  if (n < 3)
-    return r;
-  // one kink at every inner hit; the kinks are independent, so their chi2 add up
-  for (int i = 1; i + 1 < n; ++i) {
-    const double c = triplet(pts[i - 1], pts[i], pts[i + 1], R, rot);
-    r.perTriplet[i] = c;
-    r.chi2 += c;
+namespace {
+  // d/dR of asin(l / 2R), the angle between a chord of length l and the circle:
+  // -l / (2 R^2 sqrt(1 - (l/2R)^2)), with l/2R kept below 1
+  double chordAngleDerivative(double chordLength, double radius) {
+    const double halfChordOverRadius = std::min(0.999999, chordLength / (2.0 * radius));
+    return -chordLength / (2.0 * radius * radius * std::sqrt(1.0 - halfChordOverRadius * halfChordOverRadius));
   }
-  // 2 measured angles per kink, minus 1 for the radius taken from the fit
-  r.ndf = 2 * (n - 2) - 1;
-  return r;
+} // namespace
+
+double KinkChi2Calculator::highlandTheta0(double radiationLengths, double momentumGeV) {
+  if (!(radiationLengths > 0.0) || !(momentumGeV > 0.0))
+    return 0.0;
+  // Highland: theta0 = 13.6 MeV / p * sqrt(x/X0) * (1 + 0.038 ln(x/X0)) for beta = 1; the log
+  // factor is kept above 0.1, so very thin layers still give a small positive angle
+  const double logTerm = 1.0 + 0.038 * std::log(radiationLengths);
+  return 0.0136 / momentumGeV * std::sqrt(radiationLengths) * std::max(logTerm, 0.1);
+}
+
+double KinkChi2Calculator::triplet(const KinkPoint& first, const KinkPoint& middle, const KinkPoint& last,
+                                   double radius, int rotation, double sigmaRadius) const {
+  // the two chords first->middle and middle->last in the transverse plane
+  const Eigen::Vector2d chord1(middle.position.x() - first.position.x(), middle.position.y() - first.position.y());
+  const Eigen::Vector2d chord2(last.position.x() - middle.position.x(), last.position.y() - middle.position.y());
+  const double length1 = chord1.norm(), length2 = chord2.norm();
+  if (length1 < 1e-6 || length2 < 1e-6 || !(radius > 0.0))
+    return 0.0;
+
+  // 1. bending-plane kink: measured turn between the chords minus the helix turn; a chord of
+  //    length l makes the angle asin(l / 2R) with the tangent at each end
+  const double measuredTurn = std::atan2(chord1.x() * chord2.y() - chord1.y() * chord2.x(), chord1.dot(chord2));
+  const double chordAngle1 = std::asin(std::min(1.0, length1 / (2.0 * radius)));
+  const double chordAngle2 = std::asin(std::min(1.0, length2 / (2.0 * radius)));
+  const double kinkPhi = wrapAngle(measuredTurn - rotation * (chordAngle1 + chordAngle2));
+
+  // 2. dip kink: change of dz/ds between the segments (s = arc length 2 R angle, not the chord)
+  const double arc1 = 2.0 * radius * chordAngle1, arc2 = 2.0 * radius * chordAngle2;
+  const double dz1 = middle.position.z() - first.position.z(), dz2 = last.position.z() - middle.position.z();
+  const double kinkLambda = std::atan2(dz2, arc2) - std::atan2(dz1, arc1);
+
+  // 3. expected scattering at the middle hit: p = pT / cos(lambda); the material grows as
+  //    1 / cos(incidence) on the sensor (limited to 1 / 0.05 for grazing tracks)
+  const double tanLambda = (dz1 + dz2) / (arc1 + arc2);
+  const double cosLambda = 1.0 / std::sqrt(1.0 + tanLambda * tanLambda);
+  const double pT = ptFromRadius(m_bFieldTesla, radius); // GeV
+  const double momentum = pT / cosLambda;
+  const Eigen::Vector3d direction = (last.position - first.position).normalized();
+  const double cosIncidence = std::max(0.05, std::abs(middle.normal.normalized().dot(direction)));
+  const double theta0 = highlandTheta0(middle.xOverX0 / cosIncidence, momentum);
+
+  // 4. variance of the bending-plane kink: radius error (turn derivative x sigmaR), scattering
+  //    projected on the transverse plane (theta0 / cos(lambda)), and measurement errors (a shift
+  //    sigma turns a chord by sigma / l; the middle hit moves both chords)
+  const double inverseLength1 = 1.0 / length1, inverseLength2 = 1.0 / length2;
+  const double sigmaTurnFromRadius =
+      (chordAngleDerivative(length1, radius) + chordAngleDerivative(length2, radius)) * sigmaRadius;
+  const double variancePhi = sigmaTurnFromRadius * sigmaTurnFromRadius + (theta0 / cosLambda) * (theta0 / cosLambda) +
+                             first.sigmaTransverseCm * first.sigmaTransverseCm * inverseLength1 * inverseLength1 +
+                             middle.sigmaTransverseCm * middle.sigmaTransverseCm * (inverseLength1 + inverseLength2) *
+                                 (inverseLength1 + inverseLength2) +
+                             last.sigmaTransverseCm * last.sigmaTransverseCm * inverseLength2 * inverseLength2;
+  // 5. variance of the dip kink: scattering plus z errors as slope errors (sigma_z / s), times
+  //    cos^4(lambda) because d(lambda) = cos^2(lambda) d(tan lambda)
+  const double inverseArc1 = 1.0 / arc1, inverseArc2 = 1.0 / arc2;
+  const double cosLambdaToTheFourth = cosLambda * cosLambda * cosLambda * cosLambda;
+  const double varianceLambda =
+      theta0 * theta0 + cosLambdaToTheFourth * (first.sigmaZCm * first.sigmaZCm * inverseArc1 * inverseArc1 +
+                                                middle.sigmaZCm * middle.sigmaZCm * (inverseArc1 + inverseArc2) *
+                                                    (inverseArc1 + inverseArc2) +
+                                                last.sigmaZCm * last.sigmaZCm * inverseArc2 * inverseArc2);
+  // 6. chi2 of the two kinks (2 dof)
+  return kinkPhi * kinkPhi / variancePhi + kinkLambda * kinkLambda / varianceLambda;
+}
+
+KinkResult KinkChi2Calculator::track(const std::vector<KinkPoint>& points, double radius, int rotation) const {
+  KinkResult result;
+  const int numberOfPoints = static_cast<int>(points.size());
+  result.perTriplet.assign(std::max(numberOfPoints, 0), 0.0);
+  if (numberOfPoints < 3)
+    return result;
+  // one kink at every inner hit; independent kinks, so their chi2 add up
+  for (int i = 1; i + 1 < numberOfPoints; ++i) {
+    const double tripletChi2 = triplet(points[i - 1], points[i], points[i + 1], radius, rotation);
+    result.perTriplet[i] = tripletChi2;
+    result.chi2 += tripletChi2;
+  }
+  // 2 angles per kink, minus 1 for the radius taken from the fit
+  result.ndf = 2 * (numberOfPoints - 2) - 1;
+  return result;
 }
 
 } // namespace k4rt

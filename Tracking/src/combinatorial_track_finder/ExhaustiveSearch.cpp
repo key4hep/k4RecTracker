@@ -1,158 +1,109 @@
 // See ExhaustiveSearch.h.
 #include "ExhaustiveSearch.h"
+#include "LayerGeometry.h"
+#include "TrackingMath.h"
 
 #include <algorithm>
 #include <cmath>
-#include <utility>
 
 namespace k4rt {
 
-int regionOfCid(int cid, const std::unordered_map<int, int>* cidRegion) {
-  if (cidRegion) {
-    auto it = cidRegion->find(cid);
-    if (it != cidRegion->end())
-      return it->second;
+int regionOfLayer(int layerKey, const std::unordered_map<int, int>* regionOfLayerKey) {
+  if (regionOfLayerKey) {
+    auto entry = regionOfLayerKey->find(layerKey);
+    if (entry != regionOfLayerKey->end())
+      return entry->second;
   }
-  return regionOfKey(cid);
+  return regionFromKey(layerKey);
 }
 
-bool RoadCuts::passesRoadCuts(const std::vector<size_t>& gIdxVec) const {
-  const int nH = static_cast<int>(gIdxVec.size());
+bool RoadCuts::passesRoadCuts(const std::vector<size_t>& hitIndices) const {
+  const int numberOfHits = static_cast<int>(hitIndices.size());
 
-  // azimuth phi of every hit (positions in mm; the angle does not depend on the unit)
-  std::vector<double> phi(nH);
-  for (int i = 0; i < nH; ++i) {
-    const auto p = m_hits[gIdxVec[i]].getPosition();
-    phi[i] = std::atan2(p[1], p[0]);
+  // near the beam (polar angle of the mean point, atan2(mean r, mean |z|)) the phi cuts are skipped
+  double sumR = 0.0;
+  double sumAbsZ = 0.0;
+  for (size_t hitIndex : hitIndices) {
+    sumR += m_hitGeometry[hitIndex].transverseRadius;
+    sumAbsZ += m_hitGeometry[hitIndex].absoluteZ;
   }
+  const double thetaCombination = std::atan2(sumR / numberOfHits, sumAbsZ / numberOfHits);
+  const double nearBeamLow = m_config.nearBeamThetaMinDeg * M_PI / 180.0;
+  const double nearBeamHigh = m_config.nearBeamThetaMaxDeg * M_PI / 180.0;
+  if (thetaCombination < nearBeamLow || thetaCombination > nearBeamHigh)
+    return true;
 
-  // Near the beam all phi cuts are skipped: low-pT tracks there turn by a large angle in phi
-  // between endcap layers. The polar angle of the combination is that of its mean point:
-  // theta = atan2(mean r, mean |z|).
-  {
-    double sumR = 0.0, sumAbsZ = 0.0;
-    for (int i = 0; i < nH; ++i) {
-      const auto p = m_hits[gIdxVec[i]].getPosition();
-      sumR += std::sqrt(p[0] * p[0] + p[1] * p[1]);
-      sumAbsZ += std::abs(p[2]);
-    }
-    const double thetaCombo = std::atan2(sumR / nH, sumAbsZ / nH);
-    const double nearBeamLo = m_config.nearBeamThetaMinDeg * M_PI / 180.0;
-    const double nearBeamHi = m_config.nearBeamThetaMaxDeg * M_PI / 180.0;
-    if (thetaCombo < nearBeamLo || thetaCombo > nearBeamHi)
-      return true;
-  }
-
-  // Cut 1: |dphi| between hits of consecutive layers. A pair across the barrel <-> endcap
-  // transition is skipped (a large dphi is expected there).
-  const double maxConsec = m_config.maxConsecDeltaPhi;
-  if (maxConsec > 0.0) {
-    for (int i = 0; i < nH - 1; ++i) {
-      // layers of the two hits (compositeID 0 if a hit has no entry)
-      int cidA = 0, cidB = 0;
-      {
-        auto itA = m_compositeOfHit.find(gIdxVec[i]);
-        auto itB = m_compositeOfHit.find(gIdxVec[i + 1]);
-        if (itA != m_compositeOfHit.end())
-          cidA = itA->second;
-        if (itB != m_compositeOfHit.end())
-          cidB = itB->second;
-      }
-      const bool aBarrel = (regionOfCid(cidA, m_cidRegion) == 0);
-      const bool bBarrel = (regionOfCid(cidB, m_cidRegion) == 0);
-      if (aBarrel != bBarrel)
+  // cut 1: |dphi| of consecutive layers (wrapped to (-pi, pi]); barrel <-> endcap pairs skipped
+  if (m_config.maxConsecDeltaPhi > 0.0) {
+    for (int i = 0; i + 1 < numberOfHits; ++i) {
+      const HitGeometry& inner = m_hitGeometry[hitIndices[i]];
+      const HitGeometry& outer = m_hitGeometry[hitIndices[i + 1]];
+      if ((inner.region == 0) != (outer.region == 0))
         continue;
-
-      // the azimuthal step, wrapped to (-pi, pi] so that steps across phi = +-pi are small
-      double dPhi = phi[i + 1] - phi[i];
-      dPhi = wrapAngle(dPhi);
-      dPhi = std::abs(dPhi);
-      if (dPhi > maxConsec)
+      const double deltaPhi = std::abs(wrapAngle(outer.azimuth - inner.azimuth));
+      if (deltaPhi > m_config.maxConsecDeltaPhi)
         return false;
     }
   }
 
-  // Cut 2: total phi spread, max - min of every hit's phi relative to the innermost hit (each
-  // difference wrapped to (-pi, pi], so the window may straddle phi = +-pi)
-  const double maxSpread = m_config.maxComboPhiSpread;
-  if (maxSpread > 0.0) {
-    double lo = 0.0, hi = 0.0;
-    for (int i = 1; i < nH; ++i) {
-      double d = phi[i] - phi[0];
-      d = wrapAngle(d);
-      if (d < lo)
-        lo = d;
-      if (d > hi)
-        hi = d;
+  // cut 2: phi spread, max - min of every phi relative to the innermost hit (window may cross +-pi)
+  if (m_config.maxComboPhiSpread > 0.0) {
+    const double innermostAzimuth = m_hitGeometry[hitIndices[0]].azimuth;
+    double lowest = 0.0;
+    double highest = 0.0;
+    for (int i = 1; i < numberOfHits; ++i) {
+      const double difference = wrapAngle(m_hitGeometry[hitIndices[i]].azimuth - innermostAzimuth);
+      lowest = std::min(lowest, difference);
+      highest = std::max(highest, difference);
     }
-    const double spread = hi - lo;
-    if (spread > maxSpread)
+    if (highest - lowest > m_config.maxComboPhiSpread)
       return false;
   }
 
-  // Cut 3: in each endcap, the transverse radius r of a track coming from the IP can only grow
-  // (or stay the same) when |z| grows. A hit where r decreases while |z| increases cannot be on
-  // the same track (a secondary, or a hit from another track on another disk).
-  {
-    std::vector<std::pair<double, double>> posEC, negEC; // (|z| mm, r mm) of the hits of each endcap
-    for (int i = 0; i < nH; ++i) {
-      const auto p = m_hits[gIdxVec[i]].getPosition();
-      auto it = m_compositeOfHit.find(gIdxVec[i]);
-      if (it == m_compositeOfHit.end())
-        continue;
-      const int cid = it->second;
-      const double r = std::sqrt(p[0] * p[0] + p[1] * p[1]);
-      const double absZ = std::abs(p[2]);
-      const int region = regionOfCid(cid, m_cidRegion);
-      if (region == 1)
-        posEC.emplace_back(absZ, r);
-      if (region == -1)
-        negEC.emplace_back(absZ, r);
-    }
-    if (!radiusGrowsWithZ(posEC) || !radiusGrowsWithZ(negEC))
-      return false;
+  // cut 3: in each endcap r can only grow with |z| for a track from the IP
+  std::vector<std::pair<double, double>> positiveEndcapHits; // (|z|, r) in mm
+  std::vector<std::pair<double, double>> negativeEndcapHits;
+  for (size_t hitIndex : hitIndices) {
+    const HitGeometry& hit = m_hitGeometry[hitIndex];
+    if (hit.region == 1)
+      positiveEndcapHits.emplace_back(hit.absoluteZ, hit.transverseRadius);
+    if (hit.region == -1)
+      negativeEndcapHits.emplace_back(hit.absoluteZ, hit.transverseRadius);
   }
-
-  return true;
+  return radiusGrowsWithZ(positiveEndcapHits) && radiusGrowsWithZ(negativeEndcapHits);
 }
 
-bool RoadCuts::radiusGrowsWithZ(std::vector<std::pair<double, double>>& ec) {
-  if (ec.size() < 2)
+bool RoadCuts::radiusGrowsWithZ(std::vector<std::pair<double, double>>& endcapHits) {
+  if (endcapHits.size() < 2)
     return true;
-  // sorted by |z|, r must never decrease
-  std::sort(ec.begin(), ec.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-  for (int i = 0; i < (int)ec.size() - 1; ++i) {
-    const double dr = ec[i + 1].second - ec[i].second;
-    if (dr < 0.0)
+  std::sort(endcapHits.begin(), endcapHits.end(),
+            [](const auto& left, const auto& right) { return left.first < right.first; });
+  for (size_t i = 0; i + 1 < endcapHits.size(); ++i) {
+    if (endcapHits[i + 1].second - endcapHits[i].second < 0.0)
       return false;
   }
   return true;
 }
 
 double RoadCuts::distanceCm(size_t first, size_t second) const {
-  const auto pa = m_hits[first].getPosition();
-  const auto pb = m_hits[second].getPosition();
-  const double dx = pb[0] - pa[0], dy = pb[1] - pa[1], dz = pb[2] - pa[2];
-  return std::sqrt(dx * dx + dy * dy + dz * dz) * 0.1;
+  const HitGeometry& firstHit = m_hitGeometry[first];
+  const HitGeometry& secondHit = m_hitGeometry[second];
+  const double dx = secondHit.x - firstHit.x, dy = secondHit.y - firstHit.y, dz = secondHit.z - firstHit.z;
+  return std::sqrt(dx * dx + dy * dy + dz * dz) * kCmPerMm;
 }
 
-bool RoadCuts::passesDistanceCuts(const std::vector<size_t>& gIdxVec) const {
-  const int nH = static_cast<int>(gIdxVec.size());
-  const double maxConsec = m_config.maxConsecHitDist;
-  const double maxPair = m_config.maxPairHitDist;
-
-  // consecutive hits (inner -> outer)
-  if (maxConsec > 0.0) {
-    for (int i = 0; i < nH - 1; ++i) {
-      if (distanceCm(gIdxVec[i], gIdxVec[i + 1]) > maxConsec)
+bool RoadCuts::passesDistanceCuts(const std::vector<size_t>& hitIndices) const {
+  const size_t numberOfHits = hitIndices.size();
+  if (m_config.maxConsecHitDist > 0.0) { // consecutive hits
+    for (size_t i = 0; i + 1 < numberOfHits; ++i) {
+      if (distanceCm(hitIndices[i], hitIndices[i + 1]) > m_config.maxConsecHitDist)
         return false;
     }
   }
-  // any two hits
-  if (maxPair > 0.0) {
-    for (int i = 0; i < nH - 1; ++i) {
-      for (int j = i + 1; j < nH; ++j) {
-        if (distanceCm(gIdxVec[i], gIdxVec[j]) > maxPair)
+  if (m_config.maxPairHitDist > 0.0) { // any two hits
+    for (size_t i = 0; i + 1 < numberOfHits; ++i) {
+      for (size_t j = i + 1; j < numberOfHits; ++j) {
+        if (distanceCm(hitIndices[i], hitIndices[j]) > m_config.maxPairHitDist)
           return false;
       }
     }
@@ -160,51 +111,45 @@ bool RoadCuts::passesDistanceCuts(const std::vector<size_t>& gIdxVec) const {
   return true;
 }
 
-bool RoadCuts::passesTanLambdaCut(const std::vector<size_t>& gIdxVec) const {
-  const double maxDev = m_config.maxComboTanLambdaDev;
-  if (maxDev <= 0.0)
-    return true;
-  const int nH = static_cast<int>(gIdxVec.size());
-  if (nH < 3)
+bool RoadCuts::passesTanLambdaCut(const std::vector<size_t>& hitIndices) const {
+  const double maxDeviation = m_config.maxComboTanLambdaDev;
+  const size_t numberOfHits = hitIndices.size();
+  if (maxDeviation <= 0.0 || numberOfHits < 3)
     return true;
 
-  // Mixed barrel + endcap combinations have, by geometry, very different dz/dr per pair: the cut
-  // is only meaningful for pure barrel or pure endcap segments.
-  bool hasBarrel = false, hasEndcap = false;
-  for (size_t gi : gIdxVec) {
-    auto it = m_compositeOfHit.find(gi);
-    if (it == m_compositeOfHit.end())
-      continue;
-    const int cid = it->second;
-    if (regionOfCid(cid, m_cidRegion) == 0)
+  // mixed barrel + endcap combinations have very different dz/dr per pair by geometry: they pass
+  bool hasBarrel = false;
+  bool hasEndcap = false;
+  for (size_t hitIndex : hitIndices) {
+    if (m_hitGeometry[hitIndex].region == 0)
       hasBarrel = true;
     else
       hasEndcap = true;
-    if (hasBarrel && hasEndcap)
-      return true;
   }
-
-  // dip of every pair of consecutive hits: tan(lambda) = dz / (transverse distance). For a
-  // helix the transverse chord is close to the arc length when the hits are not far apart.
-  std::vector<double> tanLPairs;
-  tanLPairs.reserve(nH - 1);
-  for (int i = 0; i < nH - 1; ++i) {
-    const auto pa = m_hits[gIdxVec[i]].getPosition();
-    const auto pb = m_hits[gIdxVec[i + 1]].getPosition();
-    const double dxy = std::sqrt((pb[0] - pa[0]) * (pb[0] - pa[0]) + (pb[1] - pa[1]) * (pb[1] - pa[1]));
-    if (dxy < m_config.minPairTransverseDistanceMm)
-      continue; // too close in the transverse plane for a meaningful slope
-    tanLPairs.push_back((pb[2] - pa[2]) / dxy);
-  }
-  if (static_cast<int>(tanLPairs.size()) < 2)
+  if (hasBarrel && hasEndcap)
     return true;
 
-  // every pair must be close to the median dip (the median is not pulled by one wrong hit)
-  std::vector<double> sorted = tanLPairs;
+  // dip of each consecutive pair: dz / transverse distance (close to the arc length for near hits)
+  std::vector<double> pairTanLambdas;
+  pairTanLambdas.reserve(numberOfHits - 1);
+  for (size_t i = 0; i + 1 < numberOfHits; ++i) {
+    const HitGeometry& inner = m_hitGeometry[hitIndices[i]];
+    const HitGeometry& outer = m_hitGeometry[hitIndices[i + 1]];
+    const double transverseDistance =
+        std::sqrt((outer.x - inner.x) * (outer.x - inner.x) + (outer.y - inner.y) * (outer.y - inner.y));
+    if (transverseDistance < m_config.minPairTransverseDistanceMm)
+      continue; // too close in xy for a slope
+    pairTanLambdas.push_back((outer.z - inner.z) / transverseDistance);
+  }
+  if (pairTanLambdas.size() < 2)
+    return true;
+
+  // every pair close to the median (not pulled by one wrong hit)
+  std::vector<double> sorted = pairTanLambdas;
   std::sort(sorted.begin(), sorted.end());
   const double median = sorted[sorted.size() / 2];
-  for (double tl : tanLPairs) {
-    if (std::abs(tl - median) > maxDev)
+  for (double pairTanLambda : pairTanLambdas) {
+    if (std::abs(pairTanLambda - median) > maxDeviation)
       return false;
   }
   return true;

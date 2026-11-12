@@ -45,19 +45,19 @@ k4rt::Helix helixFromDirection(const Eigen::Vector3d& startPosition, const Eigen
   const double directionY = direction.y() / transverseLength;
 
   k4rt::Helix helix;
-  helix.R = k4rt::radiusFromPt(kBFieldTesla, pT);
+  helix.radius = k4rt::radiusFromPt(kBFieldTesla, pT);
   // a positive charge in a field along +z turns clockwise (rot = -1)
   if (charge * kBFieldTesla > 0) {
-    helix.rot = -1;
+    helix.rotation = -1;
   } else {
-    helix.rot = +1;
+    helix.rotation = +1;
   }
   // the circle centre is one radius away from the start, perpendicular to the direction
-  helix.cx = startPosition.x() + helix.rot * helix.R * (-directionY);
-  helix.cy = startPosition.y() + helix.rot * helix.R * directionX;
-  helix.phiRef = std::atan2(startPosition.y() - helix.cy, startPosition.x() - helix.cx);
-  helix.zRef = startPosition.z();
-  helix.tanL = direction.z() / transverseLength;
+  helix.centreX = startPosition.x() + helix.rotation * helix.radius * (-directionY);
+  helix.centreY = startPosition.y() + helix.rotation * helix.radius * directionX;
+  helix.referenceAngle = std::atan2(startPosition.y() - helix.centreY, startPosition.x() - helix.centreX);
+  helix.referenceZ = startPosition.z();
+  helix.tanLambda = direction.z() / transverseLength;
   return helix;
 }
 
@@ -78,20 +78,20 @@ std::vector<k4rt::KinkPoint> simulateTrack(const Eigen::Vector3d& startDirection
     if (!crossing.ok) {
       break; // the muon curls up before this layer
     }
-    position = crossing.pos;
-    direction = helix.dirAt(crossing.s);
+    position = crossing.position;
+    direction = helix.directionAt(crossing.arcLength);
 
     // 2. the measured hit: the true position moved by Gaussian noise along the two measurement
     // directions of a barrel sensor (along phi and along z)
     k4rt::KinkPoint hit;
     hit.normal = Eigen::Vector3d(position.x(), position.y(), 0).normalized();
     hit.xOverX0 = kLayerThicknessX0;
-    hit.sigT_cm = kHitResolutionCm;
-    hit.sigZ_cm = kHitResolutionCm;
+    hit.sigmaTransverseCm = kHitResolutionCm;
+    hit.sigmaZCm = kHitResolutionCm;
     const Eigen::Vector3d alongPhi(-hit.normal.y(), hit.normal.x(), 0);
     const double noiseAlongPhi = kHitResolutionCm * random.gaussian(random.generator);
     const double noiseAlongZ = kHitResolutionCm * random.gaussian(random.generator);
-    hit.pos = position + noiseAlongPhi * alongPhi + noiseAlongZ * Eigen::Vector3d::UnitZ();
+    hit.position = position + noiseAlongPhi * alongPhi + noiseAlongZ * Eigen::Vector3d::UnitZ();
     hits.push_back(hit);
 
     // 3. multiple scattering in the layer: a random kick in two planes perpendicular to the
@@ -138,7 +138,7 @@ int main() {
       // the kink chi2 with the true circle (the one at the start, before any scattering)
       const double pT = momentum * std::sin(kPolarAngle);
       const k4rt::Helix trueHelix = helixFromDirection(Eigen::Vector3d(0, 0, 0), startDirection, pT, charge);
-      const k4rt::KinkResult result = kinkCalculator.track(hits, trueHelix.R, trueHelix.rot);
+      const k4rt::KinkResult result = kinkCalculator.track(hits, trueHelix.radius, trueHelix.rotation);
       const double numberOfDegreesOfFreedom = 2.0 * (hits.size() - 2);
       sumOfNormalisedChi2 += result.chi2 / numberOfDegreesOfFreedom;
       numberOfTracks += 1;

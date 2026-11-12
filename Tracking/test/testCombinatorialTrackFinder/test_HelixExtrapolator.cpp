@@ -167,28 +167,28 @@ k4rt::Helix helixFromParticle(const TestParticle& particle) {
   const double directionY = momentum.y() / pT;
 
   k4rt::Helix helix;
-  helix.R = k4rt::radiusFromPt(particle.bFieldTesla, pT);
+  helix.radius = k4rt::radiusFromPt(particle.bFieldTesla, pT);
   // a positive charge in a field along +z turns clockwise (rot = -1)
   if (particle.charge * particle.bFieldTesla > 0) {
-    helix.rot = -1;
+    helix.rotation = -1;
   } else {
-    helix.rot = +1;
+    helix.rotation = +1;
   }
   // the circle centre is one radius away from the start, perpendicular to the direction
-  helix.cx = position.x() + helix.rot * helix.R * (-directionY);
-  helix.cy = position.y() + helix.rot * helix.R * directionX;
-  helix.phiRef = std::atan2(position.y() - helix.cy, position.x() - helix.cx);
-  helix.zRef = position.z();
-  helix.tanL = momentum.z() / pT;
+  helix.centreX = position.x() + helix.rotation * helix.radius * (-directionY);
+  helix.centreY = position.y() + helix.rotation * helix.radius * directionX;
+  helix.referenceAngle = std::atan2(position.y() - helix.centreY, position.x() - helix.centreX);
+  helix.referenceZ = position.z();
+  helix.tanLambda = momentum.z() / pT;
   return helix;
 }
 
 // 1. The helix starts at the particle position and points along its momentum.
 void checkStartPoint(const k4rt::Helix& helix, const TestParticle& particle) {
-  const double positionError = (helix.at(0) - particle.startPosition).norm();
+  const double positionError = (helix.positionAt(0) - particle.startPosition).norm();
   printCheck(positionError < 1e-12, "helix passes through x0", positionError, 1e-12);
 
-  const double directionError = (helix.dirAt(0) - particle.startMomentum.normalized()).norm();
+  const double directionError = (helix.directionAt(0) - particle.startMomentum.normalized()).norm();
   printCheck(directionError < 1e-12, "direction at x0 = p0 direction", directionError, 1e-12);
 }
 
@@ -198,7 +198,7 @@ void checkStartPoint(const k4rt::Helix& helix, const TestParticle& particle) {
 k4rt::Crossing checkCylinderCrossing(const k4rt::Helix& helix, const TestParticle& particle,
                                      const ParticleState& startState) {
   const double startRadius = std::hypot(particle.startPosition.x(), particle.startPosition.y());
-  const double largestRadius = std::hypot(helix.cx, helix.cy) + helix.R;
+  const double largestRadius = std::hypot(helix.centreX, helix.centreY) + helix.radius;
   const double cylinderRadius = startRadius + 0.5 * (largestRadius - startRadius);
 
   const k4rt::Crossing crossing = helix.crossCylinder(cylinderRadius, 0.0, +1);
@@ -211,14 +211,15 @@ k4rt::Crossing checkCylinderCrossing(const k4rt::Helix& helix, const TestParticl
     return crossing;
   }
 
-  const double distanceFromCylinder = std::abs(std::hypot(crossing.pos.x(), crossing.pos.y()) - cylinderRadius);
+  const double distanceFromCylinder =
+      std::abs(std::hypot(crossing.position.x(), crossing.position.y()) - cylinderRadius);
   printCheck(distanceFromCylinder < 1e-9, "crossing lies on the cylinder", distanceFromCylinder, 1e-9);
 
   Surface cylinder;
   cylinder.type = "cylinder";
   cylinder.radius = cylinderRadius;
   const Eigen::Vector3d reference = rungeKuttaCrossing(startState, particle.charge, particle.bFieldTesla, +1, cylinder);
-  const double difference = (crossing.pos - reference).norm();
+  const double difference = (crossing.position - reference).norm();
   printCheck(difference < kToleranceCm, "forward cylinder vs RK4", difference, kToleranceCm);
   return crossing;
 }
@@ -244,7 +245,7 @@ void checkDiskCrossing(const k4rt::Helix& helix, const TestParticle& particle, c
   disk.type = "disk";
   disk.z = diskZ;
   const Eigen::Vector3d reference = rungeKuttaCrossing(startState, particle.charge, particle.bFieldTesla, +1, disk);
-  const double difference = (crossing.pos - reference).norm();
+  const double difference = (crossing.position - reference).norm();
   printCheck(difference < kToleranceCm, "disk vs RK4", difference, kToleranceCm);
 }
 
@@ -266,34 +267,36 @@ void checkBackwardCrossing(const k4rt::Helix& helix, const TestParticle& particl
   cylinder.type = "cylinder";
   cylinder.radius = cylinderRadius;
   const Eigen::Vector3d reference = rungeKuttaCrossing(startState, particle.charge, particle.bFieldTesla, -1, cylinder);
-  const double difference = (crossing.pos - reference).norm();
+  const double difference = (crossing.position - reference).norm();
   printCheck(difference < kToleranceCm, "backward cylinder vs RK4", difference, kToleranceCm);
-  printCheck(crossing.s < 0, "backward crossing has s < 0", crossing.s, 0);
+  printCheck(crossing.arcLength < 0, "backward crossing has s < 0", crossing.arcLength, 0);
 }
 
 // 5. Rebuild the helix from 7 points taken on it (more than half a turn), knowing its circle:
 // the rotation sense, tan(lambda), the z reference and the unwrapped arc lengths must come back.
 void checkHelixFromHits(const k4rt::Helix& helix) {
-  const double pointSpacing = 0.45 * helix.R; // arc length between two points (cm)
+  const double pointSpacing = 0.45 * helix.radius; // arc length between two points (cm)
   std::vector<Eigen::Vector3d> points;
   for (int pointIndex = 0; pointIndex < 7; ++pointIndex) {
-    points.push_back(helix.at(pointSpacing * pointIndex));
+    points.push_back(helix.positionAt(pointSpacing * pointIndex));
   }
 
   k4rt::Helix fittedHelix;
   std::vector<double> arcLengths;
-  const bool fitWorked = k4rt::Helix::fromHits(helix.cx, helix.cy, helix.R, points, fittedHelix, &arcLengths);
+  const bool fitWorked =
+      k4rt::Helix::fromHits(helix.centreX, helix.centreY, helix.radius, points, fittedHelix, &arcLengths);
 
   double rotationDifference = 9; // shown when the fit failed
   if (fitWorked) {
-    rotationDifference = std::abs(fittedHelix.rot - helix.rot);
+    rotationDifference = std::abs(fittedHelix.rotation - helix.rotation);
   }
-  printCheck(fitWorked && fittedHelix.rot == helix.rot, "helixFromHits: rotation sense", rotationDifference, 0.5);
+  printCheck(fitWorked && fittedHelix.rotation == helix.rotation, "helixFromHits: rotation sense", rotationDifference,
+             0.5);
 
-  const double tanLambdaDifference = std::abs(fittedHelix.tanL - helix.tanL);
+  const double tanLambdaDifference = std::abs(fittedHelix.tanLambda - helix.tanLambda);
   printCheck(tanLambdaDifference < 1e-9, "helixFromHits: tanLambda", tanLambdaDifference, 1e-9);
 
-  const double zReferenceDifference = std::abs(fittedHelix.zRef - helix.zRef);
+  const double zReferenceDifference = std::abs(fittedHelix.referenceZ - helix.referenceZ);
   printCheck(zReferenceDifference < 1e-9, "helixFromHits: zRef", zReferenceDifference, 1e-9);
 
   const double lastArcLengthDifference = std::abs(arcLengths.back() - pointSpacing * 6);
@@ -306,14 +309,14 @@ void checkPlaneCrossing(const k4rt::Helix& helix, const TestParticle& particle, 
                         const k4rt::Crossing& cylinderCrossing) {
   // the plane normal: the radial direction at the cylinder crossing, tilted a little
   const Eigen::Vector3d radialDirection =
-      Eigen::Vector3d(cylinderCrossing.pos.x(), cylinderCrossing.pos.y(), 0).normalized();
+      Eigen::Vector3d(cylinderCrossing.position.x(), cylinderCrossing.position.y(), 0).normalized();
   const Eigen::Vector3d tilt(0.2, -0.1, 0.15);
   const Eigen::Vector3d planeNormal = (radialDirection + tilt).normalized();
   // the plane goes through a point 0.3 cm sideways from the cylinder crossing
   const Eigen::Vector3d sideways(-planeNormal.y(), planeNormal.x(), 0);
-  const Eigen::Vector3d planePoint = cylinderCrossing.pos + 0.3 * sideways;
+  const Eigen::Vector3d planePoint = cylinderCrossing.position + 0.3 * sideways;
 
-  const k4rt::Crossing crossing = helix.refineToPlane(planePoint, planeNormal, cylinderCrossing.s);
+  const k4rt::Crossing crossing = helix.refineToPlane(planePoint, planeNormal, cylinderCrossing.arcLength);
   double notFound = 1;
   if (crossing.ok) {
     notFound = 0;
@@ -323,7 +326,7 @@ void checkPlaneCrossing(const k4rt::Helix& helix, const TestParticle& particle, 
     return;
   }
 
-  const double distanceFromPlane = std::abs(planeNormal.dot(crossing.pos - planePoint));
+  const double distanceFromPlane = std::abs(planeNormal.dot(crossing.position - planePoint));
   printCheck(distanceFromPlane < 1e-9, "point lies on the plane", distanceFromPlane, 1e-9);
 
   Surface plane;
@@ -331,7 +334,7 @@ void checkPlaneCrossing(const k4rt::Helix& helix, const TestParticle& particle, 
   plane.planePoint = planePoint;
   plane.planeNormal = planeNormal;
   const Eigen::Vector3d reference = rungeKuttaCrossing(startState, particle.charge, particle.bFieldTesla, +1, plane);
-  const double difference = (crossing.pos - reference).norm();
+  const double difference = (crossing.position - reference).norm();
   printCheck(difference < kToleranceCm, "plane intersection vs RK4", difference, kToleranceCm);
 }
 
