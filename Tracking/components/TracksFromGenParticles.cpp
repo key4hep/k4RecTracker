@@ -230,6 +230,11 @@ struct TracksFromGenParticles final
       if (genParticle.getCharge() == 0)
         continue;
 
+      // consider only final-state particles: generator stable particles (status 1) or particles created in the
+      // simulation.
+      if (genParticle.getGeneratorStatus() != 1 && !genParticle.isCreatedInSimulation())
+        continue;
+
       // Build tracks only for charged particles that reach the calorimeter face
       // if m_onlyCaloReachingParticles is set to True
       if (m_onlyCaloReachingParticles && genParticle.isDecayedInTracker())
