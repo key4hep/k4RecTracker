@@ -225,7 +225,10 @@ private:
    */
   struct HitRef {
     HitType type;
-    podio::ObjectID hitID; // Source hit: collectionID identifies the input collection, index the position in it.
+    unsigned index;     // Index of hit within collection.
+    unsigned collIndex; // Index of collection within the list of sources.
+    // n.b. Can't use collectionID here because that's not assigned until
+    // the collection is written.
   };
 
   /**
@@ -295,7 +298,7 @@ private:
   static void appendPlanarHits(const std::vector<const edm4hep::TrackerHitPlaneCollection*>& collections,
                                Workspace& workspace) {
     float* featureOut = workspace.features.data() + workspace.hitRefs.size() * kFeatureCount;
-    for (const auto* collection : collections) {
+    for (unsigned collIndex = 0; const auto* collection : collections) {
       for (std::size_t hitIndex = 0; hitIndex < collection->size(); ++hitIndex) {
         const auto hit = collection->at(hitIndex);
         const auto position = hit.getPosition();
@@ -313,8 +316,9 @@ private:
         featureOut[6] = 0.0F;
         featureOut += kFeatureCount;
 
-        workspace.hitRefs.push_back({HitType::Planar, hit.id()});
+        workspace.hitRefs.push_back({HitType::Planar, static_cast<unsigned>(hitIndex), collIndex});
       }
+      ++collIndex;
     }
   }
 
@@ -340,7 +344,7 @@ private:
   void appendWireHits(const std::vector<const edm4hep::SenseWireHitCollection*>& collections,
                       Workspace& workspace) const {
     float* featureOut = workspace.features.data() + workspace.hitRefs.size() * kFeatureCount;
-    for (const auto* collection : collections) {
+    for (unsigned collIndex = 0; const auto* collection : collections) {
       for (std::size_t hitIndex = 0; hitIndex < collection->size(); ++hitIndex) {
         const auto hit = collection->at(hitIndex);
         const edm4hep::Vector3d wirePosition = hit.getPosition();
@@ -369,8 +373,9 @@ private:
         featureOut[6] = static_cast<float>(2.0 * distanceToWire * xPrimeZ);
         featureOut += kFeatureCount;
 
-        workspace.hitRefs.push_back({HitType::Wire, hit.id()});
+        workspace.hitRefs.push_back({HitType::Wire, static_cast<unsigned>(hitIndex), collIndex});
       }
+      ++collIndex;
     }
   }
 
@@ -591,29 +596,11 @@ private:
       for (std::uint32_t position = begin; position < end; ++position) {
         const HitRef& hitRef = workspace.hitRefs[order[position]];
         if (hitRef.type == HitType::Planar) {
-          const edm4hep::TrackerHitPlaneCollection* sourceCollection = nullptr;
-          for (const auto* collection : planarCollections) {
-            if (collection->getID() == hitRef.hitID.collectionID) {
-              sourceCollection = collection;
-              break;
-            }
-          }
-          if (sourceCollection == nullptr) {
-            throw std::runtime_error("Hit reference points to a collection that is not among the inputs");
-          }
-          outputTrack.addToTrackerHits(sourceCollection->at(hitRef.hitID.index));
+          const edm4hep::TrackerHitPlaneCollection* sourceCollection = planarCollections.at(hitRef.collIndex);
+          outputTrack.addToTrackerHits(sourceCollection->at(hitRef.index));
         } else {
-          const edm4hep::SenseWireHitCollection* sourceCollection = nullptr;
-          for (const auto* collection : wireCollections) {
-            if (collection->getID() == hitRef.hitID.collectionID) {
-              sourceCollection = collection;
-              break;
-            }
-          }
-          if (sourceCollection == nullptr) {
-            throw std::runtime_error("Hit reference points to a collection that is not among the inputs");
-          }
-          outputTrack.addToTrackerHits(sourceCollection->at(hitRef.hitID.index));
+          const edm4hep::SenseWireHitCollection* sourceCollection = wireCollections.at(hitRef.collIndex);
+          outputTrack.addToTrackerHits(sourceCollection->at(hitRef.index));
         }
       }
     }
