@@ -21,8 +21,7 @@
 
 namespace GenfitInterface {
 
-double MeanExcEnergy_get(int Z);
-double MeanExcEnergy_get(TGeoMaterial*);
+static double MeanExcEnergy_get(TGeoMaterial*);
 GenfitMaterialInterface* GenfitMaterialInterface::m_instance = nullptr;
 
 GenfitMaterialInterface::GenfitMaterialInterface(const dd4hep::Detector* dd4hepGeo) {
@@ -235,7 +234,7 @@ const double MeanExcEnergy_logs[MeanExcEnergy_NELEMENTS] = {
     6.72143, 6.71538, 6.67708, 6.7178,  6.71659, 6.73459, 6.7417,  6.77765, 6.79122,
 };
 
-double MeanExcEnergy_get(int Z, bool logs = false) {
+static double MeanExcEnergy_get(int Z, bool logs = false) {
   assert(Z >= 0 && Z < MeanExcEnergy_NELEMENTS);
   if (logs)
     return MeanExcEnergy_logs[Z];
@@ -243,7 +242,7 @@ double MeanExcEnergy_get(int Z, bool logs = false) {
     return MeanExcEnergy_vals[Z];
 }
 
-double MeanExcEnergy_get(TGeoMaterial* mat) {
+static double MeanExcEnergy_get(TGeoMaterial* mat) {
   if (mat->IsMixture()) {
     // The mean excitation energy is calculated as the geometric mean
     // of the mEEs of the components, weighted for abundance.
