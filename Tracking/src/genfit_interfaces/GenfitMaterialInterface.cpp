@@ -21,8 +21,9 @@
 
 namespace GenfitInterface {
 
-double MeanExcEnergy_get(int Z);
-double MeanExcEnergy_get(TGeoMaterial*);
+namespace {
+  double MeanExcEnergy_get(TGeoMaterial*);
+} // namespace
 GenfitMaterialInterface* GenfitMaterialInterface::m_instance = nullptr;
 
 GenfitMaterialInterface::GenfitMaterialInterface(const dd4hep::Detector* dd4hepGeo) {
@@ -235,35 +236,37 @@ const double MeanExcEnergy_logs[MeanExcEnergy_NELEMENTS] = {
     6.72143, 6.71538, 6.67708, 6.7178,  6.71659, 6.73459, 6.7417,  6.77765, 6.79122,
 };
 
-double MeanExcEnergy_get(int Z, bool logs = false) {
-  assert(Z >= 0 && Z < MeanExcEnergy_NELEMENTS);
-  if (logs)
-    return MeanExcEnergy_logs[Z];
-  else
-    return MeanExcEnergy_vals[Z];
-}
-
-double MeanExcEnergy_get(TGeoMaterial* mat) {
-  if (mat->IsMixture()) {
-    // The mean excitation energy is calculated as the geometric mean
-    // of the mEEs of the components, weighted for abundance.
-    double logMEE = 0.;
-    double denom = 0.;
-    TGeoMixture* mix = (TGeoMixture*)mat;
-    for (int i = 0; i < mix->GetNelements(); ++i) {
-      int index = int(mix->GetZmixt()[i]);
-      double weight = mix->GetWmixt()[i] * mix->GetZmixt()[i] / mix->GetAmixt()[i];
-      logMEE += weight * MeanExcEnergy_get(index, true);
-      denom += weight;
-    }
-    logMEE /= denom;
-    return exp(logMEE);
+namespace {
+  double MeanExcEnergy_get(int Z, bool logs = false) {
+    assert(Z >= 0 && Z < MeanExcEnergy_NELEMENTS);
+    if (logs)
+      return MeanExcEnergy_logs[Z];
+    else
+      return MeanExcEnergy_vals[Z];
   }
 
-  // not a mixture
-  int index = int(mat->GetZ());
-  return MeanExcEnergy_get(index, false);
-}
+  double MeanExcEnergy_get(TGeoMaterial* mat) {
+    if (mat->IsMixture()) {
+      // The mean excitation energy is calculated as the geometric mean
+      // of the mEEs of the components, weighted for abundance.
+      double logMEE = 0.;
+      double denom = 0.;
+      TGeoMixture* mix = (TGeoMixture*)mat;
+      for (int i = 0; i < mix->GetNelements(); ++i) {
+        int index = int(mix->GetZmixt()[i]);
+        double weight = mix->GetWmixt()[i] * mix->GetZmixt()[i] / mix->GetAmixt()[i];
+        logMEE += weight * MeanExcEnergy_get(index, true);
+        denom += weight;
+      }
+      logMEE /= denom;
+      return exp(logMEE);
+    }
+
+    // not a mixture
+    int index = int(mat->GetZ());
+    return MeanExcEnergy_get(index, false);
+  }
+} // namespace
 
 double GenfitMaterialInterface::getSafeDistance() { return getGeoManager()->GetSafeDistance(); }
 
