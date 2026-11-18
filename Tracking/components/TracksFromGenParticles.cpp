@@ -8,11 +8,8 @@
 
 #include "podio/ObjectID.h"
 
-// marlin
-#include <marlinutil/HelixClass_double.h>
-
-// pandora
-#include <Objects/Helix.h>
+// edm4hep utilities
+#include <edm4hep/utils/Helix.h>
 
 // k4FWCore
 #include "k4FWCore/Transformer.h"
@@ -33,6 +30,7 @@
 #include <cstdint>
 #include <exception>
 #include <limits>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -245,149 +243,87 @@ struct TracksFromGenParticles final
       debug() << "Number of SimTrackerHits: " << trackHits.size() << endmsg;
 
       // build an helix out of MCParticle properties and B field
-      auto helixFromGenParticle = HelixClass_double();
       auto vertex = genParticle.getVertex();
       auto endpoint = genParticle.getEndpoint();
       debug() << "Vertex radius: " << sqrt(vertex.x * vertex.x + vertex.y * vertex.y)
               << " , time: " << genParticle.getTime() << endmsg;
       debug() << "Endpoint radius: " << sqrt(endpoint.x * endpoint.x + endpoint.y * endpoint.y) << endmsg;
-      double genParticleVertex[] = {vertex.x, vertex.y, vertex.z};
-      double genParticleMomentum[] = {genParticle.getMomentum().x, genParticle.getMomentum().y,
-                                      genParticle.getMomentum().z};
-      helixFromGenParticle.Initialize_VP(genParticleVertex, genParticleMomentum, genParticle.getCharge(), m_Bz);
+      const edm4hep::utils::Helix helixFromGenParticle(vertex, genParticle.getMomentum(), genParticle.getCharge(),
+                                                       m_Bz);
 
-      // set the track and trackStates at IP properties
       auto trackFromGen = edm4hep::MutableTrack();
-      auto trackState_IP = edm4hep::TrackState{};
-      trackState_IP.location = edm4hep::TrackState::AtIP;
-      trackState_IP.D0 = helixFromGenParticle.getD0();
-      // note: the phi in the EDM track state is the phi of the momentum vector at reference, see
-      // https://github.com/iLCSoft/DDMarlinPandora/blob/master/src/DDTrackCreatorBase.cc#L360
-      trackState_IP.phi = std::atan2(genParticle.getMomentum().y, genParticle.getMomentum().x);
-      trackState_IP.omega = helixFromGenParticle.getOmega();
-      trackState_IP.Z0 = helixFromGenParticle.getZ0();
-      trackState_IP.tanLambda = helixFromGenParticle.getTanLambda();
-      trackState_IP.referencePoint =
-          edm4hep::Vector3f(genParticleVertex[0], genParticleVertex[1], genParticleVertex[2]);
-      trackFromGen.addToTrackStates(trackState_IP);
+      trackFromGen.addToTrackStates(helixFromGenParticle.toTrackState(edm4hep::TrackState::AtIP));
 
       // sort the hits according to their time
       std::sort(trackHits.begin(), trackHits.end(),
                 [](const std::array<double, 7>& a, const std::array<double, 7>& b) { return a[6] < b[6]; });
 
       // TrackState at First Hit
-      auto trackState_AtFirstHit = edm4hep::TrackState{};
       auto firstHit = trackHits.front();
-      double posAtFirstHit[] = {firstHit[0], firstHit[1], firstHit[2]};
-      double momAtFirstHit[] = {firstHit[3], firstHit[4], firstHit[5]};
+      edm4hep::Vector3d posAtFirstHit{firstHit[0], firstHit[1], firstHit[2]};
+      edm4hep::Vector3d momAtFirstHit{firstHit[3], firstHit[4], firstHit[5]};
       double rAtFirstHit = sqrt(firstHit[0] * firstHit[0] + firstHit[1] * firstHit[1]);
       debug() << "First hit: x, y, z, r = " << firstHit[0] << " " << firstHit[1] << " " << firstHit[2] << " "
               << rAtFirstHit << endmsg;
       debug() << "First hit: px, py, pz = " << firstHit[3] << " " << firstHit[4] << " " << firstHit[5] << endmsg;
 
       // produce new helix at first hit position
-      auto helixAtFirstHit = HelixClass_double();
-      helixAtFirstHit.Initialize_VP(posAtFirstHit, momAtFirstHit, genParticle.getCharge(), m_Bz);
-      // fill the TrackState parameters
-      trackState_AtFirstHit.location = edm4hep::TrackState::AtFirstHit;
-      trackState_AtFirstHit.D0 = helixAtFirstHit.getD0();
-      trackState_AtFirstHit.phi = std::atan2(momAtFirstHit[1], momAtFirstHit[0]);
-      trackState_AtFirstHit.omega = helixAtFirstHit.getOmega();
-      trackState_AtFirstHit.Z0 = helixAtFirstHit.getZ0();
-      trackState_AtFirstHit.tanLambda = helixAtFirstHit.getTanLambda();
-      trackState_AtFirstHit.referencePoint = edm4hep::Vector3f(posAtFirstHit[0], posAtFirstHit[1], posAtFirstHit[2]);
-      trackFromGen.addToTrackStates(trackState_AtFirstHit);
+      const edm4hep::utils::Helix helixAtFirstHit(posAtFirstHit, momAtFirstHit, genParticle.getCharge(), m_Bz);
+      trackFromGen.addToTrackStates(helixAtFirstHit.toTrackState(edm4hep::TrackState::AtFirstHit, posAtFirstHit));
 
       // TrackState at Last Hit
-      auto trackState_AtLastHit = edm4hep::TrackState{};
       auto lastHit = trackHits.back();
-      double posAtLastHit[] = {lastHit[0], lastHit[1], lastHit[2]};
-      double momAtLastHit[] = {lastHit[3], lastHit[4], lastHit[5]};
+      edm4hep::Vector3d posAtLastHit{lastHit[0], lastHit[1], lastHit[2]};
+      edm4hep::Vector3d momAtLastHit{lastHit[3], lastHit[4], lastHit[5]};
       debug() << "Last hit: x, y, z, r = " << lastHit[0] << " " << lastHit[1] << " " << lastHit[2] << " "
               << sqrt(lastHit[0] * lastHit[0] + lastHit[1] * lastHit[1]) << endmsg;
       debug() << "Last hit: px, py, pz = " << lastHit[3] << " " << lastHit[4] << " " << lastHit[5] << endmsg;
 
       // produce new helix at last hit position
-      auto helixAtLastHit = HelixClass_double();
-      helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit, genParticle.getCharge(), m_Bz);
-      // fill the TrackState parameters
-      trackState_AtLastHit.location = edm4hep::TrackState::AtLastHit;
-      trackState_AtLastHit.D0 = helixAtLastHit.getD0();
-      trackState_AtLastHit.phi = std::atan2(momAtLastHit[1], momAtLastHit[0]);
-      trackState_AtLastHit.omega = helixAtLastHit.getOmega();
-      trackState_AtLastHit.Z0 = helixAtLastHit.getZ0();
-      trackState_AtLastHit.tanLambda = helixAtLastHit.getTanLambda();
-      trackState_AtLastHit.referencePoint = edm4hep::Vector3f(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
-      // attach the TrackState to the track
-      trackFromGen.addToTrackStates(trackState_AtLastHit);
+      const edm4hep::utils::Helix helixAtLastHit(posAtLastHit, momAtLastHit, genParticle.getCharge(), m_Bz);
+      trackFromGen.addToTrackStates(helixAtLastHit.toTrackState(edm4hep::TrackState::AtLastHit, posAtLastHit));
 
       // TrackState at Calorimeter
       if (m_extrapolateToECal && (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.)) {
-        pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
-        pandora::CartesianVector secondBestECalProjection(0.f, 0.f, 0.f);
-        float minGenericTime(std::numeric_limits<float>::max());
-
-        // create helix to project
-        // rather than using parameters at production, better to use those from
-        // last hit
-        pandora::CartesianVector pos(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
-        pandora::CartesianVector mom(momAtLastHit[0], momAtLastHit[1], momAtLastHit[2]);
-        const pandora::Helix helix(pos, mom, genParticle.getCharge(), m_Bz);
-        const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
-        const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
+        std::optional<double> bestLength;
+        std::optional<double> secondBestLength;
 
         // First project to endcap
-        pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
-        bool hasEndCapProjection(false);
         if (m_eCalEndCapInnerR > 0) {
-          float genericTime(std::numeric_limits<float>::max());
-          const pandora::StatusCode statusCode(helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ,
-                                                                 referencePoint, endCapProjection, genericTime));
-          float x = endCapProjection.GetX();
-          float y = endCapProjection.GetY();
-          float r = std::sqrt(x * x + y * y);
-          if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (genericTime < minGenericTime) &&
-              (r >= m_eCalEndCapInnerR) && (r <= m_eCalEndCapOuterR)) {
-            minGenericTime = genericTime;
-            bestECalProjection = endCapProjection;
-            hasEndCapProjection = true;
+          const double zEndCap = (momAtLastHit.z > 0. ? 1. : -1.) * m_eCalEndCapInnerZ;
+          if (const auto pathLength = helixAtLastHit.lengthToZ(zEndCap)) {
+            const auto endCapProjection = helixAtLastHit.positionAt(*pathLength);
+            const double r = std::hypot(endCapProjection.x, endCapProjection.y);
+            if (r >= m_eCalEndCapInnerR && r <= m_eCalEndCapOuterR) {
+              bestLength = pathLength;
+            }
           }
         }
 
         // Then project to barrel surface(s), and keep projection
         // if extrapolation is within the z acceptance of the detector
-        pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
-        bool hasBarrelProjection = false;
         if (m_eCalBarrelInnerR > 0) {
-          float genericTime(std::numeric_limits<float>::max());
-          const pandora::StatusCode statusCode(
-              helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint, barrelProjection, genericTime));
-          if ((pandora::STATUS_CODE_SUCCESS == statusCode) &&
-              (std::fabs(barrelProjection.GetZ()) <= m_eCalBarrelMaxZ)) {
-            hasBarrelProjection = true;
-            if (genericTime < minGenericTime) {
-              minGenericTime = genericTime;
-              secondBestECalProjection = bestECalProjection;
-              bestECalProjection = barrelProjection;
-            } else {
-              secondBestECalProjection = barrelProjection;
+          if (const auto pathLength = helixAtLastHit.lengthToRadius(m_eCalBarrelInnerR)) {
+            const auto barrelProjection = helixAtLastHit.positionAt(*pathLength);
+            if (std::abs(barrelProjection.z) <= m_eCalBarrelMaxZ) {
+              if (!bestLength || *pathLength < *bestLength) {
+                secondBestLength = bestLength;
+                bestLength = pathLength;
+              } else {
+                secondBestLength = pathLength;
+              }
             }
           }
         }
 
-        // store extrapolation to calo
-        // by default, store extrapolation with lower arrival time
-        // get extrapolated position
-        edm4hep::TrackState trackState_AtCalorimeter =
-            getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit, m_Bz);
-
-        // attach the TrackState to the track
-        trackFromGen.addToTrackStates(trackState_AtCalorimeter);
+        // Store the earliest accepted crossing only if the track reaches the calorimeter.
+        if (bestLength) {
+          trackFromGen.addToTrackStates(getExtrapolationAtCalorimeter(helixAtLastHit, *bestLength, m_Bz));
+        }
 
         // attach second extrapolation if desired
-        if (!m_keepOnlyBestExtrapolation and hasBarrelProjection and hasEndCapProjection) {
-          edm4hep::TrackState trackState_AtCalorimeter_2 =
-              getExtrapolationAtCalorimeter(secondBestECalProjection, helixAtLastHit, m_Bz);
+        if (!m_keepOnlyBestExtrapolation && secondBestLength) {
+          auto trackState_AtCalorimeter_2 = getExtrapolationAtCalorimeter(helixAtLastHit, *secondBestLength, m_Bz);
           trackState_AtCalorimeter_2.location = edm4hep::TrackState::AtOther;
           trackFromGen.addToTrackStates(trackState_AtCalorimeter_2);
         }

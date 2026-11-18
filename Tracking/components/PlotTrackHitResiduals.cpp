@@ -9,8 +9,7 @@
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackMCParticleLinkCollection.h"
 
-// marlin
-#include <marlinutil/HelixClass_double.h>
+#include <edm4hep/utils/Helix.h>
 
 // ROOT
 #include "TH1D.h"
@@ -56,20 +55,15 @@ struct PlotTrackHitDistances final
       if (!found_trackStateAtIP)
         throw std::runtime_error("No track state defined AtIP, exiting!");
 
-      // Build an helix out of the trackState
-      auto helixFromTrack = HelixClass_double();
-      helixFromTrack.Initialize_Canonical(trackStateAtIP.phi, trackStateAtIP.D0, trackStateAtIP.Z0,
-                                          trackStateAtIP.omega, trackStateAtIP.tanLambda, m_Bz);
+      const auto helixFromTrack = edm4hep::utils::Helix::fromTrackState(trackStateAtIP, m_Bz);
 
       // Fill the histogram with residuals for hits attached to the same gen particle
       for (const auto& simTrackerHit : simTrackerHits) {
         auto simTrackerHitgenParticle = simTrackerHit.getParticle();
         if (simTrackerHitgenParticle.getObjectID() == genParticle.getObjectID()) {
-          double simTrackerHitPosition[] = {simTrackerHit.x(), simTrackerHit.y(), simTrackerHit.z()};
-          double distances[3];
-          helixFromTrack.getDistanceToPoint(simTrackerHitPosition, distances);
-          // Distance[0] - distance in R-Phi plane, Distance[1] - distance along Z axis, Distance[2] - 3D distance
-          ++m_residualHist[distances[2]];
+          const auto distances =
+              helixFromTrack.getDistanceToPoint({simTrackerHit.x(), simTrackerHit.y(), simTrackerHit.z()});
+          ++m_residualHist[distances.threeDimensional];
         }
       }
     }

@@ -694,9 +694,8 @@ private:
 
     if (runCalorimeterExtrapolation && Bz > 0) {
 
-      FillTrackWithCalorimeterExtrapolation(edm4hep_track, Bz, track_interface.GetCharge(), m_eCalBarrelInnerR,
-                                            m_eCalBarrelMaxZ, m_eCalEndCapInnerR, m_eCalEndCapOuterR,
-                                            m_eCalEndCapInnerZ);
+      FillTrackWithCalorimeterExtrapolation(edm4hep_track, Bz, m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR,
+                                            m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
 
       if (showDebugOutput) {
         auto trackStates = edm4hep_track.getTrackStates();
@@ -729,9 +728,8 @@ private:
 
       if (runCalorimeterExtrapolation && Bz > 0) {
 
-        FillTrackWithCalorimeterExtrapolation(edm4hep_track_with_fit, Bz, track_interface.GetCharge(),
-                                              m_eCalBarrelInnerR, m_eCalBarrelMaxZ, m_eCalEndCapInnerR,
-                                              m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
+        FillTrackWithCalorimeterExtrapolation(edm4hep_track_with_fit, Bz, m_eCalBarrelInnerR, m_eCalBarrelMaxZ,
+                                              m_eCalEndCapInnerR, m_eCalEndCapOuterR, m_eCalEndCapInnerZ);
 
         if (showDebugOutput) {
           auto trackStates = edm4hep_track.getTrackStates();

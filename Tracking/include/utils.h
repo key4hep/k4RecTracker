@@ -19,13 +19,12 @@
 #include "edm4hep/TrackCollection.h"
 #include "edm4hep/TrackState.h"
 
-#include <Objects/Helix.h>
 #include <TDecompChol.h>
 #include <TMatrixDSym.h>
 #include <TMatrixDSymEigen.h>
 #include <TVector3.h>
 #include <TVectorD.h>
-#include <marlinutil/HelixClass_double.h>
+#include <edm4hep/utils/Helix.h>
 
 /**
  * @brief Returns the z component of the magnetic field at the origin, in Tesla.
@@ -63,22 +62,13 @@ dd4hep::rec::LayeredCalorimeterData* getExtension(unsigned int includeFlag, unsi
 /**
  * @brief Computes the track state extrapolated at the calorimeter surface.
  *
- * This function takes the projected position of the track at the calorimeter
- * (ecalProjection), the helix representation of the track at its last hit,
- * and the magnetic field along the z-axis (Bz). It extrapolates the track
- * momentum to the calorimeter position and creates a new helix at this point.
- *
- * The output is an edm4hep::TrackState filled with the helix parameters at the
- * calorimeter, including position, momentum direction, curvature, and reference point.
- *
- * @param ecalProjection CartesianVector representing the track position at the calorimeter.
- * @param helixAtLastHit HelixClass_double instance describing the track at the last hit point.
- * @param Bz Magnetic field value along the z-axis in the detector region.
- *
- * @return edm4hep::TrackState The extrapolated track state at the calorimeter surface.
+ * @param helixAtLastHit Helix describing the track at the last hit.
+ * @param length Transverse path length from the last hit to the calorimeter [mm].
+ * @param Bz Magnetic field along the z-axis [T].
+ * @return Track state with its reference point on the trajectory at the crossing.
  */
-edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector& ecalProjection,
-                                                  const HelixClass_double& helixAtLastHit, double m_Bz);
+edm4hep::TrackState getExtrapolationAtCalorimeter(const edm4hep::utils::Helix& helixAtLastHit, double length,
+                                                  double Bz);
 
 /**
  * @brief Extrapolates the track parameters to the calorimeter surface and updates the track with this information.
@@ -94,20 +84,19 @@ edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector
  * geometries and selects the projection with the earliest arrival time.
  * The corresponding TrackState at the calorimeter is then attached to the
  * provided track object.
+ * If neither surface has an intersection within its acceptance, no state is added.
  *
  * @param edm4hep_track MutableTrack object to be updated with calorimeter extrapolation.
  * @param Bz Magnetic field component along the z-axis (Tesla).
- * @param charge Electric charge of the particle track.
  * @param m_eCalBarrelInnerR Inner radius of the barrel calorimeter.
  * @param m_eCalBarrelMaxZ Maximum half-length (z) of the barrel calorimeter.
  * @param m_eCalEndCapInnerR Inner radius of the endcap calorimeter.
  * @param m_eCalEndCapOuterR Outer radius of the endcap calorimeter.
  * @param m_eCalEndCapInnerZ z-position of the inner surface of the endcap calorimeter.
  */
-void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double Bz /* Tesla */, int charge,
-                                           double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
-                                           double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
-                                           double m_eCalEndCapInnerZ);
+void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double Bz, double m_eCalBarrelInnerR,
+                                           double m_eCalBarrelMaxZ, double m_eCalEndCapInnerR,
+                                           double m_eCalEndCapOuterR, double m_eCalEndCapInnerZ);
 
 /////////////////////
 /// Miscellaneous ///

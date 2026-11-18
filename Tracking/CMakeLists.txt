@@ -8,15 +8,6 @@ list(APPEND ExternalData_URL_TEMPLATES
 )
 
 find_package(GenFit REQUIRED)
-find_package(MarlinUtil REQUIRED)
-list(APPEND CMAKE_MODULE_PATH $ENV{PANDORAPFA}/cmakemodules)
-FOREACH( pkg  MarlinUtil PandoraSDK )
-  IF( ${pkg}_FOUND )
-    INCLUDE_DIRECTORIES( ${${pkg}_INCLUDE_DIRS} )
-    LINK_LIBRARIES( ${${pkg}_LIBRARIES} )
-    ADD_DEFINITIONS ( ${${pkg}_DEFINITIONS} )
-  ENDIF()
-ENDFOREACH()
 
 file(GLOB sources
     ${PROJECT_SOURCE_DIR}/src/*.cpp
@@ -35,6 +26,7 @@ gaudi_add_module(${PackageName}
   LINK
   Gaudi::GaudiKernel
   EDM4HEP::edm4hep
+  EDM4HEP::utils
   k4FWCore::k4FWCore
   k4FWCore::k4Interface
   k4geo::detectorCommon
@@ -47,15 +39,10 @@ gaudi_add_module(${PackageName}
   ${DELPHES_LIBRARIES}
 )
 
-if(TARGET PandoraPFA::PandoraSDK)
-  target_link_libraries(${PackageName} PRIVATE PandoraPFA::PandoraSDK)
-endif()
-
 target_include_directories(${PackageName} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/genfit_interfaces>
   $<INSTALL_INTERFACE:include>
-  ${MarlinUtil_INCLUDE_DIRS}
   ${DELPHES_INCLUDE_DIRS}
 )
 
