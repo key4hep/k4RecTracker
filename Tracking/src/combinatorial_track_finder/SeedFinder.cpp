@@ -13,31 +13,38 @@
 #include <cmath>
 #include <limits>
 #include <set>
-#include <unordered_map>
 
-namespace k4rt {
+namespace CTF {
 
 namespace {
 
   // ---- fixed constants of the search ----
   constexpr double kRaySweepFirstDegree = 0.5; // seed windows: rays from 0.5 to 180 degrees ...
   constexpr double kRaySweepLastDegree = 180.0;
-  constexpr double kRaySweepStepDegree = 0.25;       // ... in 0.25 degree steps
-  constexpr double kMinimumHitErrorCm = 1e-4;        // smallest hit error in the kink chi2 (no du / dv)
-  constexpr double kPrecheckRelativeMargin = 1.01;   // 3-hit pre-check: z cut + 1% ...
-  constexpr double kPrecheckAbsoluteMarginCm = 1e-6; // ... + 1e-6 cm (rounding)
-  constexpr int kMaxExtensionSteps = 64;             // safety limit, far more layers than any tracker has
-  constexpr int kMaxHoleSearchSteps = 12;            // hole check: layers followed outward beyond the last hit
-  constexpr double kFillChi2NdfMargin = 1.0;         // fill: new kink chi2/ndf below the current one + this
-  constexpr double kSwapMinChi2Gain = 2.0;           // swap: a hit must lower the kink chi2 by more than this
-  // shadow hits: layers crossed from 1 cm before the first to 1 cm after the last hit, within 1 cm
-  // of the layer edges; hits more than 5 cm from the crossing are not looked at
-  constexpr double kShadowArcMarginCm = 1.0;
-  constexpr double kShadowLayerToleranceCm = 1.0;
+  constexpr double kRaySweepStepDegree = 0.25; // ... in 0.25 degree steps
+  constexpr double kMinimumHitErrorCm = 1e-4;  // smallest hit error in the kink chi2 (no du / dv)
+  constexpr double kFillChi2NdfMargin = 1.0;   // fill: new kink chi2/ndf below the current one + this
+  constexpr double kSwapMinChi2Gain = 2.0;     // swap: a hit must lower the kink chi2 by more than this
+  // shadow hits: layers crossed from one search window (kWindowCm) before the first to one after
+  // the last hit, within one window of the layer edges; hits more than 5 cm from the crossing are
+  // not looked at
   constexpr double kShadowSearchRadiusCm = 5.0;
   constexpr double kMergeWindowFactor = 3.0; // merging: on the other helix within 3x the search window
   // join of two pieces: its triplets may exceed the triplet cut 4x (skipped layers' material is missing)
   constexpr double kJoinTripletCutFactor = 4.0;
+  // passes: 4-hit seeds, then 3-hit seeds on the hits left; in a pass other than the last a
+  // track claims its hits with >= 4 hits
+  constexpr int kSeedSizes[] = {4, 3};
+  constexpr int kClaimMinHits = 4;
+  constexpr int kConfirmIterations = 2;   // confirmation passes (fill, swap, drop outliers)
+  constexpr int kLayerSkip = 1;           // layers that may be skipped inside a seed window
+  constexpr double kMaxZResidualCm = 0.5; // max |z - line| of seed hits about their z-vs-arc-length line
+  constexpr double kWindowCm = 1.0;       // hit search radius at a predicted crossing ...
+  constexpr double kWindowSlope = 0.02;   // ... plus this many cm per cm of extrapolation
+  constexpr int kMaxMissedLayers = 2;     // stop extending after this many crossed layers without a hit
+  // short tracks: at most this many crossed layers without a hit (inside the span and outward;
+  // inward is not counted, a displaced track has no hits inside its origin)
+  constexpr int kShortTrackMaxHoles = 1;
 
   /// The full fit of an ordered hit list.
   struct TrackFit {
@@ -47,24 +54,31 @@ namespace {
     KinkResult kink;
   };
 
+  /// An accepted track piece: the candidate, its fit, and whether it was merged into another.
+  struct AcceptedPiece {
+    TrackCandidate candidate;
+    TrackFit fit;
+    bool merged = false;
+  };
+
   struct Seed {
     std::vector<size_t> hits;
     double kinkChi2NDF; ///< the lower, the earlier it is extended
   };
 
-  /// A hit as the search sees it (computed once per event): kink-chi2 view and sensor plane.
-  struct CachedHit {
-    KinkPoint kinkPoint;
-    bool hasPlane = false;
-    Eigen::Vector3d planeOrigin = Eigen::Vector3d::Zero(); ///< cm
-    Eigen::Vector3d planeNormal = Eigen::Vector3d::Zero(); ///< unit vector
+  /// The helix through the first, a middle and the last hit of a seed prefix, for the test of the
+  /// next hit; valid = false for collinear points (then every next hit passes, as before).
+  struct AnchorHelix {
+    bool valid = false;
+    Helix helix;
+    double lastArcLength = 0.0; ///< arc length of the last of the three hits (cm)
   };
 
   /// Where the hits of one accepted piece lie relative to the helix of another.
   enum class Placement { NotNear, Overlapping, Before, After };
 
   // helpers, defined at the end of the file
-  Eigen::Vector3d positionCm(const edm4hep::TrackerHitPlane& hit);
+  Eigen::Vector3d positionCm(const EventHit& hit);
   void completeSubsets(const std::vector<int>& layers, size_t first, size_t end, int size, std::vector<int>& current,
                        std::set<std::vector<int>>& out);
   void windowSubsets(const std::vector<int>& layers, size_t first, size_t length, int size,
@@ -73,19 +87,19 @@ namespace {
                     double& centreX, double& centreY, double& radius);
   bool tripletPrecheck(const Eigen::Vector3d& pointA, const Eigen::Vector3d& pointB, const Eigen::Vector3d& pointC,
                        double maxZResidual);
-  bool hitOnTrajectory(const Eigen::Vector3d& pointA, const Eigen::Vector3d& pointB, const Eigen::Vector3d& pointC,
-                       const Eigen::Vector3d& next, double window, double slope);
+  AnchorHelix anchorHelix(const Eigen::Vector3d& pointA, const Eigen::Vector3d& pointB, const Eigen::Vector3d& pointC);
+  bool hitOnTrajectory(const AnchorHelix& anchor, const Eigen::Vector3d& next, double window, double slope);
 
 } // namespace
 
-SeedFinder::SeedFinder(const LayerGeometry& geometry, SeedConfig config, PlaneFn plane)
-    : m_geometry(geometry), m_config(std::move(config)), m_plane(std::move(plane)) {}
+SeedFinder::SeedFinder(const LayerGeometry& geometry, Config config)
+    : m_geometry(geometry), m_config(std::move(config)) {}
 
 std::vector<std::string> SeedFinder::prepare() {
   std::vector<std::string> problems;
   m_setsBySize.clear();
   m_passes.clear();
-  for (int seedSize : m_config.passes) {
+  for (int seedSize : kSeedSizes) {
     if (seedSize < 3)
       problems.push_back("a seed size < 3 was raised to 3");
     m_passes.push_back(std::max(3, seedSize));
@@ -111,7 +125,7 @@ std::vector<std::vector<int>> SeedFinder::buildSets(int seedSize) const {
   // the order in which a straight ray from the origin crosses the layers is the inside-out order
   // a track in that direction sees them
   std::set<std::vector<int>> sets;
-  const size_t windowLength = static_cast<size_t>(seedSize + std::max(0, m_config.layerSkip));
+  const size_t windowLength = static_cast<size_t>(seedSize + std::max(0, kLayerSkip));
   for (double degree = kRaySweepFirstDegree; degree < kRaySweepLastDegree; degree += kRaySweepStepDegree) {
     const std::vector<int> crossed = m_geometry.layersCrossedByRay(degree * M_PI / 180.0);
     if (static_cast<int>(crossed.size()) < seedSize)
@@ -148,8 +162,7 @@ double SeedFinder::closestApproachCm(int layerKey) const {
 //   (e) passes of 4-hit, then 3-hit seeds; the last pass claims tracks of >= MinTrackHits
 class SeedFinder::EventSearch {
 public:
-  EventSearch(const SeedFinder& finder, const edm4hep::TrackerHitPlaneCollection& hits,
-              const std::vector<std::pair<size_t, int>>& pool);
+  EventSearch(const SeedFinder& finder, const std::vector<EventHit>& hits, const std::vector<size_t>& pool);
 
   void searchPasses();                   ///< (a) + (e)
   void mergePieces();                    ///< (d)
@@ -157,24 +170,24 @@ public:
 
 private:
   // ---- hits ----
-  const CachedHit& cachedHit(size_t hitIndex);
-  const KinkPoint& kinkPoint(size_t hitIndex) { return cachedHit(hitIndex).kinkPoint; }
+  void describeHit(size_t hitIndex);
+  const KinkPoint& kinkPoint(size_t hitIndex) const { return m_kinkPoints[hitIndex]; }
   bool anyClaimed(const std::vector<size_t>& hitIndices) const;
   void collectUnclaimedHits();
-  bool fitTrack(const std::vector<size_t>& track, TrackFit& fit);
+  bool fitTrack(const std::vector<size_t>& track, TrackFit& fit) const;
   // ---- (a) seeds ----
-  std::vector<Seed> seedsOfWindow(const std::vector<int>& layerSet, int seedSize);
+  std::vector<Seed> seedsOfWindow(const std::vector<int>& layerSet, int seedSize) const;
   void growSeeds(int level, const std::vector<int>& layerSet, int seedSize, std::vector<size_t>& chain,
-                 std::vector<Seed>& seeds);
-  bool chainStillOnTrack(int seedSize, const std::vector<size_t>& chain);
-  void keepSeedIfGood(const std::vector<size_t>& chain, int seedSize, std::vector<Seed>& seeds);
+                 std::vector<Seed>& seeds) const;
+  bool chainStillOnTrack(int seedSize, const std::vector<size_t>& chain, const AnchorHelix& anchor) const;
+  void keepSeedIfGood(const std::vector<size_t>& chain, int seedSize, std::vector<Seed>& seeds) const;
   // ---- (b) extension ----
   const LayerDescriptor* nextCrossedLayer(const Helix& helix, double fromArcLength, int direction, double tolerance,
                                           double maxArcLength, const std::vector<int>& visited, Crossing& crossing,
                                           double& distance) const;
   std::vector<std::pair<double, size_t>> nearHits(const Helix& helix, const Crossing& crossing,
                                                   const LayerDescriptor& layer, double window,
-                                                  const std::vector<size_t>& track);
+                                                  const std::vector<size_t>& track) const;
   void extend(std::vector<size_t>& track, int direction, std::vector<int>& visited, TrackFit& fit);
   bool attachBestHit(std::vector<size_t>& track, int direction, TrackFit& fit, const Crossing& crossing,
                      const LayerDescriptor& layer, double window);
@@ -184,54 +197,54 @@ private:
   bool swapBetterHits(std::vector<size_t>& track, TrackFit& fit);
   bool dropWorstKink(std::vector<size_t>& track, TrackFit& fit);
   // ---- acceptance ----
-  bool passesTrackCuts(const std::vector<size_t>& track, const TrackFit& fit, int claimMinHits);
-  bool hitNear(const LayerDescriptor& layer, const Crossing& crossing);
-  int countHoles(const std::vector<size_t>& track, const TrackFit& fit);
+  bool passesTrackCuts(const std::vector<size_t>& track, const TrackFit& fit, int claimMinHits) const;
+  bool hitNear(const LayerDescriptor& layer, const Crossing& crossing) const;
+  int countHoles(const std::vector<size_t>& track, const TrackFit& fit) const;
   void accept(const std::vector<size_t>& track, const TrackFit& fit);
   void claimShadowHits(const TrackFit& fit);
   // ---- (d) merging ----
   bool mergeOnePair();
-  Placement placeOnHelix(size_t longer, size_t shorter);
+  Placement placeOnHelix(size_t longer, size_t shorter) const;
   bool tryMerge(size_t longer, size_t shorter, bool shorterComesFirst);
 
   const SeedFinder& m_finder;
-  const SeedConfig& m_config;
+  const Config& m_config;
   const LayerGeometry& m_geometry;
-  const edm4hep::TrackerHitPlaneCollection& m_hits;
-  const std::vector<std::pair<size_t, int>>& m_pool;
+  const std::vector<EventHit>& m_hits;
+  const std::vector<size_t>& m_pool;
   const KinkChi2Calculator m_kinkCalculator;
 
   // per hit of the collection (index = hit index)
   std::vector<int> m_layerKeyOfHit;    ///< 0 for hits not in the pool
-  std::vector<CachedHit> m_cachedHits; ///< filled on first use
-  std::vector<bool> m_isCached;
-  std::vector<bool> m_claimed; ///< used by an accepted track
+  std::vector<KinkPoint> m_kinkPoints; ///< the kink-chi2 view of the pool hits
+  std::vector<bool> m_claimed;         ///< used by an accepted track
 
-  std::map<int, std::vector<size_t>> m_unclaimedByLayer;         ///< unclaimed pool hits per layer
-  std::unordered_map<int, std::vector<size_t>> m_allHitsByLayer; ///< all pool hits per layer
-  std::vector<TrackCandidate> m_accepted;                        ///< accepted candidates,
-  std::vector<TrackFit> m_acceptedFits;                          ///< their fits,
-  std::vector<bool> m_merged;                                    ///< and whether merged into another
+  std::map<int, std::vector<size_t>> m_unclaimedByLayer; ///< unclaimed pool hits per layer
+  std::map<int, std::vector<size_t>> m_allHitsByLayer;   ///< all pool hits per layer
+  std::vector<AcceptedPiece> m_accepted;                 ///< accepted pieces, in order
 };
 
-std::vector<TrackCandidate> SeedFinder::run(const edm4hep::TrackerHitPlaneCollection& hits,
-                                            const std::vector<std::pair<size_t, int>>& pool) const {
+std::vector<TrackCandidate> SeedFinder::run(const std::vector<EventHit>& hits, const std::vector<size_t>& pool) const {
   EventSearch search(*this, hits, pool);
   search.searchPasses();
   search.mergePieces();
   return search.results();
 }
 
-SeedFinder::EventSearch::EventSearch(const SeedFinder& finder, const edm4hep::TrackerHitPlaneCollection& hits,
-                                     const std::vector<std::pair<size_t, int>>& pool)
+SeedFinder::EventSearch::EventSearch(const SeedFinder& finder, const std::vector<EventHit>& hits,
+                                     const std::vector<size_t>& pool)
     : m_finder(finder), m_config(finder.m_config), m_geometry(finder.m_geometry), m_hits(hits), m_pool(pool),
-      m_kinkCalculator(finder.m_config.common.bFieldTesla), m_layerKeyOfHit(hits.size(), 0), m_cachedHits(hits.size()),
-      m_isCached(hits.size(), false), m_claimed(hits.size(), false) {
-  // every pool hit by layer, claimed or not (a hole is a crossing with no hit at all nearby)
-  for (const auto& [hitIndex, layerKey] : pool) {
+      m_kinkCalculator(finder.m_config.common.bFieldTesla), m_layerKeyOfHit(hits.size(), 0), m_kinkPoints(hits.size()),
+      m_claimed(hits.size(), false) {
+  // every pool hit by layer, claimed or not (a hole is a crossing with no hit at all nearby), and
+  // what the search needs of it
+  for (size_t hitIndex : pool) {
+    const int layerKey = hits[hitIndex].layerKey;
     m_layerKeyOfHit[hitIndex] = layerKey;
     m_allHitsByLayer[layerKey].push_back(hitIndex);
   }
+  for (size_t hitIndex : pool)
+    describeHit(hitIndex);
 }
 
 void SeedFinder::EventSearch::searchPasses() {
@@ -239,7 +252,7 @@ void SeedFinder::EventSearch::searchPasses() {
   for (size_t passIndex = 0; passIndex < passes.size(); ++passIndex) {
     const int seedSize = passes[passIndex];
     // the last pass claims tracks of >= MinTrackHits, the others only longer ones
-    int claimMinHits = std::max(m_config.claimMinHits, m_config.common.minTrackHits);
+    int claimMinHits = std::max(kClaimMinHits, m_config.common.minTrackHits);
     if (passIndex + 1 == passes.size())
       claimMinHits = std::max(3, m_config.common.minTrackHits);
     collectUnclaimedHits();
@@ -279,7 +292,7 @@ void SeedFinder::EventSearch::searchPasses() {
 // (a) seeds
 // ============================================================================================
 
-std::vector<Seed> SeedFinder::EventSearch::seedsOfWindow(const std::vector<int>& layerSet, int seedSize) {
+std::vector<Seed> SeedFinder::EventSearch::seedsOfWindow(const std::vector<int>& layerSet, int seedSize) const {
   std::vector<Seed> seeds;
   std::vector<size_t> chain;
   growSeeds(0, layerSet, seedSize, chain, seeds);
@@ -291,11 +304,17 @@ std::vector<Seed> SeedFinder::EventSearch::seedsOfWindow(const std::vector<int>&
 // every chain of one unclaimed hit per window layer (recursive, one layer per call), with cheap
 // checks before the fit; complete chains go to keepSeedIfGood
 void SeedFinder::EventSearch::growSeeds(int level, const std::vector<int>& layerSet, int seedSize,
-                                        std::vector<size_t>& chain, std::vector<Seed>& seeds) {
+                                        std::vector<size_t>& chain, std::vector<Seed>& seeds) const {
   if (level == seedSize) {
     keepSeedIfGood(chain, seedSize, seeds);
     return;
   }
+  // a 4th or later hit is tested against the helix through the first, a middle and the last
+  // hit of the prefix: built once here for all candidate hits of this layer
+  AnchorHelix anchor;
+  if (seedSize > 3 && level >= 3)
+    anchor = anchorHelix(kinkPoint(chain[0]).position, kinkPoint(chain[(level - 1) / 2]).position,
+                         kinkPoint(chain[level - 1]).position);
   for (size_t hitIndex : m_unclaimedByLayer.at(layerSet[level])) {
     if (m_claimed[hitIndex])
       continue;
@@ -304,7 +323,7 @@ void SeedFinder::EventSearch::growSeeds(int level, const std::vector<int>& layer
         (kinkPoint(hitIndex).position - kinkPoint(chain.back()).position).norm() > m_config.common.maxPairHitDistanceCm)
       continue;
     chain.push_back(hitIndex);
-    if (level == 0 || chainStillOnTrack(seedSize, chain))
+    if (level == 0 || chainStillOnTrack(seedSize, chain, anchor))
       growSeeds(level + 1, layerSet, seedSize, chain, seeds);
     chain.pop_back();
   }
@@ -312,28 +331,26 @@ void SeedFinder::EventSearch::growSeeds(int level, const std::vector<int>& layer
 
 // seeds of 4+ hits: the first three pass the 3-hit pre-check (twice the z cut), each later hit is
 // on the helix through the first, a middle and the previous hit
-bool SeedFinder::EventSearch::chainStillOnTrack(int seedSize, const std::vector<size_t>& chain) {
+bool SeedFinder::EventSearch::chainStillOnTrack(int seedSize, const std::vector<size_t>& chain,
+                                                const AnchorHelix& anchor) const {
   if (seedSize <= 3)
     return true;
   if (chain.size() == 3)
     return tripletPrecheck(kinkPoint(chain[0]).position, kinkPoint(chain[1]).position, kinkPoint(chain[2]).position,
-                           2.0 * m_config.maxZResid_cm);
-  if (chain.size() >= 4) {
-    const size_t last = chain.size() - 1;
-    return hitOnTrajectory(kinkPoint(chain[0]).position, kinkPoint(chain[(last - 1) / 2]).position,
-                           kinkPoint(chain[last - 1]).position, kinkPoint(chain[last]).position, m_config.window_cm,
-                           m_config.windowSlope);
-  }
+                           2.0 * kMaxZResidualCm);
+  if (chain.size() >= 4)
+    return hitOnTrajectory(anchor, kinkPoint(chain.back()).position, kWindowCm, kWindowSlope);
   return true;
 }
 
 // a complete chain is a seed if its hits are unclaimed, it passes the pre-check (3 hits), its fit
 // works, its hits follow the travel order and its kink chi2/ndf is small
-void SeedFinder::EventSearch::keepSeedIfGood(const std::vector<size_t>& chain, int seedSize, std::vector<Seed>& seeds) {
+void SeedFinder::EventSearch::keepSeedIfGood(const std::vector<size_t>& chain, int seedSize,
+                                             std::vector<Seed>& seeds) const {
   if (anyClaimed(chain))
     return;
   if (seedSize == 3 && !tripletPrecheck(kinkPoint(chain[0]).position, kinkPoint(chain[1]).position,
-                                        kinkPoint(chain[2]).position, m_config.maxZResid_cm))
+                                        kinkPoint(chain[2]).position, kMaxZResidualCm))
     return;
   TrackFit fit;
   if (!fitTrack(chain, fit))
@@ -356,21 +373,21 @@ void SeedFinder::EventSearch::keepSeedIfGood(const std::vector<size_t>& chain, i
 void SeedFinder::EventSearch::extend(std::vector<size_t>& track, int direction, std::vector<int>& visited,
                                      TrackFit& fit) {
   int missed = 0;
-  for (int step = 0; step < kMaxExtensionSteps; ++step) {
+  for (int step = 0; step < 64; ++step) { // safety limit: far more layers than any tracker has
     const double fromArcLength = direction > 0 ? fit.arcLengths.back() : fit.arcLengths.front();
     // the next layer within half a turn (pi R): beyond it the track curls back
     Crossing crossing;
     double distance = 0.0;
-    const LayerDescriptor* layer = nextCrossedLayer(fit.helix, fromArcLength, direction, m_config.window_cm,
+    const LayerDescriptor* layer = nextCrossedLayer(fit.helix, fromArcLength, direction, kWindowCm,
                                                     M_PI * fit.circle.radius, visited, crossing, distance);
     if (!layer)
       break;
     visited.push_back(layer->layerKey);
     // the window grows with the extrapolation distance (the prediction gets less precise)
-    const double window = m_config.window_cm + m_config.windowSlope * distance;
+    const double window = kWindowCm + kWindowSlope * distance;
     if (attachBestHit(track, direction, fit, crossing, *layer, window))
       missed = 0;
-    else if (++missed > m_config.maxMissedLayers)
+    else if (++missed > kMaxMissedLayers)
       break;
   }
 }
@@ -446,7 +463,7 @@ bool SeedFinder::EventSearch::attachBestHit(std::vector<size_t>& track, int dire
 // measured on each hit's own sensor plane
 std::vector<std::pair<double, size_t>> SeedFinder::EventSearch::nearHits(const Helix& helix, const Crossing& crossing,
                                                                          const LayerDescriptor& layer, double window,
-                                                                         const std::vector<size_t>& track) {
+                                                                         const std::vector<size_t>& track) const {
   std::vector<std::pair<double, size_t>> near;
   auto layerHits = m_unclaimedByLayer.find(layer.layerKey);
   if (layerHits == m_unclaimedByLayer.end())
@@ -458,9 +475,9 @@ std::vector<std::pair<double, size_t>> SeedFinder::EventSearch::nearHits(const H
     if ((position - crossing.position).norm() > window + layer.depthCm())
       continue; // quick test, with room for the layer depth
     double distance = (position - crossing.position).norm();
-    const CachedHit& cached = cachedHit(hitIndex);
-    if (cached.hasPlane) {
-      const Crossing onSensor = helix.refineToPlane(cached.planeOrigin, cached.planeNormal, crossing.arcLength);
+    const EventHit& hit = m_hits[hitIndex];
+    if (hit.hasPlane) {
+      const Crossing onSensor = helix.refineToPlane(hit.planeOriginCm, hit.planeNormal, crossing.arcLength);
       if (onSensor.ok)
         distance = (position - onSensor.position).norm();
     }
@@ -478,7 +495,7 @@ std::vector<std::pair<double, size_t>> SeedFinder::EventSearch::nearHits(const H
 // ============================================================================================
 
 void SeedFinder::EventSearch::confirm(std::vector<size_t>& track, TrackFit& fit) {
-  for (int iteration = 0; iteration < m_config.confirmIterations; ++iteration) {
+  for (int iteration = 0; iteration < kConfirmIterations; ++iteration) {
     // all three steps run every iteration, in this order
     const bool filled = fillMissingLayers(track, fit);
     const bool swapped = swapBetterHits(track, fit);
@@ -498,14 +515,14 @@ bool SeedFinder::EventSearch::fillMissingLayers(std::vector<size_t>& track, Trac
   for (const auto& layer : m_geometry.layers()) {
     if (present.count(layer.layerKey))
       continue;
-    const Crossing crossing = fit.helix.crossLayer(layer, fit.arcLengths.front(), +1, m_config.window_cm,
+    const Crossing crossing = fit.helix.crossLayer(layer, fit.arcLengths.front(), +1, kWindowCm,
                                                    fit.arcLengths.back() - fit.arcLengths.front());
     if (!crossing.ok)
       continue;
     std::vector<size_t> bestTrack;
     TrackFit bestFit;
     double bestChi2NDF = fit.kink.chi2ndf() + kFillChi2NdfMargin;
-    for (const auto& [distance, hitIndex] : nearHits(fit.helix, crossing, layer, m_config.window_cm, track)) {
+    for (const auto& [distance, hitIndex] : nearHits(fit.helix, crossing, layer, kWindowCm, track)) {
       // the hit goes where its arc length puts it (copy loop, not vector::insert: gcc 16 false warning)
       const double arcLength = fit.helix.arcLengthNear(kinkPoint(hitIndex).position, crossing.arcLength);
       size_t insertAt = 0;
@@ -553,7 +570,7 @@ bool SeedFinder::EventSearch::swapBetterHits(std::vector<size_t>& track, TrackFi
     for (size_t hitIndex : layerHits->second) {
       if (hitIndex == track[i] || m_claimed[hitIndex] || std::find(track.begin(), track.end(), hitIndex) != track.end())
         continue;
-      if ((kinkPoint(hitIndex).position - kinkPoint(track[i]).position).norm() > m_config.window_cm)
+      if ((kinkPoint(hitIndex).position - kinkPoint(track[i]).position).norm() > kWindowCm)
         continue;
       std::vector<size_t> trial = track;
       trial[i] = hitIndex;
@@ -610,7 +627,8 @@ bool SeedFinder::EventSearch::dropWorstKink(std::vector<size_t>& track, TrackFit
 // ============================================================================================
 
 // enough hits and a small kink chi2/ndf; a short track also needs MinComboPT and few holes
-bool SeedFinder::EventSearch::passesTrackCuts(const std::vector<size_t>& track, const TrackFit& fit, int claimMinHits) {
+bool SeedFinder::EventSearch::passesTrackCuts(const std::vector<size_t>& track, const TrackFit& fit,
+                                              int claimMinHits) const {
   if (static_cast<int>(track.size()) < claimMinHits || fit.kink.chi2ndf() > m_config.trackKinkMaxChi2NDF)
     return false;
   if (static_cast<int>(track.size()) > m_config.shortTrackMaxHits)
@@ -618,12 +636,12 @@ bool SeedFinder::EventSearch::passesTrackCuts(const std::vector<size_t>& track, 
   if (m_config.common.minPtGeV > 0.0 &&
       ptFromRadius(m_config.common.bFieldTesla, fit.circle.radius) < m_config.common.minPtGeV)
     return false;
-  return countHoles(track, fit) <= m_config.shortTrackMaxHoles;
+  return countHoles(track, fit) <= kShortTrackMaxHoles;
 }
 
 // holes inside the track's span, then outward until it leaves the tracker (or half a turn); the
 // crossings must be inside the layer (no tolerance), so passing between layers is no hole
-int SeedFinder::EventSearch::countHoles(const std::vector<size_t>& track, const TrackFit& fit) {
+int SeedFinder::EventSearch::countHoles(const std::vector<size_t>& track, const TrackFit& fit) const {
   int holes = 0;
   std::vector<int> visited;
   for (size_t hitIndex : track)
@@ -637,8 +655,8 @@ int SeedFinder::EventSearch::countHoles(const std::vector<size_t>& track, const 
     if (crossing.ok && !hitNear(layer, crossing))
       ++holes;
   }
-  double fromArcLength = lastArcLength; // outward, layer by layer
-  for (int step = 0; step < kMaxHoleSearchSteps && holes <= m_config.shortTrackMaxHoles; ++step) {
+  double fromArcLength = lastArcLength;                                   // outward, layer by layer
+  for (int step = 0; step < 12 && holes <= kShortTrackMaxHoles; ++step) { // at most 12 layers outward
     Crossing crossing;
     double distance = 0.0;
     const double maxArcLength = M_PI * fit.circle.radius - (fromArcLength - firstArcLength);
@@ -655,12 +673,12 @@ int SeedFinder::EventSearch::countHoles(const std::vector<size_t>& track, const 
 }
 
 // any pool hit (claimed or not) near the crossing of the layer?
-bool SeedFinder::EventSearch::hitNear(const LayerDescriptor& layer, const Crossing& crossing) {
+bool SeedFinder::EventSearch::hitNear(const LayerDescriptor& layer, const Crossing& crossing) const {
   auto layerHits = m_allHitsByLayer.find(layer.layerKey);
   if (layerHits == m_allHitsByLayer.end())
     return false;
   for (size_t hitIndex : layerHits->second) {
-    if ((kinkPoint(hitIndex).position - crossing.position).norm() <= m_config.window_cm + layer.depthCm())
+    if ((kinkPoint(hitIndex).position - crossing.position).norm() <= kWindowCm + layer.depthCm())
       return true;
   }
   return false;
@@ -678,9 +696,7 @@ void SeedFinder::EventSearch::accept(const std::vector<size_t>& track, const Tra
     m_claimed[hitIndex] = true;
   if (m_config.shadowHitWindow_cm > 0.0)
     claimShadowHits(fit);
-  m_accepted.push_back(std::move(candidate));
-  m_acceptedFits.push_back(fit);
-  m_merged.push_back(false);
+  m_accepted.push_back({std::move(candidate), fit, false});
 }
 
 // unclaimed hits within ShadowHitWindow of the trajectory on their own sensor (overlapping-sensor
@@ -692,9 +708,8 @@ void SeedFinder::EventSearch::claimShadowHits(const TrackFit& fit) {
     auto layerHits = m_allHitsByLayer.find(layer.layerKey);
     if (layerHits == m_allHitsByLayer.end())
       continue;
-    const Crossing crossing =
-        fit.helix.crossLayer(layer, firstArcLength - kShadowArcMarginCm, +1, kShadowLayerToleranceCm,
-                             lastArcLength - firstArcLength + 2.0 * kShadowArcMarginCm);
+    const Crossing crossing = fit.helix.crossLayer(layer, firstArcLength - kWindowCm, +1, kWindowCm,
+                                                   lastArcLength - firstArcLength + 2.0 * kWindowCm);
     if (!crossing.ok)
       continue;
     for (size_t hitIndex : layerHits->second) {
@@ -703,10 +718,10 @@ void SeedFinder::EventSearch::claimShadowHits(const TrackFit& fit) {
       const Eigen::Vector3d position = kinkPoint(hitIndex).position;
       if ((position - crossing.position).norm() > kShadowSearchRadiusCm)
         continue;
-      const CachedHit& cached = cachedHit(hitIndex);
-      if (!cached.hasPlane)
+      const EventHit& hit = m_hits[hitIndex];
+      if (!hit.hasPlane)
         continue;
-      const Crossing onSensor = fit.helix.refineToPlane(cached.planeOrigin, cached.planeNormal, crossing.arcLength);
+      const Crossing onSensor = fit.helix.refineToPlane(hit.planeOriginCm, hit.planeNormal, crossing.arcLength);
       if (onSensor.ok && (position - onSensor.position).norm() <= m_config.shadowHitWindow_cm)
         m_claimed[hitIndex] = true;
     }
@@ -726,17 +741,18 @@ void SeedFinder::EventSearch::mergePieces() {
 // Pieces overlapping on the same helix are flagged loopers.
 bool SeedFinder::EventSearch::mergeOnePair() {
   for (size_t longer = 0; longer < m_accepted.size(); ++longer) {
-    if (m_merged[longer])
+    if (m_accepted[longer].merged)
       continue;
     for (size_t shorter = 0; shorter < m_accepted.size(); ++shorter) {
-      if (shorter == longer || m_merged[shorter] || m_accepted[shorter].hits.size() > m_accepted[longer].hits.size())
+      if (shorter == longer || m_accepted[shorter].merged ||
+          m_accepted[shorter].candidate.hits.size() > m_accepted[longer].candidate.hits.size())
         continue;
       const Placement placement = placeOnHelix(longer, shorter);
       if (placement == Placement::NotNear)
         continue;
       if (placement == Placement::Overlapping) {
-        m_accepted[longer].looper = true;
-        m_accepted[shorter].looper = true;
+        m_accepted[longer].candidate.looper = true;
+        m_accepted[shorter].candidate.looper = true;
         continue;
       }
       if (tryMerge(longer, shorter, placement == Placement::Before))
@@ -747,20 +763,20 @@ bool SeedFinder::EventSearch::mergeOnePair() {
 }
 
 // are all hits of the shorter piece close to the helix of the longer one, all before or all after it?
-Placement SeedFinder::EventSearch::placeOnHelix(size_t longer, size_t shorter) {
-  const TrackFit& fit = m_acceptedFits[longer];
+Placement SeedFinder::EventSearch::placeOnHelix(size_t longer, size_t shorter) const {
+  const TrackFit& fit = m_accepted[longer].fit;
   const double firstArcLength = fit.arcLengths.front();
   const double lastArcLength = fit.arcLengths.back();
   bool allBefore = true;
   bool allAfter = true;
-  for (size_t hitIndex : m_accepted[shorter].hits) {
+  for (size_t hitIndex : m_accepted[shorter].candidate.hits) {
     const Eigen::Vector3d position = kinkPoint(hitIndex).position;
     // placed on the helix from the nearer end of the longer piece
     const bool nearerToLast = (position - fit.helix.positionAt(lastArcLength)).norm() <
                               (position - fit.helix.positionAt(firstArcLength)).norm();
     const double arcLength = fit.helix.arcLengthNear(position, nearerToLast ? lastArcLength : firstArcLength);
     const double extrapolation = std::max(0.0, std::max(arcLength - lastArcLength, firstArcLength - arcLength));
-    const double window = kMergeWindowFactor * (m_config.window_cm + m_config.windowSlope * extrapolation);
+    const double window = kMergeWindowFactor * (kWindowCm + kWindowSlope * extrapolation);
     if ((position - fit.helix.positionAt(arcLength)).norm() > window || extrapolation > M_PI * fit.circle.radius)
       return Placement::NotNear;
     allBefore = allBefore && arcLength < firstArcLength;
@@ -774,8 +790,10 @@ Placement SeedFinder::EventSearch::placeOnHelix(size_t longer, size_t shorter) {
 // the pieces joined in travel order and refitted; kept below the track cut, with no triplet beyond
 // the triplet cut (4x at the join)
 bool SeedFinder::EventSearch::tryMerge(size_t longer, size_t shorter, bool shorterComesFirst) {
-  const std::vector<size_t>& firstPiece = shorterComesFirst ? m_accepted[shorter].hits : m_accepted[longer].hits;
-  const std::vector<size_t>& secondPiece = shorterComesFirst ? m_accepted[longer].hits : m_accepted[shorter].hits;
+  const std::vector<size_t>& firstPiece =
+      shorterComesFirst ? m_accepted[shorter].candidate.hits : m_accepted[longer].candidate.hits;
+  const std::vector<size_t>& secondPiece =
+      shorterComesFirst ? m_accepted[longer].candidate.hits : m_accepted[shorter].candidate.hits;
   std::vector<size_t> joined = firstPiece;
   joined.insert(joined.end(), secondPiece.begin(), secondPiece.end());
   TrackFit joinedFit;
@@ -788,23 +806,23 @@ bool SeedFinder::EventSearch::tryMerge(size_t longer, size_t shorter, bool short
     if (joinedFit.kink.perTriplet[triplet] > cut)
       return false;
   }
-  TrackCandidate& merged = m_accepted[longer];
+  TrackCandidate& merged = m_accepted[longer].candidate;
   merged.hits = joined;
   merged.circle = joinedFit.circle;
   merged.kinkChi2 = joinedFit.kink.chi2;
   merged.kinkNdf = joinedFit.kink.ndf;
   merged.looper =
       merged.looper || (joinedFit.arcLengths.back() - joinedFit.arcLengths.front()) > M_PI * joinedFit.circle.radius;
-  m_acceptedFits[longer] = std::move(joinedFit);
-  m_merged[shorter] = true;
+  m_accepted[longer].fit = std::move(joinedFit);
+  m_accepted[shorter].merged = true;
   return true;
 }
 
 std::vector<TrackCandidate> SeedFinder::EventSearch::results() {
   std::vector<TrackCandidate> candidates;
   for (size_t i = 0; i < m_accepted.size(); ++i) {
-    if (!m_merged[i])
-      candidates.push_back(std::move(m_accepted[i]));
+    if (!m_accepted[i].merged)
+      candidates.push_back(std::move(m_accepted[i].candidate));
   }
   std::stable_sort(candidates.begin(), candidates.end(), [](const TrackCandidate& left, const TrackCandidate& right) {
     return left.hits.size() > right.hits.size();
@@ -816,26 +834,21 @@ std::vector<TrackCandidate> SeedFinder::EventSearch::results() {
 // hits
 // ============================================================================================
 
-const CachedHit& SeedFinder::EventSearch::cachedHit(size_t hitIndex) {
-  CachedHit& cached = m_cachedHits[hitIndex];
-  if (m_isCached[hitIndex])
-    return cached;
-  m_isCached[hitIndex] = true;
-  const auto hit = m_hits[hitIndex];
-  KinkPoint& point = cached.kinkPoint;
+// the kink-chi2 view and the sensor plane of a pool hit
+void SeedFinder::EventSearch::describeHit(size_t hitIndex) {
+  const EventHit& hit = m_hits[hitIndex];
+  KinkPoint& point = m_kinkPoints[hitIndex];
   point.position = positionCm(hit);
-  point.sigmaTransverseCm = std::max(kMinimumHitErrorCm, kCmPerMm * hit.getDu());
-  point.sigmaZCm = std::max(kMinimumHitErrorCm, kCmPerMm * hit.getDv());
+  point.sigmaTransverseCm = std::max(kMinimumHitErrorCm, kCmPerMm * hit.duMm);
+  point.sigmaZCm = std::max(kMinimumHitErrorCm, kCmPerMm * hit.dvMm);
   const LayerDescriptor* layer = m_geometry.find(m_layerKeyOfHit[hitIndex]);
   point.xOverX0 = layer ? layer->xOverX0 : 0.0;
-  cached.hasPlane = m_finder.m_plane(hit.getCellID(), cached.planeOrigin, cached.planeNormal);
-  if (cached.hasPlane)
-    point.normal = cached.planeNormal;
+  if (hit.hasPlane)
+    point.normal = hit.planeNormal;
   else if (layer && !layer->isBarrel())
     point.normal = Eigen::Vector3d::UnitZ(); // a disk faces along z
   else
     point.normal = Eigen::Vector3d(point.position.x(), point.position.y(), 0).normalized(); // barrel: outward
-  return cached;
 }
 
 bool SeedFinder::EventSearch::anyClaimed(const std::vector<size_t>& hitIndices) const {
@@ -848,14 +861,14 @@ bool SeedFinder::EventSearch::anyClaimed(const std::vector<size_t>& hitIndices) 
 
 void SeedFinder::EventSearch::collectUnclaimedHits() {
   m_unclaimedByLayer.clear();
-  for (const auto& [hitIndex, layerKey] : m_pool) {
+  for (size_t hitIndex : m_pool) {
     if (!m_claimed[hitIndex])
-      m_unclaimedByLayer[layerKey].push_back(hitIndex);
+      m_unclaimedByLayer[m_layerKeyOfHit[hitIndex]].push_back(hitIndex);
   }
 }
 
 // circle (fitCircle), helix and kink chi2 of an ordered hit list
-bool SeedFinder::EventSearch::fitTrack(const std::vector<size_t>& track, TrackFit& fit) {
+bool SeedFinder::EventSearch::fitTrack(const std::vector<size_t>& track, TrackFit& fit) const {
   if (track.size() < 3)
     return false;
   std::vector<Eigen::Vector3d> positions;
@@ -881,8 +894,8 @@ bool SeedFinder::EventSearch::fitTrack(const std::vector<size_t>& track, TrackFi
 
 namespace {
 
-  Eigen::Vector3d positionCm(const edm4hep::TrackerHitPlane& hit) {
-    const auto& position = hit.getPosition();
+  Eigen::Vector3d positionCm(const EventHit& hit) {
+    const auto& position = hit.positionMm;
     return {position[0] * kCmPerMm, position[1] * kCmPerMm, position[2] * kCmPerMm};
   }
 
@@ -938,38 +951,48 @@ namespace {
     if (!circumcircle(pointA, pointB, pointC, centreX, centreY, radius))
       return true;
     Helix helix;
-    std::vector<double> arcLengths;
-    if (!Helix::fromHits(centreX, centreY, radius, {pointA, pointB, pointC}, helix, &arcLengths))
+    const Eigen::Vector3d points[3] = {pointA, pointB, pointC};
+    double arcLengths[3];
+    if (!Helix::fromHitArray(centreX, centreY, radius, points, 3, helix, arcLengths))
       return true;
     if (!(arcLengths[1] > arcLengths[0]) || !(arcLengths[2] > arcLengths[1]))
       return false; // not in travel order
-    const Eigen::Vector3d* points[3] = {&pointA, &pointB, &pointC};
     double largestZResidual = 0.0;
     for (int hit = 0; hit < 3; ++hit) {
       const double zOnHelix = helix.referenceZ + helix.tanLambda * arcLengths[hit];
-      largestZResidual = std::max(largestZResidual, std::abs(points[hit]->z() - zOnHelix));
+      largestZResidual = std::max(largestZResidual, std::abs(points[hit].z() - zOnHelix));
     }
-    return largestZResidual <= maxZResidual * kPrecheckRelativeMargin + kPrecheckAbsoluteMarginCm;
+    // the z cut + 1% + 1e-6 cm (rounding): the pre-check is never stricter than the full seed check
+    return largestZResidual <= maxZResidual * 1.01 + 1e-6;
   }
 
-  // is `next` on the helix through a, b, c (travel order) within window + slope * (arc from c)?
-  // collinear anchors: accepted (left to the seed fit)
-  bool hitOnTrajectory(const Eigen::Vector3d& pointA, const Eigen::Vector3d& pointB, const Eigen::Vector3d& pointC,
-                       const Eigen::Vector3d& next, double window, double slope) {
+  // the helix through a, b, c (travel order): circumcircle and z line; not valid if collinear
+  AnchorHelix anchorHelix(const Eigen::Vector3d& pointA, const Eigen::Vector3d& pointB, const Eigen::Vector3d& pointC) {
+    AnchorHelix anchor;
     double centreX = 0.0, centreY = 0.0, radius = 0.0;
     if (!circumcircle(pointA, pointB, pointC, centreX, centreY, radius))
+      return anchor;
+    const Eigen::Vector3d points[3] = {pointA, pointB, pointC};
+    double arcLengths[3];
+    if (!Helix::fromHitArray(centreX, centreY, radius, points, 3, anchor.helix, arcLengths))
+      return anchor;
+    anchor.valid = true;
+    anchor.lastArcLength = arcLengths[2];
+    return anchor;
+  }
+
+  // is `next` on the anchor helix, after its last hit, within window + slope * (arc from that hit)?
+  // collinear anchors: accepted (left to the seed fit)
+  bool hitOnTrajectory(const AnchorHelix& anchor, const Eigen::Vector3d& next, double window, double slope) {
+    if (!anchor.valid)
       return true;
-    Helix helix;
-    std::vector<double> arcLengths;
-    if (!Helix::fromHits(centreX, centreY, radius, {pointA, pointB, pointC}, helix, &arcLengths))
-      return true;
-    const double arcLengthOfNext = helix.arcLengthNear(next, arcLengths.back());
-    if (!(arcLengthOfNext > arcLengths.back()))
+    const double arcLengthOfNext = anchor.helix.arcLengthNear(next, anchor.lastArcLength);
+    if (!(arcLengthOfNext > anchor.lastArcLength))
       return false; // behind the chain
-    const double tolerance = window + slope * (arcLengthOfNext - arcLengths.back());
-    return (next - helix.positionAt(arcLengthOfNext)).norm() <= tolerance;
+    const double tolerance = window + slope * (arcLengthOfNext - anchor.lastArcLength);
+    return (next - anchor.helix.positionAt(arcLengthOfNext)).norm() <= tolerance;
   }
 
 } // namespace
 
-} // namespace k4rt
+} // namespace CTF

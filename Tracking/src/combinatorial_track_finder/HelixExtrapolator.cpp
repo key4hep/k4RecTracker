@@ -12,16 +12,15 @@
 #include <algorithm>
 #include <cmath>
 
-namespace k4rt {
+namespace CTF {
 
 namespace {
-  constexpr double kTwoPi = 2.0 * M_PI;
   // angle in (0, 2pi]: unlike wrapAngleZeroToTwoPi, 0 becomes a full turn (a crossing at the
   // starting point itself is the next turn)
   double wrapPositive(double angle) {
-    angle = std::fmod(angle, kTwoPi);
+    angle = std::fmod(angle, 2.0 * M_PI);
     if (angle <= 0.0)
-      angle += kTwoPi;
+      angle += 2.0 * M_PI;
     return angle;
   }
 } // namespace
@@ -40,15 +39,26 @@ Eigen::Vector3d Helix::directionAt(double arcLength) const {
 
 bool Helix::fromHits(double circleCentreX, double circleCentreY, double circleRadius,
                      const std::vector<Eigen::Vector3d>& hits, Helix& out, std::vector<double>* arcLengthsOfHits) {
-  const int numberOfHits = static_cast<int>(hits.size());
+  std::vector<double> arcLengths(hits.size());
+  if (!fromHitArray(circleCentreX, circleCentreY, circleRadius, hits.data(), static_cast<int>(hits.size()), out,
+                    arcLengths.data()))
+    return false;
+  if (arcLengthsOfHits)
+    *arcLengthsOfHits = std::move(arcLengths);
+  return true;
+}
+
+bool Helix::fromHitArray(double circleCentreX, double circleCentreY, double circleRadius, const Eigen::Vector3d* hits,
+                         int numberOfHits, Helix& out, double* arcLengths) {
   if (numberOfHits < 2 || !(circleRadius > 0.0))
     return false;
   out.centreX = circleCentreX;
   out.centreY = circleCentreY;
   out.radius = circleRadius;
 
-  // 1. angle of every hit about the centre, unwrapped (each step the smallest turn from the last)
-  std::vector<double> angles(numberOfHits);
+  // 1. angle of every hit about the centre, unwrapped (each step the smallest turn from the last);
+  //    kept in the arc-length array until step 3 turns them into arc lengths
+  double* angles = arcLengths;
   angles[0] = std::atan2(hits[0].y() - circleCentreY, hits[0].x() - circleCentreX);
   for (int i = 1; i < numberOfHits; ++i) {
     const double angle = std::atan2(hits[i].y() - circleCentreY, hits[i].x() - circleCentreX);
@@ -57,14 +67,14 @@ bool Helix::fromHits(double circleCentreX, double circleCentreY, double circleRa
   // 2. rotation sense: the sign of the total turn
   out.rotation = (angles[numberOfHits - 1] - angles[0] >= 0.0) ? +1 : -1;
   out.referenceAngle = angles[0];
+  const double firstAngle = angles[0];
 
   // 3. arc lengths s_i = rotation * R * (angle_i - angle_0) and the least-squares line z = z0 + t s:
   //    t = (n sum(sz) - sum(s) sum(z)) / det, z0 = (sum(z) sum(s^2) - sum(s) sum(sz)) / det,
   //    det = n sum(s^2) - sum(s)^2
-  std::vector<double> arcLengths(numberOfHits);
   double sumS = 0, sumZ = 0, sumSS = 0, sumSZ = 0;
   for (int i = 0; i < numberOfHits; ++i) {
-    arcLengths[i] = out.rotation * circleRadius * (angles[i] - angles[0]);
+    arcLengths[i] = out.rotation * circleRadius * (angles[i] - firstAngle); // overwrites angles[i]
     sumS += arcLengths[i];
     sumZ += hits[i].z();
     sumSS += arcLengths[i] * arcLengths[i];
@@ -78,8 +88,6 @@ bool Helix::fromHits(double circleCentreX, double circleCentreY, double circleRa
     out.referenceZ = sumZ / numberOfHits; // no lever arm: flat line at the mean z
     out.tanLambda = 0.0;
   }
-  if (arcLengthsOfHits)
-    *arcLengthsOfHits = arcLengths;
   return true;
 }
 
@@ -194,4 +202,4 @@ Crossing Helix::refineToPlane(const Eigen::Vector3d& planeOrigin, const Eigen::V
   return crossing;
 }
 
-} // namespace k4rt
+} // namespace CTF

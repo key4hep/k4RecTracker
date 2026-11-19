@@ -17,7 +17,7 @@ namespace rec {
 }
 } // namespace dd4hep
 
-namespace k4rt {
+namespace CTF {
 
 // Layer key of a hit (CombinatorialTrackFinder::layerKeyOf):
 //   barrel 100 * system + layer, +endcap 10000 + 100 * system + layer, -endcap -(10000 + ...).
@@ -75,11 +75,10 @@ public:
   std::vector<std::string> validate() const;
 
   /// x/X0 of each layer (normal incidence) from the DD4hep geometry, along the normal of up to
-  /// numberOfSamples sensors, from halfway to its inner to halfway to its outer neighbour (each
-  /// side at most maxHalfDepthCm), so material between layers is shared, not counted twice.
+  /// 24 sensors, from halfway to its inner to halfway to its outer neighbour, so material between
+  /// layers is shared, not counted twice.
   void measureMaterial(dd4hep::Detector& detector,
-                       const std::map<int, std::vector<const dd4hep::rec::Surface*>>& surfacesByLayer,
-                       int numberOfSamples = 24, double maxHalfDepthCm = 1.0);
+                       const std::map<int, std::vector<const dd4hep::rec::Surface*>>& surfacesByLayer);
 
   bool empty() const { return m_layers.empty(); }
 
@@ -91,6 +90,6 @@ private:
 
 const char* kindName(LayerDescriptor::Kind kind);
 
-} // namespace k4rt
+} // namespace CTF
 
 #endif // TRACKING_LAYERGEOMETRY_H

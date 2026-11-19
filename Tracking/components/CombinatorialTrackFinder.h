@@ -21,10 +21,11 @@
 #include "DDRec/SurfaceManager.h"
 #include "DDSegmentation/BitFieldCoder.h"
 
+#include "ExhaustiveSearch.h"
 #include "LayerGeometry.h"
 #include "SeedFinder.h"
+#include "TrackCandidate.h"
 #include "TrackingMath.h"
-#include <Eigen/Dense>
 
 #include "k4FWCore/Transformer.h"
 #include "k4Interface/IGeoSvc.h"
@@ -47,7 +48,7 @@
  *      road, outlier and quality cuts reject wrong combinations;
  *   3. the best candidate becomes a track, its hits are removed, and the search repeats;
  *   4. each track stores its helix as AtFirstHit and AtLastHit, optionally AtIP (IPStateMode).
- *  For a Kalman fit, run k4RecTracker's GenfitTrackFitter on the output.
+ *  For fitting, run k4RecTracker's GenfitTrackFitter on the output.
  *
  *  @author Mahmoud Althakeel
  *  @email  mahmoud.althakeel@cern.ch
@@ -73,20 +74,12 @@ private:
   enum class Strategy { Exhaustive, SeedAndExtend };    ///< option Strategy
   enum class IPState { None, Helix, SolenoidCrossing }; ///< option IPStateMode
 
-  /// The outer helix of a track measured outside the solenoid (SolenoidCrossing AtIP state), cm.
-  struct OuterHelix {
-    double centreXCm = 0.0, centreYCm = 0.0, radiusCm = 0.0;  ///< fitted circle
-    bool clockwise = false;                                   ///< seen from +z
-    double ptGeV = 0.0;                                       ///< radius and field at the hits' centroid
-    double tanLambda = 0.0;                                   ///< kept across the solenoid boundary
-    Eigen::Vector3d innermostHitCm = Eigen::Vector3d::Zero(); ///< selects the crossing, anchors z
-    bool innermostHitInEndcap = false;                        ///< then: the solenoid's end face
-  };
-
   // ---- the steps of initialize() ----
   StatusCode setupCellIDDecoding();
   StatusCode setupSurfaces();
+  void setupField();
   StatusCode readSearchOptions();
+  void setupExhaustiveSearch();
   StatusCode setupSeedFinder();
   void findSolenoid();
 
@@ -95,36 +88,26 @@ private:
   int regionOf(uint64_t cellID) const;                          ///< 0 barrel, +1 / -1 endcaps (RegionFieldName)
   int layerNumberOf(uint64_t cellID) const;                     ///< LayerFieldName
   int layerKeyOf(uint64_t cellID) const;                        ///< layout in LayerGeometry.h
+  int regionOfLayerKey(int layerKey) const;                     ///< from the readout's region field, else from the key
   bool readoutHasField(const std::string& name) const;
   std::map<int, std::vector<const dd4hep::rec::Surface*>> groupSurfacesByLayer() const;
 
-  // ---- the solenoid ----
+  // ---- the solenoid (SolenoidCrossing) ----
   /// where the central field ends (mm), followed outward from near the IP: radius (alongZ = false)
   /// or half-length (alongZ = true)
   double findSolenoidBoundary(bool alongZ) const;
   double fieldAlongScan(double distanceMm, bool alongZ) const; ///< Bz (T) on the scan line
   /// the field has moved more than half-way from bzCentral towards zero (or beyond)
   bool outsideCentralField(double distanceMm, bool alongZ, double bzCentral) const;
-  bool isInsideSolenoid(const Eigen::Vector3d& positionCm) const;
-  bool allHitsOutsideSolenoid(const std::vector<edm4hep::TrackerHitPlane>& trackHits) const;
-  /// SolenoidCrossing: the outer helix followed back from its innermost hit to the solenoid
-  /// boundary, matched there to an inner helix (inner field, same pT and tanLambda) whose perigee is
-  /// the AtIP state; no value without a crossing
-  std::optional<edm4hep::TrackState> solenoidCrossingState(const OuterHelix& outer) const;
-  /// crossing (cm) of the outer circle with the solenoid barrel, first reached going back from the
-  /// hit and on its IP side in z (else the other one, with tryOtherCrossing); false if none
-  bool solenoidBarrelCrossing(const OuterHelix& outer, bool tryOtherCrossing, Eigen::Vector3d& crossingCm) const;
 
   void printTrackSummary(const edm4hep::TrackCollection& trackCollection) const; ///< DEBUG, one line per track
 
   // ---- settings filled in initialize() ----
-  k4rt::CommonSearchConfig m_commonConfig; ///< shared by both strategies
+  CTF::CommonSearchConfig m_commonConfig{}; ///< shared by both strategies (filled in readSearchOptions)
   Strategy m_strategyChoice = Strategy::Exhaustive;
   IPState m_ipState = IPState::None;
-  std::vector<std::pair<int, int>> m_doubletLayerPairs; ///< from DoubletLayers
-  std::map<int, int> m_partnerLayer;                    ///< layer number -> other layer of its doublet
-  double m_solenoidRadiusMm = 0.0;
-  double m_solenoidHalfLengthMm = 0.0;
+  CTF::Solenoid m_solenoid;  ///< SolenoidCrossing: boundary and inner field from the field map
+  CTF::FieldFunction m_bzAt; ///< Bz (T) of the field map at a point (cm), for the tools
 
   // ---- options used by both strategies ----
   Gaudi::Property<std::vector<std::string>> m_detectorNames{
@@ -259,9 +242,10 @@ private:
   dd4hep::rec::SurfaceMap m_mergedSurfaceMap; ///< when several detectors are combined
   std::vector<const dd4hep::rec::Surface*> m_surfaces;
   std::map<int, std::vector<const dd4hep::rec::Surface*>> m_surfacesByLayer;
-  k4rt::LayerGeometry m_layerGeometry;
-  std::unordered_map<int, int> m_regionOfLayerKey; ///< layer key -> readout region (0, +1, -1)
-  std::unique_ptr<k4rt::SeedFinder> m_seedFinder;  ///< SeedAndExtend only
+  CTF::LayerGeometry m_layerGeometry;
+  std::unordered_map<int, int> m_regionOfLayerKey;           ///< layer key -> readout region (0, +1, -1)
+  std::unique_ptr<CTF::ExhaustiveSearch> m_exhaustiveSearch; ///< Exhaustive only
+  std::unique_ptr<CTF::SeedFinder> m_seedFinder;             ///< SeedAndExtend only
   std::unique_ptr<dd4hep::DDSegmentation::BitFieldCoder> m_bitFieldCoder;
   bool m_hasRegionField{true};       ///< false: the readout has no barrel/endcap field
   bool m_useSystemInLayerKey{false}; ///< "system" in the layer key (several subdetectors, one readout)

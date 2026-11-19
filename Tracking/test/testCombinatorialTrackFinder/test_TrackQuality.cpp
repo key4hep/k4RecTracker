@@ -37,15 +37,15 @@ struct RandomNumbers {
 };
 
 // The helix of a particle at startPosition flying along direction with transverse momentum pT.
-k4rt::Helix helixFromDirection(const Eigen::Vector3d& startPosition, const Eigen::Vector3d& direction, double pT,
-                               double charge) {
+CTF::Helix helixFromDirection(const Eigen::Vector3d& startPosition, const Eigen::Vector3d& direction, double pT,
+                              double charge) {
   const double transverseLength = std::hypot(direction.x(), direction.y());
   // transverse direction of flight (unit vector)
   const double directionX = direction.x() / transverseLength;
   const double directionY = direction.y() / transverseLength;
 
-  k4rt::Helix helix;
-  helix.radius = k4rt::radiusFromPt(kBFieldTesla, pT);
+  CTF::Helix helix;
+  helix.radius = CTF::radiusFromPt(kBFieldTesla, pT);
   // a positive charge in a field along +z turns clockwise (rot = -1)
   if (charge * kBFieldTesla > 0) {
     helix.rotation = -1;
@@ -64,17 +64,17 @@ k4rt::Helix helixFromDirection(const Eigen::Vector3d& startPosition, const Eigen
 // Simulate one muon from the origin through the layers. In each layer: move along the helix to
 // the layer, store a hit with measurement noise, then turn the direction by a random scattering
 // angle (Highland). Returns the hits as the kink chi2 sees them.
-std::vector<k4rt::KinkPoint> simulateTrack(const Eigen::Vector3d& startDirection, double momentum, double charge,
-                                           RandomNumbers& random) {
+std::vector<CTF::KinkPoint> simulateTrack(const Eigen::Vector3d& startDirection, double momentum, double charge,
+                                          RandomNumbers& random) {
   const double pT = momentum * std::sin(kPolarAngle);
   Eigen::Vector3d position(0, 0, 0);
   Eigen::Vector3d direction = startDirection;
-  std::vector<k4rt::KinkPoint> hits;
+  std::vector<CTF::KinkPoint> hits;
 
   for (double layerRadius : kLayerRadiiCm) {
     // 1. move to the next layer
-    const k4rt::Helix helix = helixFromDirection(position, direction, pT, charge);
-    const k4rt::Crossing crossing = helix.crossCylinder(layerRadius, 0.0, +1);
+    const CTF::Helix helix = helixFromDirection(position, direction, pT, charge);
+    const CTF::Crossing crossing = helix.crossCylinder(layerRadius, 0.0, +1);
     if (!crossing.ok) {
       break; // the muon curls up before this layer
     }
@@ -83,7 +83,7 @@ std::vector<k4rt::KinkPoint> simulateTrack(const Eigen::Vector3d& startDirection
 
     // 2. the measured hit: the true position moved by Gaussian noise along the two measurement
     // directions of a barrel sensor (along phi and along z)
-    k4rt::KinkPoint hit;
+    CTF::KinkPoint hit;
     hit.normal = Eigen::Vector3d(position.x(), position.y(), 0).normalized();
     hit.xOverX0 = kLayerThicknessX0;
     hit.sigmaTransverseCm = kHitResolutionCm;
@@ -97,7 +97,7 @@ std::vector<k4rt::KinkPoint> simulateTrack(const Eigen::Vector3d& startDirection
     // 3. multiple scattering in the layer: a random kick in two planes perpendicular to the
     // direction; the material seen grows as 1 / cos(incidence angle)
     const double cosIncidence = std::abs(hit.normal.dot(direction));
-    const double scatteringAngle = k4rt::KinkChi2Calculator::highlandTheta0(kLayerThicknessX0 / cosIncidence, momentum);
+    const double scatteringAngle = CTF::KinkChi2Calculator::highlandTheta0(kLayerThicknessX0 / cosIncidence, momentum);
     const Eigen::Vector3d kickDirection1 = direction.cross(Eigen::Vector3d::UnitZ()).normalized();
     const Eigen::Vector3d kickDirection2 = direction.cross(kickDirection1).normalized();
     const double kick1 = scatteringAngle * random.gaussian(random.generator);
@@ -111,7 +111,7 @@ std::vector<k4rt::KinkPoint> simulateTrack(const Eigen::Vector3d& startDirection
 
 int main() {
   RandomNumbers random;
-  const k4rt::KinkChi2Calculator kinkCalculator(kBFieldTesla);
+  const CTF::KinkChi2Calculator kinkCalculator(kBFieldTesla);
   int numberOfFailures = 0;
 
   std::printf("  p [GeV]   tracks   <chi2>/(2(n-2))   expected 1.00 +- 0.05\n");
@@ -130,15 +130,15 @@ int main() {
       const Eigen::Vector3d startDirection(std::sin(kPolarAngle) * std::cos(azimuth),
                                            std::sin(kPolarAngle) * std::sin(azimuth), std::cos(kPolarAngle));
 
-      const std::vector<k4rt::KinkPoint> hits = simulateTrack(startDirection, momentum, charge, random);
+      const std::vector<CTF::KinkPoint> hits = simulateTrack(startDirection, momentum, charge, random);
       if (hits.size() < 4) {
         continue; // too few layers reached
       }
 
       // the kink chi2 with the true circle (the one at the start, before any scattering)
       const double pT = momentum * std::sin(kPolarAngle);
-      const k4rt::Helix trueHelix = helixFromDirection(Eigen::Vector3d(0, 0, 0), startDirection, pT, charge);
-      const k4rt::KinkResult result = kinkCalculator.track(hits, trueHelix.radius, trueHelix.rotation);
+      const CTF::Helix trueHelix = helixFromDirection(Eigen::Vector3d(0, 0, 0), startDirection, pT, charge);
+      const CTF::KinkResult result = kinkCalculator.track(hits, trueHelix.radius, trueHelix.rotation);
       const double numberOfDegreesOfFreedom = 2.0 * (hits.size() - 2);
       sumOfNormalisedChi2 += result.chi2 / numberOfDegreesOfFreedom;
       numberOfTracks += 1;

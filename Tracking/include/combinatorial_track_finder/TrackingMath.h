@@ -21,7 +21,7 @@
 #include <cmath>
 #include <vector>
 
-namespace k4rt {
+namespace CTF {
 
 // EDM4hep positions are in mm, DD4hep and the circle fit in cm. x / kMmPerCm and x * kCmPerMm differ
 // in the last bit: each place keeps the form it always used (unchanged outputs).
@@ -63,18 +63,15 @@ inline double ptFromOmega(double bFieldT, double omegaPerMm) {
   return kPtPerTeslaMetre * std::abs(bFieldT) / (std::abs(omegaPerMm) * 1000.0);
 }
 
-/// |omega| (1/mm) for pT ptGeV (GeV); the caller gives it the sign of the charge.
-inline double omegaFromPt(double bFieldT, double ptGeV) {
-  return kPtPerTeslaMetre * std::abs(bFieldT) / (ptGeV * 1000.0);
-}
-
 /// Settings used by both search strategies, filled once from the options (so they cannot disagree).
+/// No defaults here: the defaults are those of the CombinatorialTrackFinder options.
 struct CommonSearchConfig {
-  int minTrackHits = 3;                ///< MinTrackHits
-  double minPtGeV = 0.0;               ///< MinComboPT (<= 0 = off)
-  double maxPairHitDistanceCm = 300.0; ///< MaxPairHitDistance
-  double bFieldTesla = 0.0;            ///< Bz at the IP, from the field map
-  double sigmaHitDefaultCm = 0.04;     ///< SigmaHitDefault: hit resolution when a hit has no du
+  int minTrackHits;            ///< MinTrackHits
+  double minPtGeV;             ///< MinComboPT (<= 0 = off)
+  double maxPairHitDistanceCm; ///< MaxPairHitDistance
+  double bFieldTesla;          ///< Bz at the IP, from the field map
+  double sigmaHitDefaultCm;    ///< SigmaHitDefault: hit resolution when a hit has no du
+  double maxHitEdepKeV;        ///< MaxHitEdepKeV: hits above are not used (<= 0 = off)
 };
 
 /// One hit as the kink chi2 sees it.
@@ -117,6 +114,6 @@ private:
   double m_bFieldTesla = 0.0; ///< tesla, from the field map
 };
 
-} // namespace k4rt
+} // namespace CTF
 
 #endif // TRACKING_TRACKINGMATH_H

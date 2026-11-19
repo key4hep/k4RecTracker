@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cmath>
 
-namespace k4rt {
+namespace CTF {
 
 namespace {
   // d/dR of asin(l / 2R), the angle between a chord of length l and the circle:
@@ -96,4 +96,4 @@ KinkResult KinkChi2Calculator::track(const std::vector<KinkPoint>& points, doubl
   return result;
 }
 
-} // namespace k4rt
+} // namespace CTF

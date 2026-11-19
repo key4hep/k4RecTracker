@@ -23,7 +23,7 @@
 #include <limits>
 #include <vector>
 
-namespace k4rt {
+namespace CTF {
 
 /// Where a helix crosses a surface: ok = false if it does not.
 struct Crossing {
@@ -47,6 +47,11 @@ public:
   static bool fromHits(double circleCentreX, double circleCentreY, double circleRadius,
                        const std::vector<Eigen::Vector3d>& orderedHitsCm, Helix& out,
                        std::vector<double>* arcLengthsOfHits = nullptr);
+  /// The same for the hits hits[0 .. numberOfHits - 1], without heap allocation: the arc lengths
+  /// go to arcLengthsOfHits, which must have room for numberOfHits values.
+  static bool fromHitArray(double circleCentreX, double circleCentreY, double circleRadius,
+                           const Eigen::Vector3d* orderedHitsCm, int numberOfHits, Helix& out,
+                           double* arcLengthsOfHits);
 
   double angleAt(double arcLength) const { return referenceAngle + rotation * arcLength / radius; }
   Eigen::Vector3d positionAt(double arcLength) const;
@@ -75,6 +80,6 @@ public:
                          int maxIterations = 20, double toleranceCm = 1e-9) const;
 };
 
-} // namespace k4rt
+} // namespace CTF
 
 #endif // TRACKING_HELIXEXTRAPOLATOR_H

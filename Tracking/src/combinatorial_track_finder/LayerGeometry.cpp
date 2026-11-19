@@ -9,7 +9,7 @@
 #include <limits>
 #include <sstream>
 
-namespace k4rt {
+namespace CTF {
 
 const char* kindName(LayerDescriptor::Kind kind) {
   switch (kind) {
@@ -24,6 +24,10 @@ const char* kindName(LayerDescriptor::Kind kind) {
 }
 
 namespace {
+  // ---- fixed constants ----
+  constexpr double kNoNeighbourHalfDepthCm = 1.0; // layer material: depth on a side without a neighbour
+  constexpr int kMaterialSamplesPerLayer = 24;    // layer material: sampled on up to 24 sensors,
+
   LayerDescriptor::Kind kindFromLayerKey(int layerKey) {
     if (regionFromKey(layerKey) == 1)
       return LayerDescriptor::Kind::EndcapPos;
@@ -195,8 +199,7 @@ std::vector<std::string> LayerGeometry::validate() const {
 }
 
 void LayerGeometry::measureMaterial(dd4hep::Detector& detector,
-                                    const std::map<int, std::vector<const dd4hep::rec::Surface*>>& surfacesByLayer,
-                                    int numberOfSamples, double maxHalfDepthCm) {
+                                    const std::map<int, std::vector<const dd4hep::rec::Surface*>>& surfacesByLayer) {
   // Each layer carries the material from halfway to its inner to halfway to its outer neighbour
   // of the same kind (barrels by radius with overlapping z, disks by |z| with overlapping r), so
   // material between layers (e.g. a gas detector between silicon layers) enters the nearest kink.
@@ -224,10 +227,8 @@ void LayerGeometry::measureMaterial(dd4hep::Detector& detector,
       else if (otherPosition > layerPosition)
         outerNeighbour = std::min(outerNeighbour, otherPosition);
     }
-    const double depthInward =
-        innerNeighbour > -1e8 ? std::min(maxHalfDepthCm, 0.5 * (layerPosition - innerNeighbour)) : 1.0;
-    const double depthOutward =
-        outerNeighbour < 1e8 ? std::min(maxHalfDepthCm, 0.5 * (outerNeighbour - layerPosition)) : 1.0;
+    const double depthInward = innerNeighbour > -1e8 ? 0.5 * (layerPosition - innerNeighbour) : kNoNeighbourHalfDepthCm;
+    const double depthOutward = outerNeighbour < 1e8 ? 0.5 * (outerNeighbour - layerPosition) : kNoNeighbourHalfDepthCm;
     auto layerSurfaces = surfacesByLayer.find(layer.layerKey);
     if (layerSurfaces == surfacesByLayer.end())
       continue;
@@ -237,10 +238,10 @@ void LayerGeometry::measureMaterial(dd4hep::Detector& detector,
         sensitiveSurfaces.push_back(surface);
     if (sensitiveSurfaces.empty())
       continue;
-    const size_t step = std::max<size_t>(1, sensitiveSurfaces.size() / std::max(1, numberOfSamples));
+    const size_t step = std::max<size_t>(1, sensitiveSurfaces.size() / kMaterialSamplesPerLayer);
     double sum = 0.0;
     int samples = 0;
-    for (size_t i = 0; i < sensitiveSurfaces.size() && samples < numberOfSamples; i += step) {
+    for (size_t i = 0; i < sensitiveSurfaces.size() && samples < kMaterialSamplesPerLayer; i += step) {
       const auto origin = sensitiveSurfaces[i]->origin();
       auto normal = sensitiveSurfaces[i]->normal(origin);
       // the normal turned outward: radially for barrels, away from z = 0 for disks
@@ -266,4 +267,4 @@ void LayerGeometry::measureMaterial(dd4hep::Detector& detector,
   }
 }
 
-} // namespace k4rt
+} // namespace CTF
