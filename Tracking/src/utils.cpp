@@ -2,6 +2,11 @@
 
 #include "DD4hep/DD4hepUnits.h"
 
+#include <algorithm>
+#include <cmath>
+#include <optional>
+#include <stdexcept>
+
 double getBzAtOrigin(const dd4hep::Detector& detector) {
   const double position[3] = {0, 0, 0};
   double magneticFieldVector[3] = {0, 0, 0};
@@ -53,121 +58,53 @@ dd4hep::rec::LayeredCalorimeterData* getExtension(unsigned int includeFlag, unsi
   return theExtension;
 }
 
-edm4hep::TrackState getExtrapolationAtCalorimeter(const pandora::CartesianVector& ecalProjection,
-                                                  const HelixClass_double& helixAtLastHit, double Bz) {
-
-  edm4hep::TrackState trackState_AtCalorimeter = edm4hep::TrackState{};
-
-  double posAtCalorimeter[] = {ecalProjection.GetX(), ecalProjection.GetY(), ecalProjection.GetZ()};
-  int debug_lvl = 0;
-  if (debug_lvl > 0) {
-    std::cout << "Projection at calo: x, y, z, r = " << posAtCalorimeter[0] << " " << posAtCalorimeter[1] << " "
-              << posAtCalorimeter[2] << " "
-              << sqrt(posAtCalorimeter[0] * posAtCalorimeter[0] + posAtCalorimeter[1] * posAtCalorimeter[1])
-              << std::endl;
-  }
-
-  // get extrapolated momentum from the helix with ref point at last hit
-  double momAtCalorimeter[] = {0., 0., 0.};
-  helixAtLastHit.getExtrapolatedMomentum(posAtCalorimeter, momAtCalorimeter);
-
-  // produce new helix at calorimeter position
-  auto helixAtCalorimeter = HelixClass_double();
-  helixAtCalorimeter.Initialize_VP(posAtCalorimeter, momAtCalorimeter, helixAtLastHit.getCharge(), Bz);
-
-  // fill the TrackState parameters
-  trackState_AtCalorimeter.location = edm4hep::TrackState::AtCalorimeter;
-  trackState_AtCalorimeter.D0 = helixAtCalorimeter.getD0();
-  trackState_AtCalorimeter.phi = std::atan2(momAtCalorimeter[1], momAtCalorimeter[0]);
-  trackState_AtCalorimeter.omega = helixAtCalorimeter.getOmega();
-  trackState_AtCalorimeter.Z0 = helixAtCalorimeter.getZ0();
-  trackState_AtCalorimeter.tanLambda = helixAtCalorimeter.getTanLambda();
-  trackState_AtCalorimeter.referencePoint =
-      edm4hep::Vector3f(posAtCalorimeter[0], posAtCalorimeter[1], posAtCalorimeter[2]);
-  return trackState_AtCalorimeter;
+edm4hep::TrackState getExtrapolationAtCalorimeter(const edm4hep::utils::Helix& helixAtLastHit, double length,
+                                                  double Bz) {
+  const auto position = helixAtLastHit.positionAt(length);
+  const auto momentum = helixAtLastHit.momentumAt(length);
+  const edm4hep::utils::Helix helixAtCalorimeter(position, momentum, helixAtLastHit.getCharge(), Bz, position);
+  return helixAtCalorimeter.toTrackState(edm4hep::TrackState::AtCalorimeter, position);
 }
 
-void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double Bz /* Tesla */, int charge,
-                                           double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
-                                           double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
-                                           double m_eCalEndCapInnerZ) {
+void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track, double Bz, double m_eCalBarrelInnerR,
+                                           double m_eCalBarrelMaxZ, double m_eCalEndCapInnerR,
+                                           double m_eCalEndCapOuterR, double m_eCalEndCapInnerZ) {
+  const auto states = edm4hep_track.getTrackStates();
+  const auto lastHit =
+      std::ranges::find_if(states, [](const auto& state) { return state.location == edm4hep::TrackState::AtLastHit; });
+  if (lastHit == states.end()) {
+    return;
+  }
 
-  auto trackStateLastHit = edm4hep_track.getTrackStates()[2];
-  double omega_lastHit = trackStateLastHit.omega;
-  double pt_lasthit = ConversionUnits::a_lcio * Bz / abs(omega_lastHit);
-  double phi_lasthit = trackStateLastHit.phi;
-  double pz_lasthit = trackStateLastHit.tanLambda * pt_lasthit;
-  double px_lasthit = pt_lasthit * std::cos(phi_lasthit);
-  double py_lasthit = pt_lasthit * std::sin(phi_lasthit);
-  auto ref_lastHit = trackStateLastHit.referencePoint;
+  try {
+    const auto helix = edm4hep::utils::Helix::fromTrackState(*lastHit, Bz);
+    std::optional<double> bestLength;
 
-  // produce new helix at last hit position
-  double posAtLastHit[] = {ref_lastHit[0], ref_lastHit[1], ref_lastHit[2]};
-  double momAtLastHit[] = {px_lasthit, py_lasthit, pz_lasthit};
-  auto helixAtLastHit = HelixClass_double();
-  helixAtLastHit.Initialize_VP(posAtLastHit, momAtLastHit, charge, Bz);
-
-  // Propagation to Endcap
-  if (m_eCalBarrelInnerR > 0. || m_eCalEndCapInnerR > 0.) {
-
-    pandora::CartesianVector bestECalProjection(0.f, 0.f, 0.f);
-    pandora::CartesianVector secondBestECalProjection(0.f, 0.f, 0.f);
-    float minGenericTime(std::numeric_limits<float>::max());
-
-    // create helix to project
-    // rather than using parameters at production, better to use those from
-    // last hit
-    pandora::CartesianVector pos_lasthit(posAtLastHit[0], posAtLastHit[1], posAtLastHit[2]);
-    pandora::CartesianVector mom_lasthit(momAtLastHit[0], momAtLastHit[1], momAtLastHit[2]);
-
-    const pandora::Helix helix(pos_lasthit, mom_lasthit, charge, Bz);
-    const pandora::CartesianVector& referencePoint(helix.GetReferencePoint());
-    const int signPz((helix.GetMomentum().GetZ() > 0.f) ? 1 : -1);
-
-    // First project to endcap
-    pandora::CartesianVector endCapProjection(0.f, 0.f, 0.f);
-    if (m_eCalEndCapInnerR > 0) {
-      float genericTime(std::numeric_limits<float>::max());
-      const pandora::StatusCode statusCode(helix.GetPointInZ(static_cast<float>(signPz) * m_eCalEndCapInnerZ,
-                                                             referencePoint, endCapProjection, genericTime));
-      float x = endCapProjection.GetX();
-      float y = endCapProjection.GetY();
-      float r = std::sqrt(x * x + y * y);
-      if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (genericTime < minGenericTime) && (r >= m_eCalEndCapInnerR) &&
-          (r <= m_eCalEndCapOuterR)) {
-        minGenericTime = genericTime;
-        bestECalProjection = endCapProjection;
-      }
-    }
-
-    // Then project to barrel surface(s), and keep projection
-    // if extrapolation is within the z acceptance of the detector
-    pandora::CartesianVector barrelProjection(0.f, 0.f, 0.f);
-    if (m_eCalBarrelInnerR > 0) {
-
-      float genericTime(std::numeric_limits<float>::max());
-      const pandora::StatusCode statusCode(
-          helix.GetPointOnCircle(m_eCalBarrelInnerR, referencePoint, barrelProjection, genericTime));
-
-      if ((pandora::STATUS_CODE_SUCCESS == statusCode) && (std::fabs(barrelProjection.GetZ()) <= m_eCalBarrelMaxZ)) {
-        if (genericTime < minGenericTime) {
-          minGenericTime = genericTime;
-          secondBestECalProjection = bestECalProjection;
-          bestECalProjection = barrelProjection;
-        } else {
-          secondBestECalProjection = barrelProjection;
+    if (m_eCalEndCapInnerR > 0.) {
+      const double zEndCap = std::copysign(m_eCalEndCapInnerZ, helix.getMomentum().z);
+      if (const auto length = helix.lengthToZ(zEndCap)) {
+        const auto position = helix.positionAt(*length);
+        const double r = std::hypot(position.x, position.y);
+        if (r >= m_eCalEndCapInnerR && r <= m_eCalEndCapOuterR) {
+          bestLength = length;
         }
       }
     }
 
-    // store extrapolation to calo
-    // by default, store extrapolation with lower arrival time
-    // get extrapolated position
-    edm4hep::TrackState trackState_AtCalorimeter =
-        getExtrapolationAtCalorimeter(bestECalProjection, helixAtLastHit, Bz);
+    if (m_eCalBarrelInnerR > 0.) {
+      if (const auto length = helix.lengthToRadius(m_eCalBarrelInnerR);
+          length && (!bestLength || *length < *bestLength)) {
+        if (std::abs(helix.positionAt(*length).z) <= m_eCalBarrelMaxZ) {
+          bestLength = length;
+        }
+      }
+    }
 
-    // attach the TrackState to the track
-    edm4hep_track.addToTrackStates(trackState_AtCalorimeter);
+    if (bestLength) {
+      edm4hep_track.addToTrackStates(getExtrapolationAtCalorimeter(helix, *bestLength, Bz));
+    }
+  } catch (const std::invalid_argument&) {
+    // No extrapolation can be added for an invalid or singular fitted state.
   }
 }
 

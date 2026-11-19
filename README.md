@@ -14,7 +14,6 @@ This repository hosts Gaudi components related to vertex and tracker reconstruct
 * Delphes
 
 Extra dependendis for tracking:
-* PandoraSDK
 * Eigen3
 * onnxruntime
 
