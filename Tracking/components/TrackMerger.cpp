@@ -125,7 +125,7 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
     std::string cellIDEncodingString = m_geoSvc->constantAsString(m_encodingStringVariable.value());
     m_encoder = dd4hep::DDSegmentation::BitFieldCoder(cellIDEncodingString);
     debug() << "cellIDEncodingString for " << m_encodingStringVariable.value()
-            << " read from GeoSvc: " << cellIDEncodingString << std::endl;
+            << " read from GeoSvc: " << cellIDEncodingString << endmsg;
 
     m_ddkaltest.init();
     m_ddkaltest.setEncoder(m_encoder);
@@ -162,7 +162,7 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
     // if only one collection is empty, the other is added to the output
     if (checkForNoUnmergedTracks(unmergedInnerTracks, unmergedOuterTracks, outTracks)) {
       debug() << "One input collection is empty. InnerTracks.size: " << inputInnerTracks.size()
-              << ", OuterTracks.size: " << inputInnerTracks.size()
+              << ", OuterTracks.size: " << inputOuterTracks.size()
               << ". The non-empty collection is copied to the output collection." << endmsg;
       return outTracks;
     }
@@ -218,8 +218,8 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
 
               // get track state at the last hit
               for (const TH& ohit : outerTrack.getTrackerHits() | std::views::reverse) {
-                kalTrack.getTrackState(&ohit, tsAtLastHit, chi2, ndf);
-                if (state_status == 0)
+                int last_status = kalTrack.getTrackState(&ohit, tsAtLastHit, chi2, ndf);
+                if (last_status == 0)
                   break;
               }
               tsAtFirstHit.location = TS::AtFirstHit;
@@ -407,9 +407,13 @@ private:
 
   void printTrack(const Track& t1, TS::Location loc1) const {
     auto ts1 = t1.getTrackState(loc1);
-    debug() << fmt::format("Track 1: d0={:.4f}, z0={:.4f}, phi={:.4f}, omega={:.4f}, tanLambda={:.4f}", ts1->D0,
+    if (ts1){
+      debug() << fmt::format("Track 1: d0={:.4f}, z0={:.4f}, phi={:.4f}, omega={:.4f}, tanLambda={:.4f}", ts1->D0,
                            ts1->Z0, ts1->phi, ts1->omega, ts1->tanLambda)
-            << endmsg;
+              << endmsg;
+    } else {
+      warning() << "Track state at location " << loc1 << " does not exist for track " << t1 << "!" << endmsg;
+    }
   }
 
   // check if either or both of the remaining track vectors are empty
