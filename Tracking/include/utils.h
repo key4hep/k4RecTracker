@@ -26,7 +26,6 @@
 #include <TVector3.h>
 #include <TVectorD.h>
 #include <marlinutil/HelixClass_double.h>
-#include <torch/torch.h>
 
 /**
  * @brief Returns the z component of the magnetic field at the origin, in Tesla.
@@ -109,48 +108,6 @@ void FillTrackWithCalorimeterExtrapolation(edm4hep::MutableTrack& edm4hep_track,
                                            double m_eCalBarrelInnerR, double m_eCalBarrelMaxZ,
                                            double m_eCalEndCapInnerR, double m_eCalEndCapOuterR,
                                            double m_eCalEndCapInnerZ);
-
-////////////////////////////
-/// Clustering Utilities ///
-////////////////////////////
-
-/**
- * @brief Finds indices of "conditional points" based on a threshold and selection mask.
- *
- * This function identifies points from the `betas` tensor that exceed the given
- * threshold `tbeta` and are also present in the `unassigned` set. It returns
- * the indices of these points sorted by the negative value of their beta, effectively
- * sorting them in ascending order of beta.
- *
- * @param betas Tensor of beta values for all points (shape: [size_b]).
- * @param unassigned Tensor containing indices of points that are currently unassigned.
- * @param tbeta Threshold value for beta to select conditional points.
- *
- * @return Tensor of indices of conditional points sorted by ascending beta value.
- */
-torch::Tensor find_condpoints(const torch::Tensor& betas, const torch::Tensor& unassigned, float tbeta);
-
-/**
- * @brief Performs clustering on a set of points using beta thresholding and distance criteria.
- *
- * Given an input vector representing points with associated beta values,
- * this function clusters points based on a beta threshold (`tbeta`) and a
- * maximum distance (`td`). It identifies conditional points where beta
- * exceeds `tbeta`, then iteratively assigns points within distance `td` of
- * each conditional point to the same cluster.
- *
- * @param output_model_tensor Tensor containing point data in the format
- *        [coord_0, ..., coord_{nEmbeddingCoordinates-1}, beta].
- * @param tbeta Beta threshold for selecting conditional points.
- * @param td Distance threshold for clustering points around conditional points.
- * @param nEmbeddingCoordinates Number of leading embedding-space coordinates per point; distances are computed
- *        on these coordinates and the value immediately after them is interpreted as beta.
- *
- * @return A 1D torch::Tensor of type Long containing cluster assignments for each point.
- *         Points assigned to cluster 0 are considered unclustered.
- */
-torch::Tensor get_clustering(const torch::Tensor& output_model_tensor, float tbeta, float td,
-                             int64_t nEmbeddingCoordinates);
 
 /////////////////////
 /// Miscellaneous ///

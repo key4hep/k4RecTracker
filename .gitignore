@@ -1,6 +1,10 @@
 ### File copied from https://github.com/key4hep/key4hep-dev-utils
 ### DO NOT EDIT, CHANGES WILL BE OVERWRITTEN
 
+### Data formats ###
+*.root
+*.slcio
+
 ### C++ ###
 # Prerequisites
 *.d
@@ -223,6 +227,9 @@ poetry.toml
 
 # LSP config files
 pyrightconfig.json
+
+# macOS
+.DS_Store
 
 # Editors
 .vscode

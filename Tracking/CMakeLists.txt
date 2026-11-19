@@ -1,11 +1,6 @@
 set(PackageName Tracking)
 
-project(${PackageName})
-
-include(ExternalData)
-list(APPEND ExternalData_URL_TEMPLATES
-  "https://key4hep.web.cern.ch:443/testFiles/k4RecTracker/%(hash)"
-)
+project(${PackageName} LANGUAGES CXX)
 
 find_package(GenFit REQUIRED)
 find_package(MarlinUtil REQUIRED)
@@ -41,7 +36,6 @@ gaudi_add_module(${PackageName}
   k4geo::detectorCommon
   extensionDict
   onnxruntime::onnxruntime
-  torch
   DD4hep::DDRec
   DD4hep::DDCore
   GenFit::genfit2
@@ -79,27 +73,34 @@ install(TARGETS ${PackageName}
 
 install(FILES ${scripts} DESTINATION test)
 
-SET(test_name "test_TracksFromGenParticles")
-ADD_TEST(NAME ${test_name} COMMAND sh +x test_TracksFromGenParticles.sh)
-set_test_env(${test_name})
-set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTracksFromGenParticles")
+if(BUILD_TESTING)
+  include(ExternalData)
+  list(APPEND ExternalData_URL_TEMPLATES
+    "https://key4hep.web.cern.ch:443/testFiles/k4RecTracker/%(hash)"
+  )
 
-SET(test_name "test_TrackFinder")
-ExternalData_Add_Test(test_TrackFinder
-        NAME ${test_name}
-        COMMAND sh +x Tracking/test/testTrackFinder/test_trackFinder.sh DATA{${CMAKE_SOURCE_DIR}/Tracking/test/inputFiles/SimpleGatrIDEAv3o1.onnx})
-set_test_env(${test_name})
-set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-ExternalData_Add_Target(${test_name})
+  SET(test_name "test_TracksFromGenParticles")
+  ADD_TEST(NAME ${test_name} COMMAND sh +x test_TracksFromGenParticles.sh)
+  set_test_env(${test_name})
+  set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTracksFromGenParticles")
 
-SET(test_name "test_TrackFitter")
-ADD_TEST(NAME ${test_name} COMMAND sh +x test_trackFitter.sh)
-set_test_env(${test_name})
-set_tests_properties(${test_name} PROPERTIES DEPENDS test_TrackFinder)
-set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackFitter")
+  SET(test_name "test_TrackFinder")
+  ExternalData_Add_Test(test_TrackFinder
+          NAME ${test_name}
+          COMMAND sh +x Tracking/test/testTrackFinder/test_trackFinder.sh DATA{${CMAKE_SOURCE_DIR}/Tracking/test/inputFiles/SimpleGatrIDEAv3o1.onnx})
+  set_test_env(${test_name})
+  set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+  ExternalData_Add_Target(${test_name})
 
-SET(test_name "test_TrackMerger")
-ADD_TEST(NAME ${test_name} COMMAND python3 test_track_merger.py)
+  SET(test_name "test_TrackFitter")
+  ADD_TEST(NAME ${test_name} COMMAND sh +x test_trackFitter.sh)
+  set_test_env(${test_name})
+  set_tests_properties(${test_name} PROPERTIES DEPENDS test_TrackFinder)
+  set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackFitter")
+
+  SET(test_name "test_TrackMerger")
+  ADD_TEST(NAME ${test_name} COMMAND python3 test_track_merger.py)
   set_test_env(${test_name})
   set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
-
+  
+endif()
