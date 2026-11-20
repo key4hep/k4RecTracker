@@ -106,5 +106,6 @@ if(BUILD_TESTING)
   ADD_TEST(NAME ${test_name} COMMAND sh +x test_track_merger.sh)
     set_test_env(${test_name})
     set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
+    set_tests_properties(${test_name} PROPERTIES DEPENDS "clone_ILDConfig")
 
 endif()
