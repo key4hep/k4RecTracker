@@ -16,6 +16,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * TrackMerger, 2026, V. Schwan and U. Einhaus
+ *
+ * This functional takes two track collections as input, one 'inner' and one 'outer'.
+ * For all combinations between these, it calculates if they can be combined into one track.
+ * First, a rough matching is done based on tracks states at last (first) hit for inner (outer).
+ * For matching tracks, an outside-in fit is done, adding the hits of the inner track to the outer.
+ * Then, starting from the lowest combined chi2/ndf, matching tracks are combined into one output track.
+ * Finally, remaining 'single' tracks are added to the output.
+ *
+ * The intended use of this functional is to combine Si and TPC tracks for ILD.
+ * After merging, the combined tracks should be refitted by the RefitProcessor.
+ */
 
 #include "DD4hep/Detector.h"
 #include "DDSegmentation/BitFieldCoder.h"
@@ -26,6 +39,7 @@
 #include "edm4hep/TrackerHit.h"
 
 #include "Gaudi/Accumulators.h"
+#include "TMath.h"
 #include "k4FWCore/Transformer.h"
 #include "k4Interface/IGeoSvc.h"
 #include "k4Reco/GaudiDDKalTest.h"
@@ -114,7 +128,7 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
       return StatusCode::FAILURE;
     }
     m_Bz = getBzAtOrigin(*m_geoSvc->getDetector());
-    if (m_Bz == 0.f) {
+    if (m_useSignificance.value() && m_Bz == 0.f) {
       error() << "Magnetic field is zero, so pT cannot be derived from omega. Load a geometry with a field, or "
                  "disable the pT criterion (PtSignificance < 0 or UseSignificance = false)"
               << endmsg;
@@ -226,7 +240,8 @@ struct TrackMerger final : k4FWCore::Transformer<TrackColl(const TrackColl&, con
               tsAtLastHit.location = TS::AtLastHit;
 
               std::vector<TS> trackStates{tsAtIP, tsAtFirstHit, tsAtLastHit};
-              chi2OfCombination[chi2 / ndf] = std::make_pair(std::make_pair(innerTrack, outerTrack), trackStates);
+              chi2OfCombination[1. / TMath::Prob(chi2, ndf)] =
+                  std::make_pair(std::make_pair(innerTrack, outerTrack), trackStates);
               combined = true;
               break;
             }
@@ -407,9 +422,9 @@ private:
 
   void printTrack(const Track& t1, TS::Location loc1) const {
     auto ts1 = t1.getTrackState(loc1);
-    if (ts1){
+    if (ts1) {
       debug() << fmt::format("Track 1: d0={:.4f}, z0={:.4f}, phi={:.4f}, omega={:.4f}, tanLambda={:.4f}", ts1->D0,
-                           ts1->Z0, ts1->phi, ts1->omega, ts1->tanLambda)
+                             ts1->Z0, ts1->phi, ts1->omega, ts1->tanLambda)
               << endmsg;
     } else {
       warning() << "Track state at location " << loc1 << " does not exist for track " << t1 << "!" << endmsg;

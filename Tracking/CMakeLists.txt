@@ -98,9 +98,13 @@ if(BUILD_TESTING)
   set_tests_properties(${test_name} PROPERTIES DEPENDS test_TrackFinder)
   set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackFitter")
 
+  ADD_TEST(NAME "clone_ILDConfig"
+    COMMAND bash -c "if ! test -f ILDReconstruction.py; then git clone https://github.com/iLCSoft/ILDConfig.git --depth 1 && cp -r ILDConfig/StandardConfig/production/* .; fi"
+  )
+
   SET(test_name "test_TrackMerger")
-  ADD_TEST(NAME ${test_name} COMMAND python3 test_track_merger.py)
-  set_test_env(${test_name})
-  set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
+  ADD_TEST(NAME ${test_name} COMMAND sh +x test_track_merger.sh)
+    set_test_env(${test_name})
+    set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
   
 endif()
