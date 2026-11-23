@@ -98,14 +98,44 @@ if(BUILD_TESTING)
   set_tests_properties(${test_name} PROPERTIES DEPENDS test_TrackFinder)
   set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackFitter")
 
+  set(ILDConfig_DIR "${CMAKE_CURRENT_BINARY_DIR}/ILDConfig/StandardConfig/production")
   ADD_TEST(NAME "clone_ILDConfig"
-    COMMAND bash -c "if ! test -f ILDReconstruction.py; then git clone https://github.com/iLCSoft/ILDConfig.git --depth 1 && cp -r ILDConfig/StandardConfig/production/* .; fi"
+    COMMAND bash -c "if ! test -d ILDConfig; then git clone https://github.com/iLCSoft/ILDConfig.git --depth 1; fi"
+  )
+  set_tests_properties(clone_ILDConfig
+    PROPERTIES
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+      FIXTURES_SETUP ensure_ILDConfig
   )
 
-  SET(test_name "test_TrackMerger")
-  ADD_TEST(NAME ${test_name} COMMAND sh +x test_track_merger.sh)
+  # TrackMerger tests: simulate gun muons for each detector model, then run the
+  # ILD reconstruction (tracking only) on them and verify the merged tracks
+  foreach(det_model IN ITEMS ILD_FCCee_v01 ILD_FCCee_v02)
+    SET(test_name "test_TrackMerger_sim_${det_model}")
+    ADD_TEST(NAME ${test_name}
+      COMMAND ddsim --enableGun --gun.distribution "cos(theta)" --gun.energy "5*GeV" --gun.particle "mu-" --gun.multiplicity 10
+                    --numberOfEvents 3 --random.enableEventSeed --random.seed 42
+                    --outputFile ${det_model}_SIM.edm4hep.root
+                    --steeringFile ddsim_steer.py
+                    --compactFile $ENV{K4GEO}/FCCee/ILD_FCCee/compact/${det_model}/${det_model}.xml
+    )
     set_test_env(${test_name})
-    set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
-    set_tests_properties(${test_name} PROPERTIES DEPENDS "clone_ILDConfig")
+    set_tests_properties(${test_name}
+      PROPERTIES
+        WORKING_DIRECTORY "${ILDConfig_DIR}"
+        FIXTURES_REQUIRED ensure_ILDConfig
+        FIXTURES_SETUP TrackMerger_sim_${det_model}
+    )
 
+    SET(test_name "test_TrackMerger_reco_${det_model}")
+    ADD_TEST(NAME ${test_name}
+      COMMAND bash +x ${CMAKE_CURRENT_SOURCE_DIR}/test/testTrackMerger/test_track_merger.sh ${det_model}
+    )
+    set_test_env(${test_name})
+    set_tests_properties(${test_name}
+      PROPERTIES
+        WORKING_DIRECTORY "${ILDConfig_DIR}"
+        FIXTURES_REQUIRED "ensure_ILDConfig;TrackMerger_sim_${det_model}"
+    )
+  endforeach()
 endif()

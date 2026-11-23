@@ -18,16 +18,29 @@
 #
 # ==============================
 #
-# Test for the TrackMerger algorithm: generate gun muons, then run the full ILD reconstruction chain, but with tracking only
+# Test for the TrackMerger algorithm: run the full ILD reconstruction chain, but
+# with tracking only, on previously simulated gun muons and verify the merged
+# tracks.
+#
+# Usage: test_track_merger.sh <detector model>
+#
+# Has to be run from within the ILDConfig/StandardConfig/production directory
+# and expects the <detector model>_SIM.edm4hep.root input file to be present
+# there.
 
-det_model=ILD_FCCee_v01
-det_path=${K4GEO}/FCCee/ILD_FCCee/compact/${det_model}/${det_model}.xml
-ddsim --enableGun --gun.distribution "cos(theta)" --gun.energy "5*GeV" --gun.particle "mu-" --gun.multiplicity 10 --numberOfEvents 3 --outputFile ${det_model}_SIM.edm4hep.root --random.enableEventSeed --random.seed 42 --compactFile ${det_path}
-k4run ILDReconstruction.py --inputFiles=${det_model}_SIM.edm4hep.root --outputFileBase=${det_model} --detectorModel=${det_model} --trackingOnly
-python3 verify_merged_tracks.py "${det_model}_REC.edm4hep.root"
+set -e
 
-det_model=ILD_FCCee_v02
-det_path=${K4GEO}/FCCee/ILD_FCCee/compact/${det_model}/${det_model}.xml
-ddsim --enableGun --gun.distribution "cos(theta)" --gun.energy "5*GeV" --gun.particle "mu-" --gun.multiplicity 10 --numberOfEvents 3 --outputFile ${det_model}_SIM.edm4hep.root --random.enableEventSeed --random.seed 42 --compactFile ${det_path}
-k4run ILDReconstruction.py --inputFiles=${det_model}_SIM.edm4hep.root --outputFileBase=${det_model} --detectorModel=${det_model} --trackingOnly
-python3 verify_merged_tracks.py "${det_model}_REC.edm4hep.root"
+if [ -z "$1" ]; then
+  echo "Usage: $0 <detector model>" >&2
+  exit 1
+fi
+
+det_model=$1
+script_dir=$(cd "$(dirname "$0")" && pwd)
+
+k4run ILDReconstruction.py \
+    --inputFiles=${det_model}_SIM.edm4hep.root \
+    --outputFileBase=${det_model} \
+    --detectorModel=${det_model} \
+
+python3 "${script_dir}/verify_merged_tracks.py" "${det_model}_REC.edm4hep.root"
