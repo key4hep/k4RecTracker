@@ -4,8 +4,9 @@ project(${PackageName} LANGUAGES CXX)
 
 find_package(GenFit REQUIRED)
 find_package(MarlinUtil REQUIRED)
+find_package(k4Reco REQUIRED)
 list(APPEND CMAKE_MODULE_PATH $ENV{PANDORAPFA}/cmakemodules)
-FOREACH( pkg  MarlinUtil PandoraSDK )
+FOREACH( pkg  MarlinUtil PandoraSDK k4Reco )
   IF( ${pkg}_FOUND )
     INCLUDE_DIRECTORIES( ${${pkg}_INCLUDE_DIRS} )
     LINK_LIBRARIES( ${${pkg}_LIBRARIES} )
@@ -40,6 +41,7 @@ gaudi_add_module(${PackageName}
   GenFit::genfit2
   Eigen3::Eigen
   ${DELPHES_LIBRARIES}
+  k4Reco::GaudiTrkUtils
 )
 
 if(TARGET PandoraPFA::PandoraSDK)
@@ -96,37 +98,44 @@ if(BUILD_TESTING)
   set_tests_properties(${test_name} PROPERTIES DEPENDS test_TrackFinder)
   set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackFitter")
 
-  SET(test_dir "${CMAKE_SOURCE_DIR}/Tracking/test/testTrackMerger")
+  set(ILDConfig_DIR "${CMAKE_CURRENT_BINARY_DIR}/ILDConfig/StandardConfig/production")
+  ADD_TEST(NAME "clone_ILDConfig"
+    COMMAND bash -c "if ! test -d ILDConfig; then git clone https://github.com/iLCSoft/ILDConfig.git --depth 1; fi"
+  )
+  set_tests_properties(clone_ILDConfig
+    PROPERTIES
+      WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+      FIXTURES_SETUP ensure_ILDConfig
+  )
 
-  # Run the setup -> k4run -> check chain once per matching mode
-  foreach(mode absolute significance)
-    SET(test_name "test_TrackMerger_${mode}")
-    SET(input_file "input_${mode}.root")
-    SET(output_file "output_${mode}.root")
-
-    ADD_TEST(NAME ${test_name}_setup
-      COMMAND python3 test_track_merger.py setup --mode ${mode} --input ${input_file})
-    set_test_env(${test_name}_setup)
-    set_tests_properties(${test_name}_setup PROPERTIES
-      WORKING_DIRECTORY "${test_dir}"
-      FIXTURES_SETUP ${test_name}_input_fixture
+  # TrackMerger tests: simulate gun muons for each detector model, then run the
+  # ILD reconstruction (tracking only) on them and verify the merged tracks
+  foreach(det_model IN ITEMS ILD_FCCee_v01 ILD_FCCee_v02)
+    SET(test_name "test_TrackMerger_sim_${det_model}")
+    ADD_TEST(NAME ${test_name}
+      COMMAND ddsim --enableGun --gun.distribution "cos(theta)" --gun.energy "5*GeV" --gun.particle "mu-" --gun.multiplicity 10
+                    --numberOfEvents 10 --random.enableEventSeed --random.seed 42
+                    --outputFile ${det_model}_SIM.edm4hep.root
+                    --steeringFile ddsim_steer.py
+                    --compactFile $ENV{K4GEO}/FCCee/ILD_FCCee/compact/${det_model}/${det_model}.xml
+    )
+    set_test_env(${test_name})
+    set_tests_properties(${test_name}
+      PROPERTIES
+        WORKING_DIRECTORY "${ILDConfig_DIR}"
+        FIXTURES_REQUIRED ensure_ILDConfig
+        FIXTURES_SETUP TrackMerger_sim_${det_model}
     )
 
-    ADD_TEST(NAME ${test_name}_run
-      COMMAND k4run test_track_merger_steer.py --mode ${mode} --input ${input_file} --output ${output_file})
-    set_test_env(${test_name}_run)
-    set_tests_properties(${test_name}_run PROPERTIES
-      WORKING_DIRECTORY "${test_dir}"
-      FIXTURES_REQUIRED ${test_name}_input_fixture
-      FIXTURES_SETUP ${test_name}_output_fixture
+    SET(test_name "test_TrackMerger_reco_${det_model}")
+    ADD_TEST(NAME ${test_name}
+      COMMAND bash +x ${CMAKE_CURRENT_SOURCE_DIR}/test/testTrackMerger/test_track_merger.sh ${det_model}
     )
-
-    ADD_TEST(NAME ${test_name}_check
-      COMMAND python3 test_track_merger.py check --mode ${mode} --output ${output_file})
-    set_test_env(${test_name}_check)
-    set_tests_properties(${test_name}_check PROPERTIES
-      WORKING_DIRECTORY "${test_dir}"
-      FIXTURES_REQUIRED ${test_name}_output_fixture
+    set_test_env(${test_name})
+    set_tests_properties(${test_name}
+      PROPERTIES
+        WORKING_DIRECTORY "${ILDConfig_DIR}"
+        FIXTURES_REQUIRED "ensure_ILDConfig;TrackMerger_sim_${det_model}"
     )
   endforeach()
 endif()
