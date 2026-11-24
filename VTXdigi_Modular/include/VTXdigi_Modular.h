@@ -196,9 +196,10 @@ private:
 
   /* Path computation */
   Gaudi::Property<float> m_path_meanDepositionsPerUm{
-      this, "MeanDepositionsPerUm", 2.65f,
+      this, "MeanDepositionsPerUm", 1.36f,
       "Mean number of deposition clusters per um of path length in the sensor. Only used if the ChargeCollectionMethod "
-      "uses the path computation. Defaults to 2.65, optimised to match the Allpix Squared simulation."};
+      "uses the path computation. Defaults to 1.36, optimised to match the Allpix Squared simulation (PAI enabled) "
+      "with precise ddsim settings."};
 
   /* Charge Collection Map (CCMap) */
   Gaudi::Property<std::string> m_CCMap_FileName{this, "ChargeCollectionMap", "",

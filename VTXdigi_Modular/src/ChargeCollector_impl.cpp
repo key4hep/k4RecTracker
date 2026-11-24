@@ -175,7 +175,8 @@ Path::Path(const SimHitWrapper& simHit, const TGeoHMatrix& trafoMatrix, const VT
 std::vector<std::pair<float, dd4hep::rec::Vector3D>>
 Path::SampleDepositions(TRandom3& randomGen, const float meanDepositionsPerUm, const TH1D& chargeSamplingHist) const {
   // draw number of depositions from a sub-poissonian distribution
-  float width = 0.8; // width of the sub-poissonian (0.8 resembles what Allpix Squared does very well)
+  float width =
+      0.51; // width of the sub-poissonian (0.51 resembles what Allpix Squared does very well when PAI is enabled)
   float mean = travel.r() * mm_to_um * meanDepositionsPerUm; // convert from mm to um
   int NDepositions = std::max(1, static_cast<int>(randomGen.Binomial(std::round(mean / width), width)));
 

@@ -51,7 +51,7 @@ The exact modelling method is user-definable. For now the only realistic method 
 
 (used by charge collectors that model the particle path through the sensor, currently `ChargeCollectionMap`)
 
-- `MeanDepositionsPerUm` - Mean number of discrete charge depositions per um of path length in the sensor. Defaults to 2.65, optimised to match the Allpix Squared simulation.
+- `MeanDepositionsPerUm` - Mean number of discrete charge depositions per um of path length in the sensor. Defaults to 1.36, optimised to match the Allpix Squared simulation (with PAI enabled in Allpix Squared) using the ddsim settings below.
 
 **Charge collection map** (only used with `ChargeCollectionMethod = "ChargeCollectionMap"`)
 - `ChargeCollectionMap` - Charge collection map file (format of Allpix Squared's [[PropagationMapWriter]](https://gitlab.cern.ch/allpix-squared/allpix-squared/-/tree/master/src/modules/PropagationMapWriter)). Required for the `ChargeCollectionMap` charge collector.
@@ -325,7 +325,7 @@ For each simHit, the path through the sensor is approximated as a straight line 
 
 Then, the charge deposition and collection are modelled as follows:
 
-- The number of discrete depositions is drawn from sub-Poissonian (adjusted to resemble Allpix Squared). There is always at least one deposition.
+- The number of discrete depositions is drawn from a sub-Poissonian distribution (tuned to resemble Allpix Squared with PAI enabled). There is always at least one deposition.
 - For each deposition
   - a random position along the path is drawn
   - a random energy deposition is drawn from a distribution (sampled from a histogram in a .root file, extracted from Allpix Squared)
@@ -333,7 +333,7 @@ Then, the charge deposition and collection are modelled as follows:
 
 **Notes**
 
-- The deposition charge distribution that is sampled from is shipped with k4RecTracker (`VTXdigi_Modular/data/chargeDepositionDistribution.root`, installed to `<prefix>/share/k4RecTracker/VTXdigi_Modular/`). It pairs with the `MeanDepositionsPerUm` default of 2.65 to mirror Allpix Squared.
+- The deposition charge distribution that is sampled from is shipped with k4RecTracker (`VTXdigi_Modular/data/chargeDepositionDistribution.root`, installed to `<prefix>/share/k4RecTracker/VTXdigi_Modular/`). It pairs with the `MeanDepositionsPerUm` default of 1.36 to mirror Allpix Squared with the PAI model enabled. PAI only refers to the Allpix Squared reference simulation, it is not needed (or used) in the Key4hep simulation.
 
 ## Maintainers notes
 
