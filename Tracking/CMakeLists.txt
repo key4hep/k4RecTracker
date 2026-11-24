@@ -114,7 +114,7 @@ if(BUILD_TESTING)
     SET(test_name "test_TrackMerger_sim_${det_model}")
     ADD_TEST(NAME ${test_name}
       COMMAND ddsim --enableGun --gun.distribution "cos(theta)" --gun.energy "5*GeV" --gun.particle "mu-" --gun.multiplicity 10
-                    --numberOfEvents 3 --random.enableEventSeed --random.seed 42
+                    --numberOfEvents 10 --random.enableEventSeed --random.seed 42
                     --outputFile ${det_model}_SIM.edm4hep.root
                     --steeringFile ddsim_steer.py
                     --compactFile $ENV{K4GEO}/FCCee/ILD_FCCee/compact/${det_model}/${det_model}.xml

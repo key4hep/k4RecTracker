@@ -42,5 +42,6 @@ k4run ILDReconstruction.py \
     --inputFiles=${det_model}_SIM.edm4hep.root \
     --outputFileBase=${det_model} \
     --detectorModel=${det_model} \
+    --num-events -1
 
 python3 "${script_dir}/verify_merged_tracks.py" "${det_model}_REC.edm4hep.root"
