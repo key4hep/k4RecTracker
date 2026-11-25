@@ -1,3 +1,54 @@
+# v00.09.00
+
+* 2026-11-24 Ulrich Einhaus ([PR#124](https://github.com/key4hep/k4RecTracker/pull/124))
+  The TrackMerger combines Clupatra (TPC + SET) and Conformal (VTX + SIT) tracks.
+  This update:
+  - Adds a fit of the track combinations, so the best combinations are prioritised in merging.
+  - Uses a logic to include unmatched tracks in the output, so forward tracks without a counterpart in the TPC are not dropped.
+  - Adds track states to output tracks, so the RefitProcessor can initialise using the track state (AtLastHit). Adding SET hits to the tracks caused the Refitter to break since the hit-based initialisation cannot handle strip hits.
+  - Modifies the cmake file to include GaudiDDKalTest (k4Reco::GaudiTrkUtils), needed for the track fit.
+
+* 2026-11-19 scott snyder ([PR#128](https://github.com/key4hep/k4RecTracker/pull/128))
+  - Fix crashes due to use of CollectionID before having been assigned.
+
+* 2026-11-18 Juan Miguel Carceller ([PR#130](https://github.com/key4hep/k4RecTracker/pull/130))
+  - Skip downloading the TrackFinder test model when `BUILD_TESTING=OFF`.
+
+* 2026-11-18 Juan Miguel Carceller ([PR#127](https://github.com/key4hep/k4RecTracker/pull/127))
+  - Put the `MeanExcEnergy_get` helpers in `GenfitMaterialInterface.cpp` in an unnamed namespace so that they are not exported, and remove a declaration of an overload that is never defined.
+
+* 2026-11-18 Fangyi Guo ([PR#121](https://github.com/key4hep/k4RecTracker/pull/121))
+  - support truth tracks without SimTrackerHit input (e.g. in calorimeter-only geometry). 
+  - Add new property `UseSimTrackerHits` as the flag: enable this function by setting `UseSimTrackerHits=false`.
+
+* 2026-11-10 Juan Miguel Carceller ([PR#125](https://github.com/key4hep/k4RecTracker/pull/125))
+  - Add `LANGUAGES CXX` to all subdirectory `project()` calls.
+
+* 2026-11-10 andread3vita ([PR#119](https://github.com/key4hep/k4RecTracker/pull/119))
+  - GGTFTrackFinder: major CPU-time and memory optimization                                                             
+     - Removed the LibTorch dependency entirely: the beta-threshold clustering (find_condpoints, get_clustering)         
+       previously implemented with torch::Tensor is reimplemented in plain C++ with squared-distance comparisons, and    
+       torch is dropped from the build.                                                                                  
+     - Enabled ONNX Runtime graph optimizations (ORT_ENABLE_ALL instead of ORT_DISABLE_ALL) and made intra-op threading configurable via the new property InferenceThreads (default: 1).                                                  
+     - Disabled the ORT CPU memory arena and memory-pattern machinery (DisableCpuMemArena, DisableMemPattern): the held  heap drops from GBs to tens of MB, since hit counts vary event by event.                                          
+     - Added SessionRecreateEvents property (default: 0, disabled): recreates the ONNX session every N events with a     
+       thread-safe swap (shared_ptr + mutex) to flush the per-input-shape allocation plans ORT retains, making the held  
+       heap flat.                                                                                                        
+     - Per-event heap allocation eliminated outside ONNX Runtime: a thread_local workspace reuses the feature buffer,    
+       source-hit bookkeeping, clustering scratch, and per-cluster grouping tables across events; buffers stop growing   
+       after the largest event has been processed. 
+     - Add sigmoid after inference to obtain the correct values of beta before clustering.                                                                      
+   - Test: runTestTrackFinder.py exposes --inferenceThreads and --sessionRecreateEvents.
+
+* 2026-11-04 Juan Miguel Carceller ([PR#122](https://github.com/key4hep/k4RecTracker/pull/122))
+  - Initialize GNU install directories before configuring RPATH (no behavior change).
+
+* 2026-11-04 andread3vita ([PR#120](https://github.com/key4hep/k4RecTracker/pull/120))
+  - When the fit failed for all hypotheses (and the LimitHits retry), an empty placeholder track (chi2=ndf=-1, no hits, no track states) was written to both output collections to keep them index-aligned with the input. Skip the track instead: failed fits no longer appear in FittedTracks or FittedTracksWithFilteredHits.
+
+* 2026-10-29 David ([PR#114](https://github.com/key4hep/k4RecTracker/pull/114))
+  - Simplify/speed up logic for matching mc particles and hits. Should speed up
+
 # v00.08.00
 
 * 2026-10-16 Victor Schwan ([PR#113](https://github.com/Key4hep/k4RecTracker/pull/113))
